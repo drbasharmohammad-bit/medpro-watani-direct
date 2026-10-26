@@ -45,13 +45,26 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Verify preinstalled Android SDK
+        run: |
+          if [ -z "${ANDROID_HOME:-}" ]; then
+            echo "ERROR: ANDROID_HOME is not set on this runner." >&2
+            exit 1
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          for dir in platform-tools build-tools; do
+            if [ ! -d "$ANDROID_HOME/$dir" ]; then
+              echo "ERROR: $ANDROID_HOME/$dir is missing." >&2
+              exit 1
+            fi
+            echo "Found $dir:"
+            ls -1 "$ANDROID_HOME/$dir"
+          done
 
       - name: Download Gradle 9.3.1 (no gradlew in Studio export)
         run: |
