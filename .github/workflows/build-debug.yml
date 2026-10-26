@@ -1,0 +1,89 @@
+# Build Watani (Studio source) — DEBUG APK via GitHub Actions
+#
+# Why this file exists (26 Oct 2026):
+# - Local Gradle builds are blocked in this VM: the Gradle daemon starts but
+#   the Java client never reaches it over loopback (proven with isolated
+#   loopback tests; Gradle 8.7 and 9.1.0 fail identically). GitHub runners
+#   do not have this defect, and cloud builds are the approved path since
+#   10 Oct 2026 (private repo drbasharmohammad-bit/medpro-watani-app).
+# - This workflow is written for the CURRENT Studio Kotlin source, NOT for
+#   the old v1 React Native workflow (Node + android/ + assembleRelease).
+#   Differences that matter:
+#   * No gradlew in the Studio export, so Gradle 9.3.1 (the version pinned
+#     in gradle/wrapper/gradle-wrapper.properties) is downloaded on the
+#     runner and invoked directly.
+#   * No debug.keystore in the export (and .gitignore excludes it), while
+#     app/build.gradle.kts points debug signing at ${rootDir}/debug.keystore.
+#     The workflow generates a fresh debug keystore before building.
+#   * Debug build needs NO secrets.
+#
+# IMPORTANT — Google sign-in after the first cloud build:
+# A freshly generated debug keystore has a NEW SHA-1 fingerprint, different
+# from the AI Studio fingerprint registered in Firebase (E2:0E:5B:0C:...).
+# The workflow prints the new SHA-1 in the job summary; it must be
+# registered in Firebase (project national-exam-8ecba) before Google
+# sign-in works in a cloud-built APK. Everything else in the app can be
+# tested before that step. This is unavoidable for any non-Studio build:
+# the Studio debug keystore is not in the export.
+#
+# LOCAL PREPARATION ONLY — this file has NOT been pushed to any repo.
+# Pushing (and the choice of repo/branch) needs Dr. Bashar's word.
+
+name: Build Watani Debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Download Gradle 9.3.1 (no gradlew in Studio export)
+        run: |
+          curl -sL https://services.gradle.org/distributions/gradle-9.3.1-bin.zip -o /tmp/gradle-9.3.1-bin.zip
+          unzip -q /tmp/gradle-9.3.1-bin.zip -d /tmp
+          echo "/tmp/gradle-9.3.1/bin" >> "$GITHUB_PATH"
+
+      - name: Generate debug keystore (missing from Studio export)
+        run: |
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -storepass android -keypass android \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          keytool -list -v -keystore debug.keystore -storepass android -alias androiddebugkey \
+            | grep -E "SHA1:" | tee debug-sha1.txt
+
+      - name: Build debug APK
+        run: gradle assembleDebug --console=plain --max-workers=2
+
+      - name: Show debug SHA-1 (register in Firebase for Google sign-in)
+        run: |
+          {
+            echo "### Debug keystore SHA-1 — register in Firebase"
+            echo "Project: national-exam-8ecba, app: sy.medpro.watani"
+            cat debug-sha1.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: medpro-watani-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error

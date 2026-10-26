@@ -1,0 +1,6 @@
+{
+  "summary":  "خطة تطوير جناح الممارسة السريرية السريري المستقل (Bedside Clinical & Auscultation Suite) المعزول بالكامل عن بنك الأسئلة والامتحان الوطني، ويضم محاكي إصغاء أصوات القلب والنفخات والرئة البصري والصوتي التفاعلي (Phonocardiogram & Auscultation Simulator)، وحاسبة تسريب أدوية العناية المشددة والسوائل، ودليل تعديل الجرعات الكلوية وجرعات الأطفال من مصادر طبية عالمية معتمدة (Bates', Braunwald's, Harrison's, Sanford Guide, Harriet Lane) بدون أي ذكاء اصطناعي وبشكل أوفلاين 100%.",
+  "updatedAt":  "2026-10-23T15:03:59.982583186Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Med Pro - Watani",
+  "description": "Arabic medical exam question bank with offline download and quiz player",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
