@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import sy.medpro.watani.data.LibraryItem
 import sy.medpro.watani.data.LibrarySubject
 import sy.medpro.watani.ui.theme.MaroonPrimary
@@ -115,7 +117,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
     var loadingOpen by remember { mutableStateOf(false) }
 
     if (currentReader != null) {
-        val reader = currentReader
+        val reader = currentReader ?: return
         val onReaderBack: () -> Unit = {
             viewModel.closeItem(reader.item)
             currentReader = null
