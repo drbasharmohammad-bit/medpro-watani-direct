@@ -23,23 +23,21 @@ import kotlinx.coroutines.launch
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import java.io.File
 
+private fun getFirebaseUid(): String {
+    return try {
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    } catch (e: Exception) {
+        ""
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoPlayerScreen(videoFile: File?, title: String, onBack: () -> Unit, videoFileUrl: String? = null) {
     val context = LocalContext.current
     var isPlaying by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
-    val prefs = remember { context.getSharedPreferences("watani_library_${context.getFirebaseUid()}", Context.MODE_PRIVATE) }
-
-    fun getFirebaseUid(): String {
-        return try {
-            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
-        } catch (e: Exception) {
-            ""
-        }
-    }
-
-    fun Context.getFirebaseUid() = getFirebaseUid()
+    val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(

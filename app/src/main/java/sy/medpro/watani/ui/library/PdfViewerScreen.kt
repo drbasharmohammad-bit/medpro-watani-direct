@@ -33,6 +33,14 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.GoldAccent
 import java.io.File
 
+private fun getFirebaseUid(): String {
+    return try {
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    } catch (e: Exception) {
+        ""
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
@@ -41,7 +49,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
     var currentPage by remember { mutableStateOf(0) }
     var totalPages by remember { mutableStateOf(0) }
     var pdfRenderer by remember { mutableStateOf<PdfRenderer?>(null) }
-    var currentBitmap by remember { mutableStateOf(android.graphics.Bitmap?) }
+    var currentBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var brightness by remember { mutableStateOf(1f) }
@@ -51,17 +59,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
     var searchQuery by remember { mutableStateOf("") }
     var bookmarks by remember { mutableStateOf(setOf<Int>()) }
     var hideBarJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    val prefs = remember { context.getSharedPreferences("watani_library_${context.getFirebaseUid()}", Context.MODE_PRIVATE) }
-
-    fun getFirebaseUid(): String {
-        return try {
-            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
-        } catch (e: Exception) {
-            ""
-        }
-    }
-
-    fun Context.getFirebaseUid() = getFirebaseUid()
+    val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
 
     fun saveBookmarks() {
         val key = "bookmarks_${pdfFile.nameWithoutExtension}"
@@ -176,7 +174,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                                 resetHideBarTimer()
                             })
                         }
-                        .background(Color(brightness.coerceIn(0.1f, 1f) * 255f).let { Color(it.toInt(), it.toInt(), it.toInt()) })
+                        .background(brightness.coerceIn(0.1f, 1f).let { Color(it, it, it) })
                 )
             }
         }
@@ -227,7 +225,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.BrightnessDim, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.BrightnessLow, null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Slider(
                             value = brightness,
                             onValueChange = { brightness = it },
