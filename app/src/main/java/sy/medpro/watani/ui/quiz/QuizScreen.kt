@@ -45,6 +45,10 @@ import sy.medpro.watani.data.QuestionDto
 import sy.medpro.watani.data.WataniFirestoreSync
 import sy.medpro.watani.data.getCorrectIndices
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
+import sy.medpro.watani.ui.explanation.ExplanationSection
+import sy.medpro.watani.ui.explanation.ExplanationUiState
+import sy.medpro.watani.ui.explanation.normalizeExplanationKey
+import sy.medpro.watani.ui.explanation.rememberExplanationState
 import sy.medpro.watani.ui.theme.*
 import kotlin.math.abs
 
@@ -328,6 +332,8 @@ fun QuestionCard(
     val favPrefs = remember { context.getSharedPreferences("watani_favorites", android.content.Context.MODE_PRIVATE) }
     var favList by remember { mutableStateOf(favPrefs.getStringSet("fav_list", emptySet()) ?: emptySet()) }
     val qId = question.id ?: question.text ?: "سؤال $questionNumber"
+    val qLookupKey = normalizeExplanationKey(question.id)
+    val explanationState = rememberExplanationState(qLookupKey)
     val isFav = favList.contains(qId)
 
     Card(
@@ -538,6 +544,20 @@ fun QuestionCard(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
+                    }
+                    when (val ex = explanationState) {
+                        is ExplanationUiState.Present -> ExplanationSection(content = ex.content)
+                        ExplanationUiState.Loading -> Box(
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaroonPrimary
+                            )
+                        }
+                        ExplanationUiState.Absent, ExplanationUiState.Idle -> Unit
                     }
                 }
             }

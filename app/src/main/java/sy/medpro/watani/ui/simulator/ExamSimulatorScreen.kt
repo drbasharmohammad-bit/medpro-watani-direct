@@ -28,6 +28,10 @@ import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.data.getCorrectIndices
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
+import sy.medpro.watani.ui.explanation.ExplanationSection
+import sy.medpro.watani.ui.explanation.ExplanationUiState
+import sy.medpro.watani.ui.explanation.normalizeExplanationKey
+import sy.medpro.watani.ui.explanation.rememberExplanationState
 import sy.medpro.watani.ui.theme.*
 import java.io.File
 
@@ -37,7 +41,8 @@ private data class SimQuestion(
     val stem: String,
     val options: List<String>,
     val correctIndex: Int,
-    val explanation: String
+    val explanation: String,
+    val natId: String? = null
 )
 
 private val sampleExamQuestions = listOf(
@@ -278,7 +283,8 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                                                         stem = q.text ?: "",
                                                                         options = opts,
                                                                         correctIndex = correctIdx,
-                                                                        explanation = q.explanation ?: ""
+                                                                        explanation = q.explanation ?: "",
+                                                                        natId = q.id
                                                                     )
                                                                 )
                                                             }
@@ -523,6 +529,7 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                     itemsIndexed(activeQuestions) { idx, q ->
                         val userAns = answers[idx]
                         val isCorrect = userAns == q.correctIndex
+                        val simExplanationState = rememberExplanationState(normalizeExplanationKey(q.natId))
                         Card(
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -540,6 +547,20 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                 Text("الجواب المعتمد: ${q.options[q.correctIndex]}", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(q.explanation, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+                            }
+                            when (val ex = simExplanationState) {
+                                is ExplanationUiState.Present -> ExplanationSection(content = ex.content, modifier = Modifier.padding(horizontal = 14.dp))
+                                ExplanationUiState.Loading -> Box(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaroonPrimary
+                                    )
+                                }
+                                ExplanationUiState.Absent, ExplanationUiState.Idle -> Unit
                             }
                         }
                     }

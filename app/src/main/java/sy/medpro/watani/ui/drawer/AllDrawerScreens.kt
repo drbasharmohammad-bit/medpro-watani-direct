@@ -31,6 +31,10 @@ import org.json.JSONObject
 import sy.medpro.watani.data.*
 import sy.medpro.watani.ui.anki.AnkiFlashcardScreen
 import sy.medpro.watani.ui.courses.CoursesScreen
+import sy.medpro.watani.ui.explanation.ExplanationSection
+import sy.medpro.watani.ui.explanation.ExplanationUiState
+import sy.medpro.watani.ui.explanation.normalizeExplanationKey
+import sy.medpro.watani.ui.explanation.rememberExplanationState
 import sy.medpro.watani.ui.simulator.ExamSimulatorScreen
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import java.io.File
@@ -279,6 +283,7 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
             val (subj, q) = selectedQuestion!!
             val options = q.options ?: emptyList()
             val correctIdx = getCorrectIndices(q, options).firstOrNull() ?: 0
+            val dailyExplanationState = rememberExplanationState(normalizeExplanationKey(q.id))
 
             Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
@@ -345,6 +350,20 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
                             if (!q.explanation.isNullOrBlank()) {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text("الشرح: ${q.explanation}", fontSize = 13.sp)
+                            }
+                            when (val ex = dailyExplanationState) {
+                                is ExplanationUiState.Present -> ExplanationSection(content = ex.content)
+                                ExplanationUiState.Loading -> Box(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaroonPrimary
+                                    )
+                                }
+                                ExplanationUiState.Idle, ExplanationUiState.Absent -> Unit
                             }
                         }
                     }
