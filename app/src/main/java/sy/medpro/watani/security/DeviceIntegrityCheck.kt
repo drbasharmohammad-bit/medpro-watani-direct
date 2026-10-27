@@ -75,14 +75,19 @@ object DeviceIntegrityCheck {
             val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 packageManager.getPackageInfo(
                     context.packageName,
-                    PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNATURES_FLAG.toLong())
+                    PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong())
                 )
             } else {
                 @Suppress("DEPRECATION")
                 packageManager.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
             }
 
-            packageInfo.signatures.isNotEmpty()
+            val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageInfo.signingInfo?.apkContentsSigners
+            } else {
+                packageInfo.signatures
+            }
+            signatures?.isNotEmpty() == true
         } catch (e: Exception) {
             Log.e(TAG, "Signature validation error: ${e.message}")
             false
