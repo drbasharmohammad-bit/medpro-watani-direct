@@ -199,3 +199,26 @@ data class GuideInfoDto(
     @Json(name = "supportMessage") val supportMessage: String?
 )
 
+
+@JsonClass(generateAdapter = true)
+data class LibraryEnvelope(
+    @Json(name = "subjects") val subjects: List<LibrarySubject>?
+)
+
+@JsonClass(generateAdapter = true)
+data class LibrarySubject(
+    @Json(name = "id") val id: String?,
+    @Json(name = "name") val name: String?,
+    @Json(name = "books") val books: List<LibraryItem>?,
+    @Json(name = "videos") val videos: List<LibraryItem>?
+)
+
+@JsonClass(generateAdapter = true)
+data class LibraryItem(
+    @Json(name = "id") val id: String?,
+    @Json(name = "title") val title: String?,
+    @Json(name = "fileUrl") val fileUrl: String?,
+    @Json(name = "size") val size: Long?,
+    @Json(name = "hash") val hash: String?,
+    @Json(name = "description") val description: String?
+)

@@ -18,6 +18,7 @@ enum class AppTab(val title: String) {
     UNIVERSITIES("الجامعات"),
     UWORLD("UWorld"),
     CASES("المريض الافتراضي"),
+    LIBRARY("المكتبة"),
     LEADERBOARD("الصدارة"),
     PROGRESS("تقدمي")
 }

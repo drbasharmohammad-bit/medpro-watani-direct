@@ -222,6 +222,15 @@ object OfflineStudyVault {
         persist(context, updated)
     }
 
+    fun addFlashcardMastered(context: Context, cardId: Int) {
+        ensureInitialized(context)
+        val current = _statsFlow.value
+        if (current.masteredFlashcardIds.contains(cardId)) return
+        val updated = current.copy(masteredFlashcardIds = current.masteredFlashcardIds + cardId)
+        _statsFlow.value = updated
+        persist(context, updated)
+    }
+
     private fun classifySpecialtyCategory(rawTitle: String): String {
         val t = rawTitle.lowercase()
         return when {

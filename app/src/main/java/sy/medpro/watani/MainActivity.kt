@@ -42,6 +42,7 @@ import sy.medpro.watani.ui.courses.CoursesScreen
 import sy.medpro.watani.ui.drawer.*
 import sy.medpro.watani.ui.home.*
 import sy.medpro.watani.ui.leaderboard.LeaderboardScreen
+import sy.medpro.watani.ui.library.LibraryScreen
 import sy.medpro.watani.ui.offline.EponymsAtlasScreen
 import sy.medpro.watani.ui.offline.OfflineClinicalCalculatorsScreen
 import sy.medpro.watani.ui.offline.OfflineEcgAtlasScreen
@@ -67,6 +68,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        sy.medpro.watani.security.ContentProtection.enableScreenshotPrevention(this)
         if (com.google.firebase.FirebaseApp.getApps(this).isEmpty()) {
             val options = com.google.firebase.FirebaseOptions.Builder()
                 .setApiKey("AIzaSyBlHOicffOYb5W5REVlEsF4KT0gEhzQ-u8")
@@ -277,6 +279,7 @@ class MainActivity : ComponentActivity() {
                                             Triple(AppTab.HOME, "الرئيسية", Icons.Default.Home),
                                             Triple(AppTab.BANK, "بنك الأسئلة", Icons.Default.Book),
                                             Triple(AppTab.CASES, "المريض الافتراضي", Icons.Default.LocalHospital),
+                                            Triple(AppTab.LIBRARY, "المكتبة", Icons.Default.Book),
                                             Triple(AppTab.LEADERBOARD, "الصدارة", Icons.Default.EmojiEvents),
                                             Triple(AppTab.PROGRESS, "تقدمي", Icons.Default.WorkspacePremium)
                                         )
@@ -486,6 +489,9 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                         AppTab.LEADERBOARD -> {
                                                             LeaderboardScreen()
+                                                        }
+                                                        AppTab.LIBRARY -> {
+                                                            LibraryScreen()
                                                         }
                                                         AppTab.PROGRESS -> {
                                                             ProgressDashboardScreen(
