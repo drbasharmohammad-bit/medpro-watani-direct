@@ -31,21 +31,16 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.data.SubjectEnvelope
-import sy.medpro.watani.ui.anki.AnkiFlashcardScreen
 import sy.medpro.watani.ui.auth.SignInGate
 import sy.medpro.watani.ui.cases.CasePlayerScreen
 import sy.medpro.watani.ui.cases.CasesScreen
 import sy.medpro.watani.ui.clinical.BedsideClinicalTab
-import sy.medpro.watani.ui.clinical.BedsideDosingAndIcuSuiteScreen
-import sy.medpro.watani.ui.clinical.AuscultationTrainerScreen
 import sy.medpro.watani.ui.courses.CoursesScreen
 import sy.medpro.watani.ui.drawer.*
 import sy.medpro.watani.ui.home.*
 import sy.medpro.watani.ui.leaderboard.LeaderboardScreen
 import sy.medpro.watani.ui.library.LibraryScreen
 import sy.medpro.watani.ui.offline.EponymsAtlasScreen
-import sy.medpro.watani.ui.offline.OfflineClinicalCalculatorsScreen
-import sy.medpro.watani.ui.offline.OfflineEcgAtlasScreen
 import sy.medpro.watani.ui.offline.SmartStudyPlannerScreen
 import sy.medpro.watani.ui.progress.ProgressDashboardScreen
 import sy.medpro.watani.ui.quiz.QuizScreen
@@ -159,15 +154,17 @@ class MainActivity : ComponentActivity() {
                                             verticalArrangement = Arrangement.spacedBy(2.dp),
                                             modifier = Modifier.weight(1f)
                                         ) {
+                                            // تجميع 28 أكتوبر 2026 (بأمر الدكتور): كل فكرة واحدة تحت
+                                            // تبويب واحد — القلب والإصغاء، المختبرات والحاسبات،
+                                            // البطاقات والمراجعة، والتواصل — بلا حذف أي محتوى.
                                             val drawerItems = listOf(
                                                 "الملف الشخصي",
                                                 "الاشتراك وتفعيل الحساب",
                                                 "الكورسات",
                                                 "التحدي اليومي",
-                                                "البطاقات",
+                                                "البطاقات والمراجعة الذكية",
                                                 "دليل الدراسة",
                                                 "سجل أخطائي والاختبارات",
-                                                "المراجعة الذكية Anki",
                                                 "محاكاة الامتحان",
                                                 "المريض الافتراضي",
                                                 "نقاط الضعف",
@@ -178,16 +175,12 @@ class MainActivity : ComponentActivity() {
                                                 "ملاحظاتي",
                                                 "إعدادات وسجل الإشعارات",
                                                 "الخصوصية والشروط",
-                                                "التواصل مع الإدارة",
-                                                "روابط التواصل",
+                                                "التواصل",
                                                 "محطات OSCE",
-                                                "مختبر غازات الدم",
-                                                "مدرب تخطيط القلب",
+                                                "القلب والإصغاء",
                                                 "محاكاة المناوبة الليلية",
                                                 "غرفة الطوارئ",
-                                                "مختبر القيم المخبرية",
-                                                "الحاسبات السريرية الموسعة",
-                                                "مدرب الإصغاء",
+                                                "المختبرات والحاسبات",
                                                 "تسجيل الخروج"
                                             )
                                             items(drawerItems) { title ->
@@ -196,10 +189,9 @@ class MainActivity : ComponentActivity() {
                                                     "الاشتراك وتفعيل الحساب" -> Icons.Default.VpnKey
                                                     "الكورسات" -> Icons.Default.MenuBook
                                                     "التحدي اليومي" -> Icons.Default.Whatshot
-                                                    "البطاقات" -> Icons.Default.Style
+                                                    "البطاقات والمراجعة الذكية" -> Icons.Default.Style
                                                     "دليل الدراسة" -> Icons.Default.Book
                                                     "سجل أخطائي والاختبارات" -> Icons.Default.History
-                                                    "المراجعة الذكية Anki" -> Icons.Default.Psychology
                                                     "محاكاة الامتحان" -> Icons.Default.Quiz
                                                     "المريض الافتراضي" -> Icons.Default.LocalHospital
                                                     "نقاط الضعف" -> Icons.Default.Assessment
@@ -210,16 +202,12 @@ class MainActivity : ComponentActivity() {
                                                     "ملاحظاتي" -> Icons.Default.NoteAlt
                                                     "إعدادات وسجل الإشعارات" -> Icons.Default.Settings
                                                     "الخصوصية والشروط" -> Icons.Default.Security
-                                                    "التواصل مع الإدارة" -> Icons.Default.SupportAgent
-                                                    "روابط التواصل" -> Icons.Default.Share
+                                                    "التواصل" -> Icons.Default.SupportAgent
                                                     "محطات OSCE" -> Icons.Default.MedicalServices
-                                                    "مختبر غازات الدم" -> Icons.Default.Science
-                                                    "مدرب تخطيط القلب" -> Icons.Default.MonitorHeart
+                                                    "القلب والإصغاء" -> Icons.Default.MonitorHeart
                                                     "محاكاة المناوبة الليلية" -> Icons.Default.Nightlight
                                                     "غرفة الطوارئ" -> Icons.Default.LocalHospital
-                                                    "مختبر القيم المخبرية" -> Icons.Default.Biotech
-                                                    "الحاسبات السريرية الموسعة" -> Icons.Default.Calculate
-                                                    "مدرب الإصغاء" -> Icons.Default.VolumeUp
+                                                    "المختبرات والحاسبات" -> Icons.Default.Science
                                                     else -> Icons.Default.Logout
                                                 }
                                                 NavigationDrawerItem(
@@ -323,10 +311,11 @@ class MainActivity : ComponentActivity() {
                                                 "الاشتراك وتفعيل الحساب" -> ActivationScreen(onBack = { drawerScreen = null })
                                                 "الكورسات" -> CoursesScreen(onBack = { drawerScreen = null })
                                                 "التحدي اليومي" -> DailyChallengeScreen(onBack = { drawerScreen = null })
-                                                "البطاقات" -> FlashcardsScreen(onBack = { drawerScreen = null })
+                                                "البطاقات والمراجعة الذكية" -> FlashcardsReviewScreen(onBack = { drawerScreen = null })
+                                                "البطاقات" -> FlashcardsReviewScreen(initialTab = 0, onBack = { drawerScreen = null })
                                                 "دليل الدراسة" -> StudyGuideScreen(onBack = { drawerScreen = null })
                                                 "سجل أخطائي والاختبارات" -> WrongAnswersScreen(onBack = { drawerScreen = null })
-                                                "المراجعة الذكية Anki" -> AnkiFlashcardScreen(onBack = { drawerScreen = null })
+                                                "المراجعة الذكية Anki" -> FlashcardsReviewScreen(initialTab = 1, onBack = { drawerScreen = null })
                                                 "محاكاة الامتحان" -> ExamSimulatorScreen(onBack = { drawerScreen = null })
                                                 "نقاط الضعف" -> WeakPointsScreen(onBack = { drawerScreen = null })
                                                 "مؤقت التركيز" -> FocusTimerScreen(onBack = { drawerScreen = null })
@@ -336,31 +325,38 @@ class MainActivity : ComponentActivity() {
                                                 "ملاحظاتي" -> MyNotesScreen(onBack = { drawerScreen = null })
                                                 "إعدادات وسجل الإشعارات" -> SettingsScreen(onBack = { drawerScreen = null })
                                                 "الخصوصية والشروط" -> PrivacyScreen(onBack = { drawerScreen = null })
+                                                "التواصل" -> ContactScreen(onBack = { drawerScreen = null })
                                                 "التواصل مع الإدارة" -> ContactScreen(onBack = { drawerScreen = null })
                                                 "روابط التواصل" -> ContactScreen(onBack = { drawerScreen = null })
                                                 "خوارزميات التدبير" -> ClinicalAlgorithmsScreen(onBack = { drawerScreen = null })
                                                 "الخطوط العلاجية الأولى" -> FirstLineDrugsScreen(onBack = { drawerScreen = null })
                                                 "النقاط الذهبية" -> GoldenPearlsScreen(onBack = { drawerScreen = null })
                                                 "موسوعة المتلازمات" -> EponymsAtlasScreen(onBack = { drawerScreen = null })
-                                                "أطلس تخطيط القلب" -> OfflineEcgAtlasScreen(onBack = { drawerScreen = null })
                                                 "مخطط جدول الدراسة" -> SmartStudyPlannerScreen(onBack = { drawerScreen = null })
-                                                "الحاسبات السريرية" -> OfflineClinicalCalculatorsScreen(onBack = { drawerScreen = null })
-                                                "مدرب الإصغاء" -> AuscultationTrainerScreen(onBack = { drawerScreen = null })
-                                                "حاسبات العناية والسوائل" -> BedsideDosingAndIcuSuiteScreen(
-                                                    initialTab = BedsideClinicalTab.ICU_INFUSIONS,
+                                                // مجموعات 28 أكتوبر: الأسماء القديمة أسماء مستعارة تفتح
+                                                // المجموعة على التبويب المقابل، فلا تنكسر روابط الرئيسية.
+                                                "القلب والإصغاء" -> HeartAuscultationScreen(onBack = { drawerScreen = null })
+                                                "مدرب تخطيط القلب" -> HeartAuscultationScreen(initialTab = 0, onBack = { drawerScreen = null })
+                                                "أطلس تخطيط القلب" -> HeartAuscultationScreen(initialTab = 1, onBack = { drawerScreen = null })
+                                                "مدرب الإصغاء" -> HeartAuscultationScreen(initialTab = 2, onBack = { drawerScreen = null })
+                                                "المختبرات والحاسبات" -> LabsCalculatorsScreen(onBack = { drawerScreen = null })
+                                                "مختبر غازات الدم" -> LabsCalculatorsScreen(initialTab = 0, onBack = { drawerScreen = null })
+                                                "مختبر القيم المخبرية" -> LabsCalculatorsScreen(initialTab = 1, onBack = { drawerScreen = null })
+                                                "الحاسبات السريرية الموسعة" -> LabsCalculatorsScreen(initialTab = 2, onBack = { drawerScreen = null })
+                                                "الحاسبات السريرية" -> LabsCalculatorsScreen(initialTab = 3, onBack = { drawerScreen = null })
+                                                "حاسبات العناية والسوائل" -> LabsCalculatorsScreen(
+                                                    initialTab = 4,
+                                                    initialBedsideTab = BedsideClinicalTab.ICU_INFUSIONS,
                                                     onBack = { drawerScreen = null }
                                                 )
-                                                "الصادات والكلية والأطفال" -> BedsideDosingAndIcuSuiteScreen(
-                                                    initialTab = BedsideClinicalTab.RENAL_ANTIBIOTICS,
+                                                "الصادات والكلية والأطفال" -> LabsCalculatorsScreen(
+                                                    initialTab = 4,
+                                                    initialBedsideTab = BedsideClinicalTab.RENAL_ANTIBIOTICS,
                                                     onBack = { drawerScreen = null }
                                                 )
                                                 "محطات OSCE" -> OsceStationsScreen(onBack = { drawerScreen = null })
-                                                "مختبر غازات الدم" -> AbgLabScreen(onBack = { drawerScreen = null })
-                                                "مدرب تخطيط القلب" -> EcgTrainerScreen(onBack = { drawerScreen = null })
                                                 "محاكاة المناوبة الليلية" -> NightShiftSimulatorScreen(onBack = { drawerScreen = null })
                                                 "غرفة الطوارئ" -> EmergencyRoomScreen(onBack = { drawerScreen = null })
-                                                "مختبر القيم المخبرية" -> LabValuesLabScreen(onBack = { drawerScreen = null })
-                                                "الحاسبات السريرية الموسعة" -> ClinicalCalculatorsExpandedScreen(onBack = { drawerScreen = null })
                                                 else -> ProfileScreen(onBack = { drawerScreen = null })
                                             }
                                         } else {

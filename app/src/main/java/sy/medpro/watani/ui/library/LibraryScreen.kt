@@ -37,43 +37,8 @@ data class LibraryReaderState(
 
 @Composable
 fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val prefs = remember { context.getSharedPreferences("watani_activation", android.content.Context.MODE_PRIVATE) }
-    val isActivated by remember { mutableStateOf(prefs.getBoolean("is_activated", false)) }
-
-    if (!isActivated) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Card(
-                Modifier
-                    .fillMaxWidth(0.9f)
-                    .padding(16.dp),
-                elevation = CardDefaults.cardElevation(4.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(
-                    Modifier.padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.Lock, null, Modifier.size(64.dp), tint = MaroonPrimary)
-                    Text(
-                        "المكتبة متاحة للحسابات المفعلة",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        "انتقل إلى \"الاشتراك وتفعيل الحساب\" لتفعيل حسابك والوصول إلى المكتبة والكتب والفيديوهات.",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                }
-            }
-        }
-        return
-    }
-
+    // المكتبة مجانية حاليًا بقرار الدكتور (28 أكتوبر 2026): أُزيل حجب التفعيل
+    // بالكامل من هذه الشاشة. التفعيل باقٍ لباقي أقسام التطبيق المدفوعة.
     val state by viewModel.state.collectAsState()
 
     if (state.isLoading && state.library == null) {
