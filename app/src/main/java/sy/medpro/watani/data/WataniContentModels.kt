@@ -220,5 +220,8 @@ data class LibraryItem(
     @Json(name = "fileUrl") val fileUrl: String?,
     @Json(name = "size") val size: Long?,
     @Json(name = "hash") val hash: String?,
-    @Json(name = "description") val description: String?
+    @Json(name = "description") val description: String?,
+    // Side-car Arabic SRT for videos. Default null keeps old library.json
+    // files (without this field) parsing exactly as before.
+    @Json(name = "subtitleUrl") val subtitleUrl: String? = null
 )

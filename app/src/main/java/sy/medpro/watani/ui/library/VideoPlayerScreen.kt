@@ -1,7 +1,7 @@
 package sy.medpro.watani.ui.library
 
-import android.content.Context
-import android.media.MediaPlayer
+import android.net.Uri
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -13,51 +13,103 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import android.widget.VideoView
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import java.io.File
 
-private fun getFirebaseUid(): String {
-    return try {
-        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
-    } catch (e: Exception) {
-        ""
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Video player with toggleable Arabic SRT subtitles (Media3 ExoPlayer).
+ *
+ * Pairing rule: the subtitle belongs to THIS video only. It arrives either
+ * as [subtitleFile] (the locally downloaded side-car for a downloaded video)
+ * or as [subtitleUrl] (streamed alongside a streamed video). A subtitle is
+ * never shown for the wrong video and never invented: when neither is
+ * available, playback simply has no subtitles and no toggle is shown.
+ *
+ * Offline: a downloaded video plays from its local file and its local SRT
+ * file, with no network call during playback. The toggle only enables or
+ * disables the text track; it never restarts the video.
+ */
+@OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun VideoPlayerScreen(videoFile: File?, title: String, onBack: () -> Unit, videoFileUrl: String? = null) {
+fun VideoPlayerScreen(
+    videoFile: File?,
+    title: String,
+    onBack: () -> Unit,
+    videoFileUrl: String? = null,
+    subtitleFile: File? = null,
+    subtitleUrl: String? = null
+) {
     val context = LocalContext.current
-    var isPlaying by remember { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
-    val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
+
+    val videoUri: Uri? = when {
+        videoFile != null -> Uri.fromFile(videoFile)
+        !videoFileUrl.isNullOrBlank() -> Uri.parse(videoFileUrl)
+        else -> null
+    }
+    // Local side-car wins for downloaded videos (offline); otherwise the URL.
+    val subtitleUri: Uri? = when {
+        subtitleFile != null && subtitleFile.exists() -> Uri.fromFile(subtitleFile)
+        !subtitleUrl.isNullOrBlank() -> Uri.parse(subtitleUrl)
+        else -> null
+    }
+    val hasSubtitles = subtitleUri != null
+    var subtitlesEnabled by remember { mutableStateOf(hasSubtitles) }
+
+    val player = remember(videoUri, subtitleUri) {
+        ExoPlayer.Builder(context).build().apply {
+            if (videoUri != null) {
+                val itemBuilder = MediaItem.Builder().setUri(videoUri)
+                if (subtitleUri != null) {
+                    itemBuilder.setSubtitleConfigurations(
+                        listOf(
+                            MediaItem.SubtitleConfiguration.Builder(subtitleUri)
+                                .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                                .setLanguage("ar")
+                                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                                .build()
+                        )
+                    )
+                }
+                setMediaItem(itemBuilder.build())
+                prepare()
+                playWhenReady = true
+            }
+        }
+    }
+
+    // Toggling subtitles only flips the text track; playback continues.
+    LaunchedEffect(subtitlesEnabled, hasSubtitles) {
+        if (hasSubtitles) {
+            player.trackSelectionParameters = player.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !subtitlesEnabled)
+                .build()
+        }
+    }
+
+    DisposableEffect(player) {
+        onDispose { player.release() }
+    }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
-                VideoView(ctx).apply {
-                    if (videoFile != null) {
-                        setVideoPath(videoFile.absolutePath)
-                    } else if (videoFileUrl != null) {
-                        setVideoURI(android.net.Uri.parse(videoFileUrl))
-                    }
-                    setOnPreparedListener { mp ->
-                        mp.start()
-                        isPlaying = true
-                    }
-                    setOnCompletionListener {
-                        isPlaying = false
-                    }
+                PlayerView(ctx).apply {
+                    this.player = player
+                    useController = true
                 }
-            }
+            },
+            update = { view -> view.player = player }
         )
 
         if (showControls) {
@@ -79,6 +131,21 @@ fun VideoPlayerScreen(videoFile: File?, title: String, onBack: () -> Unit, video
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (hasSubtitles) {
+                        TextButton(onClick = { subtitlesEnabled = !subtitlesEnabled }) {
+                            Icon(
+                                if (subtitlesEnabled) Icons.Default.Subtitles else Icons.Default.SubtitlesOff,
+                                null,
+                                tint = Color.White
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (subtitlesEnabled) "إيقاف الترجمة" else "تشغيل الترجمة",
+                                color = Color.White
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
+                    }
                     IconButton(onClick = { showControls = false }) {
                         Icon(Icons.Default.Close, null, tint = Color.White)
                     }

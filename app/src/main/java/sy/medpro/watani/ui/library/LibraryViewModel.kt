@@ -66,6 +66,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         return repository.getLibraryFile(item)
     }
 
+    /** Local SRT side-car for a downloaded video, or null when not downloaded. */
+    fun getSubtitleFile(item: LibraryItem): java.io.File? {
+        return repository.getLibrarySubtitleFileIfExists(item)
+    }
+
     suspend fun openItem(item: LibraryItem): Result<java.io.File> {
         return repository.openLibraryItem(item)
     }

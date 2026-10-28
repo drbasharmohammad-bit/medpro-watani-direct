@@ -405,6 +405,39 @@ class WataniRepository(private val context: Context) {
         return File(dir, name)
     }
 
+    /** Plain side-car SRT file for a video, next to its plain file.
+     * Paired strictly by the same item (same base name), never by guesswork:
+     * the SRT belongs to this item's id/file only. Stored in the app's
+     * private filesDir (not external storage) and deleted with the item. */
+    fun getLibrarySubtitleFile(item: LibraryItem): File {
+        val plain = getLibraryFile(item)
+        return File(plain.parentFile, "${plain.nameWithoutExtension}.srt")
+    }
+
+    fun getLibrarySubtitleFileIfExists(item: LibraryItem): File? {
+        val f = getLibrarySubtitleFile(item)
+        return if (f.exists()) f else null
+    }
+
+    /** Best-effort download of the item's SRT side-car. Never fails the
+     * video download: a missing SRT only means subtitles are unavailable
+     * for that video until the next download attempt. */
+    private fun downloadLibrarySubtitle(item: LibraryItem) {
+        val url = item.subtitleUrl?.takeIf { it.isNotBlank() } ?: return
+        try {
+            val target = getLibrarySubtitleFile(item)
+            client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { resp ->
+                if (!resp.isSuccessful) return
+                val body = resp.body ?: return
+                body.byteStream().use { input ->
+                    java.io.FileOutputStream(target).use { output -> input.copyTo(output) }
+                }
+            }
+        } catch (_: Exception) {
+            // SRT download failure is non-fatal by design.
+        }
+    }
+
     fun getLibraryEncryptedFile(item: LibraryItem): File {
         val dir = sy.medpro.watani.security.ContentEncryption.getEncryptedDir(context)
         val rawName = item.id ?: item.fileUrl?.substringAfterLast('/') ?: "item"
@@ -493,6 +526,7 @@ class WataniRepository(private val context: Context) {
         if (plainTemp.exists()) plainTemp.delete()
         plainFile.delete()
         encFile.delete()
+        getLibrarySubtitleFile(item).delete()
         return !plainFile.exists() && !encFile.exists()
     }
 
@@ -582,6 +616,9 @@ class WataniRepository(private val context: Context) {
                 }
 
                 plainTarget.delete()
+                // Side-car SRT travels with the video; its failure never
+                // fails the video download (see downloadLibrarySubtitle).
+                downloadLibrarySubtitle(item)
                 onProgress(1f)
                 return@withContext LibraryDownloadResult.ok(encFile)
             } catch (e: Exception) {

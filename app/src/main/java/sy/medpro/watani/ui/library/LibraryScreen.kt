@@ -26,7 +26,14 @@ import sy.medpro.watani.data.LibrarySubject
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.GoldAccent
 
-data class LibraryReaderState(val item: LibraryItem, val file: java.io.File?, val url: String?, val isBook: Boolean)
+data class LibraryReaderState(
+    val item: LibraryItem,
+    val file: java.io.File?,
+    val url: String?,
+    val isBook: Boolean,
+    val subtitleFile: java.io.File? = null,
+    val subtitleUrl: String? = null
+)
 
 @Composable
 fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
@@ -130,9 +137,15 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
             }
             else -> {
                 if (reader.file != null && reader.file.exists()) {
-                    VideoPlayerScreen(reader.file, reader.item.title ?: "فيديو", onBack = onReaderBack)
+                    VideoPlayerScreen(
+                        reader.file, reader.item.title ?: "فيديو", onBack = onReaderBack,
+                        subtitleFile = reader.subtitleFile, subtitleUrl = reader.subtitleUrl
+                    )
                 } else if (!reader.url.isNullOrEmpty()) {
-                    VideoPlayerScreen(null, reader.item.title ?: "فيديو", onBack = onReaderBack, videoFileUrl = reader.url)
+                    VideoPlayerScreen(
+                        null, reader.item.title ?: "فيديو", onBack = onReaderBack,
+                        videoFileUrl = reader.url, subtitleUrl = reader.subtitleUrl
+                    )
                 }
             }
         }
@@ -224,7 +237,13 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 filteredItems.forEach { item ->
                                     LibraryItemRow(item, selectedTab == 0, viewModel, state.downloadingIds, onOpenReader = { file, url ->
-                                        currentReader = LibraryReaderState(item, file, url, selectedTab == 0)
+                                        currentReader = LibraryReaderState(
+                                            item, file, url, selectedTab == 0,
+                                            // Local SRT side-car only for downloaded videos;
+                                            // streamed videos use the item's subtitleUrl.
+                                            subtitleFile = if (file != null) viewModel.getSubtitleFile(item) else null,
+                                            subtitleUrl = item.subtitleUrl
+                                        )
                                     }, onOpenError = { err ->
                                         openError = err
                                     })
