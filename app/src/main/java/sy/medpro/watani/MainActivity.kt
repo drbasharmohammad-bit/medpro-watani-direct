@@ -184,6 +184,7 @@ class MainActivity : ComponentActivity() {
                                                 "مختبر غازات الدم",
                                                 "مدرب تخطيط القلب",
                                                 "محاكاة المناوبة الليلية",
+                                                "غرفة الطوارئ",
                                                 "مختبر القيم المخبرية",
                                                 "الحاسبات السريرية الموسعة",
                                                 "مدرب الإصغاء",
@@ -215,6 +216,7 @@ class MainActivity : ComponentActivity() {
                                                     "مختبر غازات الدم" -> Icons.Default.Science
                                                     "مدرب تخطيط القلب" -> Icons.Default.MonitorHeart
                                                     "محاكاة المناوبة الليلية" -> Icons.Default.Nightlight
+                                                    "غرفة الطوارئ" -> Icons.Default.LocalHospital
                                                     "مختبر القيم المخبرية" -> Icons.Default.Biotech
                                                     "الحاسبات السريرية الموسعة" -> Icons.Default.Calculate
                                                     "مدرب الإصغاء" -> Icons.Default.VolumeUp
@@ -356,6 +358,7 @@ class MainActivity : ComponentActivity() {
                                                 "مختبر غازات الدم" -> AbgLabScreen(onBack = { drawerScreen = null })
                                                 "مدرب تخطيط القلب" -> EcgTrainerScreen(onBack = { drawerScreen = null })
                                                 "محاكاة المناوبة الليلية" -> NightShiftSimulatorScreen(onBack = { drawerScreen = null })
+                                                "غرفة الطوارئ" -> EmergencyRoomScreen(onBack = { drawerScreen = null })
                                                 "مختبر القيم المخبرية" -> LabValuesLabScreen(onBack = { drawerScreen = null })
                                                 "الحاسبات السريرية الموسعة" -> ClinicalCalculatorsExpandedScreen(onBack = { drawerScreen = null })
                                                 else -> ProfileScreen(onBack = { drawerScreen = null })
