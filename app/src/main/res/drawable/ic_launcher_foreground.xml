@@ -1,15 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- Bold White Letter M -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,76V32h10l14,24l14,-24h10v44h-9V47l-11,18h-8L39,47v29H30z" />
-    <!-- Gold/Brass Medical Plus Sign (+) at upper-right of M -->
-    <path
-        android:fillColor="#D4AF37"
-        android:pathData="M76,28h6v6h6v6h-6v6h-6v-6h-6v-6h6V28z" />
-</vector>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/ic_launcher_artwork"
+    android:gravity="center" />
