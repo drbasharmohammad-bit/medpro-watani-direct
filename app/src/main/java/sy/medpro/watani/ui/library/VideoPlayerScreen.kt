@@ -1,7 +1,6 @@
 package sy.medpro.watani.ui.library
 
 import android.net.Uri
-import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
