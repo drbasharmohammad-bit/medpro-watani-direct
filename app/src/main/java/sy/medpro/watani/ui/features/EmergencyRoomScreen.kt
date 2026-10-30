@@ -66,7 +66,7 @@ data class ErCase(
     fun node(id: String): ErNode = nodes.first { it.id == id }
 }
 
-private val erCases: List<ErCase> = listOf(
+private val erCasesPilot: List<ErCase> = listOf(
     ErCase(
         id = "stemi",
         title = "ألم صدري حاد — احتشاء بارتفاع ST",
@@ -432,6 +432,11 @@ private val erCases: List<ErCase> = listOf(
         endSummary = "الدرس: نقص السكر مع عدم القدرة على البلع = لا شيء بالفم، دكستروز أو غلوكاغون، ثم كربوهيدرات طويلة ومراجعة السبب."
     )
 )
+
+// Pilot bank (5 cases, untouched) + the four merged waves (184 cases).
+// Wave lists live in waveA.kt / waveB.kt / waveC.kt / waveD.kt in this package.
+private val erCases: List<ErCase> =
+    erCasesPilot + erCasesWaveA + erCasesWaveB + erCasesWaveC + erCasesWaveD
 
 // ---------------------------------------------------------------------------
 // UI state: one case at a time, one node at a time.

@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.R
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
+import sy.medpro.watani.ui.clinical.calcSpecsSet1
+import sy.medpro.watani.ui.clinical.calcSpecsSet2
 import sy.medpro.watani.ui.theme.*
 import java.util.Locale
 
@@ -367,6 +369,7 @@ fun ClinicalCalculatorsExpandedScreen(onBack: () -> Unit) {
         Triple("مقياس غلاسكو للغيبوبة (GCS)", "تقييم الاستجابة الحركية (1-6)، اللفظية (1-5)، والعينية (1-4).", "طبيعي 15 | غيبوبة عميقة <= 8"),
         Triple("مقياس CHA2DS2-VASc", "تقدير خطر السكتة الدماغية لدى مرضى الرجفان الأذيني لتحديد استطباب مضادات التخثر.", "الذكور >= 2 والإناناث >= 3 تستطب مضادات التخثر الفموية NOACs")
     )
+    val allNewCalcSpecs = remember { calcSpecsSet1 + calcSpecsSet2 }
 
     DrawerScreenScaffold(title = "الحاسبات والمعايير السريرية الموسعة", onBack = onBack) { padding ->
         LazyColumn(
@@ -413,6 +416,46 @@ fun ClinicalCalculatorsExpandedScreen(onBack: () -> Unit) {
                                 Text(calculators[selectedCalc].third, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
+                    }
+                }
+            }
+
+            item {
+                Text(
+                    "حاسبات إضافية (56) — بالصيغة والمدخلات والتفسير والمصدر",
+                    fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaroonPrimary,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+            items(allNewCalcSpecs) { spec ->
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(spec.titleAr, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(spec.formula, fontSize = 13.sp, lineHeight = 20.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("المدخلات:", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 12.sp)
+                        spec.inputs.forEach { input ->
+                            Text(
+                                "• ${input.labelAr} (${input.unit})" +
+                                    (if (input.min != null && input.max != null) " — المجال: ${input.min} إلى ${input.max}" else "") +
+                                    (if (input.default != null) " — الافتراضي: ${input.default}" else ""),
+                                fontSize = 13.sp, lineHeight = 20.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("التفسير:", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 12.sp)
+                        Text(spec.interpretation, fontSize = 13.sp, lineHeight = 20.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("مثال محسوب:", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 12.sp)
+                        Text(spec.workedExample, fontSize = 13.sp, lineHeight = 20.sp)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("المصدر: ${spec.source}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                     }
                 }
             }
