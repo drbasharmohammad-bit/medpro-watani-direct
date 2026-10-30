@@ -33,7 +33,7 @@ val universitiesMap = mapOf(
     "damascus" to "جامعة دمشق",
     "aleppo" to "جامعة حلب",
     "lattakia" to "جامعة اللاذقية",
-    "homs" to "جامعة البعث (حمص)",
+    "homs" to "جامعة حمص",
     "hama" to "جامعة حماة"
 )
 

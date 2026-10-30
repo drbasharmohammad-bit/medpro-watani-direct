@@ -18,16 +18,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import org.json.JSONArray
+import com.google.firebase.auth.FirebaseAuth
+import org.json.JSONObject
+import sy.medpro.watani.data.WorkerActivationApi
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
-data class LeaderboardUser(val rank: Int, val name: String, val score: Int, val specialty: String)
+data class LeaderboardUser(val rank: Int, val name: String, val score: Int, val university: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,58 +38,62 @@ fun LeaderboardScreen() {
         if (!isLoading) isRefreshing = false
     }
 
+    var notActivated by remember { mutableStateOf(false) }
+    var needsSignIn by remember { mutableStateOf(false) }
+
     LaunchedEffect(reloadTrigger) {
         isLoading = true
         errorMessage = null
+        notActivated = false
+        needsSignIn = false
         try {
-            val list = mutableListOf<LeaderboardUser>()
-            try {
-                val db = FirebaseFirestore.getInstance()
-                val snapshot = db.collection("users").orderBy("xp", Query.Direction.DESCENDING).limit(50).get().await()
-                var r = 1
-                for (doc in snapshot.documents) {
-                    val name = doc.getString("name") ?: "طبيب مقيم"
-                    val xp = (doc.getLong("xp") ?: 0L).toInt()
-                    val specialty = doc.getString("specialty") ?: "طب بشري"
-                    list.add(LeaderboardUser(rank = r++, name = name, score = xp, specialty = specialty))
-                }
-            } catch (_: Exception) {}
-
-            if (list.isEmpty()) {
-                val result = withContext(Dispatchers.IO) {
-                    val client = OkHttpClient()
-                    val request = okhttp3.Request.Builder()
-                        .url("https://watani-api.drbasharmohammed.workers.dev/v1/leaderboard")
-                        .get()
-                        .build()
-                    client.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body?.string() ?: "[]"
-                            val jsonArr = JSONArray(body)
-                            val wList = mutableListOf<LeaderboardUser>()
-                            for (i in 0 until jsonArr.length()) {
-                                val obj = jsonArr.getJSONObject(i)
-                                wList.add(
-                                    LeaderboardUser(
-                                        rank = obj.optInt("rank", i + 1),
-                                        name = obj.optString("name", "طبيب متميز"),
-                                        score = obj.optInt("score", 0),
-                                        specialty = obj.optString("specialty", "طب بشري")
-                                    )
+            val user = FirebaseAuth.getInstance().currentUser
+            if (user == null) {
+                needsSignIn = true
+                users = emptyList()
+                isLoading = false
+                return@LaunchedEffect
+            }
+            // الصدارة الآن من الـWorker حصرًا (لا قراءة Firestore هنا أبدًا):
+            // رمز Google ID للمصادقة، و403 تعني «للمفعّلين فقط».
+            val result = WorkerActivationApi.getFromWorker(user, "/v1/leaderboard?limit=50")
+            when (result.code) {
+                200 -> {
+                    val entries = JSONObject(result.body ?: "{}").optJSONArray("entries")
+                    val parsed = mutableListOf<LeaderboardUser>()
+                    if (entries != null) {
+                        for (i in 0 until entries.length()) {
+                            val obj = entries.getJSONObject(i)
+                            parsed.add(
+                                LeaderboardUser(
+                                    rank = obj.optInt("rank", i + 1),
+                                    name = obj.optString("name", "طبيب متميز").ifBlank { "طبيب متميز" },
+                                    score = obj.optInt("points", 0),
+                                    university = obj.optString("university", "")
                                 )
-                            }
-                            wList
-                        } else {
-                            emptyList()
+                            )
                         }
                     }
+                    users = parsed
+                    isLoading = false
                 }
-                users = result
-            } else {
-                users = list
+                403 -> {
+                    notActivated = true
+                    users = emptyList()
+                    isLoading = false
+                }
+                401, -1 -> {
+                    needsSignIn = true
+                    users = emptyList()
+                    isLoading = false
+                }
+                else -> {
+                    errorMessage = "تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت والإعادة."
+                    users = emptyList()
+                    isLoading = false
+                }
             }
-            isLoading = false
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             errorMessage = "تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت والإعادة."
             isLoading = false
             users = emptyList()
@@ -133,11 +133,31 @@ fun LeaderboardScreen() {
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text(
-                                    text = errorMessage ?: "لا توجد بيانات حالياً في لوحة الصدارة",
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                                    fontSize = 14.sp
-                                )
+                                when {
+                                    notActivated -> {
+                                        Text("لوحة الصدارة للمفعّلين فقط", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaroonPrimary)
+                                        Text(
+                                            "فعّل حسابك من «الاشتراك وتفعيل الحساب» باللوحة الجانبية لعرض ترتيبك بين زملائك.",
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                    needsSignIn -> {
+                                        Text("سجّل دخولك بحساب Google لعرض الصدارة", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaroonPrimary)
+                                        Text(
+                                            "الصدارة متاحة للطلاب المسجّلين بحساب Google.",
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                    else -> {
+                                        Text(
+                                            text = errorMessage ?: "لا توجد بيانات حالياً في لوحة الصدارة",
+                                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                }
                                 Button(shape = MaterialTheme.shapes.medium,
                                     onClick = { reloadTrigger++ },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
@@ -181,7 +201,9 @@ fun LeaderboardScreen() {
                                         Spacer(modifier = Modifier.width(16.dp))
                                         Column {
                                             Text(user.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                            Text(user.specialty, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                            if (user.university.isNotBlank()) {
+                                                Text(user.university, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                            }
                                         }
                                     }
                                     Surface(

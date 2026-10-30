@@ -73,6 +73,13 @@ fun ProfileScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) { OfflineStudyVault.ensureInitialized(context) }
     val stats by OfflineStudyVault.statsFlow.collectAsState()
 
+    // حقول الملف المعروض بالصدارة (تُحفظ محليًا بعد نجاح الحفظ بالـWorker)
+    val profilePrefs = remember { context.getSharedPreferences("watani_profile", Context.MODE_PRIVATE) }
+    var displayName by remember { mutableStateOf(profilePrefs.getString("display_name", firebaseUser?.displayName ?: "") ?: "") }
+    var university by remember { mutableStateOf(profilePrefs.getString("university", "") ?: "") }
+    var isSavingProfile by remember { mutableStateOf(false) }
+    var profileSaveMessage by remember { mutableStateOf<String?>(null) }
+
     DrawerScreenScaffold(title = "الملف الشخصي", onBack = onBack) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Surface(shape = RoundedCornerShape(50.dp), color = MaroonPrimary.copy(alpha = 0.2f), modifier = Modifier.size(96.dp)) {
@@ -95,6 +102,80 @@ fun ProfileScreen(onBack: () -> Unit) {
                     }
                     Text("إجمالي النقاط المكتسبة: ${stats.totalCorrect * 25} XP")
                     Text("الأسئلة المجابة محلياً: ${stats.totalAnswered} (${stats.totalCorrect} صحيحة)")
+                }
+            }
+            if (isSignedIn) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("الاسم والجامعة بالصدارة", fontWeight = FontWeight.Bold, color = MaroonPrimary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("الاسم المعروض بالصدارة فقط — بريدك لا يظهر أبدًا لأي طالب.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = displayName,
+                            onValueChange = { if (it.length <= 80) displayName = it },
+                            label = { Text("الاسم المعروض") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.medium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = university,
+                            onValueChange = { if (it.length <= 80) university = it },
+                            label = { Text("الجامعة (نص حر)") },
+                            placeholder = { Text("مثال: جامعة حمص، جامعة دمشق، أو جامعتك الخاصة") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.medium
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        if (isSavingProfile) {
+                            CircularProgressIndicator(color = MaroonPrimary, modifier = Modifier.size(28.dp))
+                        } else {
+                            Button(
+                                onClick = {
+                                    val u = firebaseUser ?: return@Button
+                                    if (displayName.isBlank()) {
+                                        profileSaveMessage = "اكتب الاسم المعروض أولاً"
+                                        return@Button
+                                    }
+                                    isSavingProfile = true
+                                    profileSaveMessage = null
+                                    scope.launch {
+                                        val result = WorkerActivationApi.postToWorker(
+                                            u, "/v1/profile",
+                                            JSONObject().put("name", displayName.trim()).put("university", university.trim())
+                                        )
+                                        isSavingProfile = false
+                                        profileSaveMessage = if (result.code == 200) {
+                                            profilePrefs.edit()
+                                                .putString("display_name", displayName.trim())
+                                                .putString("university", university.trim())
+                                                .apply()
+                                            "تم الحفظ — سيظهر الاسم الجديد بالصدارة عند تحديثها"
+                                        } else {
+                                            "تعذر الحفظ — تحقق من الاتصال وحاول مجددًا"
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Text("حفظ الاسم والجامعة", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        if (profileSaveMessage != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                profileSaveMessage!!,
+                                fontSize = 13.sp,
+                                color = if (profileSaveMessage!!.startsWith("تم")) MaroonPrimary else MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
             }
             if (!isSignedIn) {

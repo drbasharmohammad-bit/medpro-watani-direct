@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -506,5 +507,51 @@ object WorkerActivationApi {
             throw IllegalArgumentException("رابط المحتوى غير صالح")
         }
         return contentRequest(context, decoded)
+    }
+
+    /**
+     * نتيجة نداء Worker برمز Google ID (للمسارات غير المقيدة بالتفعيل:
+     * الصدارة والملف الشخصي وتثبيت النقاط).
+     * code: كما رد الخادم (200/401/403/...)؛ -1 عند غياب الرمز (جلسة منتهية)؛
+     * -2 عند فشل الشبكة قبل الرد. المستدعي يميّز الحالات ولا يطويها بخطأ عام.
+     */
+    data class WorkerIdResult(val code: Int, val body: String?)
+
+    private suspend fun googleIdToken(user: FirebaseUser): String? = try {
+        user.getIdToken(false).await().token
+    } catch (_: Exception) {
+        null
+    }
+
+    suspend fun getFromWorker(user: FirebaseUser, path: String): WorkerIdResult = withContext(Dispatchers.IO) {
+        val token = googleIdToken(user) ?: return@withContext WorkerIdResult(-1, null)
+        try {
+            val request = Request.Builder()
+                .url("$WORKER_BASE$path")
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
+            client.newCall(request).execute().use { response ->
+                WorkerIdResult(response.code, response.body?.string())
+            }
+        } catch (_: Exception) {
+            WorkerIdResult(-2, null)
+        }
+    }
+
+    suspend fun postToWorker(user: FirebaseUser, path: String, json: JSONObject): WorkerIdResult = withContext(Dispatchers.IO) {
+        val token = googleIdToken(user) ?: return@withContext WorkerIdResult(-1, null)
+        try {
+            val request = Request.Builder()
+                .url("$WORKER_BASE$path")
+                .header("Authorization", "Bearer $token")
+                .post(json.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            client.newCall(request).execute().use { response ->
+                WorkerIdResult(response.code, response.body?.string())
+            }
+        } catch (_: Exception) {
+            WorkerIdResult(-2, null)
+        }
     }
 }

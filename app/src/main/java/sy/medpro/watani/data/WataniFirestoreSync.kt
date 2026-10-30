@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -77,6 +78,13 @@ object WataniFirestoreSync {
                     .putInt("total_answered", rAns)
                     .putInt("total_correct", rCor)
                     .apply()
+            }
+
+            // تثبيت النقاط على الـWorker (بذر الصدارة الجديدة؛ فشلها صامت ولا يمس مزامنة Firestore)
+            try {
+                val xp = stats.totalCorrect * 25
+                WorkerActivationApi.postToWorker(user, "/v1/score/set", JSONObject().put("points", xp))
+            } catch (_: Exception) {
             }
         } catch (e: Exception) {
             // Offline or sync error, fallback silently
