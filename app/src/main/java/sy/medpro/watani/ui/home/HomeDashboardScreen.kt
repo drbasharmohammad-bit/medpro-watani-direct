@@ -533,7 +533,10 @@ fun HomeDashboardScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("حالة المزامنة وقاعدة البيانات", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 14.sp)
                         Text(
-                            text = "الفهرس متزامن مع الخادم الرسمي للبنك الوطني" + (if (manifestVersion != null) " • الإصدار $manifestVersion" else ""),
+                            // User-facing sync status only: the raw manifest
+                            // version is an internal timestamp and must never
+                            // be shown to users (it also renders mangled RTL).
+                            text = "الفهرس متزامن مع الخادم الرسمي للبنك الوطني",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )

@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.activity.compose.BackHandler
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
@@ -106,6 +108,25 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     var searchQuery by remember { mutableStateOf("") }
     var bookmarks by remember { mutableStateOf(setOf<Int>()) }
     var hideBarJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    // Fullscreen (tablets + landscape reading): hides the system bars and
+    // the app bars; a floating exit button + Back are the way back, and
+    // leaving the reader always restores the system bars.
+    var isFullscreen by remember { mutableStateOf(false) }
+    fun setSystemBarsVisible(visible: Boolean) {
+        val activity = context as? android.app.Activity ?: return
+        val controller = WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+        if (visible) {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+    BackHandler(enabled = isFullscreen) {
+        isFullscreen = false
+        setSystemBarsVisible(true)
+        showBars = true
+    }
     val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
 
     // Highlighter persistence (outer scope so the open effect can restore it).
@@ -193,6 +214,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     DisposableEffect(Unit) {
         onDispose {
             hideBarJob?.cancel()
+            setSystemBarsVisible(true)
             try { pdfRenderer?.close() } catch (_: Exception) {}
             try { parcelFd?.close() } catch (_: Exception) {}
         }
@@ -254,7 +276,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // System Back leaves highlight mode first; only a second Back
             // leaves the book. Exiting the whole reader from inside a
             // stroke is what made the mode feel like a trap.
-            BackHandler(enabled = highlightMode) {
+            BackHandler(enabled = highlightMode && !isFullscreen) {
                 highlightMode = false
             }
 
@@ -501,6 +523,13 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         }
                         IconButton(onClick = { showSearch = !showSearch }) {
                             Icon(Icons.Default.Search, null, tint = Color.White)
+                        }
+                        TextButton(onClick = {
+                            isFullscreen = true
+                            setSystemBarsVisible(false)
+                            showBars = false
+                        }) {
+                            Text("ملء الشاشة", color = Color.White, fontSize = 12.sp)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary)
@@ -758,6 +787,24 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                             fontSize = 10.sp,
                             modifier = Modifier.padding(top = 40.dp)
                         )
+                    }
+                }
+            }
+
+            if (isFullscreen) {
+                Box(
+                    Modifier.fillMaxSize().padding(16.dp),
+                    contentAlignment = Alignment.TopStart
+                ) {
+                    Button(
+                        onClick = {
+                            isFullscreen = false
+                            setSystemBarsVisible(true)
+                            showBars = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.6f))
+                    ) {
+                        Text("خروج من ملء الشاشة", color = Color.White)
                     }
                 }
             }

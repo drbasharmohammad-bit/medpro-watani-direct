@@ -19,6 +19,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.activity.compose.BackHandler
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -67,6 +70,28 @@ fun VideoPlayerScreen(
     // A playback failure must surface as a message, never as a silent
     // black screen or an unexplained exit (the HLS pilot failure mode).
     var playerError by remember { mutableStateOf<String?>(null) }
+    // Fullscreen (tablets + landscape watching): hides the system bars and
+    // the app bars; a floating exit button + Back are the way back, and
+    // leaving the player always restores the system bars.
+    var isFullscreen by remember { mutableStateOf(false) }
+    fun setSystemBarsVisible(visible: Boolean) {
+        val activity = context as? android.app.Activity ?: return
+        val controller = WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+        if (visible) {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { setSystemBarsVisible(true) }
+    }
+    BackHandler(enabled = isFullscreen) {
+        isFullscreen = false
+        setSystemBarsVisible(true)
+        showControls = true
+    }
 
     val player = remember(videoUri, subtitleUri) {
         ExoPlayer.Builder(context).build().apply {
@@ -155,9 +180,34 @@ fun VideoPlayerScreen(
                         }
                         Spacer(Modifier.width(16.dp))
                     }
+                    TextButton(onClick = {
+                        isFullscreen = true
+                        setSystemBarsVisible(false)
+                        showControls = false
+                    }) {
+                        Text("ملء الشاشة", color = Color.White)
+                    }
+                    Spacer(Modifier.width(16.dp))
                     IconButton(onClick = { showControls = false }) {
                         Icon(Icons.Default.Close, null, tint = Color.White)
                     }
+                }
+            }
+        }
+        if (isFullscreen) {
+            Box(
+                Modifier.fillMaxSize().padding(16.dp),
+                contentAlignment = Alignment.TopStart
+            ) {
+                Button(
+                    onClick = {
+                        isFullscreen = false
+                        setSystemBarsVisible(true)
+                        showControls = true
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.6f))
+                ) {
+                    Text("خروج من ملء الشاشة", color = Color.White)
                 }
             }
         }
