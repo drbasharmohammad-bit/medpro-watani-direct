@@ -386,13 +386,25 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
+                            // Top title: the section's full name once the
+                            // student is inside a section (bottom labels
+                            // stay short so the bar never wraps); the
+                            // brand name stays on Home.
+                            val topBarTitle = when (uiState.currentTab) {
+                                AppTab.BANK -> "بنك الأسئلة"
+                                AppTab.CASES -> "المريض الافتراضي"
+                                AppTab.LIBRARY -> "المكتبة"
+                                AppTab.LEADERBOARD -> "الصدارة"
+                                AppTab.PROGRESS -> "تقدمي"
+                                else -> "Med Pro - وطني"
+                            }
                             Scaffold(
                                 topBar = {
                                     TopAppBar(
                                         title = {
                                             Column {
                                                 Text(
-                                                    "Med Pro - وطني",
+                                                    topBarTitle,
                                                     fontWeight = FontWeight.Bold,
                                                     fontSize = 18.sp,
                                                     color = androidx.compose.ui.graphics.Color.White
@@ -435,8 +447,8 @@ class MainActivity : ComponentActivity() {
                                     ) {
                                         val tabs = listOf(
                                             Triple(AppTab.HOME, "الرئيسية", Icons.Default.Home),
-                                            Triple(AppTab.BANK, "بنك الأسئلة", Icons.Default.Book),
-                                            Triple(AppTab.CASES, "المريض الافتراضي", Icons.Default.LocalHospital),
+                                            Triple(AppTab.BANK, "بنك", Icons.Default.Book),
+                                            Triple(AppTab.CASES, "المريض", Icons.Default.LocalHospital),
                                             Triple(AppTab.LIBRARY, "المكتبة", Icons.Default.Book),
                                             Triple(AppTab.LEADERBOARD, "الصدارة", Icons.Default.EmojiEvents),
                                             Triple(AppTab.PROGRESS, "تقدمي", Icons.Default.WorkspacePremium)
@@ -468,7 +480,8 @@ class MainActivity : ComponentActivity() {
                                                     Text(
                                                         label,
                                                         color = if (selected) MaroonPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                                        maxLines = 1
                                                     )
                                                 }
                                             )
