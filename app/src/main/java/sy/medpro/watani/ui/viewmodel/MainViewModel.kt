@@ -200,6 +200,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Manual explanations download for an already-downloaded section.
+     * Sections downloaded before the bundle rule (or whose prefetch was
+     * skipped) have questions on disk but no explanation shards, so
+     * those questions fall back to slow on-demand shard downloads that
+     * spin forever on a slow connection. This reuses the same prefetch
+     * path as section downloads: questions are never re-downloaded,
+     * cached shards are skipped, and a failure surfaces the same
+     * banner + retry instead of silently succeeding. */
+    fun downloadExplanationsForSection(path: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(downloadingPaths = it.downloadingPaths + path) }
+            val error = prefetchExplanations(path)
+            _uiState.update { st ->
+                st.copy(
+                    downloadingPaths = st.downloadingPaths - path,
+                    downloadError = if (error != null) error
+                        else if (st.explanationFailedPath == path) null else st.downloadError,
+                    explanationFailedPath = if (error != null) path
+                        else if (st.explanationFailedPath == path) null else st.explanationFailedPath
+                )
+            }
+        }
+    }
+
     /** Step-by-step back navigation: every detail screen pushes the screen
      * it came from, so back restores it instead of jumping to Home. */
     private fun navigateTo(state: ScreenState) {

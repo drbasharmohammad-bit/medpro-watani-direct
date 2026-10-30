@@ -640,6 +640,7 @@ class MainActivity : ComponentActivity() {
                                                                     onTabSelected = { requestTab(it) },
                                                                 onRefreshManifest = { viewModel.fetchManifest() },
                                                                 onDownloadSection = { path, entry -> viewModel.downloadSection(path, entry) },
+                                                                onDownloadExplanations = { path -> viewModel.downloadExplanationsForSection(path) },
                                                                 onOpenSubject = { path, name, tab ->
                                                                     coroutineScope.launch {
                                                                         activeSubjectEnvelope = viewModel.getSubjectEnvelope(path)
@@ -798,6 +799,7 @@ class MainActivity : ComponentActivity() {
                                                         downloadingPaths = uiState.downloadingPaths,
                                                         downloadingProgress = uiState.downloadingProgress,
                                                         onDownloadSection = { path, entry -> viewModel.downloadSection(path, entry) },
+                                                        onDownloadExplanations = { path -> viewModel.downloadExplanationsForSection(path) },
                                                         onOpenSubject = { path, name ->
                                                             coroutineScope.launch {
                                                                 activeSubjectEnvelope = viewModel.getSubjectEnvelope(path)
