@@ -142,7 +142,16 @@ class WataniRepository(private val context: Context) {
                 requestBuilder.header("Range", "bytes=$existingBytes-")
             }
 
-            val resp = client.newCall(requestBuilder.build()).execute()
+            var resp = client.newCall(requestBuilder.build()).execute()
+            if (resp.code == 416) {
+                // Detector fix (b5): a stale Range (temp longer than a
+                // shrunk origin file) must restart from zero, not loop
+                // on the same bad Range forever (the gateway now passes
+                // 416 through instead of masking it as 502).
+                if (tempFile.exists()) tempFile.delete()
+                resp.close()
+                resp = client.newCall(baseRequest).execute()
+            }
             if (resp.code == 401 || resp.code == 403) {
                 // M3: no generic HTTP message, no cached fallback —
                 // activation is lost (cleared + wiped + prompt event).
@@ -487,12 +496,17 @@ class WataniRepository(private val context: Context) {
                 return
             } ?: return
             val target = getLibrarySubtitleFile(item)
+            // Detector fix (b9): write to a temp file and rename — a
+            // direct write interrupted mid-stream left a partial SRT
+            // that later counted as "existing".
+            val tmp = java.io.File(target.parentFile, "${target.name}.tmp")
             client.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) return
                 val body = resp.body ?: return
                 body.byteStream().use { input ->
-                    java.io.FileOutputStream(target).use { output -> input.copyTo(output) }
+                    java.io.FileOutputStream(tmp).use { output -> input.copyTo(output) }
                 }
+                tmp.renameTo(target)
             }
         } catch (_: Exception) {
             // SRT download failure is non-fatal by design.
@@ -627,13 +641,21 @@ class WataniRepository(private val context: Context) {
                 if (existingBytes > 0) builder.header("Range", "bytes=$existingBytes-")
                 client.newCall(builder.build()).execute().use { resp ->
                     if (resp.code == 401 || resp.code == 403) {
-                        // M3: revoked activation — typed failure so the
-                        // UI shows the prompt, not a generic HTTP error.
+                        // M3: revoked activation — the prompt itself
+                        // fires from the activationLost event; the
+                        // failure text stands alone, no HTTP generic.
                         WorkerActivationApi.notifyActivationLost(context)
                         refreshDownloadedSections()
-                        return@withContext LibraryDownloadResult.failAuth(
+                        return@withContext LibraryDownloadResult.fail(
                             "انتهى التفعيل على هذا الجهاز — أعد إدخال كود التفعيل."
                         )
+                    }
+                    if (resp.code == 416) {
+                        // Detector fix (b5): stale Range — drop the temp
+                        // and let the attempt loop retry from zero.
+                        plainTemp.delete()
+                        if (attempt < 2) continue
+                        return@withContext LibraryDownloadResult.fail("تعذر استئناف التحميل — أعد المحاولة.")
                     }
                     if (!resp.isSuccessful && resp.code != 206) {
                         return@withContext LibraryDownloadResult.fail("فشل التحميل — تأكد من اتصال الإنترنت.")

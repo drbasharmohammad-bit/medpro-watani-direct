@@ -479,15 +479,24 @@ object WorkerActivationApi {
      * any other host is fetched directly, unchanged.
      *
      * @throws IllegalArgumentException with an Arabic message when the
-     * decoded path still carries '%' in any segment (M9 double-encoding
-     * guard). Callers must NOT turn this into an activation prompt: it
-     * is a malformed URL, not a missing token.
+     * URL is malformed: encoded slashes/backslashes in any RAW segment
+     * (detector b7 — decoding first would turn %2F into a real
+     * separator and build a gateway URL for a DIFFERENT file), or when
+     * the decoded path still carries '%' in any segment (M9
+     * double-encoding guard). Callers must NOT turn this into an
+     * activation prompt: it is a malformed URL, not a missing token.
      */
     fun contentRequestForUrl(context: Context, absoluteUrl: String): Request? {
         if (!absoluteUrl.startsWith(WataniApi.BASE_URL)) {
             return Request.Builder().url(absoluteUrl).build()
         }
         val remainder = absoluteUrl.removePrefix(WataniApi.BASE_URL)
+        // Detector fix (b7): reject encoded separators BEFORE decoding.
+        if (remainder.split("/").any {
+                it.contains("%2F", ignoreCase = true) || it.contains("%5C", ignoreCase = true)
+            }) {
+            throw IllegalArgumentException("رابط المحتوى غير صالح")
+        }
         val decoded = try {
             URLDecoder.decode(remainder.replace("+", "%2B"), "UTF-8")
         } catch (_: Exception) {

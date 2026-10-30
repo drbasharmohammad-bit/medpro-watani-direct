@@ -771,8 +771,13 @@ class MainActivity : ComponentActivity() {
                                 pendingDrawer = null
                                 // M5: uniform path — activation just
                                 // succeeded, so requestTab switches.
+                                // Detector fix (b4.5): a drawer target
+                                // re-passes the device gate too (a
+                                // debugger attached during the prompt
+                                // window must not open a restricted
+                                // drawer screen unchecked).
                                 if (drawerTarget != null) {
-                                    drawerScreen = drawerTarget
+                                    openRestrictedDrawer(drawerTarget)
                                 } else if (target != null) {
                                     requestTab(target)
                                 }

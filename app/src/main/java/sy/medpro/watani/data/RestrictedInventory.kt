@@ -47,10 +47,14 @@ object RestrictedInventory {
         "books_"
     )
 
-    /** True when a sections_cache file name belongs to restricted content. */
+    /** True when a sections_cache file name belongs to restricted content.
+     * Detector fix (b2): library.json is matched by PREFIX, not exact
+     * name — getSectionFile appends ".json", so the stored file is
+     * "library.json.json", which the exact match missed and the wipe
+     * left behind (with its prefs entries deleted, looking wiped). */
     fun isRestrictedSectionFile(fileName: String): Boolean {
         val base = fileName.removeSuffix(".tmp")
-        if (base == "library.json") return true
+        if (base.startsWith("library.json")) return true
         return SECTION_PREFIXES.any { base.startsWith(it) }
     }
 
