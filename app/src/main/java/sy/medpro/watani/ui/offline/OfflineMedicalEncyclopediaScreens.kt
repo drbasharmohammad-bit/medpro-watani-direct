@@ -687,7 +687,6 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SmartStudyPlannerScreen(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
