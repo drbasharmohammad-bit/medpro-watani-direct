@@ -70,6 +70,24 @@ class WataniRepository(private val context: Context) {
         _downloadedSectionsFlow.value = loadDownloadedSections()
     }
 
+    /** Reloads the downloaded-sections flow from prefs (after an
+     * external wipe, e.g. sign-out or deactivation from another screen). */
+    fun refreshDownloadedSections() {
+        _downloadedSectionsFlow.value = loadDownloadedSections()
+    }
+
+    /**
+     * Gateway 401/403 handler (M3/M4): clears the activation, wipes
+     * restricted downloads and returns the typed revocation failure.
+     * Callers must surface [ActivationRevokedException] unwrapped (the
+     * MainActivity prompt event fires from [WorkerActivationApi] itself).
+     */
+    private fun gatewayAuthFailure(context: Context): ActivationRevokedException {
+        WorkerActivationApi.notifyActivationLost(context)
+        refreshDownloadedSections()
+        return ActivationRevokedException("انتهى التفعيل على هذا الجهاز — أعد إدخال كود التفعيل.")
+    }
+
     suspend fun fetchManifest(): Result<ManifestResponse> = withContext(Dispatchers.IO) {
         try {
             val response = api.getManifest()
@@ -96,6 +114,15 @@ class WataniRepository(private val context: Context) {
         onProgress: (Float) -> Unit = {}
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
+            // M8: device-integrity gate at the restricted-download entry.
+            // Blocked devices never reach the gateway (and never get a
+            // partial file to keep).
+            if (WorkerActivationApi.isRestrictedPath(path)) {
+                val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
+                if (!gate.allowed) {
+                    return@withContext Result.failure(Exception(gate.userMessage))
+                }
+            }
             val file = getSectionFile(path)
             val tempFile = File(file.parentFile, "${file.name}.tmp")
 
@@ -116,8 +143,13 @@ class WataniRepository(private val context: Context) {
             }
 
             val resp = client.newCall(requestBuilder.build()).execute()
+            if (resp.code == 401 || resp.code == 403) {
+                // M3: no generic HTTP message, no cached fallback —
+                // activation is lost (cleared + wiped + prompt event).
+                return@withContext Result.failure(gatewayAuthFailure(context))
+            }
             if (!resp.isSuccessful && resp.code != 206) {
-                return@withContext Result.failure(Exception("فشل التحميل (HTTP ${resp.code}): تأكد من اتصال الإنترنت أو صحة الرابط."))
+                return@withContext Result.failure(Exception("فشل التحميل — تأكد من اتصال الإنترنت أو صحة الرابط."))
             }
 
             // A1: Resume safety - if server answered HTTP 200 instead of 206 with full body, discard partial temp file
@@ -186,7 +218,13 @@ class WataniRepository(private val context: Context) {
             saveDownloadedSection(entity)
             Result.success(actualCount)
         } catch (e: Exception) {
-            Result.failure(Exception("خطأ في التحميل: ${e.localizedMessage ?: "تحقق من اتصال الإنترنت"}"))
+            // Typed revocation passes through unwrapped (M3): callers
+            // distinguish it from ordinary download failures.
+            if (e is ActivationRevokedException) {
+                Result.failure(e)
+            } else {
+                Result.failure(Exception("خطأ في التحميل: ${e.localizedMessage ?: "تحقق من اتصال الإنترنت"}"))
+            }
         }
     }
 
@@ -370,8 +408,13 @@ class WataniRepository(private val context: Context) {
                 if (resp.code == 404) {
                     return@withContext Result.success(null)
                 }
+                if (resp.code == 401 || resp.code == 403) {
+                    // M3: revoked activation — no retry, no cached
+                    // fallback, prompt event fires from the gateway path.
+                    return@withContext Result.failure(gatewayAuthFailure(context))
+                }
                 if (!resp.isSuccessful) {
-                    lastError = Exception("فشل جلب المكتبة (HTTP ${resp.code})")
+                    lastError = Exception("فشل جلب المكتبة — تأكد من اتصال الإنترنت.")
                     if (attempt < retries) {
                         Thread.sleep(700L * attempt)
                         continue
@@ -428,12 +471,23 @@ class WataniRepository(private val context: Context) {
 
     /** Best-effort download of the item's SRT side-car. Never fails the
      * video download: a missing SRT only means subtitles are unavailable
-     * for that video until the next download attempt. */
+     * for that video until the next download attempt.
+     *
+     * M10: subtitles go through the same switch point
+     * ([WorkerActivationApi.contentRequestForUrl]), never a raw link —
+     * so a restricted subtitle URL is gateway-checked like any other
+     * restricted file, and a malformed (double-encoded) URL is rejected
+     * instead of fetched. */
     private fun downloadLibrarySubtitle(item: LibraryItem) {
         val url = item.subtitleUrl?.takeIf { it.isNotBlank() } ?: return
         try {
+            val request = try {
+                WorkerActivationApi.contentRequestForUrl(context, url)
+            } catch (_: IllegalArgumentException) {
+                return
+            } ?: return
             val target = getLibrarySubtitleFile(item)
-            client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { resp ->
+            client.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) return
                 val body = resp.body ?: return
                 body.byteStream().use { input ->
@@ -564,13 +618,25 @@ class WataniRepository(private val context: Context) {
                 // Same switch point for absolute file URLs: Pages /v1/
                 // URLs under a restricted prefix (e.g. books/) go via the
                 // Worker gateway; other hosts stay direct, unchanged.
-                val itemRequest = WorkerActivationApi.contentRequestForUrl(context, url)
-                    ?: return@withContext LibraryDownloadResult.fail("هذا الملف يحتاج كود تفعيل — فعّل حسابك أولاً.")
+                val itemRequest = try {
+                    WorkerActivationApi.contentRequestForUrl(context, url)
+                } catch (_: IllegalArgumentException) {
+                    return@withContext LibraryDownloadResult.fail("رابط الملف غير صالح")
+                } ?: return@withContext LibraryDownloadResult.fail("هذا الملف يحتاج كود تفعيل — فعّل حسابك أولاً.")
                 val builder = itemRequest.newBuilder()
                 if (existingBytes > 0) builder.header("Range", "bytes=$existingBytes-")
                 client.newCall(builder.build()).execute().use { resp ->
+                    if (resp.code == 401 || resp.code == 403) {
+                        // M3: revoked activation — typed failure so the
+                        // UI shows the prompt, not a generic HTTP error.
+                        WorkerActivationApi.notifyActivationLost(context)
+                        refreshDownloadedSections()
+                        return@withContext LibraryDownloadResult.failAuth(
+                            "انتهى التفعيل على هذا الجهاز — أعد إدخال كود التفعيل."
+                        )
+                    }
                     if (!resp.isSuccessful && resp.code != 206) {
-                        return@withContext LibraryDownloadResult.fail("فشل التحميل (HTTP ${resp.code})")
+                        return@withContext LibraryDownloadResult.fail("فشل التحميل — تأكد من اتصال الإنترنت.")
                     }
                     val isPartial = resp.code == 206
                     val startBytes = if (isPartial) existingBytes else {

@@ -90,6 +90,12 @@ class ExplanationRepository(
             val request = WorkerActivationApi.contentRequest(context, "${layerBasePath}index.json")
                 ?: return@withContext null
             client.newCall(request).execute().use { resp ->
+                if (resp.code == 401 || resp.code == 403) {
+                    // M3: revoked activation — clear + wipe + prompt
+                    // event; never fall back to cached explanations.
+                    WorkerActivationApi.notifyActivationLost(context)
+                    return@withContext null
+                }
                 if (!resp.isSuccessful) return@withContext null
                 val text = resp.body?.string() ?: return@withContext null
                 indexAdapter.fromJson(text)
@@ -120,6 +126,11 @@ class ExplanationRepository(
             val request = WorkerActivationApi.contentRequest(context, "$layerBasePath$shardName")
                 ?: return@withContext null
             client.newCall(request).execute().use { resp ->
+                if (resp.code == 401 || resp.code == 403) {
+                    // M3: same revocation path as the index fetch.
+                    WorkerActivationApi.notifyActivationLost(context)
+                    return@withContext null
+                }
                 if (!resp.isSuccessful) return@withContext null
                 val text = resp.body?.string() ?: return@withContext null
                 persistShardCache(shardName, text)
