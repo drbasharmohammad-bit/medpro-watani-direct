@@ -1,10 +1,13 @@
 package sy.medpro.watani.data
 
 import android.content.Context
-import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -13,7 +16,30 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.util.UUID
 import java.util.concurrent.TimeUnit
+
+/**
+ * Typed signal that the gateway rejected this device's activation
+ * (HTTP 401/403). Repository callers return it unwrapped (never folded
+ * into a generic "download failed" message) so the UI can clear the
+ * activation, wipe restricted downloads and show the activation prompt.
+ */
+class ActivationRevokedException(message: String) : Exception(message)
+
+/** Outcome of one token-refresh attempt (see [WorkerActivationApi.tryRefresh]). */
+enum class RefreshOutcome {
+    /** A fresh token was stored. */
+    REFRESHED,
+
+    /** The server answered 401/403: the token is dead or access was
+     * revoked (expired code, reset device, banned). Activation is lost. */
+    REVOKED,
+
+    /** No answer (no network, no user, no token): keep the old state,
+     * never wipe on this outcome. */
+    UNAVAILABLE
+}
 
 /**
  * Team 1 — Worker activation client (entry-activation branch).
@@ -44,6 +70,7 @@ object WorkerActivationApi {
     private const val KEY_CODE = "activated_code"
     private const val KEY_TOKEN = "activation_token"
     private const val KEY_EXPIRES_AT = "activation_expires_at"
+    private const val KEY_DEVICE_UUID = "device_uuid_fallback"
 
     /** Restricted prefixes under v1/ (contract) + the exact library.json file. */
     private val RESTRICTED_PREFIXES = listOf(
@@ -63,16 +90,35 @@ object WorkerActivationApi {
         .build()
 
     // ------------------------------------------------------------------
-    // Device id — same rule as the old Firestore code.
+    // Device id.
     // ------------------------------------------------------------------
 
+    /**
+     * Stable per-device id. ANDROID_ID when available; otherwise a random
+     * UUID generated once and stored in prefs (M7). NEVER Build.MODEL:
+     * a model string is shared by every phone of that model, so two
+     * different users' devices would collide on the same "device" and
+     * break the 2-device limit in both directions.
+     *
+     * Migration note: devices previously bound under a Build.MODEL
+     * fallback present a new UUID after this change and count as a new
+     * device until the admin resets the old binding. The app is
+     * unreleased, so no real user is affected.
+     */
     fun deviceId(context: Context): String {
         val androidId = try {
             Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         } catch (_: Exception) {
             null
         }
-        return if (!androidId.isNullOrBlank()) androidId else (Build.MODEL ?: "AndroidDevice")
+        if (!androidId.isNullOrBlank()) return androidId
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        var uuid = prefs.getString(KEY_DEVICE_UUID, null)
+        if (uuid.isNullOrBlank()) {
+            uuid = UUID.randomUUID().toString()
+            prefs.edit().putString(KEY_DEVICE_UUID, uuid).apply()
+        }
+        return uuid
     }
 
     // ------------------------------------------------------------------
@@ -112,6 +158,68 @@ object WorkerActivationApi {
             .apply()
     }
 
+    // ------------------------------------------------------------------
+    // Activation loss (M2/M3/M4): one path for every way activation ends.
+    // ------------------------------------------------------------------
+
+    /**
+     * Clears the local activation AND wipes restricted downloads (M4:
+     * decided by the doctor — ended/cancelled activation must not keep
+     * working offline). Silent: no UI event. Used by sign-out (M2: a
+     * second user on this device must not inherit anything) and by the
+     * deliberate deactivation button.
+     */
+    fun clearActivationAndWipe(context: Context) {
+        clearLocalActivation(context)
+        try {
+            RestrictedInventory.wipeRestrictedDownloads(context)
+        } catch (_: Exception) {
+        }
+    }
+
+    private val _activationLostEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Collected by MainActivity: a gateway 401/403 (or a revoked refresh)
+     * means "show the activation prompt now". */
+    val activationLostEvents: SharedFlow<Unit> = _activationLostEvents.asSharedFlow()
+
+    /**
+     * Gateway 401/403 path (M3): clear + wipe (M4) + emit the prompt
+     * event. Repository fetch paths call this the moment the gateway
+     * answers 401/403 — never a generic HTTP message, never a cached
+     * fallback for restricted content.
+     */
+    fun notifyActivationLost(context: Context) {
+        clearActivationAndWipe(context)
+        _activationLostEvents.tryEmit(Unit)
+    }
+
+    /**
+     * Arabic user text for a server activation error (M14). The raw
+     * server string is logged only (never shown); the user sees Arabic.
+     * Unknown strings fall back to a generic Arabic message, never to
+     * the raw string.
+     */
+    fun arabicActivationError(serverError: String, httpCode: Int = 0): String {
+        Log.d("WorkerActivationApi", "activation error raw: $serverError (http=$httpCode)")
+        return when (serverError.trim().lowercase()) {
+            "invalid code", "invalid_code" -> "كود التفعيل غير صحيح أو غير موجود."
+            "code bound to another account" -> "هذا الكود مستخدم بالفعل ومسجل بحساب آخر."
+            "device limit reached", "device_limit" -> "تم تجاوز الحد الأقصى للأجهزة المسموحة (جهازان كحد أقصى للحساب الواحد)."
+            "expired", "code_expired", "access_expired" -> "انتهت مدة كود التفعيل — جدّد الكود من لوحة الإدارة أو أدخل كودًا جديدًا."
+            "access_revoked", "invalid_token" -> "انتهى التفعيل على هذا الجهاز — أعد إدخال كود التفعيل."
+            "rate_limited" -> "محاولات كثيرة جدًا — انتظر ساعة ثم أعد المحاولة."
+            "bad_request" -> "طلب تفعيل غير صالح — أعد المحاولة."
+            "server_misconfigured" -> "خطأ في إعدادات الخادم — أبلغ الإدارة."
+            "auth" -> "تعذر التحقق من الحساب — سجّل الدخول ثم أعد المحاولة."
+            else -> if (httpCode == 401 || httpCode == 403) {
+                "انتهى التفعيل على هذا الجهاز — أعد إدخال كود التفعيل."
+            } else {
+                "تعذر التفعيل — تحقق من الكود والاتصال ثم أعد المحاولة."
+            }
+        }
+    }
+
     private fun storeActivation(context: Context, code: String, token: String, expiresAt: Long) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_ACTIVATED, true)
@@ -127,9 +235,8 @@ object WorkerActivationApi {
 
     /**
      * Activates [code] for [user] on this device.
-     * Returns Pair(success, message) where message is the EXACT server
-     * error text on failure (the `error` field, verbatim) so the UI can
-     * show it without paraphrasing.
+     * Returns Pair(success, message) where message is ARABIC user text
+     * (M14); the raw server `error` string is only logged, never shown.
      */
     suspend fun activate(context: Context, user: FirebaseUser, code: String): Pair<Boolean, String> =
         withContext(Dispatchers.IO) {
@@ -155,10 +262,9 @@ object WorkerActivationApi {
                         JSONObject()
                     }
                     if (!resp.isSuccessful || !json.optBoolean("ok", false)) {
-                        // Exact server error text; never paraphrased.
-                        val serverError = json.optString("error", "").takeIf { it.isNotBlank() }
-                            ?: "خطأ في التفعيل (HTTP ${resp.code})"
-                        return@withContext Pair(false, serverError)
+                        // Arabic user text (M14); raw server string only logged.
+                        val serverError = json.optString("error", "").takeIf { it.isNotBlank() } ?: ""
+                        return@withContext Pair(false, arabicActivationError(serverError, resp.code))
                     }
                     val token = json.optString("token", "")
                     if (token.isBlank()) {
@@ -173,19 +279,36 @@ object WorkerActivationApi {
         }
 
     /**
-     * Tries a token refresh when the stored token expired. Returns true
-     * when a fresh token was stored. Callers on the UI thread must call
-     * this from a coroutine (it performs network I/O).
+     * Tries a token refresh when the stored token expired. Distinguishes
+     * REVOKED (server 401/403: activation is lost — caller must clear
+     * and wipe) from UNAVAILABLE (no network/user/token: keep the old
+     * state, never wipe on this outcome). Callers on the UI thread must
+     * call this from a coroutine (it performs network I/O).
      */
-    suspend fun tryRefresh(context: Context): Boolean = withContext(Dispatchers.IO) {
-        refreshBlocking(context) != null
+    suspend fun tryRefresh(context: Context): RefreshOutcome = withContext(Dispatchers.IO) {
+        val (token, revoked) = refreshInternal(context)
+        when {
+            token != null -> RefreshOutcome.REFRESHED
+            revoked -> RefreshOutcome.REVOKED
+            else -> RefreshOutcome.UNAVAILABLE
+        }
     }
 
     /** Blocking refresh used by the fetch layer (already on an IO thread). */
     private fun refreshBlocking(context: Context): String? {
+        return refreshInternal(context).first
+    }
+
+    /**
+     * Returns (fresh token or null, serverRejected401_403).
+     * STRICT ok check: a response WITHOUT `ok: true` is rejected even
+     * when it carries a token — a missing `ok` must never be read as
+     * success (the old `optBoolean("ok", true)` default did exactly that).
+     */
+    private fun refreshInternal(context: Context): Pair<String?, Boolean> {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val oldToken = prefs.getString(KEY_TOKEN, null) ?: return null
-        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return null
+        val oldToken = prefs.getString(KEY_TOKEN, null) ?: return Pair(null, false)
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return Pair(null, false)
         return try {
             val bodyJson = JSONObject().apply {
                 put("uid", uid)
@@ -203,15 +326,17 @@ object WorkerActivationApi {
                 } catch (_: Exception) {
                     JSONObject()
                 }
-                if (!resp.isSuccessful || !json.optBoolean("ok", true)) return null
+                if (!resp.isSuccessful || !json.optBoolean("ok", false)) {
+                    return Pair(null, resp.code == 401 || resp.code == 403)
+                }
                 val token = json.optString("token", "")
-                if (token.isBlank()) return null
+                if (token.isBlank()) return Pair(null, false)
                 val code = prefs.getString(KEY_CODE, null) ?: ""
                 storeActivation(context, code, token, parseExpiresAt(json))
-                token
+                Pair(token, false)
             }
         } catch (_: Exception) {
-            null
+            Pair(null, false)
         }
     }
 
@@ -288,6 +413,30 @@ object WorkerActivationApi {
         }
 
     /**
+     * Pure gateway URL builder (M1, unit-tested).
+     *
+     * The gateway REJECTS %2F before decoding (encoded-slash smuggling
+     * guard), so the `path` query value MUST carry literal '/' separators
+     * with only each SEGMENT percent-encoded. OkHttp's
+     * `addQueryParameter("path", rel)` encodes '/' as %2F and is therefore
+     * unusable here — every restricted path (all contain '/') would be
+     * rejected 400. This builder concatenates the encoded segments
+     * manually; see WorkerActivationApiUrlTest for the pinned behaviour.
+     */
+    fun buildGatewayUrl(rel: String): String {
+        return "$WORKER_BASE/v1/content?path=${encodeRelativePath(rel)}"
+    }
+
+    /**
+     * Pure double-encoding guard (M9): after one decode, no segment may
+     * still carry '%'. A remaining '%' means the input was double-encoded
+     * (%252F -> %2F) or smuggles an encoded byte — reject, never fetch.
+     */
+    fun validateDecodedPath(decoded: String): Boolean {
+        return decoded.split("/").none { it.contains('%') }
+    }
+
+    /**
      * Builds the request for a content file given its RAW relative path
      * under v1/ (e.g. "questions/foo.json", "books/x.pdf", "library.json").
      * Restricted paths go to GET {WORKER_BASE}/v1/content?path=... with
@@ -305,14 +454,8 @@ object WorkerActivationApi {
             return Request.Builder().url("${WataniApi.BASE_URL}${encodeRelativePath(rel)}").build()
         }
         val token = validTokenOrRefresh(context) ?: return null
-        val url = okhttp3.HttpUrl.Builder()
-            .scheme("https")
-            .host(WORKER_BASE.removePrefix("https://"))
-            .addPathSegments("v1/content")
-            .addQueryParameter("path", rel)
-            .build()
         return Request.Builder()
-            .url(url)
+            .url(buildGatewayUrl(rel))
             .header("Authorization", "Bearer $token")
             .build()
     }
@@ -323,6 +466,17 @@ object WorkerActivationApi {
      * Pages /v1/ URLs are mapped to their relative path and routed above;
      * any other host is fetched directly, unchanged.
      */
+    /**
+     * Same switch point for absolute content URLs (e.g. LibraryItem.fileUrl
+     * values such as https://watani-content.pages.dev/v1/books/...).
+     * Pages /v1/ URLs are mapped to their relative path and routed above;
+     * any other host is fetched directly, unchanged.
+     *
+     * @throws IllegalArgumentException with an Arabic message when the
+     * decoded path still carries '%' in any segment (M9 double-encoding
+     * guard). Callers must NOT turn this into an activation prompt: it
+     * is a malformed URL, not a missing token.
+     */
     fun contentRequestForUrl(context: Context, absoluteUrl: String): Request? {
         if (!absoluteUrl.startsWith(WataniApi.BASE_URL)) {
             return Request.Builder().url(absoluteUrl).build()
@@ -332,6 +486,9 @@ object WorkerActivationApi {
             URLDecoder.decode(remainder.replace("+", "%2B"), "UTF-8")
         } catch (_: Exception) {
             remainder
+        }
+        if (!validateDecodedPath(decoded)) {
+            throw IllegalArgumentException("رابط المحتوى غير صالح")
         }
         return contentRequest(context, decoded)
     }
