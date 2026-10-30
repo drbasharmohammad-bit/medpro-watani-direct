@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
@@ -89,7 +90,7 @@ private fun getFirebaseUid(): String {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
+fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCorrupt: (() -> Unit)? = null) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var totalPages by remember { mutableStateOf(0) }
@@ -208,6 +209,17 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                     Icon(Icons.Default.Error, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(16.dp))
                     Text(error!!, color = Color.White, fontSize = 14.sp)
+                    if (onDeleteCorrupt != null) {
+                        Spacer(Modifier.height(24.dp))
+                        Button(
+                            onClick = onDeleteCorrupt,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.height(48.dp)
+                        ) {
+                            Text("حذف النسخة التالفة وإعادة التحميل")
+                        }
+                    }
                 }
             }
         } else if (totalPages > 0 && !isLoading) {
@@ -237,6 +249,13 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                     hideBarJob?.cancel()
                     showBars = true
                 }
+            }
+
+            // System Back leaves highlight mode first; only a second Back
+            // leaves the book. Exiting the whole reader from inside a
+            // stroke is what made the mode feel like a trap.
+            BackHandler(enabled = highlightMode) {
+                highlightMode = false
             }
 
             // Touch point -> page-normalized point (0..1 across the fitted
@@ -334,12 +353,15 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                                 .pointerInput(Unit) {
                                     detectTapGestures(
                                         onTap = {
-                                            // While highlighting, taps must never hide
-                                            // the bars — the off switch lives in them.
-                                            if (!showBars) {
+                                            // In highlight mode a plain tap is the
+                                            // quickest stop: it leaves the mode
+                                            // instead of doing nothing.
+                                            if (highlightMode) {
+                                                highlightMode = false
+                                            } else if (!showBars) {
                                                 showBars = true
                                                 resetHideBarTimer()
-                                            } else if (!highlightMode) {
+                                            } else {
                                                 showBars = false
                                             }
                                         },
@@ -501,7 +523,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("اسحب للتأشير", color = Color.White, fontSize = 12.sp)
+                            Text("اسحب للتأشير • اضغط للإيقاف", color = Color.White, fontSize = 12.sp)
                             TextButton(onClick = { highlightMode = false }) {
                                 Text("إنهاء التأشير ✓", color = GoldAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
@@ -531,11 +553,27 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                                     )
                                 }
                             }
-                            TextButton(onClick = {
-                                highlightStrokes = highlightStrokes.filter { it.page != currentPage }
-                                saveHighlights()
-                            }) {
-                                Text("مسح تأشير الصفحة", color = Color.White, fontSize = 12.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val hasPageStroke = highlightStrokes.any { it.page == currentPage }
+                                TextButton(onClick = {
+                                    val idx = highlightStrokes.indexOfLast { it.page == currentPage }
+                                    if (idx >= 0) {
+                                        highlightStrokes = highlightStrokes.toMutableList().also { it.removeAt(idx) }
+                                        saveHighlights()
+                                    }
+                                }) {
+                                    Text(
+                                        "تراجع",
+                                        color = Color.White.copy(alpha = if (hasPageStroke) 1f else 0.4f),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                TextButton(onClick = {
+                                    highlightStrokes = highlightStrokes.filter { it.page != currentPage }
+                                    saveHighlights()
+                                }) {
+                                    Text("مسح تأشير الصفحة", color = Color.White, fontSize = 12.sp)
+                                }
                             }
                         }
                     }

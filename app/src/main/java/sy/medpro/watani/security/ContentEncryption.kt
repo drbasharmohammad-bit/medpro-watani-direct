@@ -43,12 +43,15 @@ object ContentEncryption {
         return keyGenerator.generateKey()
     }
 
-    fun encryptFile(context: Context, plainFile: File, encryptedFile: File): Boolean {
+    fun encryptFile(context: Context, plainFile: File, encryptedFile: File, onProgress: ((Float) -> Unit)? = null): Boolean {
         return try {
             val key = getOrCreateKey()
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, key)
             val iv = cipher.iv
+            val total = plainFile.length().coerceAtLeast(1L)
+            var processed = 0L
+            var lastReported = 0L
 
             FileOutputStream(encryptedFile).use { output ->
                 output.write(iv)
@@ -60,6 +63,11 @@ object ContentEncryption {
                         if (encrypted != null) {
                             output.write(encrypted)
                         }
+                        processed += bytesRead
+                        if (processed - lastReported >= 1024 * 1024) {
+                            lastReported = processed
+                            onProgress?.invoke((processed.toFloat() / total).coerceIn(0f, 1f))
+                        }
                     }
                     val finalBytes = cipher.doFinal()
                     if (finalBytes != null) {
@@ -67,6 +75,7 @@ object ContentEncryption {
                     }
                 }
             }
+            onProgress?.invoke(1f)
             true
         } catch (e: Exception) {
             e.printStackTrace()

@@ -154,7 +154,14 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
         when {
             reader.isBook -> {
                 if (reader.file != null) {
-                    PdfViewerScreen(reader.file, reader.item.title ?: "كتاب", onBack = onReaderBack)
+                    PdfViewerScreen(
+                        reader.file, reader.item.title ?: "كتاب", onBack = onReaderBack,
+                        onDeleteCorrupt = {
+                            viewModel.closeItem(reader.item)
+                            viewModel.deleteItem(reader.item)
+                            currentReader = null
+                        }
+                    )
                 }
             }
             else -> {

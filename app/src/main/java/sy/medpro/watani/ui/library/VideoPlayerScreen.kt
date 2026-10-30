@@ -17,6 +17,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -62,6 +64,9 @@ fun VideoPlayerScreen(
     }
     val hasSubtitles = subtitleUri != null
     var subtitlesEnabled by remember { mutableStateOf(hasSubtitles) }
+    // A playback failure must surface as a message, never as a silent
+    // black screen or an unexplained exit (the HLS pilot failure mode).
+    var playerError by remember { mutableStateOf<String?>(null) }
 
     val player = remember(videoUri, subtitleUri) {
         ExoPlayer.Builder(context).build().apply {
@@ -79,6 +84,11 @@ fun VideoPlayerScreen(
                     )
                 }
                 setMediaItem(itemBuilder.build())
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        playerError = error.message ?: "تعذر تشغيل الفيديو"
+                    }
+                })
                 prepare()
                 playWhenReady = true
             }
@@ -149,6 +159,18 @@ fun VideoPlayerScreen(
                         Icon(Icons.Default.Close, null, tint = Color.White)
                     }
                 }
+            }
+        }
+        if (playerError != null) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "تعذر تشغيل الفيديو\n$playerError",
+                    color = Color.White,
+                    modifier = Modifier.padding(24.dp)
+                )
             }
         }
     }

@@ -478,6 +478,152 @@ class WataniRepository(private val context: Context) {
         return if (f.exists()) f else null
     }
 
+    /** HLS items: fileUrl ends with .m3u8. The offline copy is the whole
+     * playlist tree (master + variants + segments) in one directory, so a
+     * local master playlist plays offline with its relative segments. */
+    fun isHlsItem(item: LibraryItem): Boolean =
+        item.fileUrl?.substringBefore('?')?.endsWith(".m3u8", ignoreCase = true) == true
+
+    fun getLibraryHlsDir(item: LibraryItem): File {
+        val dir = File(context.filesDir, "library_files_plain")
+        if (!dir.exists()) dir.mkdirs()
+        val rawName = item.id ?: item.fileUrl?.substringAfterLast('/')?.substringBefore('?') ?: "item"
+        val safe = rawName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        return File(dir, safe)
+    }
+
+    fun getLibraryHlsMasterFile(item: LibraryItem): File {
+        val name = item.fileUrl?.substringAfterLast('/')?.substringBefore('?')?.takeIf { it.isNotBlank() } ?: "master.m3u8"
+        return File(getLibraryHlsDir(item), name)
+    }
+
+    private fun hlsDirTotalBytes(dir: File): Long =
+        if (!dir.exists()) 0L else dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+    fun isHlsItemDownloaded(item: LibraryItem): Boolean {
+        val dir = getLibraryHlsDir(item)
+        if (!dir.exists() || !getLibraryHlsMasterFile(item).exists()) return false
+        val expected = item.size ?: 0L
+        return expected <= 0L || hlsDirTotalBytes(dir) == expected
+    }
+
+    private fun resolvePlaylistUrl(baseUrl: String, ref: String): String {
+        if (ref.startsWith("http://") || ref.startsWith("https://")) return ref
+        return java.net.URL(java.net.URL(baseUrl), ref).toString()
+    }
+
+    private fun playlistFileName(url: String): String =
+        url.substringAfterLast('/').substringBefore('?').takeIf { it.isNotBlank() } ?: "file"
+
+    /** Downloads an HLS tree: master + variant playlists + all segments,
+     * preserving relative names so the local master plays offline as-is.
+     * No Range resume in this first version (fresh dir per attempt);
+     * total bytes must equal item.size, exactly like the single-file flow.
+     * Stored plain in the private filesDir (same level as SRT side-cars);
+     * at-rest encryption for HLS trees is a later step, not this fix. */
+    private suspend fun downloadHlsItem(
+        item: LibraryItem,
+        onProgress: (Float) -> Unit
+    ): LibraryDownloadResult {
+        val url = item.fileUrl ?: return LibraryDownloadResult.fail("رابط الملف غير متوفر في محتوى المكتبة")
+        val dir = getLibraryHlsDir(item)
+        if (isHlsItemDownloaded(item)) {
+            return LibraryDownloadResult.ok(getLibraryHlsMasterFile(item))
+        }
+        if (dir.exists()) dir.deleteRecursively()
+        dir.mkdirs()
+        var downloaded = 0L
+        val total = item.size ?: 0L
+        fun fetchTo(targetUrl: String, targetFile: File): Boolean {
+            val request = try {
+                WorkerActivationApi.contentRequestForUrl(context, targetUrl)
+            } catch (_: IllegalArgumentException) {
+                return false
+            } ?: return false
+            try {
+                client.newCall(request).execute().use { resp ->
+                    if (!resp.isSuccessful) return false
+                    val body = resp.body ?: return false
+                    targetFile.parentFile?.mkdirs()
+                    body.byteStream().use { input ->
+                        java.io.FileOutputStream(targetFile).use { output -> input.copyTo(output) }
+                    }
+                }
+            } catch (_: Exception) {
+                return false
+            }
+            downloaded += targetFile.length()
+            if (total > 0) onProgress((downloaded.toFloat() / total).coerceIn(0f, 0.9f))
+            return true
+        }
+        fun readText(targetUrl: String): String? {
+            val request = try {
+                WorkerActivationApi.contentRequestForUrl(context, targetUrl)
+            } catch (_: IllegalArgumentException) {
+                return null
+            } ?: return null
+            return try {
+                client.newCall(request).execute().use { resp ->
+                    if (!resp.isSuccessful) return null
+                    resp.body?.string()
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+        fun fail(msg: String): LibraryDownloadResult {
+            dir.deleteRecursively()
+            return LibraryDownloadResult.fail(msg)
+        }
+        val masterText = readText(url)
+            ?: return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
+        val masterFile = File(dir, playlistFileName(url))
+        masterFile.writeText(masterText)
+        downloaded += masterFile.length()
+        val variantUrls = mutableListOf<String>()
+        val masterLines = masterText.lines()
+        for (i in masterLines.indices) {
+            if (masterLines[i].startsWith("#EXT-X-STREAM-INF")) {
+                val next = masterLines.getOrNull(i + 1)?.trim().orEmpty()
+                if (next.isNotEmpty() && !next.startsWith("#")) {
+                    variantUrls.add(resolvePlaylistUrl(url, next))
+                }
+            }
+        }
+        val playlistsToScan = if (variantUrls.isEmpty()) listOf(url to masterText) else emptyList()
+        for (variantUrl in variantUrls) {
+            val variantText = readText(variantUrl)
+                ?: return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
+            val variantFile = File(dir, playlistFileName(variantUrl))
+            variantFile.writeText(variantText)
+            downloaded += variantFile.length()
+            for (line in variantText.lines()) {
+                val ref = line.trim()
+                if (ref.isEmpty() || ref.startsWith("#")) continue
+                val segUrl = resolvePlaylistUrl(variantUrl, ref)
+                if (!fetchTo(segUrl, File(dir, playlistFileName(segUrl)))) {
+                    return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
+                }
+            }
+        }
+        for ((playlistUrl, playlistText) in playlistsToScan) {
+            for (line in playlistText.lines()) {
+                val ref = line.trim()
+                if (ref.isEmpty() || ref.startsWith("#")) continue
+                val segUrl = resolvePlaylistUrl(playlistUrl, ref)
+                if (!fetchTo(segUrl, File(dir, playlistFileName(segUrl)))) {
+                    return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
+                }
+            }
+        }
+        if (total > 0 && hlsDirTotalBytes(dir) != total) {
+            return fail("حجم الملف غير مطابق للمتوقع")
+        }
+        downloadLibrarySubtitle(item)
+        onProgress(1f)
+        return LibraryDownloadResult.ok(getLibraryHlsMasterFile(item))
+    }
+
     /** Best-effort download of the item's SRT side-car. Never fails the
      * video download: a missing SRT only means subtitles are unavailable
      * for that video until the next download attempt.
@@ -538,6 +684,17 @@ class WataniRepository(private val context: Context) {
     private fun migrateAnyPlainLibraryFile(item: LibraryItem): Boolean {
         val plainFile = getLibraryFile(item)
         if (!plainFile.exists()) return false
+        // Never bless a stale/corrupt plain copy: an unverified plain file
+        // becomes "downloaded but broken" after migration. Drop it so the
+        // user re-downloads a clean copy instead of being stuck.
+        if (verifyLibraryFile(plainFile, item) != null) {
+            plainFile.delete()
+            return false
+        }
+        if (isPdfItem(item) && !hasPdfHeader(plainFile)) {
+            plainFile.delete()
+            return false
+        }
         val encryptedFile = getLibraryEncryptedFile(item)
         return sy.medpro.watani.security.ContentEncryption.encryptFile(context, plainFile, encryptedFile).also {
             if (it) plainFile.delete()
@@ -578,12 +735,29 @@ class WataniRepository(private val context: Context) {
         return null
     }
 
+    /** A downloaded book must start with the PDF magic. Gateway/error
+     * bytes that happen to match the declared size must never be blessed
+     * as a downloaded book — they only surface later as a corrupt open. */
+    private fun hasPdfHeader(file: File): Boolean {
+        if (!file.exists() || file.length() < 5) return false
+        return try {
+            val head = ByteArray(5)
+            java.io.FileInputStream(file).use { it.read(head) == 5 } && head.decodeToString() == "%PDF-"
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun isPdfItem(item: LibraryItem): Boolean =
+        item.fileUrl?.substringBefore('?')?.endsWith(".pdf", ignoreCase = true) == true
+
     fun hashVerificationFor(item: LibraryItem): HashVerification {
         if (item.hash.isNullOrBlank()) return HashVerification.SIZE_ONLY
         return if (expectedHashFormat(item.hash) != null) HashVerification.VERIFIED else HashVerification.UNKNOWN_FORMAT
     }
 
     fun isLibraryItemDownloaded(item: LibraryItem): Boolean {
+        if (isHlsItem(item)) return isHlsItemDownloaded(item)
         if (isItemDownloadedAndEncrypted(item)) return true
         // Migration succeeds → returns encrypted state result directly
         if (migrateAnyPlainLibraryFile(item)) return isItemDownloadedAndEncrypted(item)
@@ -602,7 +776,9 @@ class WataniRepository(private val context: Context) {
         plainFile.delete()
         encFile.delete()
         getLibrarySubtitleFile(item).delete()
-        return !plainFile.exists() && !encFile.exists()
+        val hlsDir = getLibraryHlsDir(item)
+        if (hlsDir.exists()) hlsDir.deleteRecursively()
+        return !plainFile.exists() && !encFile.exists() && !hlsDir.exists()
     }
 
     suspend fun downloadLibraryItem(
@@ -616,6 +792,10 @@ class WataniRepository(private val context: Context) {
 
         val url = item.fileUrl
             ?: return@withContext LibraryDownloadResult.fail("رابط الملف غير متوفر في محتوى المكتبة")
+
+        if (isHlsItem(item)) {
+            return@withContext downloadHlsItem(item, onProgress)
+        }
 
         if (isItemDownloadedAndEncrypted(item)) {
             return@withContext LibraryDownloadResult.ok(getLibraryEncryptedFile(item))
@@ -707,9 +887,17 @@ class WataniRepository(private val context: Context) {
                     return@withContext LibraryDownloadResult.fail("الملف تالف ($reason) — أعد المحاولة")
                 }
 
+                if (isPdfItem(item) && !hasPdfHeader(plainTarget)) {
+                    plainTarget.delete()
+                    if (attempt < 2) continue
+                    return@withContext LibraryDownloadResult.fail("الملف المحمّل ليس PDF سليمًا — أعد المحاولة")
+                }
+
                 onProgress(0.95f)
                 val encFile = getLibraryEncryptedFile(item)
-                if (!sy.medpro.watani.security.ContentEncryption.encryptFile(context, plainTarget, encFile)) {
+                if (!sy.medpro.watani.security.ContentEncryption.encryptFile(context, plainTarget, encFile) { p ->
+                        onProgress(0.95f + p * 0.04f)
+                    }) {
                     plainTarget.delete()
                     encFile.delete()
                     return@withContext LibraryDownloadResult.fail("فشل تشفير الملف")
@@ -745,6 +933,12 @@ class WataniRepository(private val context: Context) {
     suspend fun openLibraryItem(item: LibraryItem): Result<File> = withContext(Dispatchers.IO) {
         if (!isLibraryItemDownloaded(item)) {
             return@withContext Result.failure(Exception("العنصر غير محمّل"))
+        }
+
+        if (isHlsItem(item)) {
+            val master = getLibraryHlsMasterFile(item)
+            return@withContext if (master.exists()) Result.success(master)
+            else Result.failure(Exception("تعذر العثور على الملف المحمّل"))
         }
 
         val encFile = getLibraryEncryptedFile(item)
