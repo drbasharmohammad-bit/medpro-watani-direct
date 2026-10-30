@@ -211,8 +211,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                                 onClick = onBack,
                                 colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
                                 modifier = Modifier.height(50.dp),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
+                                shape = MaterialTheme.shapes.medium) {
                                 Text("رجوع")
                             }
                         }
@@ -234,16 +233,14 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                                     onClick = { rebuildSession() },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
                                     modifier = Modifier.weight(1f).height(50.dp),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
+                                    shape = MaterialTheme.shapes.medium) {
                                     Text("إعادة الجلسة")
                                 }
                                 Button(
                                     onClick = { backToPicker() },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                     modifier = Modifier.weight(1f).height(50.dp),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
+                                    shape = MaterialTheme.shapes.medium) {
                                     Text("اختيار مادة أخرى", color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
@@ -319,8 +316,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
                                 modifier = Modifier.weight(1f).height(50.dp),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
+                                shape = MaterialTheme.shapes.medium) {
                                 Text("صعب / إعادة")
                             }
                             Button(
@@ -333,8 +329,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
                                 modifier = Modifier.weight(1f).height(50.dp),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
+                                shape = MaterialTheme.shapes.medium) {
                                 Text("سهل / تثبيت")
                             }
                         }
@@ -343,8 +338,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                             onClick = { showAnswer = true },
                             colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
                             modifier = Modifier.fillMaxWidth().height(50.dp),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
+                            shape = MaterialTheme.shapes.medium) {
                             Text("إظهار الإجابة", fontSize = 16.sp)
                         }
                     }

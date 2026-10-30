@@ -567,7 +567,7 @@ fun QuestionCard(
                                 color = MaterialTheme.colorScheme.error
                             )
                             Spacer(modifier = Modifier.height(6.dp))
-                            OutlinedButton(onClick = ex.retry) {
+                            OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = ex.retry) {
                                 Text("إعادة تحميل الشرح", fontSize = 13.sp)
                             }
                         }

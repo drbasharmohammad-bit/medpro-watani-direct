@@ -2,9 +2,11 @@ package sy.medpro.watani.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -67,7 +69,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Icon(Icons.Default.Error, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.error)
                 Text(state.error ?: "خطأ", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.error)
-                Button(onClick = { viewModel.loadLibrary() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
+                Button(shape = MaterialTheme.shapes.medium, onClick = { viewModel.loadLibrary() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
                     Icon(Icons.Default.Refresh, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("إعادة المحاولة")
@@ -85,13 +87,46 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
             modifier = Modifier.fillMaxSize()
         ) {
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Default.LibraryBooks, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f))
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = GoldAccent.copy(alpha = 0.18f),
+                        modifier = Modifier.size(96.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.LibraryBooks, null,
+                                tint = if (isSystemInDarkTheme()) GoldAccent else MaroonPrimary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+                    }
                     Text(
-                        "لا يوجد محتوى بعد — سيظهر هنا عند إضافة كتب وفيديوهات جديدة",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        "لا يوجد محتوى بعد",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
+                    Text(
+                        "سيظهر هنا عند إضافة كتب وفيديوهات جديدة",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = { viewModel.loadLibrary() },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Text("إعادة التحميل")
+                    }
                     Text(
                         "اسحب للأسفل للتحقق من جديد",
                         fontSize = 12.sp,
@@ -342,7 +377,7 @@ private fun LibraryItemRow(item: LibraryItem, isBook: Boolean, viewModel: Librar
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    Button(
+                    Button(shape = MaterialTheme.shapes.medium,
                         onClick = { onOpenReader(null, item.fileUrl) },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
                         modifier = Modifier.height(32.dp)

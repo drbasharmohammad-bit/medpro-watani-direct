@@ -1,6 +1,7 @@
 package sy.medpro.watani.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,7 +24,9 @@ import sy.medpro.watani.data.DownloadedSectionEntity
 import sy.medpro.watani.data.ManifestFileEntry
 import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.ui.cases.CasesScreen
+import sy.medpro.watani.ui.theme.GoldAccent
 import sy.medpro.watani.ui.theme.MaroonPrimary
+import sy.medpro.watani.ui.theme.featuredCardBackground
 import sy.medpro.watani.ui.viewmodel.AppTab
 
 val universitiesMap = mapOf(
@@ -139,7 +142,7 @@ fun HomeScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
                                 Text("خطأ في الاتصال: $manifestError", color = MaterialTheme.colorScheme.error)
                                 Spacer(modifier = Modifier.height(16.dp))
-                                Button(onClick = onRefreshManifest) {
+                                Button(shape = MaterialTheme.shapes.medium, onClick = onRefreshManifest) {
                                     Text("إعادة المحاولة")
                                 }
                             }
@@ -248,7 +251,8 @@ fun SectionCard(
 ) {
     Card(
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = featuredCardBackground()),
+        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -305,16 +309,15 @@ fun SectionCard(
                     Button(
                         onClick = onOpenClick,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = MaterialTheme.shapes.small
-                    ) {
+                        shape = MaterialTheme.shapes.medium) {
                         Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("فتح القسم", fontSize = 14.sp)
                     }
                 } else {
-                    OutlinedButton(
+                    OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary),
                         onClick = onDownloadClick,
-                        shape = MaterialTheme.shapes.small,
+                        shape = MaterialTheme.shapes.medium,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -413,7 +416,7 @@ fun TopicSelectionScreen(
                 ) {
                     Text("القسم غير محمل أو لم يتم تنزيل ملفاته بعد.", fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
-                    Button(
+                    Button(shape = MaterialTheme.shapes.medium,
                         onClick = onDownloadClick,
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {

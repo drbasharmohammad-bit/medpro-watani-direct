@@ -111,8 +111,7 @@ fun SignInGate(onSignedIn: () -> Unit) {
                             .fillMaxWidth()
                             .height(50.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
+                        shape = MaterialTheme.shapes.medium) {
                         Text("Sign in with Google (تسجيل الدخول بواسطة جوجل)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 }

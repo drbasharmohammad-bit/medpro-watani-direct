@@ -658,7 +658,8 @@ fun QuickActionCard(
 ) {
     Card(
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = featuredCardBackground()),
+        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier.clickable { onClick() }
     ) {

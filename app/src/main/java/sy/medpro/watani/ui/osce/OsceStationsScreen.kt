@@ -129,7 +129,7 @@ fun OsceStationsScreen(onBack: () -> Unit) {
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(20.dp))
-                    Button(
+                    Button(shape = MaterialTheme.shapes.medium,
                         onClick = { coroutineScope.launch { loadOsce() } },
                         colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
                     ) {
@@ -297,8 +297,7 @@ private fun OsceStationDetailScreen(
                     .fillMaxWidth()
                     .height(50.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                shape = RoundedCornerShape(12.dp)
-            ) {
+                shape = MaterialTheme.shapes.medium) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("بدء وضع الامتحان الفعلي مع مؤقت المحطة", fontWeight = FontWeight.Bold, fontSize = 15.sp)
@@ -435,8 +434,7 @@ private fun OsceExamRunnerScreen(
                         .fillMaxWidth()
                         .height(50.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
+                    shape = MaterialTheme.shapes.medium) {
                     Icon(Icons.Default.DoneAll, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("إنهاء المحطة وإصدار تقرير الأداء", fontWeight = FontWeight.Bold, fontSize = 15.sp)
@@ -516,8 +514,7 @@ private fun OsceExamRunnerScreen(
                         .fillMaxWidth()
                         .height(50.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
+                    shape = MaterialTheme.shapes.medium) {
                     Text("العودة لقائمة محطات OSCE", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
             }

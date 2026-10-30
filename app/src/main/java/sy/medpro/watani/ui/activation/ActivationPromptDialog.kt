@@ -113,8 +113,7 @@ fun ActivationPromptDialog(
                         enabled = !isLoading,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
+                        shape = MaterialTheme.shapes.medium) {
                         Text("تسجيل الدخول بحساب Google")
                     }
                 } else {
@@ -154,8 +153,7 @@ fun ActivationPromptDialog(
                         enabled = !isLoading,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
+                        shape = MaterialTheme.shapes.medium) {
                         if (isLoading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),

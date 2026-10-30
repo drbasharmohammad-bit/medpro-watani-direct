@@ -172,7 +172,7 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text("تعذر تحميل حزمة الأصوات.", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { loadPack() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
+                        Button(shape = MaterialTheme.shapes.medium, onClick = { loadPack() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
                             Text("إعادة المحاولة")
                         }
                     }
@@ -242,7 +242,7 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
                                         Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text("استمع للصوت وحدد النتيجة السريرية الأرجح:", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaroonPrimary)
                                             Spacer(modifier = Modifier.height(16.dp))
-                                            Button(
+                                            Button(shape = MaterialTheme.shapes.medium,
                                                 onClick = { playAudio(qClip) },
                                                 colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
                                             ) {
@@ -272,7 +272,7 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
                                             }
                                         }
                                     }
-                                    Button(
+                                    Button(shape = MaterialTheme.shapes.medium,
                                         onClick = {
                                             if (selectedOption != null) {
                                                 isSubmitted = true
@@ -297,7 +297,7 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
                                         Text("تأكيد الإجابة", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                     }
                                     if (isSubmitted) {
-                                        Button(
+                                        Button(shape = MaterialTheme.shapes.medium,
                                             onClick = { setupQuiz(clips) },
                                             modifier = Modifier.fillMaxWidth().height(48.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)

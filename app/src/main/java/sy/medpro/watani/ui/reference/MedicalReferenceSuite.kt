@@ -497,7 +497,7 @@ fun QuickMedicalReferenceModal(onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            Button(
+            Button(shape = MaterialTheme.shapes.medium,
                 onClick = onDismiss,
                 colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
             ) {

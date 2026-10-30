@@ -9,8 +9,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideIntoContainer
-import androidx.compose.animation.slideOutOfContainer
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -23,9 +21,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -416,9 +416,21 @@ class MainActivity : ComponentActivity() {
                                     )
                                 },
                                 bottomBar = {
+                                    // Floating bottom bar (proposal 10): 16dp side
+                                    // margins, large corners, shadow. The Scaffold
+                                    // measures the whole slot, so innerPadding
+                                    // already clears bar height + bottom gap.
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                                        shape = MaterialTheme.shapes.extraLarge,
+                                        color = MaterialTheme.colorScheme.surface,
+                                        shadowElevation = 8.dp
+                                    ) {
                                     NavigationBar(
-                                        containerColor = MaterialTheme.colorScheme.surface,
-                                        tonalElevation = 3.dp
+                                        containerColor = Color.Transparent,
+                                        tonalElevation = 0.dp
                                     ) {
                                         val tabs = listOf(
                                             Triple(AppTab.HOME, "الرئيسية", Icons.Default.Home),
@@ -461,6 +473,7 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     }
+                                    }
                                 }
                             ) { innerPadding ->
                                 Box(modifier = Modifier.padding(innerPadding)) {
@@ -468,11 +481,13 @@ class MainActivity : ComponentActivity() {
                                         targetState = drawerScreen,
                                         transitionSpec = {
                                             (fadeIn(animationSpec = tween(200)) + slideIntoContainer(
+                                                towards = SlideDirection.Up,
                                                 animationSpec = tween(200),
-                                                initialOffset = { it / 8 }
+                                                initialOffset = { IntOffset(0, it.height / 8) }
                                             )) togetherWith (fadeOut(animationSpec = tween(180)) + slideOutOfContainer(
+                                                towards = SlideDirection.Down,
                                                 animationSpec = tween(180),
-                                                targetOffset = { it / 8 }
+                                                targetOffset = { IntOffset(0, it.height / 8) }
                                             ))
                                         },
                                         label = "drawerScreenTransition"

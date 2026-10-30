@@ -138,7 +138,7 @@ fun LeaderboardScreen() {
                                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                                     fontSize = 14.sp
                                 )
-                                Button(
+                                Button(shape = MaterialTheme.shapes.medium,
                                     onClick = { reloadTrigger++ },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
                                 ) {

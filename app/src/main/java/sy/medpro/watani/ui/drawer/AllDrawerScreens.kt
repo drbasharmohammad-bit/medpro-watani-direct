@@ -4,10 +4,13 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,6 +33,7 @@ import sy.medpro.watani.ui.explanation.ExplanationUiState
 import sy.medpro.watani.ui.explanation.normalizeExplanationKey
 import sy.medpro.watani.ui.explanation.rememberExplanationState
 import sy.medpro.watani.ui.simulator.ExamSimulatorScreen
+import sy.medpro.watani.ui.theme.GoldAccent
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import java.io.File
 
@@ -328,7 +332,7 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-                Button(
+                Button(shape = MaterialTheme.shapes.medium,
                     onClick = {
                         if (selectedOptionIndex != null) {
                             submitted = true
@@ -381,7 +385,7 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
                                         color = MaterialTheme.colorScheme.error
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    OutlinedButton(onClick = ex.retry) {
+                                    OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = ex.retry) {
                                         Text("إعادة تحميل الشرح", fontSize = 13.sp)
                                     }
                                 }
@@ -469,13 +473,13 @@ fun FlashcardsScreen(onBack: () -> Unit) {
                     }
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = {
+                    OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = {
                         showAnswer = false
                         currentIndex = (currentIndex + 1) % flashcards.size
                     }, modifier = Modifier.weight(1f).height(48.dp)) {
                         Text("التالي (مراجعة لاحقاً)")
                     }
-                    Button(onClick = {
+                    Button(shape = MaterialTheme.shapes.medium, onClick = {
                         showAnswer = false
                         currentIndex = (currentIndex + 1) % flashcards.size
                     }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary), modifier = Modifier.weight(1f).height(48.dp)) {
@@ -533,7 +537,7 @@ fun StudyGuideScreen(onBack: () -> Unit) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text("لم يتم تحميل دليل الدراسة (guide.json) بعد.", fontWeight = FontWeight.Bold, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { loadGuide() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
+                        Button(shape = MaterialTheme.shapes.medium, onClick = { loadGuide() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
                             Text("تحميل دليل الدراسة")
                         }
                     }
@@ -596,13 +600,37 @@ fun WrongAnswersScreen(onBack: () -> Unit, onOpenAnkiWrong: (() -> Unit)? = null
             }
             if (stats.savedMistakes.isEmpty()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(64.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("لا توجد أخطاء مسجلة حالياً.", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text("أي سؤال تخطئ في حله سيُحفظ هنا تلقائياً للمراجعة بدون إنترنت.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = GoldAccent.copy(alpha = 0.18f),
+                            modifier = Modifier.size(96.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.CheckCircle, contentDescription = null,
+                                    tint = if (isSystemInDarkTheme()) GoldAccent else MaroonPrimary,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
+                        }
+                        Text("لا توجد أخطاء مسجلة حالياً.", fontWeight = FontWeight.Bold, fontSize = 17.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Text("أي سؤال تخطئ في حله سيُحفظ هنا تلقائياً للمراجعة بدون إنترنت.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = onBack,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.height(48.dp)
+                        ) {
+                            Text("عودة")
+                        }
+                    }
                 }
-            }
         } else {
             LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item {
@@ -715,10 +743,10 @@ fun FocusTimerScreen(onBack: () -> Unit) {
             Text(text = String.format("%02d:%02d", m, s), fontSize = 64.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Button(onClick = { isRunning = !isRunning }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
+                Button(shape = MaterialTheme.shapes.medium, onClick = { isRunning = !isRunning }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
                     Text(if (isRunning) "إيقاف مؤقت" else "بدء التركيز")
                 }
-                OutlinedButton(onClick = { isRunning = false; timeLeft = 25 * 60 }) {
+                OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = { isRunning = false; timeLeft = 25 * 60 }) {
                     Text("إعادة ضبط")
                 }
             }
@@ -850,10 +878,35 @@ fun FavoritesScreen(onBack: () -> Unit) {
     DrawerScreenScaffold(title = "المفضلة", onBack = onBack) { padding ->
         if (favs.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Favorite, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(64.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("لا توجد عناصر مضافة للمفضلة حالياً.\nيمكنك إضافة الأسئلة أو الحالات إلى المفضلة بالضغط على أيقونة القلب في بطاقة السؤال أو شاشة الحالة السريرية.", fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = GoldAccent.copy(alpha = 0.18f),
+                        modifier = Modifier.size(96.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Favorite, contentDescription = null,
+                                tint = if (isSystemInDarkTheme()) GoldAccent else MaroonPrimary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+                    }
+                    Text("لا توجد عناصر مضافة للمفضلة حالياً.", fontWeight = FontWeight.Bold, fontSize = 17.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Text("يمكنك إضافة الأسئلة أو الحالات إلى المفضلة بالضغط على أيقونة القلب في بطاقة السؤال أو شاشة الحالة السريرية.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = onBack,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Text("تصفح الأقسام")
+                    }
                 }
             }
         } else {
@@ -900,7 +953,7 @@ fun MyNotesScreen(onBack: () -> Unit) {
                 shape = MaterialTheme.shapes.medium
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Button(
+            Button(shape = MaterialTheme.shapes.medium,
                 onClick = {
                     if (noteText.isNotBlank()) {
                         val next = listOf(noteText) + notesList
@@ -1012,7 +1065,7 @@ fun PrivacyScreen(onBack: () -> Unit) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text("لم يتم تحميل تفاصيل الخصوصية بعد.", fontWeight = FontWeight.Bold, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { loadGuide() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
+                        Button(shape = MaterialTheme.shapes.medium, onClick = { loadGuide() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
                             Text("تحميل التفاصيل")
                         }
                     }
@@ -1090,7 +1143,7 @@ fun ContactScreen(onBack: () -> Unit) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text("لم يتم تحميل معلومات التواصل بعد.", fontWeight = FontWeight.Bold, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = { loadGuide() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
+                        Button(shape = MaterialTheme.shapes.medium, onClick = { loadGuide() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
                             Text("تحميل التفاصيل")
                         }
                     }
@@ -1106,7 +1159,7 @@ fun ContactScreen(onBack: () -> Unit) {
                                     Text(info.supportMessage ?: "تواصل معنا عبر القنوات الرسمية أدناه:", fontSize = 13.sp)
                                     Spacer(modifier = Modifier.height(16.dp))
                                     if (!info.telegramChannel.isNullOrBlank()) {
-                                        Button(onClick = {
+                                        Button(shape = MaterialTheme.shapes.medium, onClick = {
                                             val url = buildTelegramUrl(info.telegramChannel)
                                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                                             context.startActivity(intent)
@@ -1118,7 +1171,7 @@ fun ContactScreen(onBack: () -> Unit) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                     }
                                     if (!info.telegramBot.isNullOrBlank()) {
-                                        OutlinedButton(onClick = {
+                                        OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = {
                                             val url = buildTelegramUrl(info.telegramBot)
                                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                                             context.startActivity(intent)
@@ -1130,7 +1183,7 @@ fun ContactScreen(onBack: () -> Unit) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                     }
                                     if (!info.adminEmail.isNullOrBlank()) {
-                                        OutlinedButton(onClick = {
+                                        OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = {
                                             val uriStr = "mailto:${info.adminEmail}"
                                             val intent = Intent(Intent.ACTION_SENDTO, Uri.parse(uriStr))
                                             context.startActivity(intent)

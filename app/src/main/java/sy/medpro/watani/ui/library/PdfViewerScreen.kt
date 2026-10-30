@@ -616,7 +616,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                             } else {
                                 LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     items(bookmarks.sorted()) { page ->
-                                        Button(
+                                        Button(shape = MaterialTheme.shapes.medium,
                                             onClick = {
                                                 coroutineScope.launch {
                                                     pagerState.animateScrollToPage(page)
@@ -657,8 +657,8 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                                     .weight(1f)
                                     .height(40.dp),
                                 colors = TextFieldDefaults.colors(
-                                    unfocusedContainerColor = Color.White,
-                                    focusedContainerColor = Color.White
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             )
                             IconButton(onClick = { showSearch = false }) {

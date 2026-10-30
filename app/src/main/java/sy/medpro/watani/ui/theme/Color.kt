@@ -1,6 +1,14 @@
 package sy.medpro.watani.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+
+/** Featured/call-to-action card background: light gold in light mode,
+ *  dark bronze-gold in dark mode, so onSurface text stays readable in both. */
+@Composable
+fun featuredCardBackground(): Color =
+    if (isSystemInDarkTheme()) DarkGoldContainer else GoldContainer
 
 // Brand Primary Maroon Family
 val MaroonPrimary = Color(0xFF7A1F2B)
@@ -15,6 +23,9 @@ val GoldAccent = Color(0xFFD4AF37)
 val GoldAccentDark = Color(0xFFA67C1E)
 val GoldContainer = Color(0xFFFFF0C2)
 val OnGoldContainer = Color(0xFF3D2E00)
+// Dark-mode counterpart of GoldContainer: a dark bronze-gold so featured
+// cards keep gold identity with readable light text in dark mode.
+val DarkGoldContainer = Color(0xFF4A3510)
 
 // Light Theme Surfaces & Backgrounds
 val RoseBackground = Color(0xFFFBF3F4)

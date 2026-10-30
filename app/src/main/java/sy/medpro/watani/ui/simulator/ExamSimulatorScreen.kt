@@ -311,8 +311,7 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                     .fillMaxWidth()
                                     .height(52.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
+                                shape = MaterialTheme.shapes.medium) {
                                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("بدء الامتحان التجريبي الآن", fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -462,7 +461,7 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        OutlinedButton(
+                        OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium,
                             onClick = { if (currentIndex > 0) currentIndex-- },
                             enabled = currentIndex > 0,
                             modifier = Modifier.weight(1f)
@@ -470,7 +469,7 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                             Text("السؤال السابق")
                         }
                         if (currentIndex < activeQuestions.lastIndex) {
-                            Button(
+                            Button(shape = MaterialTheme.shapes.medium,
                                 onClick = { currentIndex++ },
                                 colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
                                 modifier = Modifier.weight(1f)
@@ -478,7 +477,7 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                 Text("السؤال التالي")
                             }
                         } else {
-                            Button(
+                            Button(shape = MaterialTheme.shapes.medium,
                                 onClick = { mode = "REPORT" },
                                 colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
                                 modifier = Modifier.weight(1f)
@@ -570,7 +569,7 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                         color = MaterialTheme.colorScheme.error
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    OutlinedButton(onClick = ex.retry) {
+                                    OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = ex.retry) {
                                         Text("إعادة تحميل الشرح", fontSize = 13.sp)
                                     }
                                 }
@@ -584,8 +583,7 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                             onClick = { mode = "SETUP" },
                             colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
                             modifier = Modifier.fillMaxWidth().height(50.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
+                            shape = MaterialTheme.shapes.medium) {
                             Text("بدء جلسة محاكاة جديدة")
                         }
                     }

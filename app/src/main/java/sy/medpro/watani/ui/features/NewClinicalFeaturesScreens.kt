@@ -289,7 +289,7 @@ fun NightShiftSimulatorScreen(onBack: () -> Unit) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text("النتيجة النهائية للمناوبة: $shiftScore / 100", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp)
                             Spacer(modifier = Modifier.height(12.dp))
-                            Button(
+                            Button(shape = MaterialTheme.shapes.medium,
                                 onClick = {
                                     currentScenarioIndex = 0
                                     shiftScore = 100

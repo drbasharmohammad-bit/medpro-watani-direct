@@ -2,6 +2,7 @@ package sy.medpro.watani.ui.welcome
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -106,8 +107,7 @@ fun WelcomeScreen(
                         .fillMaxWidth()
                         .height(52.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
+                    shape = MaterialTheme.shapes.medium) {
                     Text("الدخول إلى التطبيق", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -123,7 +123,7 @@ fun WelcomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("جاري تسجيل الدخول...", fontSize = 13.sp)
                 } else {
-                    OutlinedButton(
+                    OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary),
                         onClick = {
                             signInError = null
                             isSigningIn = true
@@ -144,8 +144,7 @@ fun WelcomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
+                        shape = MaterialTheme.shapes.medium) {
                         Text("تسجيل الدخول بحساب Google (اختياري)", fontSize = 14.sp)
                     }
                 }

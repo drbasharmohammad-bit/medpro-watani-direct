@@ -507,7 +507,7 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
                     } else {
                         Text("بلا أخطاء — مناوبة نظيفة تمامًا.", fontSize = 13.sp, color = MaroonPrimary, fontWeight = FontWeight.Bold)
                     }
-                    Button(
+                    Button(shape = MaterialTheme.shapes.medium,
                         onClick = {
                             caseIndex = -1; totalScore = 0; caseScores = emptyList()
                             mistakes = emptyList(); shiftDone = false
@@ -529,14 +529,14 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text("${index + 1}. ${c.title}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
                                 Text(c.presentation, fontSize = 12.sp)
-                                Button(
+                                Button(shape = MaterialTheme.shapes.medium,
                                     onClick = { startCase(index) },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
                                 ) { Text("ابدأ هذه الحالة") }
                             }
                         }
                     }
-                    Button(
+                    Button(shape = MaterialTheme.shapes.medium,
                         onClick = { startCase(0) },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
                         modifier = Modifier.fillMaxWidth()
@@ -564,7 +564,7 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
                                 Text("نقاط هذه الحالة: $caseScore", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
                         }
-                        Button(
+                        Button(shape = MaterialTheme.shapes.medium,
                             onClick = {
                                 caseScores = caseScores + (c.title to caseScore)
                                 if (caseIndex + 1 < erCases.size) startCase(caseIndex + 1) else shiftDone = true
@@ -585,7 +585,7 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
                                 Text(fb.feedback, fontSize = 13.sp)
                             }
                         }
-                        Button(
+                        Button(shape = MaterialTheme.shapes.medium,
                             onClick = {
                                 if (pendingNextNode == null) {
                                     caseEnded = true
@@ -602,7 +602,7 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
                     } else {
                         Text(node.text, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         node.actions.forEach { action ->
-                            Button(
+                            Button(shape = MaterialTheme.shapes.medium,
                                 onClick = {
                                     caseScore += action.points
                                     totalScore += action.points
