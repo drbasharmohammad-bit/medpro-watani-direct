@@ -39,6 +39,8 @@ data class UiState(
     val manifestError: String? = null,
     val downloadingPaths: Set<String> = emptySet(),
     val downloadError: String? = null,
+    /** Device-gate block message (M8), shown as a dialog by MainActivity. */
+    val gateMessage: String? = null,
     val screenState: ScreenState = ScreenState.Home
 )
 
@@ -101,12 +103,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update {
                         it.copy(
                             downloadingPaths = it.downloadingPaths - path,
-                            downloadError = "فشل تحميل $path: ${error.localizedMessage}"
+                            // M3: revocation text stands alone (Arabic,
+                            // no "download failed" prefix); the prompt
+                            // itself fires from the repository event.
+                            downloadError = if (error is ActivationRevokedException) {
+                                error.localizedMessage
+                            } else {
+                                "فشل تحميل $path: ${error.localizedMessage}"
+                            }
                         )
                     }
                 }
             )
         }
+    }
+
+    /** Reloads the downloaded list after an external wipe (sign-out,
+     * deactivation, revocation) so badges stop showing wiped sections. */
+    fun refreshDownloadedSections() {
+        repository.refreshDownloadedSections()
+    }
+
+    fun clearGateMessage() {
+        _uiState.update { it.copy(gateMessage = null) }
     }
 
     fun navigateToHome() {
@@ -128,6 +147,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openTopicQuiz(path: String, topicName: String) {
         viewModelScope.launch {
+            // M8: re-check the device gate at quiz entry (a debugger
+            // attached mid-session is caught here, not only at tab entry).
+            // The quiz only opens restricted bank content, so the gate
+            // applies whenever the path is restricted.
+            if (WorkerActivationApi.isRestrictedPath(path)) {
+                val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(
+                    getApplication<Application>().applicationContext
+                )
+                if (!gate.allowed) {
+                    _uiState.update { it.copy(gateMessage = gate.userMessage) }
+                    return@launch
+                }
+            }
             val envelope = repository.getSubjectEnvelope(path)
             val topic = envelope?.topics?.find { it.name == topicName }
             val questions = topic?.questions ?: emptyList()

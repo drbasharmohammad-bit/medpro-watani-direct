@@ -22,11 +22,15 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
  *
  * Flow: Google sign-in (only if not signed in) -> code entry ->
  * POST {WORKER_BASE}/v1/activate -> on success the caller unlocks the
- * requested section. On failure the EXACT server error text is shown
- * (WorkerActivationApi returns the `error` field verbatim).
+ * requested section. On failure an ARABIC message is shown (M14: the
+ * raw server `error` string is only logged, never displayed).
  *
- * If a previous token merely expired, one silent refresh is attempted
- * first; only when it fails is the code asked for again.
+ * If a previous token expired, one refresh is attempted first WITH a
+ * visible status message ("جاري تجديد التفعيل...") — NOT silent, the
+ * earlier "silent refresh" comment was wrong and is corrected here.
+ * Only when the refresh proves revocation (server 401/403) is the
+ * activation cleared, restricted downloads wiped (M4) and the code
+ * asked for again; a mere network failure keeps the old state.
  */
 @Composable
 fun ActivationPromptDialog(
@@ -41,19 +45,30 @@ fun ActivationPromptDialog(
     var message by remember { mutableStateOf<String?>(null) }
     var isError by remember { mutableStateOf(false) }
 
-    // Silent refresh for an expired token before asking for the code again.
+    // Visible refresh attempt for an expired token before asking for
+    // the code again (status message shown above, not silent).
     LaunchedEffect(user) {
         val u = user ?: return@LaunchedEffect
         if (WorkerActivationApi.hasExpiredToken(context)) {
             isLoading = true
             message = "جاري تجديد التفعيل..."
             isError = false
-            val refreshed = WorkerActivationApi.tryRefresh(context)
-            isLoading = false
-            if (refreshed) {
-                onActivated()
-            } else {
-                message = "انتهى التفعيل السابق — أدخل كود تفعيل لتجديده."
+            when (WorkerActivationApi.tryRefresh(context)) {
+                sy.medpro.watani.data.RefreshOutcome.REFRESHED -> {
+                    isLoading = false
+                    onActivated()
+                }
+                sy.medpro.watani.data.RefreshOutcome.REVOKED -> {
+                    // Activation is lost (M4): clear + wipe + ask code.
+                    WorkerActivationApi.notifyActivationLost(context)
+                    isLoading = false
+                    message = "انتهى التفعيل السابق — أدخل كود تفعيل لتجديده. " +
+                        "(حُذف المحتوى المقيّد المنزّل من الجهاز.)"
+                }
+                sy.medpro.watani.data.RefreshOutcome.UNAVAILABLE -> {
+                    isLoading = false
+                    message = "تعذر الاتصال بخادم التفعيل — تحقق من الشبكة ثم أعد المحاولة."
+                }
             }
         }
     }

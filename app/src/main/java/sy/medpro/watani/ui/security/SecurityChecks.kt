@@ -34,6 +34,15 @@ object SecurityChecks {
     @Volatile
     private var lifecycleRegistered = false
 
+    /**
+     * Process-once startup sweep flag (M13). Static state lives for the
+     * process lifetime, so a configuration-change recreation (which
+     * re-runs onCreate -> install) does NOT re-sweep, while a fresh
+     * process start (after a process kill) DOES sweep once.
+     */
+    @Volatile
+    private var startupSweepDone = false
+
     /** Window-only install (for any future Activity/window without a sweep).
      * Same flag ContentProtection applies; set directly here so this
      * branch adds no edits to the pre-existing ContentProtection file. */
@@ -44,9 +53,23 @@ object SecurityChecks {
         )
     }
 
-    /** Full install for MainActivity: window flag + app-close temp sweep. */
+    /**
+     * Full install for MainActivity: window flag + temp sweeps.
+     * M13: (a) a ONE-TIME sweep at process start closes the process-death
+     * window (a temp surviving a crash/force-stop is deleted on the next
+     * start, not left until the next app close); (b) the destroy sweep
+     * below is guarded by isFinishing so a rotation (destroy without
+     * finish) never wipes a temp its reader still needs.
+     */
     fun install(activity: Activity) {
         ContentProtection.enableScreenshotPrevention(activity)
+        if (!startupSweepDone) {
+            startupSweepDone = true
+            try {
+                TempDecryptedFiles.deleteAll(activity)
+            } catch (_: Exception) {
+            }
+        }
         registerTempSweep(activity)
     }
 
@@ -63,9 +86,12 @@ object SecurityChecks {
                 override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
                 override fun onActivityDestroyed(a: Activity) {
                     // App close path P3: wipe any plaintext temp that a
-                    // reader close path missed. Runs per destroyed
-                    // Activity; the sweep itself is idempotent.
-                    if (a is sy.medpro.watani.MainActivity) {
+                    // reader close path missed. M13 guard: ONLY when the
+                    // Activity is finishing (real app close). A destroy
+                    // without finish is a configuration change (rotation):
+                    // sweeping there would delete temps whose readers
+                    // are merely being recreated.
+                    if (a is sy.medpro.watani.MainActivity && a.isFinishing) {
                         TempDecryptedFiles.deleteAll(a)
                     }
                 }

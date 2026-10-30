@@ -130,7 +130,7 @@ fun ProfileScreen(onBack: () -> Unit) {
 // Device list display was removed: the Worker contract has no
 // list-devices endpoint, so bound devices can no longer be shown here.
 @Composable
-fun ActivationScreen(onBack: () -> Unit) {
+fun ActivationScreen(onBack: () -> Unit, onActivationChanged: () -> Unit = {}) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("watani_activation", Context.MODE_PRIVATE) }
     var code by remember { mutableStateOf("") }
@@ -198,13 +198,20 @@ fun ActivationScreen(onBack: () -> Unit) {
                     onClick = {
                         isLoading = true
                         scope.launch {
-                            // No revoke endpoint exists in the Worker contract, so
-                            // deactivation clears local state only; the server-side
-                            // device binding is untouched (open issue, see report).
-                            WorkerActivationApi.clearLocalActivation(context)
+                            // M12 (honest label, see button text below): no
+                            // user-facing revoke endpoint exists in the Worker
+                            // contract — only the admin reset-device endpoint —
+                            // so this removes the activation from THIS DEVICE
+                            // only: local state cleared + restricted downloads
+                            // wiped (M4). The server-side binding stays, and
+                            // the same code can re-activate this device later.
+                            WorkerActivationApi.clearActivationAndWipe(context)
                             isActivated = false
-                            statusMessage = "تم إلغاء التفعيل على هذا الجهاز."
+                            statusMessage = "تمت إزالة التفعيل من هذا الجهاز وحُذف المحتوى المقيّد المنزّل."
                             isLoading = false
+                            // Refresh download badges elsewhere (the wipe
+                            // removed prefs entries behind the flow).
+                            onActivationChanged()
                         }
                     },
                     enabled = !isLoading,
@@ -215,7 +222,9 @@ fun ActivationScreen(onBack: () -> Unit) {
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                     } else {
-                        Text("إلغاء التفعيل", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        // M12: honest label — this device only, not a
+                        // server-side cancellation (no such endpoint).
+                        Text("إزالة التفعيل من هذا الجهاز فقط", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

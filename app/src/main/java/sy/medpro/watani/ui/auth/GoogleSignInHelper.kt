@@ -17,9 +17,10 @@ import kotlin.coroutines.resume
  * for activation and profile, never as an entry wall.
  *
  * Returns Result.success on a completed Firebase sign-in, or
- * Result.failure with a human-readable message otherwise. The Firebase
- * sign-in callback is bridged with suspendCancellableCoroutine; callers
- * must call from a coroutine scope.
+ * Result.failure with an ARABIC user message otherwise (M14: raw
+ * exception text is only logged, never shown). The Firebase sign-in
+ * callback is bridged with suspendCancellableCoroutine; callers must
+ * call from a coroutine scope.
  */
 object GoogleSignInHelper {
 
@@ -49,11 +50,14 @@ object GoogleSignInHelper {
                             if (task.isSuccessful) {
                                 continuation.resume(Result.success(Unit))
                             } else {
+                                // Raw Firebase detail -> log only (M14).
+                                android.util.Log.d(
+                                    "GoogleSignInHelper",
+                                    "firebase sign-in failed: ${task.exception}"
+                                )
                                 continuation.resume(
                                     Result.failure(
-                                        Exception(
-                                            "فشل تسجيل الدخول عبر Firebase: ${task.exception?.localizedMessage}"
-                                        )
+                                        Exception("تعذر تسجيل الدخول — أعد المحاولة.")
                                     )
                                 )
                             }
@@ -63,9 +67,13 @@ object GoogleSignInHelper {
                 Result.failure(Exception("نوع الاعتماد غير متوافق."))
             }
         } catch (e: androidx.credentials.exceptions.GetCredentialException) {
-            Result.failure(Exception("تم إلغاء تسجيل الدخول أو حدث خطأ: ${e.localizedMessage}"))
+            android.util.Log.d("GoogleSignInHelper", "credential error: $e")
+            // A user-cancelled picker reads as an exception too; keep the
+            // message Arabic and neutral either way.
+            Result.failure(Exception("تم إلغاء تسجيل الدخول أو حدث خطأ — أعد المحاولة."))
         } catch (e: Exception) {
-            Result.failure(Exception("خطأ غير متوقع: ${e.localizedMessage}"))
+            android.util.Log.d("GoogleSignInHelper", "sign-in error: $e")
+            Result.failure(Exception("خطأ غير متوقع — أعد المحاولة."))
         }
     }
 }

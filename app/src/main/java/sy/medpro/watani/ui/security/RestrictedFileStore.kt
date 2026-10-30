@@ -86,10 +86,11 @@ import java.io.File
  * PATHS NOT COVERED (documented, not hidden):
  *  U1. Process kill (crash / force-stop / swiped from recents with the
  *      process killed): no finally block or lifecycle callback runs, so a
- *      temp open at that moment survives until the next app-close sweep
- *      or the next open of the same item (openLibraryItem deletes a stale
- *      temp first). Mitigation available later: sweep on app START as
- *      well as on destroy (one line in SecurityChecks.install).
+ *      temp open at that moment survives until the next app START sweep
+ *      (M13: SecurityChecks.install sweeps once per process) or the next
+ *      open of the same item (openLibraryItem deletes a stale temp
+ *      first). The destroy sweep itself is isFinishing-guarded (M13),
+ *      so rotation never wipes a live reader's temp.
  *  U2. A debugger attached DURING an open reader: the gate blocks the
  *      NEXT restricted entry, but does not force-close an already-open
  *      reader or wipe its temp mid-read. Closing in-flight readers on
@@ -119,6 +120,9 @@ object RestrictedFileStore {
         "dawrat_jami3at/",
         "uworld/",
         "explanations/",
+        // M11: books/ was missing here (the gateway list already had it),
+        // so book files were not classified as restricted by this store.
+        "books/",
     )
 
     /** True for manifest paths whose downloads must be stored encrypted. */
