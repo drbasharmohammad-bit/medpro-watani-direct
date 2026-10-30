@@ -10,12 +10,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -83,12 +81,9 @@ fun CoursesScreen(onBack: () -> Unit) {
         fetchCourses()
     }
 
-    val pullState = rememberPullToRefreshState()
-    if (pullState.isRefreshing) {
-        LaunchedEffect(Unit) { fetchCourses() }
-    }
+    var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(isLoading) {
-        if (!isLoading && pullState.isRefreshing) pullState.endRefresh()
+        if (!isLoading) isRefreshing = false
     }
 
     Scaffold(
@@ -102,7 +97,11 @@ fun CoursesScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background).nestedScroll(pullState.nestedScrollConnection)) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true; fetchCourses() },
+            modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)
+        ) {
             when {
                 isLoading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -168,7 +167,6 @@ fun CoursesScreen(onBack: () -> Unit) {
                     }
                 }
             }
-            PullToRefreshContainer(state = pullState, modifier = Modifier.align(Alignment.TopCenter))
-        }
+                    }
     }
 }

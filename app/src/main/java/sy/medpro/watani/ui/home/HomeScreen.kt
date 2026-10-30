@@ -10,12 +10,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
@@ -63,12 +61,9 @@ fun HomeScreen(
     onCaseClick: (sy.medpro.watani.data.ClinicalCaseDto) -> Unit
 ) {
     var selectedBankSection by remember { mutableStateOf(BankSection.WATANI) }
-    val pullState = rememberPullToRefreshState()
-    if (pullState.isRefreshing) {
-        LaunchedEffect(Unit) { onRefreshManifest() }
-    }
+    var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(isLoadingManifest) {
-        if (!isLoadingManifest && pullState.isRefreshing) pullState.endRefresh()
+        if (!isLoadingManifest) isRefreshing = false
     }
     LaunchedEffect(currentTab) {
         selectedBankSection = when (currentTab) {
@@ -123,7 +118,11 @@ fun HomeScreen(
                 }
             }
 
-            Box(modifier = Modifier.fillMaxSize().nestedScroll(pullState.nestedScrollConnection)) {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { isRefreshing = true; onRefreshManifest() },
+                modifier = Modifier.fillMaxSize()
+            ) {
                 when {
                     isLoadingManifest && files.isEmpty() -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -229,8 +228,7 @@ fun HomeScreen(
                         }
                     }
                 }
-                PullToRefreshContainer(state = pullState, modifier = Modifier.align(Alignment.TopCenter))
-            }
+                            }
         }
     }
 }

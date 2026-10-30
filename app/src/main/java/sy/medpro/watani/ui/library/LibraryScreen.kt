@@ -9,15 +9,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,12 +42,9 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
     // المكتبة مجانية حاليًا بقرار الدكتور (28 أكتوبر 2026): أُزيل حجب التفعيل
     // بالكامل من هذه الشاشة. التفعيل باقٍ لباقي أقسام التطبيق المدفوعة.
     val state by viewModel.state.collectAsState()
-    val pullState = rememberPullToRefreshState()
-    if (pullState.isRefreshing) {
-        LaunchedEffect(Unit) { viewModel.loadLibrary() }
-    }
+    var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(state.isLoading) {
-        if (!state.isLoading && pullState.isRefreshing) pullState.endRefresh()
+        if (!state.isLoading) isRefreshing = false
     }
 
     if (state.isLoading && state.library == null) {
@@ -79,7 +74,11 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
 
     val library = state.library
     if (library == null || library.subjects.isNullOrEmpty()) {
-        Box(Modifier.fillMaxSize().nestedScroll(pullState.nestedScrollConnection)) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true; viewModel.loadLibrary() },
+            modifier = Modifier.fillMaxSize()
+        ) {
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.LibraryBooks, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f))
@@ -95,7 +94,6 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
                     )
                 }
             }
-            PullToRefreshContainer(state = pullState, modifier = Modifier.align(Alignment.TopCenter))
         }
         return
     }
@@ -136,7 +134,11 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
         return
     }
 
-    Box(Modifier.fillMaxSize().nestedScroll(pullState.nestedScrollConnection)) {
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { isRefreshing = true; viewModel.loadLibrary() },
+        modifier = Modifier.fillMaxSize()
+    ) {
         Column(Modifier.fillMaxSize()) {
             TabRow(
                 selectedTabIndex = selectedTab,
@@ -240,7 +242,6 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
                 }
             }
         }
-        PullToRefreshContainer(state = pullState, modifier = Modifier.align(Alignment.TopCenter))
     }
 }
 
