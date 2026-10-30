@@ -23,10 +23,16 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
  * Team 1 — welcome screen, the new entry point of the app.
  *
  * No sign-in is required to see it or to enter: [onEnter] opens the main
- * interface directly. The hero image is the app icon itself
- * (R.mipmap.ic_launcher — the doctor's own image, used as-is, never
- * redesigned). Google sign-in is offered here only as an option (for
- * activation and profile); skipping it loses nothing free.
+ * interface directly. The hero image is the app icon's own photo
+ * (R.drawable.ic_launcher_artwork — the doctor's own image, used as-is,
+ * never redesigned).
+ *
+ * Crash fix (30 Oct 2026): the first version loaded R.mipmap.ic_launcher
+ * via painterResource. On API 26+ that ID resolves to the ADAPTIVE icon
+ * (mipmap-anydpi-v26/ic_launcher.xml), which Compose cannot draw, so the
+ * app died on the very first frame (grey window, then exit). The artwork
+ * raster loads safely on every API level; the dark box behind it
+ * reproduces the icon's own background colour (#2D1015).
  */
 @Composable
 fun WelcomeScreen(
@@ -56,12 +62,22 @@ fun WelcomeScreen(
                 modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // App icon as-is (mipmap launcher image, scaled, not redrawn).
-                Image(
-                    painter = painterResource(id = R.mipmap.ic_launcher),
-                    contentDescription = "أيقونة تطبيق Med Pro - وطني",
-                    modifier = Modifier.size(120.dp)
-                )
+                // App icon's own photo (raster artwork, never the adaptive
+                // mipmap — see the KDoc above). The dark box reproduces the
+                // icon's own background colour.
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .background(androidx.compose.ui.graphics.Color(0xFF2D1015)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_artwork),
+                        contentDescription = "أيقونة تطبيق Med Pro - وطني",
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     "Med Pro - وطني",
