@@ -14,17 +14,22 @@
 #     runner and invoked directly.
 #   * No debug.keystore in the export (and .gitignore excludes it), while
 #     app/build.gradle.kts points debug signing at ${rootDir}/debug.keystore.
-#     The workflow generates a fresh debug keystore before building.
-#   * Debug build needs NO secrets.
+#     The workflow restores ONE stable keystore from GitHub secrets
+#     (WATANI_KEYSTORE_BASE64) before building — see below.
+#   * The debug build needs three secrets (set via the repo web UI; the
+#     automation token has no secrets permission): WATANI_KEYSTORE_BASE64,
+#     WATANI_KEYSTORE_PASSWORD, WATANI_KEY_PASSWORD.
 #
-# IMPORTANT — Google sign-in after the first cloud build:
-# A freshly generated debug keystore has a NEW SHA-1 fingerprint, different
-# from the AI Studio fingerprint registered in Firebase (E2:0E:5B:0C:...).
-# The workflow prints the new SHA-1 in the job summary; it must be
-# registered in Firebase (project national-exam-8ecba) before Google
-# sign-in works in a cloud-built APK. Everything else in the app can be
-# tested before that step. This is unavoidable for any non-Studio build:
-# the Studio debug keystore is not in the export.
+# IMPORTANT — one stable signature for all builds (30 Oct 2026):
+# Before this change every run generated a FRESH debug keystore, so every
+# APK had a different signature: each build was a "different app" (fresh
+# install required, local data lost) and a NEW SHA-1 fingerprint that had
+# to be registered in Firebase before Google sign-in worked. Now one
+# keystore signs every build: updates install over the old version, and
+# the SHA-1 below is registered in Firebase ONCE (project
+# national-exam-8ecba) and never changes. The next build after this
+# change is the LAST one that needs an uninstall first (its signature
+# differs from all ephemeral-key builds before it).
 #
 # LOCAL PREPARATION ONLY — this file has NOT been pushed to any repo.
 # Pushing (and the choice of repo/branch) needs Dr. Bashar's word.
@@ -72,23 +77,29 @@ jobs:
           unzip -q /tmp/gradle-9.3.1-bin.zip -d /tmp
           echo "/tmp/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
-      - name: Generate debug keystore (missing from Studio export)
+      - name: Restore stable signing keystore (one key for all builds)
+        env:
+          WATANI_KEYSTORE_BASE64: ${{ secrets.WATANI_KEYSTORE_BASE64 }}
+          WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
+          WATANI_KEY_ALIAS: watani
+          WATANI_KEYSTORE_TYPE: PKCS12
         run: |
-          keytool -genkeypair -v \
-            -keystore debug.keystore \
-            -storepass android -keypass android \
-            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
-          keytool -list -v -keystore debug.keystore -storepass android -alias androiddebugkey \
+          echo "$WATANI_KEYSTORE_BASE64" | base64 -d > debug.keystore
+          keytool -list -v -keystore debug.keystore -storetype "$WATANI_KEYSTORE_TYPE" -storepass "$WATANI_KEYSTORE_PASSWORD" -alias "$WATANI_KEY_ALIAS" \
             | grep -E "SHA1:" | tee debug-sha1.txt
 
       - name: Build debug APK
+        env:
+          WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
+          WATANI_KEY_ALIAS: watani
+          WATANI_KEY_PASSWORD: ${{ secrets.WATANI_KEY_PASSWORD }}
+          WATANI_KEYSTORE_TYPE: PKCS12
         run: gradle assembleDebug --console=plain --max-workers=2
 
-      - name: Show debug SHA-1 (register in Firebase for Google sign-in)
+      - name: Show stable SHA-1 (registered in Firebase once)
         run: |
           {
-            echo "### Debug keystore SHA-1 — register in Firebase"
+            echo "### Stable signing SHA-1 — registered in Firebase once"
             echo "Project: national-exam-8ecba, app: sy.medpro.watani"
             cat debug-sha1.txt
           } >> "$GITHUB_STEP_SUMMARY"

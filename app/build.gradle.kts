@@ -21,8 +21,13 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
-  // Do not remove or modify these signingConfigs. They are necessary for building, installing,
-  // and updating Android apps in AI Studio.
+  // Stable signing key (30 Oct 2026): CI restores ONE keystore from the
+  // WATANI_* GitHub secrets and signs every build with it, so all builds
+  // share one signature — updates install over the old version and the
+  // Firebase SHA-1 never changes again. Without the env vars (local
+  // builds) it falls back to the classic debug credentials. The old
+  // per-run fresh keystore is gone: it made every build a "different
+  // app" (fresh install + new fingerprint every time).
   signingConfigs {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
@@ -33,9 +38,10 @@ android {
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      storeType = System.getenv("WATANI_KEYSTORE_TYPE") ?: "JKS"
+      storePassword = System.getenv("WATANI_KEYSTORE_PASSWORD") ?: "android"
+      keyAlias = System.getenv("WATANI_KEY_ALIAS") ?: "androiddebugkey"
+      keyPassword = System.getenv("WATANI_KEY_PASSWORD") ?: "android"
     }
   }
 
