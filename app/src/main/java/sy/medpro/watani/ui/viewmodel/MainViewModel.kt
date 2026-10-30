@@ -41,6 +41,10 @@ data class UiState(
     val isLoadingManifest: Boolean = false,
     val manifestError: String? = null,
     val downloadingPaths: Set<String> = emptySet(),
+    /** Live download progress per section path (0f..1f), so a slow
+     * section download shows a percentage instead of an endless
+     * spinner — the same fix as the library book downloads. */
+    val downloadingProgress: Map<String, Float> = emptyMap(),
     val downloadError: String? = null,
     /** Device-gate block message (M8), shown as a dialog by MainActivity. */
     val gateMessage: String? = null,
@@ -96,16 +100,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun downloadSection(path: String, entry: ManifestFileEntry) {
         viewModelScope.launch {
-            _uiState.update { it.copy(downloadingPaths = it.downloadingPaths + path, downloadError = null) }
-            val result = repository.downloadSection(path, entry)
+            _uiState.update {
+                it.copy(
+                    downloadingPaths = it.downloadingPaths + path,
+                    downloadingProgress = it.downloadingProgress + (path to 0f),
+                    downloadError = null
+                )
+            }
+            val result = repository.downloadSection(path, entry) { p ->
+                _uiState.update { st -> st.copy(downloadingProgress = st.downloadingProgress + (path to p)) }
+            }
             result.fold(
                 onSuccess = { _ ->
-                    _uiState.update { it.copy(downloadingPaths = it.downloadingPaths - path) }
+                    _uiState.update {
+                        it.copy(
+                            downloadingPaths = it.downloadingPaths - path,
+                            downloadingProgress = it.downloadingProgress - path
+                        )
+                    }
                 },
                 onFailure = { error ->
                     _uiState.update {
                         it.copy(
                             downloadingPaths = it.downloadingPaths - path,
+                            downloadingProgress = it.downloadingProgress - path,
                             // M3: revocation text stands alone (Arabic,
                             // no "download failed" prefix); the prompt
                             // itself fires from the repository event.

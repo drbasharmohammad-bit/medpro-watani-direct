@@ -17,6 +17,10 @@ sealed interface ExplanationUiState {
     data object Idle : ExplanationUiState
     data object Loading : ExplanationUiState
     data object Absent : ExplanationUiState
+    /** Load failed (network/timeout/corrupt shard) — the UI shows a retry
+     * button instead of silent nothing. Distinct from Absent, which strictly
+     * means "the layer loaded and this question has no record". */
+    data class Failed(val retry: () -> Unit) : ExplanationUiState
     data class Present(val content: ExplanationContent) : ExplanationUiState
 }
 
@@ -32,8 +36,9 @@ fun explanationRepository(context: Context, layerBasePath: String = "explanation
 /**
  * Looks up the explanation for an already-normalized question key.
  * Callers normalize with [normalizeExplanationKey] (id first, then qid, both to string).
- * Missing layer, 404, parse failure and network error all resolve to [ExplanationUiState.Absent] -
- * explanations are an enhancement, never a blocker, never an error surface.
+ * Missing layer, 404 and "question not covered" resolve to [ExplanationUiState.Absent];
+ * network/timeout/shard errors resolve to [ExplanationUiState.Failed] with a retry
+ * action — explanations are never silently missing on a failed load again.
  */
 @Composable
 fun rememberExplanationState(questionKey: String?): ExplanationUiState {
@@ -41,11 +46,16 @@ fun rememberExplanationState(questionKey: String?): ExplanationUiState {
     val context = LocalContext.current
     val repository = remember(context) { explanationRepository(context) }
     var state by remember(questionKey) { mutableStateOf<ExplanationUiState>(ExplanationUiState.Loading) }
+    var retryNonce by remember(questionKey) { mutableStateOf(0) }
 
-    LaunchedEffect(questionKey) {
+    LaunchedEffect(questionKey, retryNonce) {
         state = ExplanationUiState.Loading
-        val result = repository.fetchExplanation(questionKey).getOrNull()
-        state = if (result == null) ExplanationUiState.Absent else ExplanationUiState.Present(result)
+        val result = repository.fetchExplanation(questionKey)
+        state = when {
+            result.isFailure -> ExplanationUiState.Failed(retry = { retryNonce++ })
+            result.getOrNull() == null -> ExplanationUiState.Absent
+            else -> ExplanationUiState.Present(result.getOrNull()!!)
+        }
     }
     return state
 }

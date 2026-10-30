@@ -137,22 +137,23 @@ class MainActivity : ComponentActivity() {
                 // restricted paths without a token are never fetched.)
                 // M8: the device-integrity gate is checked here too, so a
                 // blocked device cannot enter restricted tabs at all.
-                fun requestTab(tab: AppTab) {
+                fun requestTab(tab: AppTab): Boolean {
                     val restricted = tab == AppTab.BANK || tab == AppTab.UNIVERSITIES ||
                         tab == AppTab.UWORLD || tab == AppTab.LIBRARY
                     if (restricted) {
                         val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
                         if (!gate.allowed) {
                             gateDialogMessage = gate.userMessage
-                            return
+                            return false
                         }
                         if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
                             pendingTab = tab
                             showActivationPrompt = true
-                            return
+                            return false
                         }
                     }
                     viewModel.setTab(tab)
+                    return true
                 }
 
                 if (showWelcome) {
@@ -354,6 +355,44 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         ) {
+                            // Back navigation + exit confirmation: the app
+                            // used to have NO back handling at all, so the
+                            // system back button finished the activity from
+                            // anywhere — mid-quiz, mid-drawer-screen — and
+                            // the app "exited randomly". Chain: close the
+                            // drawer, close the drawer screen, leave the
+                            // detail screen, go to Home, and only at Home
+                            // ask "هل تريد تأكيد الخروج من التطبيق؟".
+                            var showExitConfirm by remember { mutableStateOf(false) }
+                            androidx.activity.compose.BackHandler {
+                                when {
+                                    drawerState.isOpen -> coroutineScope.launch { drawerState.close() }
+                                    drawerScreen != null -> drawerScreen = null
+                                    uiState.screenState != ScreenState.Home -> viewModel.navigateToHome()
+                                    uiState.currentTab != AppTab.HOME -> viewModel.setTab(AppTab.HOME)
+                                    else -> showExitConfirm = true
+                                }
+                            }
+                            if (showExitConfirm) {
+                                AlertDialog(
+                                    onDismissRequest = { showExitConfirm = false },
+                                    title = { Text("الخروج من التطبيق", fontWeight = FontWeight.Bold) },
+                                    text = { Text("هل تريد تأكيد الخروج من التطبيق؟") },
+                                    confirmButton = {
+                                        TextButton(onClick = {
+                                            showExitConfirm = false
+                                            this@MainActivity.finish()
+                                        }) {
+                                            Text("خروج", color = MaterialTheme.colorScheme.error)
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showExitConfirm = false }) {
+                                            Text("إلغاء")
+                                        }
+                                    }
+                                )
+                            }
                             Scaffold(
                                 topBar = {
                                     TopAppBar(
@@ -398,7 +437,15 @@ class MainActivity : ComponentActivity() {
                                             val selected = uiState.currentTab == tab
                                             NavigationBarItem(
                                                 selected = selected,
-                                                onClick = { requestTab(tab) },
+                                                // Bottom-bar fix: tapping a tab while a
+                                                // drawer screen is open used to change
+                                                // the tab state but leave the drawer
+                                                // screen on top, so the bar looked dead.
+                                                // On a successful switch, close the
+                                                // drawer screen too; on a gate failure
+                                                // (prompt shown) keep it, so the user
+                                                // does not lose their place.
+                                                onClick = { if (requestTab(tab)) drawerScreen = null },
                                                 icon = {
                                                     Icon(
                                                         icon,
@@ -539,6 +586,7 @@ class MainActivity : ComponentActivity() {
                                                                     manifestError = uiState.manifestError,
                                                                     downloadedSections = downloadedSections,
                                                                     downloadingPaths = uiState.downloadingPaths,
+                                                                    downloadingProgress = uiState.downloadingProgress,
                                                                     downloadError = uiState.downloadError,
                                                                     casesList = casesList,
                                                                     // M5: the in-bank tab selector goes
@@ -702,6 +750,7 @@ class MainActivity : ComponentActivity() {
                                                         files = uiState.files,
                                                         downloadedSections = downloadedSections,
                                                         downloadingPaths = uiState.downloadingPaths,
+                                                        downloadingProgress = uiState.downloadingProgress,
                                                         onDownloadSection = { path, entry -> viewModel.downloadSection(path, entry) },
                                                         onOpenSubject = { path, name ->
                                                             coroutineScope.launch {

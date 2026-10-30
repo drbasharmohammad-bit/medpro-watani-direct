@@ -51,6 +51,7 @@ fun HomeScreen(
     manifestError: String?,
     downloadedSections: List<DownloadedSectionEntity>,
     downloadingPaths: Set<String>,
+    downloadingProgress: Map<String, Float> = emptyMap(),
     downloadError: String?,
     casesList: List<sy.medpro.watani.data.ClinicalCaseDto>,
     onTabSelected: (AppTab) -> Unit,
@@ -219,6 +220,7 @@ fun HomeScreen(
                                             entry = entry,
                                             isDownloaded = isDownloaded,
                                             isDownloading = isDownloading,
+                                            downloadProgress = downloadingProgress[path],
                                             onDownloadClick = { onDownloadSection(path, entry) },
                                             onOpenClick = { onOpenSubject(path, subjectDisplayName, targetTab) }
                                         )
@@ -240,6 +242,7 @@ fun SectionCard(
     entry: ManifestFileEntry,
     isDownloaded: Boolean,
     isDownloading: Boolean,
+    downloadProgress: Float? = null,
     onDownloadClick: () -> Unit,
     onOpenClick: () -> Unit
 ) {
@@ -277,11 +280,27 @@ fun SectionCard(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 if (isDownloading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(36.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 3.dp
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (downloadProgress != null && downloadProgress > 0f) {
+                            LinearProgressIndicator(
+                                progress = { downloadProgress.coerceIn(0f, 1f) },
+                                modifier = Modifier.width(72.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "${(downloadProgress * 100).toInt()}%",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        } else {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(36.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 3.dp
+                            )
+                        }
+                    }
                 } else if (isDownloaded) {
                     Button(
                         onClick = onOpenClick,
@@ -449,6 +468,7 @@ fun UniversitySubjectsScreen(
     files: Map<String, ManifestFileEntry>,
     downloadedSections: List<DownloadedSectionEntity>,
     downloadingPaths: Set<String>,
+    downloadingProgress: Map<String, Float> = emptyMap(),
     onDownloadSection: (String, ManifestFileEntry) -> Unit,
     onOpenSubject: (String, String) -> Unit,
     onBack: () -> Unit
@@ -502,6 +522,7 @@ fun UniversitySubjectsScreen(
                     entry = entry,
                     isDownloaded = isDownloaded,
                     isDownloading = isDownloading,
+                    downloadProgress = downloadingProgress[path],
                     onDownloadClick = { onDownloadSection(path, entry) },
                     onOpenClick = { onOpenSubject(path, subjectName) }
                 )

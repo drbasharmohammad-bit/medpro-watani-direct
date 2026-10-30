@@ -557,6 +557,20 @@ fun QuestionCard(
                                 color = MaroonPrimary
                             )
                         }
+                        is ExplanationUiState.Failed -> Column(
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "تعذر تحميل الشرح — تحقق من الاتصال وحاول مجددًا.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            OutlinedButton(onClick = ex.retry) {
+                                Text("إعادة تحميل الشرح", fontSize = 13.sp)
+                            }
+                        }
                         ExplanationUiState.Absent, ExplanationUiState.Idle -> Unit
                     }
                 }
