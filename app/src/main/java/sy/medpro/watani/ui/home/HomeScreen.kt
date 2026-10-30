@@ -10,9 +10,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
@@ -60,6 +63,13 @@ fun HomeScreen(
     onCaseClick: (sy.medpro.watani.data.ClinicalCaseDto) -> Unit
 ) {
     var selectedBankSection by remember { mutableStateOf(BankSection.WATANI) }
+    val pullState = rememberPullToRefreshState()
+    if (pullState.isRefreshing) {
+        LaunchedEffect(Unit) { onRefreshManifest() }
+    }
+    LaunchedEffect(isLoadingManifest) {
+        if (!isLoadingManifest && pullState.isRefreshing) pullState.endRefresh()
+    }
     LaunchedEffect(currentTab) {
         selectedBankSection = when (currentTab) {
             AppTab.UNIVERSITIES -> BankSection.UNIVERSITIES
@@ -113,7 +123,7 @@ fun HomeScreen(
                 }
             }
 
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxSize().nestedScroll(pullState.nestedScrollConnection)) {
                 when {
                     isLoadingManifest && files.isEmpty() -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -219,6 +229,7 @@ fun HomeScreen(
                         }
                     }
                 }
+                PullToRefreshContainer(state = pullState, modifier = Modifier.align(Alignment.TopCenter))
             }
         }
     }
