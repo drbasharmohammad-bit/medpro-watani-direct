@@ -42,7 +42,6 @@ fun HomeDashboardScreen(
     onNavigateBank: () -> Unit,
     onNavigateCases: () -> Unit,
     onNavigateLeaderboard: () -> Unit,
-    onOpenDailyChallenge: () -> Unit = onNavigateBank,
     onOpenAlgorithms: () -> Unit = {},
     onOpenFirstLineDrugs: () -> Unit = {},
     onOpenGoldenPearls: () -> Unit = {},
@@ -513,13 +512,6 @@ fun HomeDashboardScreen(
                     subtitle = "ترتيب طلاب الوطني",
                     icon = Icons.Default.EmojiEvents,
                     onClick = onNavigateLeaderboard,
-                    modifier = Modifier.weight(1f)
-                )
-                QuickActionCard(
-                    title = "التحدي اليومي",
-                    subtitle = "سؤال سريري +20 نقطة",
-                    icon = Icons.Default.Whatshot,
-                    onClick = onOpenDailyChallenge,
                     modifier = Modifier.weight(1f)
                 )
             }

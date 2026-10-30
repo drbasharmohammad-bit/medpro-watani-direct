@@ -36,7 +36,6 @@ import sy.medpro.watani.ui.welcome.WelcomeScreen
 import sy.medpro.watani.ui.cases.CasePlayerScreen
 import sy.medpro.watani.ui.cases.CasesScreen
 import sy.medpro.watani.ui.clinical.BedsideClinicalTab
-import sy.medpro.watani.ui.courses.CoursesScreen
 import sy.medpro.watani.ui.drawer.*
 import sy.medpro.watani.ui.home.*
 import sy.medpro.watani.ui.leaderboard.LeaderboardScreen
@@ -46,7 +45,6 @@ import sy.medpro.watani.ui.offline.SmartStudyPlannerScreen
 import sy.medpro.watani.ui.progress.ProgressDashboardScreen
 import sy.medpro.watani.ui.quiz.QuizScreen
 import sy.medpro.watani.ui.reference.*
-import sy.medpro.watani.ui.simulator.ExamSimulatorScreen
 import sy.medpro.watani.ui.osce.OsceStationsScreen
 import sy.medpro.watani.ui.features.*
 import sy.medpro.watani.ui.theme.GoldAccent
@@ -266,12 +264,9 @@ class MainActivity : ComponentActivity() {
                                             val drawerItems = listOf(
                                                 "الملف الشخصي",
                                                 "الاشتراك وتفعيل الحساب",
-                                                "الكورسات",
-                                                "التحدي اليومي",
                                                 "البطاقات والمراجعة الذكية",
                                                 "دليل الدراسة",
                                                 "سجل أخطائي والاختبارات",
-                                                "محاكاة الامتحان",
                                                 "المريض الافتراضي",
                                                 "نقاط الضعف",
                                                 "مؤقت التركيز",
@@ -284,7 +279,6 @@ class MainActivity : ComponentActivity() {
                                                 "التواصل",
                                                 "محطات OSCE",
                                                 "القلب والإصغاء",
-                                                "محاكاة المناوبة الليلية",
                                                 "غرفة الطوارئ",
                                                 "المختبرات والحاسبات",
                                                 "تسجيل الخروج"
@@ -293,12 +287,9 @@ class MainActivity : ComponentActivity() {
                                                 val icon = when (title) {
                                                     "الملف الشخصي" -> Icons.Default.Person
                                                     "الاشتراك وتفعيل الحساب" -> Icons.Default.VpnKey
-                                                    "الكورسات" -> Icons.Default.MenuBook
-                                                    "التحدي اليومي" -> Icons.Default.Whatshot
                                                     "البطاقات والمراجعة الذكية" -> Icons.Default.Style
                                                     "دليل الدراسة" -> Icons.Default.Book
                                                     "سجل أخطائي والاختبارات" -> Icons.Default.History
-                                                    "محاكاة الامتحان" -> Icons.Default.Quiz
                                                     "المريض الافتراضي" -> Icons.Default.LocalHospital
                                                     "نقاط الضعف" -> Icons.Default.Assessment
                                                     "مؤقت التركيز" -> Icons.Default.Timer
@@ -311,7 +302,6 @@ class MainActivity : ComponentActivity() {
                                                     "التواصل" -> Icons.Default.SupportAgent
                                                     "محطات OSCE" -> Icons.Default.MedicalServices
                                                     "القلب والإصغاء" -> Icons.Default.MonitorHeart
-                                                    "محاكاة المناوبة الليلية" -> Icons.Default.Nightlight
                                                     "غرفة الطوارئ" -> Icons.Default.LocalHospital
                                                     "المختبرات والحاسبات" -> Icons.Default.Science
                                                     else -> Icons.Default.Logout
@@ -335,8 +325,7 @@ class MainActivity : ComponentActivity() {
                                                         } else if (title == "المريض الافتراضي") {
                                                             drawerScreen = null
                                                             viewModel.setTab(AppTab.CASES)
-                                                        } else if (title == "محاكاة الامتحان" || title == "التحدي اليومي" ||
-                                                            title == "البطاقات والمراجعة الذكية" || title == "البطاقات" ||
+                                                        } else if (title == "البطاقات والمراجعة الذكية" || title == "البطاقات" ||
                                                             title == "المراجعة الذكية Anki") {
                                                             // M8 + activation: these drawer screens
                                                             // read downloaded question banks directly
@@ -480,14 +469,11 @@ class MainActivity : ComponentActivity() {
                                                     onBack = { drawerScreen = null },
                                                     onActivationChanged = { viewModel.refreshDownloadedSections() }
                                                 )
-                                                "الكورسات" -> CoursesScreen(onBack = { drawerScreen = null })
-                                                "التحدي اليومي" -> DailyChallengeScreen(onBack = { drawerScreen = null })
                                                 "البطاقات والمراجعة الذكية" -> FlashcardsReviewScreen(onBack = { drawerScreen = null })
                                                 "البطاقات" -> FlashcardsReviewScreen(initialTab = 0, onBack = { drawerScreen = null })
                                                 "دليل الدراسة" -> StudyGuideScreen(onBack = { drawerScreen = null })
                                                 "سجل أخطائي والاختبارات" -> WrongAnswersScreen(onBack = { drawerScreen = null })
                                                 "المراجعة الذكية Anki" -> FlashcardsReviewScreen(initialTab = 1, onBack = { drawerScreen = null })
-                                                "محاكاة الامتحان" -> ExamSimulatorScreen(onBack = { drawerScreen = null })
                                                 "نقاط الضعف" -> WeakPointsScreen(onBack = { drawerScreen = null })
                                                 "مؤقت التركيز" -> FocusTimerScreen(onBack = { drawerScreen = null })
                                                 "الإنجازات والأوسمة" -> BadgesScreen(onBack = { drawerScreen = null })
@@ -526,7 +512,6 @@ class MainActivity : ComponentActivity() {
                                                     onBack = { drawerScreen = null }
                                                 )
                                                 "محطات OSCE" -> OsceStationsScreen(onBack = { drawerScreen = null })
-                                                "محاكاة المناوبة الليلية" -> NightShiftSimulatorScreen(onBack = { drawerScreen = null })
                                                 "غرفة الطوارئ" -> EmergencyRoomScreen(onBack = { drawerScreen = null })
                                                 else -> ProfileScreen(onBack = { drawerScreen = null })
                                             }
@@ -540,7 +525,6 @@ class MainActivity : ComponentActivity() {
                                                                 onNavigateBank = { requestTab(AppTab.BANK) },
                                                                 onNavigateCases = { viewModel.setTab(AppTab.CASES) },
                                                                 onNavigateLeaderboard = { viewModel.setTab(AppTab.LEADERBOARD) },
-                                                                onOpenDailyChallenge = { openRestrictedDrawer("التحدي اليومي") },
                                                                 onOpenAlgorithms = { drawerScreen = "خوارزميات التدبير" },
                                                                 onOpenFirstLineDrugs = { drawerScreen = "الخطوط العلاجية الأولى" },
                                                                 onOpenGoldenPearls = { drawerScreen = "النقاط الذهبية" },
