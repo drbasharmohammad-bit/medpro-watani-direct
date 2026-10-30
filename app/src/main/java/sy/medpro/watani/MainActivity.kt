@@ -31,7 +31,8 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.data.SubjectEnvelope
-import sy.medpro.watani.ui.auth.SignInGate
+import sy.medpro.watani.ui.activation.ActivationPromptDialog
+import sy.medpro.watani.ui.welcome.WelcomeScreen
 import sy.medpro.watani.ui.cases.CasePlayerScreen
 import sy.medpro.watani.ui.cases.CasesScreen
 import sy.medpro.watani.ui.clinical.BedsideClinicalTab
@@ -63,7 +64,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        sy.medpro.watani.security.ContentProtection.enableScreenshotPrevention(this)
+        // TEAM-3 device-protection (single wiring line): FLAG_SECURE on this
+        // window (same call as before, via SecurityChecks) + app-close sweep
+        // of plaintext temp files. No auth-gate logic touched.
+        sy.medpro.watani.ui.security.SecurityChecks.install(this)
         if (com.google.firebase.FirebaseApp.getApps(this).isEmpty()) {
             val options = com.google.firebase.FirebaseOptions.Builder()
                 .setApiKey("AIzaSyBlHOicffOYb5W5REVlEsF4KT0gEhzQ-u8")
@@ -89,15 +93,48 @@ class MainActivity : ComponentActivity() {
                 }
             }
             WataniTheme(darkTheme = darkTheme) {
-                var authTrigger by remember { mutableStateOf(false) }
-                val currentUser = remember(authTrigger) { FirebaseAuth.getInstance().currentUser }
+                // Team 1: NO hard sign-in wall. Auth state is observed so
+                // sign-in/out from any screen (welcome, profile, activation
+                // prompt) refreshes the UI without a manual trigger flag.
+                var currentUser by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
+                DisposableEffect(Unit) {
+                    val listener = FirebaseAuth.AuthStateListener { auth -> currentUser = auth.currentUser }
+                    FirebaseAuth.getInstance().addAuthStateListener(listener)
+                    onDispose { FirebaseAuth.getInstance().removeAuthStateListener(listener) }
+                }
+                var showWelcome by remember { mutableStateOf(true) }
+                var pendingTab by remember { mutableStateOf<AppTab?>(null) }
+                var showActivationPrompt by remember { mutableStateOf(false) }
 
-                if (currentUser == null) {
-                    SignInGate(onSignedIn = { authTrigger = !authTrigger })
+                // Gating point (UI): ONLY Questions (BANK / UNIVERSITIES /
+                // UWORLD) and Library require activation. Everything else
+                // is free. A gated tab tap shows the activation prompt
+                // instead of switching; on success the pending tab opens.
+                // (The fetch layer enforces the same rule independently:
+                // restricted paths without a token are never fetched.)
+                fun requestTab(tab: AppTab) {
+                    val restricted = tab == AppTab.BANK || tab == AppTab.UNIVERSITIES ||
+                        tab == AppTab.UWORLD || tab == AppTab.LIBRARY
+                    if (restricted && !sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
+                        pendingTab = tab
+                        showActivationPrompt = true
+                        return
+                    }
+                    viewModel.setTab(tab)
+                }
+
+                if (showWelcome) {
+                    // Entry point: welcome screen, no sign-in required.
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        WelcomeScreen(onEnter = { showWelcome = false })
+                    }
                 } else {
                     val contextForSync = androidx.compose.ui.platform.LocalContext.current
                     LaunchedEffect(currentUser) {
-                        sy.medpro.watani.data.WataniFirestoreSync.ensureAndSyncUser(contextForSync, currentUser)
+                        val user = currentUser
+                        if (user != null) {
+                            sy.medpro.watani.data.WataniFirestoreSync.ensureAndSyncUser(contextForSync, user)
+                        }
                     }
                     val uiState by viewModel.uiState.collectAsState()
                     val downloadedSections by viewModel.downloadedSections.collectAsState()
@@ -217,8 +254,10 @@ class MainActivity : ComponentActivity() {
                                                     onClick = {
                                                         coroutineScope.launch { drawerState.close() }
                                                         if (title == "تسجيل الخروج") {
+                                                            // AuthStateListener above refreshes currentUser;
+                                                            // sign-out no longer drops the user to a gate —
+                                                            // the app stays browsable, signed out.
                                                             FirebaseAuth.getInstance().signOut()
-                                                            authTrigger = !authTrigger
                                                         } else if (title == "المريض الافتراضي") {
                                                             drawerScreen = null
                                                             viewModel.setTab(AppTab.CASES)
@@ -277,7 +316,7 @@ class MainActivity : ComponentActivity() {
                                             val selected = uiState.currentTab == tab
                                             NavigationBarItem(
                                                 selected = selected,
-                                                onClick = { viewModel.setTab(tab) },
+                                                onClick = { requestTab(tab) },
                                                 icon = {
                                                     Icon(
                                                         icon,
@@ -366,7 +405,7 @@ class MainActivity : ComponentActivity() {
                                                         AppTab.HOME -> {
                                                             HomeDashboardScreen(
                                                                 manifestVersion = uiState.manifestVersion,
-                                                                onNavigateBank = { viewModel.setTab(AppTab.BANK) },
+                                                                onNavigateBank = { requestTab(AppTab.BANK) },
                                                                 onNavigateCases = { viewModel.setTab(AppTab.CASES) },
                                                                 onNavigateLeaderboard = { viewModel.setTab(AppTab.LEADERBOARD) },
                                                                 onOpenDailyChallenge = { drawerScreen = "التحدي اليومي" },
@@ -555,6 +594,22 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                    }
+                    // Activation prompt overlay (Team 1 gating point):
+                    // shown instead of switching to a restricted tab.
+                    if (showActivationPrompt) {
+                        ActivationPromptDialog(
+                            onDismiss = {
+                                showActivationPrompt = false
+                                pendingTab = null
+                            },
+                            onActivated = {
+                                showActivationPrompt = false
+                                val target = pendingTab
+                                pendingTab = null
+                                if (target != null) viewModel.setTab(target)
+                            }
+                        )
                     }
                 }
             }

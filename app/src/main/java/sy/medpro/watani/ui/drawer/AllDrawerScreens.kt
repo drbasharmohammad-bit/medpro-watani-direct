@@ -20,12 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import sy.medpro.watani.data.*
@@ -58,13 +53,19 @@ fun DrawerScreenScaffold(title: String, onBack: () -> Unit, content: @Composable
     )
 }
 
-// 1. Profile
+// 1. Profile — Team 1: must NOT crash when signed out. Signed-out users
+// see a signed-out state with an optional Google sign-in button; sign-in
+// never blocks entry or free sections (MainActivity no longer gates).
 @Composable
 fun ProfileScreen(onBack: () -> Unit) {
     val firebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-    val userName = firebaseUser?.displayName ?: "طبيب مقيم"
-    val email = firebaseUser?.email ?: "dr.student@watani.sy"
+    val isSignedIn = firebaseUser != null
+    val userName = firebaseUser?.displayName ?: "زائر"
+    val email = firebaseUser?.email ?: "غير مسجل الدخول — الدخول اختياري"
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isSigningIn by remember { mutableStateOf(false) }
+    var signInError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) { OfflineStudyVault.ensureInitialized(context) }
     val stats by OfflineStudyVault.statsFlow.collectAsState()
@@ -84,41 +85,59 @@ fun ProfileScreen(onBack: () -> Unit) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("حساب Google المرتبط (Firebase Auth)", fontWeight = FontWeight.Bold, color = MaroonPrimary)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("الحالة: متصل بنجاح ✓")
+                    if (isSignedIn) {
+                        Text("الحالة: متصل بنجاح ✓")
+                    } else {
+                        Text("الحالة: غير مسجل الدخول (اختياري — التصفح المجاني متاح بدونه)")
+                    }
                     Text("إجمالي النقاط المكتسبة: ${stats.totalCorrect * 25} XP")
                     Text("الأسئلة المجابة محلياً: ${stats.totalAnswered} (${stats.totalCorrect} صحيحة)")
+                }
+            }
+            if (!isSignedIn) {
+                Spacer(modifier = Modifier.height(16.dp))
+                if (isSigningIn) {
+                    CircularProgressIndicator(color = MaroonPrimary, modifier = Modifier.size(28.dp))
+                } else {
+                    Button(
+                        onClick = {
+                            isSigningIn = true
+                            signInError = null
+                            scope.launch {
+                                val result = sy.medpro.watani.ui.auth.GoogleSignInHelper.signInWithGoogle(context)
+                                isSigningIn = false
+                                result.onFailure { signInError = it.localizedMessage }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("تسجيل الدخول بحساب Google (اختياري)", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (signInError != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(signInError!!, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
                 }
             }
         }
     }
 }
 
-// 2. Subscription & Activation (Firestore REST validation)
+// 2. Subscription & Activation — Team 1: Worker activation API.
+// Firestore code validation was replaced (see WorkerActivationApi).
+// Device list display was removed: the Worker contract has no
+// list-devices endpoint, so bound devices can no longer be shown here.
 @Composable
 fun ActivationScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("watani_activation", Context.MODE_PRIVATE) }
     var code by remember { mutableStateOf("") }
     var statusMessage by remember { mutableStateOf(prefs.getString("activated_code", null)?.let { "الحساب مفعل بالكود: $it" } ?: "الحساب غير مفعل. يرجى إدخال كود تفعيل صحيح.") }
-    var isActivated by remember { mutableStateOf(prefs.getBoolean("is_activated", false)) }
+    var isActivated by remember { mutableStateOf(WorkerActivationApi.isActivated(context)) }
     var isLoading by remember { mutableStateOf(false) }
-    var boundDevices by remember { mutableStateOf<List<String>>(emptyList()) }
     val scope = rememberCoroutineScope()
-
-    LaunchedEffect(isActivated) {
-        if (isActivated) {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                    if (user != null) {
-                        val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(user.uid).get().await()
-                        val devs = (doc.get("devices") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
-                        boundDevices = devs
-                    }
-                } catch (_: Exception) {}
-            }
-        }
-    }
 
     DrawerScreenScaffold(title = "الاشتراك وتفعيل الحساب", onBack = onBack) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
@@ -156,7 +175,8 @@ fun ActivationScreen(onBack: () -> Unit) {
                                 isLoading = false
                                 return@launch
                             }
-                            val (success, msg) = WataniFirestoreSync.validateAndBindActivation(context, user, trimmed)
+                            // Exact server error text is returned verbatim on failure.
+                            val (success, msg) = WorkerActivationApi.activate(context, user, trimmed)
                             isActivated = success
                             statusMessage = msg
                             isLoading = false
@@ -178,14 +198,12 @@ fun ActivationScreen(onBack: () -> Unit) {
                     onClick = {
                         isLoading = true
                         scope.launch {
-                            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                            if (user != null) {
-                                WataniFirestoreSync.deactivateDevice(context, user)
-                            }
-                            prefs.edit().putBoolean("is_activated", false).remove("activated_code").apply()
+                            // No revoke endpoint exists in the Worker contract, so
+                            // deactivation clears local state only; the server-side
+                            // device binding is untouched (open issue, see report).
+                            WorkerActivationApi.clearLocalActivation(context)
                             isActivated = false
-                            boundDevices = emptyList()
-                            statusMessage = "تم إلغاء التفعيل وإزالة الجهاز من الخادم."
+                            statusMessage = "تم إلغاء التفعيل على هذا الجهاز."
                             isLoading = false
                         }
                     },
@@ -198,18 +216,6 @@ fun ActivationScreen(onBack: () -> Unit) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                     } else {
                         Text("إلغاء التفعيل", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                if (boundDevices.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text("الأجهزة المسجلة والمفعلة على الحساب:", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 14.sp)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            boundDevices.forEach { dev ->
-                                Text("• الجهاز: $dev", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
                     }
                 }
             }

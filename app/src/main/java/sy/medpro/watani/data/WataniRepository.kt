@@ -13,7 +13,6 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.io.File
-import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import kotlin.text.Charsets
 
@@ -97,16 +96,21 @@ class WataniRepository(private val context: Context) {
         onProgress: (Float) -> Unit = {}
     ): Result<Int> = withContext(Dispatchers.IO) {
         try {
-            val encodedPath = path.split("/").joinToString("/") { seg ->
-                URLEncoder.encode(seg, "UTF-8").replace("+", "%20")
-            }
-            val fileUrl = "${WataniApi.BASE_URL}$encodedPath"
-
             val file = getSectionFile(path)
             val tempFile = File(file.parentFile, "${file.name}.tmp")
 
             val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
-            val requestBuilder = okhttp3.Request.Builder().url(fileUrl)
+            // THE fetch-layer switch point (Team 1): restricted paths
+            // (questions/, dawrat/, dawrat_jami3at/, uworld/,
+            // explanations/, books/, library.json) are fetched via the
+            // Worker gateway with the activation token; free paths keep
+            // fetching directly from Pages, unchanged. Null = restricted
+            // but no usable token -> activation prompt, never a direct fetch.
+            val baseRequest = WorkerActivationApi.contentRequest(context, path)
+                ?: return@withContext Result.failure(
+                    Exception("هذا القسم يحتاج كود تفعيل — فعّل حسابك من نافذة التفعيل أولاً.")
+                )
+            val requestBuilder = baseRequest.newBuilder()
             if (existingBytes > 0) {
                 requestBuilder.header("Range", "bytes=$existingBytes-")
             }
@@ -355,11 +359,14 @@ class WataniRepository(private val context: Context) {
     }
 
     suspend fun fetchLibrary(retries: Int = 3): Result<LibraryEnvelope?> = withContext(Dispatchers.IO) {
+        // library.json is a restricted path (contract): via the Worker
+        // gateway with the activation token. Null = not activated.
+        val libraryRequest = WorkerActivationApi.contentRequest(context, "library.json")
+            ?: return@withContext Result.failure(Exception("المكتبة تحتاج كود تفعيل — فعّل حسابك أولاً."))
         var lastError: Exception? = null
         for (attempt in 1..retries) {
             try {
-                val fileUrl = "${WataniApi.BASE_URL}library.json"
-                val resp = client.newCall(okhttp3.Request.Builder().url(fileUrl).build()).execute()
+                val resp = client.newCall(libraryRequest).execute()
                 if (resp.code == 404) {
                     return@withContext Result.success(null)
                 }
@@ -554,7 +561,12 @@ class WataniRepository(private val context: Context) {
             attempt++
             try {
                 val existingBytes = if (plainTemp.exists()) plainTemp.length() else 0L
-                val builder = okhttp3.Request.Builder().url(url)
+                // Same switch point for absolute file URLs: Pages /v1/
+                // URLs under a restricted prefix (e.g. books/) go via the
+                // Worker gateway; other hosts stay direct, unchanged.
+                val itemRequest = WorkerActivationApi.contentRequestForUrl(context, url)
+                    ?: return@withContext LibraryDownloadResult.fail("هذا الملف يحتاج كود تفعيل — فعّل حسابك أولاً.")
+                val builder = itemRequest.newBuilder()
                 if (existingBytes > 0) builder.header("Range", "bytes=$existingBytes-")
                 client.newCall(builder.build()).execute().use { resp ->
                     if (!resp.isSuccessful && resp.code != 206) {
