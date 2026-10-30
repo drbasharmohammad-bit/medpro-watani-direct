@@ -1,5 +1,6 @@
 package sy.medpro.watani
 
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
@@ -393,6 +395,12 @@ class MainActivity : ComponentActivity() {
                             // True fullscreen for readers: when a book/video
                             // goes fullscreen, the Scaffold chrome hides too.
                             var readerFullscreen by remember { mutableStateOf(false) }
+                            // Landscape: students use tablets in landscape,
+                            // where vertical space is precious — the top bar
+                            // eats it. In landscape only the bottom bar
+                            // stays; the drawer still opens by edge swipe
+                            // (ModalNavigationDrawer gestures stay enabled).
+                            val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
                             val topBarTitle = when (uiState.currentTab) {
                                 AppTab.BANK -> "بنك الأسئلة"
                                 AppTab.CASES -> "المريض الافتراضي"
@@ -403,7 +411,7 @@ class MainActivity : ComponentActivity() {
                             }
                             Scaffold(
                                 topBar = {
-                                    if (!readerFullscreen)
+                                    if (!readerFullscreen && !isLandscape)
                                     TopAppBar(
                                         title = {
                                             Column {
@@ -640,7 +648,6 @@ class MainActivity : ComponentActivity() {
                                                                     onTabSelected = { requestTab(it) },
                                                                 onRefreshManifest = { viewModel.fetchManifest() },
                                                                 onDownloadSection = { path, entry -> viewModel.downloadSection(path, entry) },
-                                                                onDownloadExplanations = { path -> viewModel.downloadExplanationsForSection(path) },
                                                                 onOpenSubject = { path, name, tab ->
                                                                     coroutineScope.launch {
                                                                         activeSubjectEnvelope = viewModel.getSubjectEnvelope(path)
@@ -799,7 +806,6 @@ class MainActivity : ComponentActivity() {
                                                         downloadingPaths = uiState.downloadingPaths,
                                                         downloadingProgress = uiState.downloadingProgress,
                                                         onDownloadSection = { path, entry -> viewModel.downloadSection(path, entry) },
-                                                        onDownloadExplanations = { path -> viewModel.downloadExplanationsForSection(path) },
                                                         onOpenSubject = { path, name ->
                                                             coroutineScope.launch {
                                                                 activeSubjectEnvelope = viewModel.getSubjectEnvelope(path)

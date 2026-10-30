@@ -61,7 +61,6 @@ fun HomeScreen(
     onTabSelected: (AppTab) -> Unit,
     onRefreshManifest: () -> Unit,
     onDownloadSection: (String, ManifestFileEntry) -> Unit,
-    onDownloadExplanations: ((String) -> Unit)? = null,
     onOpenSubject: (String, String, AppTab) -> Unit,
     onOpenUniversity: (String, String) -> Unit,
     onCaseClick: (sy.medpro.watani.data.ClinicalCaseDto) -> Unit
@@ -237,7 +236,6 @@ fun HomeScreen(
                                             isDownloading = isDownloading,
                                             downloadProgress = downloadingProgress[path],
                                             onDownloadClick = { onDownloadSection(path, entry) },
-                                            onDownloadExplanations = onDownloadExplanations?.let { f -> { f(path) } },
                                             onOpenClick = { onOpenSubject(path, subjectDisplayName, targetTab) }
                                         )
                                     }
@@ -260,7 +258,6 @@ fun SectionCard(
     isDownloading: Boolean,
     downloadProgress: Float? = null,
     onDownloadClick: () -> Unit,
-    onDownloadExplanations: (() -> Unit)? = null,
     onOpenClick: () -> Unit
 ) {
     Card(
@@ -328,23 +325,6 @@ fun SectionCard(
                             Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("فتح القسم", fontSize = 14.sp)
-                        }
-                        // Sections downloaded before the bundle rule have
-                        // questions but no explanation shards: without
-                        // this button their explanations fall back to
-                        // slow on-demand downloads that spin on a slow
-                        // connection. Prefetch is idempotent (cached
-                        // shards are skipped) and never re-downloads
-                        // the questions themselves.
-                        if (onDownloadExplanations != null) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary),
-                                onClick = onDownloadExplanations,
-                                shape = MaterialTheme.shapes.medium,
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Text("تحميل الشروحات", fontSize = 13.sp)
-                            }
                         }
                     }
                 } else {
@@ -506,7 +486,6 @@ fun UniversitySubjectsScreen(
     downloadingPaths: Set<String>,
     downloadingProgress: Map<String, Float> = emptyMap(),
     onDownloadSection: (String, ManifestFileEntry) -> Unit,
-    onDownloadExplanations: ((String) -> Unit)? = null,
     onOpenSubject: (String, String) -> Unit,
     onBack: () -> Unit
 ) {
@@ -561,7 +540,6 @@ fun UniversitySubjectsScreen(
                     isDownloading = isDownloading,
                     downloadProgress = downloadingProgress[path],
                     onDownloadClick = { onDownloadSection(path, entry) },
-                    onDownloadExplanations = onDownloadExplanations?.let { f -> { f(path) } },
                     onOpenClick = { onOpenSubject(path, subjectName) }
                 )
             }

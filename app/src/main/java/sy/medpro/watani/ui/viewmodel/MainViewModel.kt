@@ -174,7 +174,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 envelope.sessions.orEmpty().flatMap { it.questions.orEmpty() })
                 .mapNotNull { it.id }
             if (ids.isEmpty()) return null
-            val repo = sy.medpro.watani.ui.explanation.ExplanationRepository(
+            // Shared process-lifetime repository (not a fresh instance):
+            // its in-memory index + shard cache are the same ones the
+            // question screens read, so a background prefetch on section
+            // open warms them and repeat opens do not re-download the
+            // layer index network-first every time.
+            val repo = sy.medpro.watani.ui.explanation.explanationRepository(
                 getApplication<Application>().applicationContext
             )
             if (repo.prefetchForQuestionIds(ids).isSuccess) null else incomplete
@@ -200,29 +205,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Manual explanations download for an already-downloaded section.
-     * Sections downloaded before the bundle rule (or whose prefetch was
-     * skipped) have questions on disk but no explanation shards, so
-     * those questions fall back to slow on-demand shard downloads that
-     * spin forever on a slow connection. This reuses the same prefetch
-     * path as section downloads: questions are never re-downloaded,
-     * cached shards are skipped, and a failure surfaces the same
-     * banner + retry instead of silently succeeding. */
-    fun downloadExplanationsForSection(path: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(downloadingPaths = it.downloadingPaths + path) }
-            val error = prefetchExplanations(path)
-            _uiState.update { st ->
-                st.copy(
-                    downloadingPaths = st.downloadingPaths - path,
-                    downloadError = if (error != null) error
-                        else if (st.explanationFailedPath == path) null else st.downloadError,
-                    explanationFailedPath = if (error != null) path
-                        else if (st.explanationFailedPath == path) null else st.explanationFailedPath
-                )
-            }
-        }
-    }
 
     /** Step-by-step back navigation: every detail screen pushes the screen
      * it came from, so back restores it instead of jumping to Home. */
@@ -258,6 +240,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun openSubject(path: String, subjectName: String, tab: AppTab) {
         viewModelScope.launch {
             navigateTo(ScreenState.TopicSelection(path, subjectName))
+        }
+        // Silent bundle completion (no separate user action): a section
+        // opened from an older download has questions but possibly no
+        // explanation shards. Fetch them in the background (resumable,
+        // cached, idempotent) so explanations land offline by use.
+        // Failures are silent here — the next open retries, and the
+        // question-level retry remains the explicit fallback.
+        viewModelScope.launch {
+            try { prefetchExplanations(path) } catch (_: Exception) { }
         }
     }
 
