@@ -207,7 +207,7 @@ fun ActivationScreen(onBack: () -> Unit, onActivationChanged: () -> Unit = {}) {
                             // the same code can re-activate this device later.
                             WorkerActivationApi.clearActivationAndWipe(context)
                             isActivated = false
-                            statusMessage = "تمت إزالة التفعيل من هذا الجهاز وحُذف المحتوى المقيّد المنزّل."
+                            statusMessage = "تمت إزالة التفعيل من هذا الجهاز وحُذف المحتوى المقيّد المنزّل. ملاحظة: خانة الجهاز على الخادم تبقى محجوزة حتى يعيد الإداري ضبطها من اللوحة."
                             isLoading = false
                             // Refresh download badges elsewhere (the wipe
                             // removed prefs entries behind the flow).
@@ -750,10 +750,15 @@ fun GlobalSearchScreen(onBack: () -> Unit) {
             results = emptyList()
             return@LaunchedEffect
         }
+        // Unactivated users may only search FREE files: this screen reads
+        // full file text, so searching restricted bank files without an
+        // activation would be a presence oracle over restricted content.
+        val activated = sy.medpro.watani.data.WorkerActivationApi.isActivated(context)
         val dir = File(context.filesDir, "sections_cache")
         val list = mutableListOf<String>()
         if (dir.exists() && dir.isDirectory) {
             dir.listFiles()?.forEach { file ->
+                if (!activated && sy.medpro.watani.data.RestrictedInventory.isRestrictedSectionFile(file.name)) return@forEach
                 if (file.name.endsWith(".json") && !file.name.contains("guide")) {
                     try {
                         val text = file.readText(Charsets.UTF_8)

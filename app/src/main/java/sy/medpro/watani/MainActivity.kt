@@ -120,6 +120,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Quiz-entry activation request (M4/M8): a restricted
+                // quiz tapped without a live activation opens the prompt
+                // instead of the quiz (see MainViewModel.openTopicQuiz).
+                LaunchedEffect(Unit) {
+                    viewModel.activationPromptRequests.collect {
+                        showActivationPrompt = true
+                    }
+                }
+
                 // Gating point (UI): ONLY Questions (BANK / UNIVERSITIES /
                 // UWORLD) and Library require activation. Everything else
                 // is free. A gated tab tap shows the activation prompt
@@ -170,6 +179,39 @@ class MainActivity : ComponentActivity() {
                     var casesList by remember { mutableStateOf<List<ClinicalCaseDto>>(emptyList()) }
                     var activeSubjectEnvelope by remember { mutableStateOf<SubjectEnvelope?>(null) }
                     var drawerScreen by remember { mutableStateOf<String?>(null) }
+
+                    // Shared guarded entry for restricted drawer screens,
+                    // used by drawer taps AND home shortcuts alike:
+                    // device gate first, then activation; on success the
+                    // screen opens, else the prompt (with a pending drawer
+                    // target) or the gate message.
+                    fun openRestrictedDrawer(title: String) {
+                        val drawerGate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
+                        if (!drawerGate.allowed) {
+                            gateDialogMessage = drawerGate.userMessage
+                        } else if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
+                            pendingDrawer = title
+                            showActivationPrompt = true
+                        } else {
+                            drawerScreen = title
+                        }
+                    }
+
+                    // M4: on activation loss, close restricted UI state
+                    // too — an open quiz keeps its questions in memory,
+                    // and the wipe only deletes files. (The outer
+                    // collector above opens the prompt; this one resets
+                    // the screens underneath it.)
+                    LaunchedEffect(Unit) {
+                        sy.medpro.watani.data.WorkerActivationApi.activationLostEvents.collect {
+                            drawerScreen = null
+                            viewModel.navigateToHome()
+                            if (uiState.currentTab == AppTab.BANK || uiState.currentTab == AppTab.UNIVERSITIES ||
+                                uiState.currentTab == AppTab.UWORLD || uiState.currentTab == AppTab.LIBRARY) {
+                                viewModel.setTab(AppTab.HOME)
+                            }
+                        }
+                    }
 
                     LaunchedEffect(downloadedSections) {
                         val casesEnv = viewModel.getCasesEnvelope()
@@ -292,21 +334,15 @@ class MainActivity : ComponentActivity() {
                                                         } else if (title == "المريض الافتراضي") {
                                                             drawerScreen = null
                                                             viewModel.setTab(AppTab.CASES)
-                                                        } else if (title == "محاكاة الامتحان" || title == "التحدي اليومي") {
-                                                            // M8 + activation: these two drawer screens
+                                                        } else if (title == "محاكاة الامتحان" || title == "التحدي اليومي" ||
+                                                            title == "البطاقات والمراجعة الذكية" || title == "البطاقات" ||
+                                                            title == "المراجعة الذكية Anki") {
+                                                            // M8 + activation: these drawer screens
                                                             // read downloaded question banks directly
                                                             // (sections_cache), so they must pass the
                                                             // same gates as the bank tabs instead of
                                                             // opening ungated from the drawer.
-                                                            val drawerGate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
-                                                            if (!drawerGate.allowed) {
-                                                                gateDialogMessage = drawerGate.userMessage
-                                                            } else if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
-                                                                pendingDrawer = title
-                                                                showActivationPrompt = true
-                                                            } else {
-                                                                drawerScreen = title
-                                                            }
+                                                            openRestrictedDrawer(title)
                                                         } else {
                                                             drawerScreen = title
                                                         }
@@ -457,7 +493,7 @@ class MainActivity : ComponentActivity() {
                                                                 onNavigateBank = { requestTab(AppTab.BANK) },
                                                                 onNavigateCases = { viewModel.setTab(AppTab.CASES) },
                                                                 onNavigateLeaderboard = { viewModel.setTab(AppTab.LEADERBOARD) },
-                                                                onOpenDailyChallenge = { drawerScreen = "التحدي اليومي" },
+                                                                onOpenDailyChallenge = { openRestrictedDrawer("التحدي اليومي") },
                                                                 onOpenAlgorithms = { drawerScreen = "خوارزميات التدبير" },
                                                                 onOpenFirstLineDrugs = { drawerScreen = "الخطوط العلاجية الأولى" },
                                                                 onOpenGoldenPearls = { drawerScreen = "النقاط الذهبية" },
@@ -481,6 +517,17 @@ class MainActivity : ComponentActivity() {
                                                                 GateBlockedMessage(
                                                                     message = tabGate.userMessage
                                                                         ?: "المحتوى المحمي غير متاح على هذا الجهاز.",
+                                                                    onBackHome = { requestTab(AppTab.HOME) }
+                                                                )
+                                                            } else if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
+                                                                // M4: activation expired mid-session —
+                                                                // never render restricted content from
+                                                                // local files without a live activation.
+                                                                ActivationNeededMessage(
+                                                                    onOpenActivation = {
+                                                                        pendingTab = uiState.currentTab
+                                                                        showActivationPrompt = true
+                                                                    },
                                                                     onBackHome = { requestTab(AppTab.HOME) }
                                                                 )
                                                             } else {
@@ -607,6 +654,16 @@ class MainActivity : ComponentActivity() {
                                                                         ?: "المحتوى المحمي غير متاح على هذا الجهاز.",
                                                                     onBackHome = { requestTab(AppTab.HOME) }
                                                                 )
+                                                            } else if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
+                                                                // M4: same mid-session activation
+                                                                // re-check as the bank tabs above.
+                                                                ActivationNeededMessage(
+                                                                    onOpenActivation = {
+                                                                        pendingTab = AppTab.LIBRARY
+                                                                        showActivationPrompt = true
+                                                                    },
+                                                                    onBackHome = { requestTab(AppTab.HOME) }
+                                                                )
                                                             } else {
                                                                 LibraryScreen()
                                                             }
@@ -723,6 +780,39 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * M4: full-screen block shown INSTEAD of a restricted tab's content when
+ * the activation expired mid-session (no live activation, no local
+ * content). Offers the activation prompt, or the way back home.
+ */
+@Composable
+private fun ActivationNeededMessage(onOpenActivation: () -> Unit, onBackHome: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "انتهى التفعيل — هذا القسم يحتاج كود تفعيل ساريًا.",
+                fontSize = 15.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = onOpenActivation,
+                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("فتح شاشة التفعيل", fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            TextButton(onClick = onBackHome) {
+                Text("العودة إلى الرئيسية")
             }
         }
     }

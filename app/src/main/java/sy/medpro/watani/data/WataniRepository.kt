@@ -94,10 +94,10 @@ class WataniRepository(private val context: Context) {
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
-                Result.failure(Exception("خطأ في جلب الفهرس (رمز HTTP ${response.code()})"))
+                Result.failure(Exception("تعذر جلب الفهرس — تحقق من الاتصال وحاول مجددًا."))
             }
         } catch (e: Exception) {
-            Result.failure(Exception("تعذر الاتصال بخادم الفهرس: ${e.localizedMessage ?: "خطأ في الشبكة"}"))
+            Result.failure(Exception("تعذر الاتصال بخادم الفهرس — تحقق من الشبكة وحاول مجددًا.", e))
         }
     }
 
@@ -223,7 +223,7 @@ class WataniRepository(private val context: Context) {
             if (e is ActivationRevokedException) {
                 Result.failure(e)
             } else {
-                Result.failure(Exception("خطأ في التحميل: ${e.localizedMessage ?: "تحقق من اتصال الإنترنت"}"))
+                Result.failure(Exception("تعذر التحميل — تحقق من اتصال الإنترنت وحاول مجددًا.", e))
             }
         }
     }
@@ -328,7 +328,7 @@ class WataniRepository(private val context: Context) {
             Result.success(parsed)
         } catch (e: Exception) {
             if (tempFile.exists()) tempFile.delete()
-            Result.failure(Exception("خطأ في تحميل الوصف العربي: ${e.localizedMessage ?: "تحقق من اتصال الإنترنت"}"))
+            Result.failure(Exception("تعذر تحميل الوصف العربي — تحقق من الاتصال وحاول مجددًا.", e))
         }
     }
 
@@ -378,7 +378,7 @@ class WataniRepository(private val context: Context) {
         } catch (e: Exception) {
             if (tempFile.exists()) tempFile.delete()
             if (targetFile.exists()) targetFile.delete()
-            Result.failure(Exception("خطأ في تحميل الصوت: ${e.localizedMessage}"))
+            Result.failure(Exception("تعذر تحميل الصوت — تحقق من الاتصال وحاول مجددًا.", e))
         }
     }
 
@@ -442,7 +442,7 @@ class WataniRepository(private val context: Context) {
         // Offline fallback: if we have a cached copy, serve it rather than failing.
         val cached = getLibraryEnvelope()
         if (cached != null) return@withContext Result.success(cached)
-        Result.failure(Exception("تعذر تحميل المكتبة: ${lastError?.localizedMessage ?: "تحقق من اتصال الإنترنت"}"))
+        Result.failure(Exception("تعذر تحميل المكتبة — تحقق من الاتصال وحاول مجددًا.", lastError))
     }
 
     fun getLibraryFile(item: LibraryItem): File {
@@ -703,7 +703,7 @@ class WataniRepository(private val context: Context) {
                 if (attempt >= 2) {
                     plainTemp.delete()
                     return@withContext LibraryDownloadResult.fail(
-                        "خطأ في التحميل: ${e.localizedMessage ?: "تحقق من اتصال الإنترنت"}"
+                        "تعذر التحميل — تحقق من اتصال الإنترنت وحاول مجددًا."
                     )
                 }
             }

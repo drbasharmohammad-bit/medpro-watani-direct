@@ -3,8 +3,11 @@ package sy.medpro.watani.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -79,7 +82,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update {
                         it.copy(
                             isLoadingManifest = false,
-                            manifestError = error.localizedMessage ?: "Failed to fetch manifest"
+                            manifestError = error.localizedMessage ?: "تعذر جلب الفهرس"
                         )
                     }
                 }
@@ -109,7 +112,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             downloadError = if (error is ActivationRevokedException) {
                                 error.localizedMessage
                             } else {
-                                "فشل تحميل $path: ${error.localizedMessage}"
+                                // M14: Arabic only — the raw exception text
+                                // stays in the failure cause, never in UI.
+                                "فشل تحميل $path — تحقق من الاتصال وحاول مجددًا."
                             }
                         )
                     }
@@ -145,6 +150,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Quiz-entry activation prompt requests (M4/M8): MainActivity
+     * collects this and opens the activation prompt. A restricted quiz
+     * tapped without a live activation must prompt, never open from
+     * downloaded files that outlived the activation.
+     */
+    private val _activationPromptRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val activationPromptRequests: SharedFlow<Unit> = _activationPromptRequests.asSharedFlow()
+
     fun openTopicQuiz(path: String, topicName: String) {
         viewModelScope.launch {
             // M8: re-check the device gate at quiz entry (a debugger
@@ -157,6 +171,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 if (!gate.allowed) {
                     _uiState.update { it.copy(gateMessage = gate.userMessage) }
+                    return@launch
+                }
+                // M4: re-check activation too — an expired token with no
+                // network fetch yet must not keep opening quizzes offline
+                // from files downloaded under the old activation.
+                if (!WorkerActivationApi.isActivated(getApplication<Application>().applicationContext)) {
+                    _activationPromptRequests.tryEmit(Unit)
                     return@launch
                 }
             }

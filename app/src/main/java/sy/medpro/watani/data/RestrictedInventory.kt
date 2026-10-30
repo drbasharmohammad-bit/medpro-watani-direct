@@ -1,6 +1,7 @@
 package sy.medpro.watani.data
 
 import android.content.Context
+import android.util.Log
 import sy.medpro.watani.ui.security.TempDecryptedFiles
 import java.io.File
 
@@ -59,8 +60,9 @@ object RestrictedInventory {
         sectionsDir.listFiles()?.forEach { file ->
             if (file.isFile && isRestrictedSectionFile(file.name)) {
                 try {
-                    file.delete()
-                } catch (_: Exception) {
+                    if (!file.delete()) Log.w("RestrictedInventory", "could not delete ${file.name}")
+                } catch (e: Exception) {
+                    Log.w("RestrictedInventory", "delete failed for ${file.name}", e)
                 }
             }
         }
@@ -94,15 +96,28 @@ object RestrictedInventory {
         }
     }
 
+    /**
+     * Deletes a directory's contents recursively (files AND
+     * subdirectories — a flat-only sweep would leave restricted files
+     * behind if a future layout nests them). Failures are logged, never
+     * silent: a leftover restricted file after a wipe must be visible.
+     */
     private fun deleteDirContents(dir: File) {
         try {
             dir.listFiles()?.forEach { file ->
                 try {
-                    if (file.isFile) file.delete()
-                } catch (_: Exception) {
+                    if (file.isDirectory) {
+                        deleteDirContents(file)
+                        if (!file.delete()) Log.w("RestrictedInventory", "could not delete dir ${file.name}")
+                    } else if (!file.delete()) {
+                        Log.w("RestrictedInventory", "could not delete ${file.name}")
+                    }
+                } catch (e: Exception) {
+                    Log.w("RestrictedInventory", "delete failed for ${file.name}", e)
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w("RestrictedInventory", "sweep failed for ${dir.name}", e)
         }
     }
 }

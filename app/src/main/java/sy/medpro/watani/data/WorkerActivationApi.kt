@@ -274,7 +274,8 @@ object WorkerActivationApi {
                     Pair(true, "تم تفعيل الحساب والجهاز بنجاح!")
                 }
             } catch (e: Exception) {
-                Pair(false, "تعذر الاتصال بخادم التفعيل: ${e.localizedMessage ?: "خطأ شبكة"}")
+                Log.d("WorkerActivationApi", "activate network failure: ${e.localizedMessage}")
+                Pair(false, "تعذر الاتصال بخادم التفعيل — تحقق من الشبكة وحاول مجددًا.")
             }
         }
 
@@ -294,10 +295,8 @@ object WorkerActivationApi {
         }
     }
 
-    /** Blocking refresh used by the fetch layer (already on an IO thread). */
-    private fun refreshBlocking(context: Context): String? {
-        return refreshInternal(context).first
-    }
+    // (No blocking-refresh wrapper: validTokenOrRefresh below calls
+    // refreshInternal directly so it can see the revocation flag.)
 
     /**
      * Returns (fresh token or null, serverRejected401_403).
@@ -345,6 +344,11 @@ object WorkerActivationApi {
      * otherwise one blocking refresh attempt. Null = no usable token
      * (caller must surface the activation prompt, not fetch restricted
      * content directly).
+     *
+     * Overseer fix (fetch-layer revocation): when the refresh attempt
+     * proves revocation (server 401/403), this notifies activation loss
+     * immediately (wipe + prompt event) instead of returning a silent
+     * null that would leave downloaded content usable offline.
      */
     fun validTokenOrRefresh(context: Context): String? {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -352,7 +356,9 @@ object WorkerActivationApi {
         if (token.isNullOrBlank()) return null
         val expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0L)
         if (expiresAt == 0L || expiresAt > System.currentTimeMillis() + 60_000L) return token
-        return refreshBlocking(context)
+        val (fresh, revoked) = refreshInternal(context)
+        if (revoked) notifyActivationLost(context)
+        return fresh
     }
 
     private fun parseExpiresAt(json: JSONObject): Long {

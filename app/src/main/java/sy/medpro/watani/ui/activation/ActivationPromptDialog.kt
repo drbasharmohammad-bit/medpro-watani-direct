@@ -144,7 +144,8 @@ fun ActivationPromptDialog(
                                 if (success) {
                                     onActivated()
                                 } else {
-                                    // Exact server error text, shown as returned.
+                                    // Arabic user text from arabicActivationError
+                                    // (the raw server string is only logged).
                                     message = msg
                                     isError = true
                                 }
