@@ -316,6 +316,12 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // Annotation tool inside highlight mode: FREEHAND (strokes),
             // TEXT (tap places a text box), RECT, ELLIPSE, ARROW (drag).
             var annotationTool by remember { mutableStateOf("FREEHAND") }
+            // One undo history for both marking kinds (strokes and
+            // shape/text annotations): the student sees one kind of
+            // marking, so there is one undo, not two. Entries are
+            // (kind, page); session-only — reopening the book clears
+            // undo history, the markings themselves stay saved.
+            var markHistory by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
             var pendingTextAt by remember { mutableStateOf<Offset?>(null) }
             var showTextEditor by remember { mutableStateOf(false) }
             var paintingPoints by remember { mutableStateOf<List<Offset>?>(null) }
@@ -332,10 +338,11 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 }
             }
 
-            // System Back leaves highlight mode first; only a second Back
-            // leaves the book. Exiting the whole reader from inside a
-            // stroke is what made the mode feel like a trap.
-            BackHandler(enabled = highlightMode && !isFullscreen) {
+            // System Back leaves highlight mode first, then fullscreen,
+            // then the book — one predictable chain. (The fullscreen
+            // BackHandler above is composed earlier, so this later one
+            // wins while the mode is on.)
+            BackHandler(enabled = highlightMode) {
                 highlightMode = false
             }
 
@@ -434,22 +441,23 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 .pointerInput(Unit) {
                                     detectTapGestures(
                                         onTap = { tapOff ->
-                                            // Text tool: tap places a text box
-                                            // instead of toggling bars or
-                                            // leaving the mode.
+                                            // Text tool: tap places a text box.
+                                            // Any other tap in highlight mode
+                                            // does nothing on purpose: an
+                                            // accidental tap must never kill
+                                            // the mode mid-marking. Exit is
+                                            // only the finish button, the
+                                            // brush toggle, or Back.
                                             if (highlightMode && annotationTool == "TEXT") {
                                                 pendingTextAt = toNormalized(tapOff, bitmap)
                                                 showTextEditor = true
-                                            } else if (highlightMode) {
-                                                // In highlight mode a plain tap is the
-                                                // quickest stop: it leaves the mode
-                                                // instead of doing nothing.
-                                                highlightMode = false
-                                            } else if (!showBars) {
-                                                showBars = true
-                                                resetHideBarTimer()
-                                            } else {
-                                                showBars = false
+                                            } else if (!highlightMode) {
+                                                if (!showBars) {
+                                                    showBars = true
+                                                    resetHideBarTimer()
+                                                } else {
+                                                    showBars = false
+                                                }
                                             }
                                         },
                                         onDoubleTap = { toggleZoom() }
@@ -460,11 +468,20 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                         Modifier.pointerInput(Unit) {
                                             detectDragGestures(
                                                 onDragStart = { off ->
-                                                    paintingPoints = listOf(toNormalized(off, bitmap))
+                                                    // TEXT comes only from taps:
+                                                    // a drag in TEXT mode paints
+                                                    // nothing and stores nothing
+                                                    // (a stroke preview that
+                                                    // vanished unsaved was a trap).
+                                                    if (annotationTool != "TEXT") {
+                                                        paintingPoints = listOf(toNormalized(off, bitmap))
+                                                    }
                                                 },
                                                 onDrag = { change, _ ->
-                                                    paintingPoints = (paintingPoints ?: emptyList()) +
-                                                        toNormalized(change.position, bitmap)
+                                                    if (annotationTool != "TEXT") {
+                                                        paintingPoints = (paintingPoints ?: emptyList()) +
+                                                            toNormalized(change.position, bitmap)
+                                                    }
                                                 },
                                                 onDragEnd = {
                                                     val pts = paintingPoints
@@ -478,6 +495,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                                 width = 0.035f
                                                             )
                                                             saveHighlights()
+                                                            markHistory = markHistory + ("stroke" to page)
                                                         } else if (annotationTool != "TEXT") {
                                                             // Shape tools: drag start -> end.
                                                             // TEXT comes only from taps (dialog),
@@ -494,6 +512,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                                     color = highlightColor.toArgb()
                                                                 )
                                                                 saveAnnotations()
+                                                                markHistory = markHistory + ("annotation" to page)
                                                             }
                                                         }
                                                     }
@@ -681,8 +700,10 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary)
                 )
 
-                // Highlighter panel: pen colors + finish + clear this page.
-                // Two rows so nothing squeezes or overlaps on narrow phones.
+                // Highlighter panel: one finish button, tools, colors,
+                // one undo, one clear — a single markings model, not
+                // two parallel ones. Three rows so the page keeps
+                // as much height as possible.
                 if (highlightMode) {
                     Column(
                         Modifier
@@ -698,7 +719,14 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("اسحب للتأشير • اضغط للإيقاف", color = Color.White, fontSize = 12.sp)
+                            Text(
+                                when (annotationTool) {
+                                    "TEXT" -> "اضغط على الصفحة لوضع مربع نص"
+                                    "FREEHAND" -> "اسحب للتأشير"
+                                    else -> "اسحب لرسم الشكل"
+                                },
+                                color = Color.White, fontSize = 12.sp
+                            )
                             TextButton(onClick = { highlightMode = false }) {
                                 Text("إنهاء التأشير ✓", color = GoldAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
@@ -732,42 +760,6 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                when (annotationTool) {
-                                    "TEXT" -> "اضغط على الصفحة لوضع مربع نص"
-                                    "FREEHAND" -> "اسحب للتأشير"
-                                    else -> "اسحب لرسم الشكل"
-                                },
-                                color = Color.White, fontSize = 12.sp
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                val hasPageAnnotation = annotations.any { it.page == currentPage }
-                                TextButton(onClick = {
-                                    val idx = annotations.indexOfLast { it.page == currentPage }
-                                    if (idx >= 0) {
-                                        annotations = annotations.toMutableList().also { it.removeAt(idx) }
-                                        saveAnnotations()
-                                    }
-                                }) {
-                                    Text(
-                                        "تراجع تعليق",
-                                        color = Color.White.copy(alpha = if (hasPageAnnotation) 1f else 0.4f),
-                                        fontSize = 12.sp
-                                    )
-                                }
-                                TextButton(onClick = {
-                                    annotations = annotations.filter { it.page != currentPage }
-                                    saveAnnotations()
-                                }) {
-                                    Text("مسح تعليقات الصفحة", color = Color.White, fontSize = 12.sp)
-                                }
-                            }
-                        }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 listOf(
                                     Color.Yellow,
@@ -789,25 +781,45 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                val hasPageStroke = highlightStrokes.any { it.page == currentPage }
+                                // One undo for both marking kinds: the
+                                // student sees one kind of marking, so
+                                // the last marking on this page (stroke
+                                // or shape/text) is what comes off.
+                                val hasPageMark = markHistory.any { (_, p) -> p == currentPage }
                                 TextButton(onClick = {
-                                    val idx = highlightStrokes.indexOfLast { it.page == currentPage }
+                                    val idx = markHistory.indexOfLast { (_, p) -> p == currentPage }
                                     if (idx >= 0) {
-                                        highlightStrokes = highlightStrokes.toMutableList().also { it.removeAt(idx) }
-                                        saveHighlights()
+                                        val (kind, _) = markHistory[idx]
+                                        markHistory = markHistory.toMutableList().also { it.removeAt(idx) }
+                                        if (kind == "stroke") {
+                                            val sIdx = highlightStrokes.indexOfLast { it.page == currentPage }
+                                            if (sIdx >= 0) {
+                                                highlightStrokes = highlightStrokes.toMutableList().also { it.removeAt(sIdx) }
+                                                saveHighlights()
+                                            }
+                                        } else {
+                                            val aIdx = annotations.indexOfLast { it.page == currentPage }
+                                            if (aIdx >= 0) {
+                                                annotations = annotations.toMutableList().also { it.removeAt(aIdx) }
+                                                saveAnnotations()
+                                            }
+                                        }
                                     }
                                 }) {
                                     Text(
                                         "تراجع",
-                                        color = Color.White.copy(alpha = if (hasPageStroke) 1f else 0.4f),
+                                        color = Color.White.copy(alpha = if (hasPageMark) 1f else 0.4f),
                                         fontSize = 12.sp
                                     )
                                 }
                                 TextButton(onClick = {
                                     highlightStrokes = highlightStrokes.filter { it.page != currentPage }
                                     saveHighlights()
+                                    annotations = annotations.filter { it.page != currentPage }
+                                    saveAnnotations()
+                                    markHistory = markHistory.filter { (_, p) -> p != currentPage }
                                 }) {
-                                    Text("مسح تأشير الصفحة", color = Color.White, fontSize = 12.sp)
+                                    Text("مسح العلامات", color = Color.White, fontSize = 12.sp)
                                 }
                             }
                         }
@@ -1015,22 +1027,6 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 }
             }
 
-            // Always-visible highlight exit: the panel button alone was
-            // easy to miss, which made the mode feel like a trap.
-            if (highlightMode) {
-                Box(
-                    Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 16.dp),
-                    contentAlignment = Alignment.BottomCenter
-                ) {
-                    Button(
-                        onClick = { highlightMode = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
-                    ) {
-                        Text("إنهاء التأشير ✓", color = Color.White)
-                    }
-                }
-            }
-
             // Text-box editor: tap in TEXT mode opens it at the tap point.
             if (showTextEditor) {
                 var textValue by remember { mutableStateOf("") }
@@ -1054,6 +1050,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                     text = textValue.trim(), color = highlightColor.toArgb()
                                 )
                                 saveAnnotations()
+                                markHistory = markHistory + ("annotation" to currentPage)
                             }
                             showTextEditor = false
                             pendingTextAt = null
