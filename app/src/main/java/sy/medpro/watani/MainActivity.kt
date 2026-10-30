@@ -9,6 +9,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -25,7 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -480,14 +481,12 @@ class MainActivity : ComponentActivity() {
                                     AnimatedContent(
                                         targetState = drawerScreen,
                                         transitionSpec = {
-                                            (fadeIn(animationSpec = tween(200)) + slideIntoContainer(
-                                                towards = SlideDirection.Up,
-                                                animationSpec = tween(200),
-                                                initialOffset = { IntOffset(0, it.height / 8) }
-                                            )) togetherWith (fadeOut(animationSpec = tween(180)) + slideOutOfContainer(
-                                                towards = SlideDirection.Down,
-                                                animationSpec = tween(180),
-                                                targetOffset = { IntOffset(0, it.height / 8) }
+                                            (fadeIn(animationSpec = tween(200)) + slideInVertically(
+                                                initialOffsetY = { it / 8 },
+                                                animationSpec = tween(200)
+                                            )) togetherWith (fadeOut(animationSpec = tween(180)) + slideOutVertically(
+                                                targetOffsetY = { it / 8 },
+                                                animationSpec = tween(180)
                                             ))
                                         },
                                         label = "drawerScreenTransition"
