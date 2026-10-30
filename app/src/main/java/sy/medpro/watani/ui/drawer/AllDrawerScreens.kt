@@ -110,7 +110,7 @@ fun ProfileScreen(onBack: () -> Unit) {
                         },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = MaterialTheme.shapes.medium
                     ) {
                         Text("تسجيل الدخول بحساب Google (اختياري)", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     }
@@ -155,7 +155,7 @@ fun ActivationScreen(onBack: () -> Unit, onActivationChanged: () -> Unit = {}) {
                     label = { Text("أدخل كود التفعيل الرسمي") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = MaterialTheme.shapes.medium
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
@@ -184,7 +184,7 @@ fun ActivationScreen(onBack: () -> Unit, onActivationChanged: () -> Unit = {}) {
                     enabled = !isLoading,
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = MaterialTheme.shapes.medium
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
@@ -216,7 +216,7 @@ fun ActivationScreen(onBack: () -> Unit, onActivationChanged: () -> Unit = {}) {
                     enabled = !isLoading,
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = MaterialTheme.shapes.medium
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
@@ -450,7 +450,7 @@ fun FlashcardsScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().weight(1f).padding(vertical = 16.dp).clickable { showAnswer = !showAnswer },
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = MaterialTheme.shapes.large
                 ) {
                     Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -616,7 +616,7 @@ fun WrongAnswersScreen(onBack: () -> Unit, onOpenAnkiWrong: (() -> Unit)? = null
                     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Surface(color = MaroonPrimary.copy(alpha = 0.1f), shape = RoundedCornerShape(6.dp)) {
+                                Surface(color = MaroonPrimary.copy(alpha = 0.1f), shape = MaterialTheme.shapes.extraSmall) {
                                     Text(mistake.subjectTitle, color = MaroonPrimary, fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                                 }
                                 TextButton(onClick = { OfflineStudyVault.removeMistake(context, mistake.id) }) {
@@ -811,7 +811,7 @@ fun GlobalSearchScreen(onBack: () -> Unit) {
                 onValueChange = { query = it },
                 label = { Text("ابحث عن مصطلح في الملفات المحملة...") },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.medium,
                 singleLine = true
             )
             Spacer(modifier = Modifier.height(16.dp))
@@ -897,7 +897,7 @@ fun MyNotesScreen(onBack: () -> Unit) {
                 onValueChange = { noteText = it },
                 label = { Text("أضف ملاحظة جديدة...") },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                shape = MaterialTheme.shapes.medium
             )
             Spacer(modifier = Modifier.height(8.dp))
             Button(

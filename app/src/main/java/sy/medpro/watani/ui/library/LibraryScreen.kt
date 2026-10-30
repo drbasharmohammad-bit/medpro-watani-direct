@@ -200,7 +200,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
                         Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(2.dp),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = MaterialTheme.shapes.medium
                     ) {
                         Column {
                             Row(
@@ -263,7 +263,7 @@ private fun LibraryItemRow(item: LibraryItem, isBook: Boolean, viewModel: Librar
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-        shape = RoundedCornerShape(8.dp)
+        shape = MaterialTheme.shapes.small
     ) {
         Column {
             Row(

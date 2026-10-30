@@ -91,7 +91,7 @@ fun HomeDashboardScreen(
     ) {
         item {
             Card(
-                shape = RoundedCornerShape(20.dp),
+                shape = MaterialTheme.shapes.extraLarge,
                 elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -114,7 +114,7 @@ fun HomeDashboardScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Surface(
                                     color = GoldAccent.copy(alpha = 0.22f),
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = MaterialTheme.shapes.small
                                 ) {
                                     Text(
                                         text = "منصة التحضير السريري المعتمدة",
@@ -171,7 +171,7 @@ fun HomeDashboardScreen(
 
                         Surface(
                             color = Color.White.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -212,7 +212,7 @@ fun HomeDashboardScreen(
         // Standalone Bedside Clinical & Physical Exam Suite (Isolated from Question Bank)
         item {
             Card(
-                shape = RoundedCornerShape(18.dp),
+                shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.5.dp, GoldAccent.copy(alpha = 0.65f)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -243,7 +243,7 @@ fun HomeDashboardScreen(
                         }
                         Surface(
                             color = GoldAccent.copy(alpha = 0.22f),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = MaterialTheme.shapes.small
                         ) {
                             Text(
                                 text = "مبتكر • أوفلاين",
@@ -298,7 +298,7 @@ fun HomeDashboardScreen(
                 )
                 Surface(
                     color = MaroonPrimary.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(6.dp)
+                    shape = MaterialTheme.shapes.extraSmall
                 ) {
                     Text(
                         text = "أوفلاين 100% • بدون ذكاء اصطناعي",
@@ -397,7 +397,7 @@ fun HomeDashboardScreen(
 
         item {
             Card(
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.55f)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -451,7 +451,7 @@ fun HomeDashboardScreen(
                         Column(modifier = Modifier.padding(top = 10.dp)) {
                             Surface(
                                 color = SuccessGreen.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = MaterialTheme.shapes.small,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(10.dp)) {
@@ -519,7 +519,7 @@ fun HomeDashboardScreen(
 
         item {
             Card(
-                shape = RoundedCornerShape(14.dp),
+                shape = MaterialTheme.shapes.medium,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -554,7 +554,7 @@ private fun AccreditedToolBannerCard(
     onClick: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         border = BorderStroke(1.dp, accentColor.copy(alpha = 0.22f)),
@@ -567,7 +567,7 @@ private fun AccreditedToolBannerCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = RoundedCornerShape(14.dp),
+                shape = MaterialTheme.shapes.medium,
                 color = accentColor.copy(alpha = 0.12f),
                 modifier = Modifier.size(50.dp)
             ) {
@@ -599,7 +599,7 @@ private fun AccreditedToolBannerCard(
                 Spacer(modifier = Modifier.height(6.dp))
                 Surface(
                     color = accentColor.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(6.dp)
+                    shape = MaterialTheme.shapes.extraSmall
                 ) {
                     Text(
                         text = badge,
@@ -624,7 +624,7 @@ private fun CompactMedicalToolCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.25f)),
@@ -657,7 +657,7 @@ fun QuickActionCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier.clickable { onClick() }

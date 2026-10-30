@@ -49,7 +49,7 @@ fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> 
                 label = { Text("بحث في الحالات السريرية حسب الاختصاص أو القصة...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaroonPrimary) },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                shape = MaterialTheme.shapes.medium
             )
 
             LazyColumn(
@@ -59,7 +59,7 @@ fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> 
             ) {
                 items(filteredCases, key = { it.id ?: it.title ?: "" }) { caseItem ->
                     Card(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.large,
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                         border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.2f)),
@@ -75,7 +75,7 @@ fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> 
                             ) {
                                 Surface(
                                     color = MaroonPrimary.copy(alpha = 0.1f),
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = MaterialTheme.shapes.small
                                 ) {
                                     Text(
                                         text = caseItem.specialty ?: "طب عام وباطنة",
@@ -87,7 +87,7 @@ fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> 
                                 }
                                 Surface(
                                     color = GoldAccent.copy(alpha = 0.2f),
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = MaterialTheme.shapes.small
                                 ) {
                                     Text(
                                         text = "+${caseItem.xpReward ?: 50} XP",
@@ -157,7 +157,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaroonDeep),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -218,7 +218,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { revealedHistory = revealedHistory + idx },
-                        shape = RoundedCornerShape(10.dp)
+                        shape = MaterialTheme.shapes.small
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
@@ -231,7 +231,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Surface(
                                     color = MaroonPrimary.copy(alpha = 0.08f),
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
@@ -264,7 +264,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { revealedExams = revealedExams + idx },
-                        shape = RoundedCornerShape(10.dp)
+                        shape = MaterialTheme.shapes.small
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
@@ -277,7 +277,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Surface(
                                     color = SuccessGreen.copy(alpha = 0.1f),
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
@@ -311,7 +311,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { revealedTests = revealedTests + idx },
-                        shape = RoundedCornerShape(10.dp)
+                        shape = MaterialTheme.shapes.small
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
@@ -324,7 +324,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Surface(
                                     color = MaroonPrimary.copy(alpha = 0.08f),
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = MaterialTheme.shapes.small,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
@@ -365,13 +365,13 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         else -> MaterialTheme.colorScheme.surface
                     }
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = MaterialTheme.shapes.small,
                         color = bg,
                         border = BorderStroke(1.5.dp, borderColor),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(MaterialTheme.shapes.small)
                             .clickable(enabled = !showExplanation) {
                                 selectedDiagnosis = option
                                 showExplanation = true
@@ -428,7 +428,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         // Performance Report Summary Card
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaroonDeep),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = MaterialTheme.shapes.large
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
@@ -439,7 +439,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     Text("تقرير أداء الحالة السريرية", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                     Surface(
                                         color = GoldAccent,
-                                        shape = RoundedCornerShape(8.dp)
+                                        shape = MaterialTheme.shapes.small
                                     ) {
                                         Text(
                                             text = "+${caseItem.xpReward ?: 50} XP",
@@ -465,7 +465,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         if (!caseItem.explanation.isNullOrEmpty()) {
                             Surface(
                                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = MaterialTheme.shapes.medium,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
@@ -480,7 +480,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         if (!caseItem.learningPoints.isNullOrEmpty()) {
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                shape = RoundedCornerShape(12.dp),
+                                shape = MaterialTheme.shapes.medium,
                                 border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f))
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {

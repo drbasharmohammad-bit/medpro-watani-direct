@@ -9,6 +9,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideIntoContainer
+import androidx.compose.animation.slideOutOfContainer
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -48,6 +50,7 @@ import sy.medpro.watani.ui.reference.*
 import sy.medpro.watani.ui.osce.OsceStationsScreen
 import sy.medpro.watani.ui.features.*
 import sy.medpro.watani.ui.theme.GoldAccent
+import sy.medpro.watani.ui.theme.GoldContainer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.WataniTheme
@@ -413,7 +416,10 @@ class MainActivity : ComponentActivity() {
                                     )
                                 },
                                 bottomBar = {
-                                    NavigationBar {
+                                    NavigationBar(
+                                        containerColor = MaterialTheme.colorScheme.surface,
+                                        tonalElevation = 3.dp
+                                    ) {
                                         val tabs = listOf(
                                             Triple(AppTab.HOME, "الرئيسية", Icons.Default.Home),
                                             Triple(AppTab.BANK, "بنك الأسئلة", Icons.Default.Book),
@@ -426,6 +432,9 @@ class MainActivity : ComponentActivity() {
                                             val selected = uiState.currentTab == tab
                                             NavigationBarItem(
                                                 selected = selected,
+                                                colors = NavigationBarItemDefaults.colors(
+                                                    indicatorColor = GoldContainer
+                                                ),
                                                 // Bottom-bar fix: tapping a tab while a
                                                 // drawer screen is open used to change
                                                 // the tab state but leave the drawer
@@ -458,7 +467,13 @@ class MainActivity : ComponentActivity() {
                                     AnimatedContent(
                                         targetState = drawerScreen,
                                         transitionSpec = {
-                                            fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+                                            (fadeIn(animationSpec = tween(200)) + slideIntoContainer(
+                                                animationSpec = tween(200),
+                                                initialOffset = { it / 8 }
+                                            )) togetherWith (fadeOut(animationSpec = tween(180)) + slideOutOfContainer(
+                                                animationSpec = tween(180),
+                                                targetOffset = { it / 8 }
+                                            ))
                                         },
                                         label = "drawerScreenTransition"
                                     ) { activeDrawer ->
@@ -522,7 +537,14 @@ class MainActivity : ComponentActivity() {
                                         } else {
                                             when (val screen = uiState.screenState) {
                                                 is ScreenState.Home -> {
-                                                    when (uiState.currentTab) {
+                                                    AnimatedContent(
+                                                        targetState = uiState.currentTab,
+                                                        transitionSpec = {
+                                                            fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(180))
+                                                        },
+                                                        label = "tabTransition"
+                                                    ) { tab ->
+                                                        when (tab) {
                                                         AppTab.HOME -> {
                                                             HomeDashboardScreen(
                                                                 manifestVersion = uiState.manifestVersion,
@@ -605,7 +627,7 @@ class MainActivity : ComponentActivity() {
                                                                 ) {
                                                                     if (casesEntry != null) {
                                                                         Card(
-                                                                            shape = RoundedCornerShape(16.dp),
+                                                                            shape = MaterialTheme.shapes.large,
                                                                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                                                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                                                                             modifier = Modifier.fillMaxWidth()
@@ -650,7 +672,7 @@ class MainActivity : ComponentActivity() {
                                                                                     Button(
                                                                                         onClick = { viewModel.downloadSection("cases.json", casesEntry) },
                                                                                         colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                                                                                        shape = RoundedCornerShape(8.dp),
+                                                                                        shape = MaterialTheme.shapes.small,
                                                                                         modifier = Modifier.fillMaxWidth()
                                                                                     ) {
                                                                                         Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -712,6 +734,7 @@ class MainActivity : ComponentActivity() {
                                                                  onOpenCalculators = { drawerScreen = "الحاسبات السريرية" }
                                                              )
                                                         }
+                                                    }
                                                     }
                                                 }
                                                 is ScreenState.TopicSelection -> {
@@ -848,7 +871,7 @@ private fun ActivationNeededMessage(onOpenActivation: () -> Unit, onBackHome: ()
             Button(
                 onClick = onOpenActivation,
                 colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                shape = RoundedCornerShape(12.dp)
+                shape = MaterialTheme.shapes.medium
             ) {
                 Text("فتح شاشة التفعيل", fontWeight = FontWeight.Bold)
             }
@@ -881,7 +904,7 @@ private fun GateBlockedMessage(message: String, onBackHome: () -> Unit) {
             Button(
                 onClick = onBackHome,
                 colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                shape = RoundedCornerShape(12.dp)
+                shape = MaterialTheme.shapes.medium
             ) {
                 Text("العودة إلى الرئيسية", fontWeight = FontWeight.Bold)
             }

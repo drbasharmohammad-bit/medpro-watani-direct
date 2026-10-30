@@ -53,7 +53,7 @@ fun ProgressDashboardScreen(
         ) {
             item {
                 Card(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = MaterialTheme.shapes.extraLarge,
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -77,7 +77,7 @@ fun ProgressDashboardScreen(
                                 }
                                 Surface(
                                     color = Color.White.copy(alpha = 0.15f),
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = MaterialTheme.shapes.medium
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -144,7 +144,7 @@ fun ProgressDashboardScreen(
 
             item {
                 Card(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -201,7 +201,7 @@ fun ProgressDashboardScreen(
 
             items(stats.savedMistakes, key = { it.id }) { mistake ->
                 Card(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = MaterialTheme.shapes.medium,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
@@ -212,7 +212,7 @@ fun ProgressDashboardScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(color = MaroonPrimary.copy(alpha = 0.1f), shape = RoundedCornerShape(6.dp)) {
+                            Surface(color = MaroonPrimary.copy(alpha = 0.1f), shape = MaterialTheme.shapes.extraSmall) {
                                 Text(
                                     mistake.subjectTitle,
                                     color = MaroonPrimary,
@@ -233,7 +233,7 @@ fun ProgressDashboardScreen(
                             Spacer(modifier = Modifier.height(6.dp))
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = MaterialTheme.shapes.small,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
@@ -254,7 +254,7 @@ fun ProgressDashboardScreen(
 private fun StatPillCard(label: String, value: String, modifier: Modifier = Modifier) {
     Surface(
         color = Color.White.copy(alpha = 0.12f),
-        shape = RoundedCornerShape(10.dp),
+        shape = MaterialTheme.shapes.small,
         modifier = modifier
     ) {
         Column(
@@ -276,7 +276,7 @@ private fun OfflineQuickButton(
     modifier: Modifier = Modifier
 ) {
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier.clickable { onClick() }
