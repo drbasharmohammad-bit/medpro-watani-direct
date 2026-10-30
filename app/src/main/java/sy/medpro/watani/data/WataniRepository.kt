@@ -723,9 +723,12 @@ class WataniRepository(private val context: Context) {
                 return@withContext LibraryDownloadResult.ok(encFile)
             } catch (e: Exception) {
                 if (attempt >= 2) {
-                    plainTemp.delete()
+                    // Book-download fix: KEEP the partial temp file on a
+                    // network failure so the next tap resumes via Range
+                    // (the gateway now serves ranges from cache) instead
+                    // of restarting a 20MB book from zero every time.
                     return@withContext LibraryDownloadResult.fail(
-                        "تعذر التحميل — تحقق من اتصال الإنترنت وحاول مجددًا."
+                        "تعذر التحميل — تحقق من اتصال الإنترنت وحاول مجددًا (سيُستأنف من حيث توقف)."
                     )
                 }
             }

@@ -228,7 +228,8 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
                                 HorizontalDivider()
                                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     filteredItems.forEach { item ->
-                                        LibraryItemRow(item, selectedTab == 0, viewModel, state.downloadingIds, onOpenReader = { file, url ->
+                                        val itemId = item.id ?: item.fileUrl ?: ""
+                                        LibraryItemRow(item, selectedTab == 0, viewModel, state.downloadingIds, downloadProgress = state.downloadingProgress[itemId], downloadError = state.downloadErrors[itemId], onOpenReader = { file, url ->
                                             currentReader = LibraryReaderState(
                                                 item, file, url, selectedTab == 0,
                                                 // Local SRT side-car only for downloaded videos;
@@ -251,7 +252,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
 }
 
 @Composable
-private fun LibraryItemRow(item: LibraryItem, isBook: Boolean, viewModel: LibraryViewModel, downloadingIds: Set<String>, onOpenReader: (java.io.File?, String?) -> Unit = { _, _ -> }, onOpenError: (String) -> Unit = {}) {
+private fun LibraryItemRow(item: LibraryItem, isBook: Boolean, viewModel: LibraryViewModel, downloadingIds: Set<String>, downloadProgress: Float? = null, downloadError: String? = null, onOpenReader: (java.io.File?, String?) -> Unit = { _, _ -> }, onOpenError: (String) -> Unit = {}) {
     val id = item.id ?: item.fileUrl ?: ""
     val isDownloading = id in downloadingIds
     val isDownloaded by remember { derivedStateOf { viewModel.isItemDownloaded(item) } }
@@ -284,7 +285,22 @@ private fun LibraryItemRow(item: LibraryItem, isBook: Boolean, viewModel: Librar
                 }
 
                 when {
-                    isDownloading -> CircularProgressIndicator(Modifier.size(36.dp), color = MaroonPrimary, strokeWidth = 3.dp)
+                    isDownloading -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (downloadProgress != null && downloadProgress > 0f) {
+                            LinearProgressIndicator(
+                                progress = { downloadProgress.coerceIn(0f, 1f) },
+                                modifier = Modifier.width(72.dp),
+                                color = MaroonPrimary
+                            )
+                            Text(
+                                "${(downloadProgress * 100).toInt()}٪",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        } else {
+                            CircularProgressIndicator(Modifier.size(36.dp), color = MaroonPrimary, strokeWidth = 3.dp)
+                        }
+                    }
                     isDownloaded -> Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         IconButton(onClick = {
                             coroutineScope.launch {
@@ -308,6 +324,15 @@ private fun LibraryItemRow(item: LibraryItem, isBook: Boolean, viewModel: Librar
                         Icon(Icons.Default.CloudDownload, "تحميل", tint = GoldAccent)
                     }
                 }
+            }
+
+            if (downloadError != null) {
+                Text(
+                    downloadError,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
             }
 
             if (!isDownloaded && !isBook && !item.fileUrl.isNullOrEmpty()) {

@@ -14,7 +14,13 @@ data class LibraryUiState(
     val isLoading: Boolean = false,
     val library: LibraryEnvelope? = null,
     val error: String? = null,
-    val downloadingIds: Set<String> = emptySet()
+    val downloadingIds: Set<String> = emptySet(),
+    // Book-download fix: live progress per item (0f..1f) so a slow
+    // download shows a percentage instead of an endless spinner,
+    // and the last failure message per item instead of silent return
+    // to the download button.
+    val downloadingProgress: Map<String, Float> = emptyMap(),
+    val downloadErrors: Map<String, String> = emptyMap()
 )
 
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
@@ -42,12 +48,27 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun downloadItem(item: LibraryItem, onProgress: (Float) -> Unit = {}) {
+    fun downloadItem(item: LibraryItem) {
         val id = item.id ?: item.fileUrl ?: ""
         viewModelScope.launch {
-            _state.update { it.copy(downloadingIds = it.downloadingIds + id) }
-            val result = repository.downloadLibraryItem(item, onProgress)
-            _state.update { it.copy(downloadingIds = it.downloadingIds - id) }
+            _state.update {
+                it.copy(
+                    downloadingIds = it.downloadingIds + id,
+                    downloadingProgress = it.downloadingProgress + (id to 0f),
+                    downloadErrors = it.downloadErrors - id
+                )
+            }
+            val result = repository.downloadLibraryItem(item) { p ->
+                _state.update { st -> st.copy(downloadingProgress = st.downloadingProgress + (id to p)) }
+            }
+            _state.update {
+                it.copy(
+                    downloadingIds = it.downloadingIds - id,
+                    downloadingProgress = it.downloadingProgress - id,
+                    downloadErrors = if (result.success) it.downloadErrors - id
+                        else it.downloadErrors + (id to (result.errorMessage ?: "تعذر التحميل — أعد المحاولة."))
+                )
+            }
         }
     }
 
