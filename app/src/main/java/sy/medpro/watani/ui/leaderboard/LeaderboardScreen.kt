@@ -82,8 +82,16 @@ fun LeaderboardScreen() {
                     users = emptyList()
                     isLoading = false
                 }
-                401, -1 -> {
+                401 -> {
                     needsSignIn = true
+                    users = emptyList()
+                    isLoading = false
+                }
+                -1 -> {
+                    // Signed in, but the Google ID token could not be
+                    // refreshed — NOT the same as signed out. A distinct
+                    // error keeps this from ever reading as "sign in".
+                    errorMessage = "تعذر تحديث جلسة الدخول — أعد فتح الصدارة، وإن استمرت سجّل دخولك من جديد."
                     users = emptyList()
                     isLoading = false
                 }
