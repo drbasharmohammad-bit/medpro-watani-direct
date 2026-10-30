@@ -5,7 +5,12 @@ import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -13,7 +18,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -23,16 +30,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,7 +55,20 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.GoldAccent
 import java.io.File
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
+
+/**
+ * One highlight stroke on a book page, stored normalized (0..1 across the
+ * page) so it survives zoom and screen sizes. Persisted per book in prefs.
+ * The reader also supports go-to-page (jump by number) from the indicator.
+ */
+data class HighlightStrokeDto(
+    val page: Int,
+    val points: List<Float>,
+    val color: Int,
+    val width: Float
+)
 
 private fun getFirebaseUid(): String {
     return try {
@@ -78,6 +106,21 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
     var bookmarks by remember { mutableStateOf(setOf<Int>()) }
     var hideBarJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
+
+    // Highlighter persistence (outer scope so the open effect can restore it).
+    val highlightAdapter = remember {
+        Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+            .adapter<List<HighlightStrokeDto>>(
+                Types.newParameterizedType(List::class.java, HighlightStrokeDto::class.java)
+            )
+    }
+    var highlightStrokes by remember { mutableStateOf<List<HighlightStrokeDto>>(emptyList()) }
+    fun saveHighlights() {
+        prefs.edit().putString(
+            "highlights_${pdfFile.nameWithoutExtension}",
+            highlightAdapter.toJson(highlightStrokes)
+        ).apply()
+    }
 
     fun saveBookmarks() {
         val key = "bookmarks_${pdfFile.nameWithoutExtension}"
@@ -120,6 +163,13 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
         withContext(Dispatchers.Default) {
             try {
                 loadBookmarks()
+                try {
+                    prefs.getString("highlights_${pdfFile.nameWithoutExtension}", null)?.let {
+                        highlightStrokes = highlightAdapter.fromJson(it) ?: emptyList()
+                    }
+                } catch (_: Exception) {
+                    // Corrupt highlights JSON must never block opening the book.
+                }
                 val fd = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)
                 val renderer = PdfRenderer(fd)
                 parcelFd = fd
@@ -172,6 +222,27 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
             var sliderPos by remember { mutableStateOf<Float?>(null) }
             val bitmapCache = remember { mutableStateMapOf<Int, Bitmap>() }
 
+            // Highlighter UI state (strokes live in the outer scope).
+            var highlightMode by remember { mutableStateOf(false) }
+            var highlightColor by remember { mutableStateOf(Color.Yellow) }
+            var paintingPoints by remember { mutableStateOf<List<Offset>?>(null) }
+            var showGoToPage by remember { mutableStateOf(false) }
+            var goToPageText by remember { mutableStateOf("") }
+
+            // Touch point -> page-normalized point (0..1 across the fitted
+            // page rect), so strokes survive zoom and screen sizes.
+            fun toNormalized(px: Offset, bmp: Bitmap): Offset {
+                val fit = minOf(boxSize.width.toFloat() / bmp.width, boxSize.height.toFloat() / bmp.height)
+                val fittedW = bmp.width * fit
+                val fittedH = bmp.height * fit
+                val offX = (boxSize.width - fittedW) / 2f
+                val offY = (boxSize.height - fittedH) / 2f
+                return Offset(
+                    ((px.x - offX) / fittedW).coerceIn(0f, 1f),
+                    ((px.y - offY) / fittedH).coerceIn(0f, 1f)
+                )
+            }
+
             // Save the reading position and reset zoom on every page turn.
             LaunchedEffect(currentPage) {
                 zoom = 1f
@@ -206,8 +277,9 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
             HorizontalPager(
                 state = pagerState,
                 // While zoomed, horizontal drags pan the page instead of
-                // flipping it; at 1x they always flip.
-                userScrollEnabled = zoom <= 1.01f,
+                // flipping it; in highlight mode they paint instead of
+                // flipping; at 1x they always flip.
+                userScrollEnabled = zoom <= 1.01f && !highlightMode,
                 modifier = Modifier.fillMaxSize().onSizeChanged { boxSize = it }
             ) { page ->
                 val bitmap = bitmapCache[page]
@@ -232,11 +304,8 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (bitmap != null) {
                         val isCurrent = page == currentPage
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
+                        Box(
+                            Modifier
                                 .fillMaxSize()
                                 .graphicsLayer(
                                     scaleX = if (isCurrent) zoom else 1f,
@@ -254,7 +323,36 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                                     )
                                 }
                                 .then(
-                                    if (isCurrent && zoom > 1.01f) {
+                                    if (isCurrent && highlightMode) {
+                                        Modifier.pointerInput(Unit) {
+                                            detectDragGestures(
+                                                onDragStart = { off ->
+                                                    paintingPoints = listOf(toNormalized(off, bitmap))
+                                                },
+                                                onDrag = { change, _ ->
+                                                    paintingPoints = (paintingPoints ?: emptyList()) +
+                                                        toNormalized(change.position, bitmap)
+                                                },
+                                                onDragEnd = {
+                                                    val pts = paintingPoints
+                                                    paintingPoints = null
+                                                    if (pts != null && pts.size >= 2) {
+                                                        highlightStrokes = highlightStrokes + HighlightStrokeDto(
+                                                            page = page,
+                                                            points = pts.flatMap { listOf(it.x, it.y) },
+                                                            color = highlightColor.toArgb(),
+                                                            width = 0.035f
+                                                        )
+                                                        saveHighlights()
+                                                    }
+                                                },
+                                                onDragCancel = { paintingPoints = null }
+                                            )
+                                        }
+                                    } else Modifier
+                                )
+                                .then(
+                                    if (isCurrent && zoom > 1.01f && !highlightMode) {
                                         Modifier.pointerInput(Unit) {
                                             detectTransformGestures { _, panChange, _, _ ->
                                                 // Clamp the pan so the page cannot
@@ -276,7 +374,45 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                                         }
                                     } else Modifier
                                 )
-                        )
+                        ) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            // Highlighter layer: strokes drawn over the page,
+                            // inside the same zoom/pan transform as the image.
+                            Canvas(Modifier.fillMaxSize()) {
+                                val fit = minOf(size.width / bitmap.width, size.height / bitmap.height)
+                                val fittedW = bitmap.width * fit
+                                val fittedH = bitmap.height * fit
+                                val offX = (size.width - fittedW) / 2f
+                                val offY = (size.height - fittedH) / 2f
+                                fun drawStroke(pts: List<Offset>, argb: Int, wFrac: Float) {
+                                    if (pts.size < 2) return
+                                    val path = Path().apply {
+                                        moveTo(offX + pts[0].x * fittedW, offY + pts[0].y * fittedH)
+                                        pts.drop(1).forEach {
+                                            lineTo(offX + it.x * fittedW, offY + it.y * fittedH)
+                                        }
+                                    }
+                                    drawPath(
+                                        path = path,
+                                        color = Color(argb),
+                                        style = Stroke(width = wFrac * fittedW, cap = StrokeCap.Round),
+                                        alpha = 0.45f
+                                    )
+                                }
+                                highlightStrokes.filter { it.page == page }.forEach { s ->
+                                    val pts = s.points.chunked(2).map { Offset(it[0], it[1]) }
+                                    drawStroke(pts, s.color, s.width)
+                                }
+                                if (isCurrent) paintingPoints?.let {
+                                    drawStroke(it, highlightColor.toArgb(), 0.035f)
+                                }
+                            }
+                        }
                     } else {
                         CircularProgressIndicator(
                             modifier = Modifier.size(36.dp),
@@ -304,12 +440,57 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                         IconButton(onClick = { toggleBookmark(currentPage) }) {
                             Icon(Icons.Default.Bookmark, null, tint = if (currentPage in bookmarks) GoldAccent else Color.White)
                         }
+                        IconButton(onClick = { highlightMode = !highlightMode }) {
+                            Icon(Icons.Default.Brush, null, tint = if (highlightMode) GoldAccent else Color.White)
+                        }
                         IconButton(onClick = { showSearch = !showSearch }) {
                             Icon(Icons.Default.Search, null, tint = Color.White)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary)
                 )
+
+                // Highlighter panel: pen colors + clear this page.
+                if (highlightMode) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                            .padding(top = 64.dp)
+                            .background(MaroonPrimary.copy(alpha = 0.9f))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("اسحب بإصبعك للتأشير", color = Color.White, fontSize = 12.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                Color.Yellow,
+                                Color(0xFFFF8FA3),
+                                Color(0xFF90EE90),
+                                Color(0xFF87CEEB)
+                            ).forEach { c ->
+                                Box(
+                                    Modifier
+                                        .size(28.dp)
+                                        .background(c, CircleShape)
+                                        .border(
+                                            width = if (highlightColor == c) 2.dp else 0.dp,
+                                            color = GoldAccent,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { highlightColor = c }
+                                )
+                            }
+                        }
+                        TextButton(onClick = {
+                            highlightStrokes = highlightStrokes.filter { it.page != currentPage }
+                            saveHighlights()
+                        }) {
+                            Text("مسح تأشير الصفحة", color = Color.White, fontSize = 12.sp)
+                        }
+                    }
+                }
 
                 Box(
                     Modifier
@@ -331,11 +512,16 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                             }) {
                                 Icon(Icons.Default.ChevronLeft, null, tint = Color.White)
                             }
-                            Text(
-                                "${currentPage + 1} / $totalPages (${((currentPage + 1).toFloat() / totalPages * 100).toInt()}%)",
-                                color = Color.White,
-                                fontWeight = FontWeight.Medium
-                            )
+                            TextButton(onClick = {
+                                goToPageText = (currentPage + 1).toString()
+                                showGoToPage = true
+                            }) {
+                                Text(
+                                    "${currentPage + 1} / $totalPages (${((currentPage + 1).toFloat() / totalPages * 100).toInt()}%)",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                             IconButton(onClick = {
                                 if (currentPage < totalPages - 1) coroutineScope.launch {
                                     pagerState.animateScrollToPage(currentPage + 1)
@@ -487,6 +673,37 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                         )
                     }
                 }
+            }
+
+            // Go-to-page dialog: outside showBars so the auto-hide timer
+            // cannot dismiss it while the user types.
+            if (showGoToPage) {
+                AlertDialog(
+                    onDismissRequest = { showGoToPage = false },
+                    title = { Text("اذهب إلى صفحة") },
+                    text = {
+                        TextField(
+                            value = goToPageText,
+                            onValueChange = { goToPageText = it.filter { ch -> ch.isDigit() } },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            placeholder = { Text("رقم الصفحة (1-$totalPages)") }
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            goToPageText.toIntOrNull()?.let { n ->
+                                coroutineScope.launch {
+                                    pagerState.scrollToPage((n - 1).coerceIn(0, totalPages - 1))
+                                }
+                            }
+                            showGoToPage = false
+                        }) { Text("اذهب") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showGoToPage = false }) { Text("إلغاء") }
+                    }
+                )
             }
         }
     }
