@@ -199,7 +199,7 @@ private val offlineEcgCases = listOf(
         ),
         firstLineManagement = "تفعيل بروتوكول القثطرة القلبية البدئية الفورية (Primary PCI خلال ≤ 90 دقيقة) + أسبرين مضغاً + مثبط P2Y12 + هيبارين.",
         examTrap = "الاحتشاء الأمامي الواسع يترافق مع صدمة قلبية المنشأ وحصار فرع الحزمة الأيسر الحديث (New LBBB يعامل معاملة STEMI).",
-        reference = "ESC / AHA STEMI Guidelines"
+        reference = "ESC / AHA STEMI Guidelines",
         attribution = "المصدر: Cureus 2018 — CC BY",
     ),
     EcgAtlasCase(
@@ -216,7 +216,7 @@ private val offlineEcgCases = listOf(
         ),
         firstLineManagement = "إعادة التروية الفورية + سوائل وريدية في حال إشراك البطين الأيمن.",
         examTrap = "يُمنع إعطاء النترات (Nitroglycerin) والمورفين والمدرات عند ترافق الاحتشاء السفلي باحتشاء البطين الأيمن لتجنب الهبوط الصاعق للضغط.",
-        reference = "Braunwald's Heart Disease"
+        reference = "Braunwald's Heart Disease",
         attribution = "المصدر: Patho — CC BY-SA 3.0",
     ),
     EcgAtlasCase(
@@ -233,7 +233,7 @@ private val offlineEcgCases = listOf(
         ),
         firstLineManagement = "إذا كان غير مستقر هيموديناميكياً -> صدمة كهربائية متزامنة فورية. إذا كان مستقراً -> ضبط السرعة بحاصرات بيتا أو حاصرات الكالسيوم اللاثنائية الهيدروبيريدين (Diltiazem/Verapamil) + تقييم التميع بحرز CHA2DS2-VASc.",
         examTrap = "الرجفان الأذيني الصمامي (تضيق التاجي المتوسط/الشديد أو صمام صنعي ميكانيكي) يُميّع حصراً بالوارفارين وليس بمضادات التخثر الفموية المباشرة (DOACs).",
-        reference = "ESC Atrial Fibrillation Guidelines"
+        reference = "ESC Atrial Fibrillation Guidelines",
         attribution = "المصدر: R.W. Koster (ECGPedia) — CC BY-SA 3.0",
     ),
     EcgAtlasCase(
@@ -249,7 +249,7 @@ private val offlineEcgCases = listOf(
         ),
         firstLineManagement = "العلاج الشافي النهائي والأكثر فعالية هو الكي بالقثطرة للبرزخ الأجوفي مثلث الشرف (Catheter Ablation).",
         examTrap = "قواعد منع التخثر والوقاية من الصمات الدماغية في الرفرفة الأذينية مطابقة تماماً لقواعد الرجفان الأذيني.",
-        reference = "AHA / ESC Supraventricular Tachycardia Guidelines"
+        reference = "AHA / ESC Supraventricular Tachycardia Guidelines",
         attribution = "المصدر: James Heilman, MD — CC BY-SA 4.0",
     ),
     EcgAtlasCase(
@@ -265,7 +265,7 @@ private val offlineEcgCases = listOf(
         ),
         firstLineManagement = "• نبض غائب (Pulseless VT): صدمة غير متزامنة (Defibrillation) + إنعاش قلبي رئوي.\n• نبض موجود وغير مستقر: صدمة كهربائية متزامنة.\n• نبض موجود ومستقر: Amiodarone أو Procainamide وريدياً.",
         examTrap = "أي تسرع قلب عريض المركب لدى مريض لديه قصة احتشاء عضلة قلبية سابق يُعامل على أنه تسرع بطيني (VT) حتى يثبت العكس، ويُمنع إعطاء الفيراباميل.",
-        reference = "AHA ACLS Guidelines"
+        reference = "AHA ACLS Guidelines",
         attribution = "المصدر: Glenlarson — ملكية عامة",
     ),
     EcgAtlasCase(
@@ -282,7 +282,7 @@ private val offlineEcgCases = listOf(
         ),
         firstLineManagement = "الخطوة الأولى الفورية لحماية غشاء الخلية القلبية هي: غلوكونات الكالسيوم الوريدية (IV Calcium Gluconate)، يتبعها الأنسولين مع الغلوكوز لإدخال البوتاسيوم للخلايا.",
         examTrap = "غلوكونات الكالسيوم لا تخفض رقم البوتاسيوم في الدم بل تثبت غشاء العضلة القلبية فوراً ريثما تعمل الأدوية الخافضة للبوتاسيوم.",
-        reference = "Harrison's Internal Medicine"
+        reference = "Harrison's Internal Medicine",
         attribution = "المصدر: Agbayani وGonzales — CC BY 4.0",
     ),
     EcgAtlasCase(
@@ -299,7 +299,7 @@ private val offlineEcgCases = listOf(
         ),
         firstLineManagement = "مضادات الالتهاب غير الستيروئيدية (NSAIDs أو الأسبرين في التهاب التامور تلو الاحتشاء) + الكولشيسين (Colchicine) لمنع النكس.",
         examTrap = "تجنب الستيروئيدات الجهازية كخط أول لأنها تزيد معدل نكس التهاب التامور عند سحبها.",
-        reference = "ESC Pericardial Diseases Guidelines"
+        reference = "ESC Pericardial Diseases Guidelines",
         attribution = "المصدر: James Heilman, MD — CC BY-SA 3.0",
     ),
     EcgAtlasCase(
@@ -315,7 +315,7 @@ private val offlineEcgCases = listOf(
         ),
         firstLineManagement = "تنظيم الخطى عبر الجلد مؤقتاً (Transcutaneous Pacing) ثم زرع ناظم خطى دائم (Permanent Pacemaker - PPM).",
         examTrap = "في حصار الدرجة الثانية Mobitz II وحصار الدرجة الثالثة التام يستطب زرع ناظم الخطى الدائم حتى لو كان المريض لا عرضياً.",
-        reference = "ESC Cardiac Pacing Guidelines"
+        reference = "ESC Cardiac Pacing Guidelines",
         attribution = "المصدر: James Heilman, MD — CC BY-SA 3.0",
     )
 )
