@@ -25,7 +25,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import sy.medpro.watani.data.*
 import sy.medpro.watani.ui.anki.AnkiFlashcardScreen
-import sy.medpro.watani.ui.courses.CoursesScreen
 import sy.medpro.watani.ui.explanation.ExplanationSection
 import sy.medpro.watani.ui.explanation.ExplanationUiState
 import sy.medpro.watani.ui.explanation.normalizeExplanationKey
@@ -230,12 +229,6 @@ fun ActivationScreen(onBack: () -> Unit, onActivationChanged: () -> Unit = {}) {
             }
         }
     }
-}
-
-// 3. Courses
-@Composable
-fun CoursesDrawerScreen(onBack: () -> Unit) {
-    CoursesScreen(onBack = onBack)
 }
 
 // 4. Daily Challenge (dynamic from downloaded sections)
