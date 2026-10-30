@@ -8,9 +8,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +31,7 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
 
 data class LeaderboardUser(val rank: Int, val name: String, val score: Int, val specialty: String)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LeaderboardScreen() {
     val context = LocalContext.current
@@ -35,6 +39,13 @@ fun LeaderboardScreen() {
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var reloadTrigger by remember { mutableStateOf(0) }
+    val pullState = rememberPullToRefreshState()
+    if (pullState.isRefreshing) {
+        LaunchedEffect(Unit) { reloadTrigger++ }
+    }
+    LaunchedEffect(isLoading) {
+        if (!isLoading && pullState.isRefreshing) pullState.endRefresh()
+    }
 
     LaunchedEffect(reloadTrigger) {
         isLoading = true
@@ -95,7 +106,7 @@ fun LeaderboardScreen() {
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).nestedScroll(pullState.nestedScrollConnection)) {
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = MaroonPrimary)
@@ -192,6 +203,7 @@ fun LeaderboardScreen() {
                     }
                 }
             }
+            PullToRefreshContainer(state = pullState, modifier = Modifier.align(Alignment.TopCenter))
         }
     }
 }
