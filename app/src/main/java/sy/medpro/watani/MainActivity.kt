@@ -390,6 +390,9 @@ class MainActivity : ComponentActivity() {
                             // student is inside a section (bottom labels
                             // stay short so the bar never wraps); the
                             // brand name stays on Home.
+                            // True fullscreen for readers: when a book/video
+                            // goes fullscreen, the Scaffold chrome hides too.
+                            var readerFullscreen by remember { mutableStateOf(false) }
                             val topBarTitle = when (uiState.currentTab) {
                                 AppTab.BANK -> "بنك الأسئلة"
                                 AppTab.CASES -> "المريض الافتراضي"
@@ -400,6 +403,7 @@ class MainActivity : ComponentActivity() {
                             }
                             Scaffold(
                                 topBar = {
+                                    if (!readerFullscreen)
                                     TopAppBar(
                                         title = {
                                             Column {
@@ -433,6 +437,7 @@ class MainActivity : ComponentActivity() {
                                     // margins, large corners, shadow. The Scaffold
                                     // measures the whole slot, so innerPadding
                                     // already clears bar height + bottom gap.
+                                    if (!readerFullscreen)
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -753,7 +758,7 @@ class MainActivity : ComponentActivity() {
                                                                     onBackHome = { requestTab(AppTab.HOME) }
                                                                 )
                                                             } else {
-                                                                LibraryScreen()
+                                                                LibraryScreen(onReaderFullscreenChange = { readerFullscreen = it })
                                                             }
                                                         }
                                                         AppTab.PROGRESS -> {

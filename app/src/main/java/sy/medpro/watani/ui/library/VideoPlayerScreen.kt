@@ -49,7 +49,8 @@ fun VideoPlayerScreen(
     onBack: () -> Unit,
     videoFileUrl: String? = null,
     subtitleFile: File? = null,
-    subtitleUrl: String? = null
+    subtitleUrl: String? = null,
+    onFullscreenChange: ((Boolean) -> Unit)? = null
 ) {
     val context = LocalContext.current
     var showControls by remember { mutableStateOf(true) }
@@ -85,12 +86,16 @@ fun VideoPlayerScreen(
         }
     }
     DisposableEffect(Unit) {
-        onDispose { setSystemBarsVisible(true) }
+        onDispose { setSystemBarsVisible(true); onFullscreenChange?.invoke(false) }
     }
     BackHandler(enabled = isFullscreen) {
         isFullscreen = false
         setSystemBarsVisible(true)
         showControls = true
+    }
+    // True fullscreen needs the main Scaffold bars hidden too.
+    LaunchedEffect(isFullscreen) {
+        onFullscreenChange?.invoke(isFullscreen)
     }
 
     val player = remember(videoUri, subtitleUri) {

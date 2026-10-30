@@ -40,7 +40,7 @@ data class LibraryReaderState(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
+fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenChange: ((Boolean) -> Unit)? = null) {
     // Team 1 (entry-activation): the Library is gated again per the
     // 30 Oct entry spec — Questions + Library require activation, all
     // other sections are free. Enforcement is the bottom-tab gate in
@@ -150,6 +150,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
         val onReaderBack: () -> Unit = {
             viewModel.closeItem(reader.item)
             currentReader = null
+            onReaderFullscreenChange?.invoke(false)
         }
         when {
             reader.isBook -> {
@@ -160,7 +161,9 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
                             viewModel.closeItem(reader.item)
                             viewModel.deleteItem(reader.item)
                             currentReader = null
-                        }
+                            onReaderFullscreenChange?.invoke(false)
+                        },
+                        onFullscreenChange = onReaderFullscreenChange
                     )
                 }
             }
@@ -168,12 +171,14 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
                 if (reader.file != null && reader.file.exists()) {
                     VideoPlayerScreen(
                         reader.file, reader.item.title ?: "فيديو", onBack = onReaderBack,
-                        subtitleFile = reader.subtitleFile, subtitleUrl = reader.subtitleUrl
+                        subtitleFile = reader.subtitleFile, subtitleUrl = reader.subtitleUrl,
+                        onFullscreenChange = onReaderFullscreenChange
                     )
                 } else if (!reader.url.isNullOrEmpty()) {
                     VideoPlayerScreen(
                         null, reader.item.title ?: "فيديو", onBack = onReaderBack,
-                        videoFileUrl = reader.url, subtitleUrl = reader.subtitleUrl
+                        videoFileUrl = reader.url, subtitleUrl = reader.subtitleUrl,
+                        onFullscreenChange = onReaderFullscreenChange
                     )
                 }
             }

@@ -38,7 +38,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -57,6 +64,7 @@ import kotlinx.coroutines.withContext
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.GoldAccent
 import java.io.File
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -71,6 +79,24 @@ data class HighlightStrokeDto(
     val points: List<Float>,
     val color: Int,
     val width: Float
+)
+
+/**
+ * A shape/text annotation on a book page, normalized (0..1 across the
+ * page) like strokes so it survives zoom and screen sizes. Persisted
+ * per book in prefs alongside highlights.
+ * type: TEXT (tap-placed text box; x1/y1 = origin, text = content),
+ * RECT, ELLIPSE, ARROW (drag start x1/y1 -> end x2/y2).
+ */
+data class PdfAnnotationDto(
+    val page: Int,
+    val type: String,
+    val x1: Float,
+    val y1: Float,
+    val x2: Float,
+    val y2: Float,
+    val text: String,
+    val color: Int
 )
 
 private fun getFirebaseUid(): String {
@@ -92,7 +118,7 @@ private fun getFirebaseUid(): String {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCorrupt: (() -> Unit)? = null) {
+fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCorrupt: (() -> Unit)? = null, onFullscreenChange: ((Boolean) -> Unit)? = null) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var totalPages by remember { mutableStateOf(0) }
@@ -127,6 +153,11 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
         setSystemBarsVisible(true)
         showBars = true
     }
+    // True fullscreen needs the main Scaffold bars hidden too, so the
+    // reader reports its state up (MainActivity hides top/bottom bars).
+    LaunchedEffect(isFullscreen) {
+        onFullscreenChange?.invoke(isFullscreen)
+    }
     val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
 
     // Highlighter persistence (outer scope so the open effect can restore it).
@@ -141,6 +172,21 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
         prefs.edit().putString(
             "highlights_${pdfFile.nameWithoutExtension}",
             highlightAdapter.toJson(highlightStrokes)
+        ).apply()
+    }
+
+    // Shape/text annotations (outer scope so the open effect restores them).
+    val annotationAdapter = remember {
+        Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+            .adapter<List<PdfAnnotationDto>>(
+                Types.newParameterizedType(List::class.java, PdfAnnotationDto::class.java)
+            )
+    }
+    var annotations by remember { mutableStateOf<List<PdfAnnotationDto>>(emptyList()) }
+    fun saveAnnotations() {
+        prefs.edit().putString(
+            "annotations_${pdfFile.nameWithoutExtension}",
+            annotationAdapter.toJson(annotations)
         ).apply()
     }
 
@@ -192,6 +238,13 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 } catch (_: Exception) {
                     // Corrupt highlights JSON must never block opening the book.
                 }
+                try {
+                    prefs.getString("annotations_${pdfFile.nameWithoutExtension}", null)?.let {
+                        annotations = annotationAdapter.fromJson(it) ?: emptyList()
+                    }
+                } catch (_: Exception) {
+                    // Corrupt annotations JSON must never block opening the book.
+                }
                 val fd = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)
                 val renderer = PdfRenderer(fd)
                 parcelFd = fd
@@ -215,6 +268,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
         onDispose {
             hideBarJob?.cancel()
             setSystemBarsVisible(true)
+            onFullscreenChange?.invoke(false)
             try { pdfRenderer?.close() } catch (_: Exception) {}
             try { parcelFd?.close() } catch (_: Exception) {}
         }
@@ -259,6 +313,11 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // Highlighter UI state (strokes live in the outer scope).
             var highlightMode by remember { mutableStateOf(false) }
             var highlightColor by remember { mutableStateOf(Color.Yellow) }
+            // Annotation tool inside highlight mode: FREEHAND (strokes),
+            // TEXT (tap places a text box), RECT, ELLIPSE, ARROW (drag).
+            var annotationTool by remember { mutableStateOf("FREEHAND") }
+            var pendingTextAt by remember { mutableStateOf<Offset?>(null) }
+            var showTextEditor by remember { mutableStateOf(false) }
             var paintingPoints by remember { mutableStateOf<List<Offset>?>(null) }
             var showGoToPage by remember { mutableStateOf(false) }
             var goToPageText by remember { mutableStateOf("") }
@@ -374,11 +433,17 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 )
                                 .pointerInput(Unit) {
                                     detectTapGestures(
-                                        onTap = {
-                                            // In highlight mode a plain tap is the
-                                            // quickest stop: it leaves the mode
-                                            // instead of doing nothing.
-                                            if (highlightMode) {
+                                        onTap = { tapOff ->
+                                            // Text tool: tap places a text box
+                                            // instead of toggling bars or
+                                            // leaving the mode.
+                                            if (highlightMode && annotationTool == "TEXT") {
+                                                pendingTextAt = toNormalized(tapOff, bitmap)
+                                                showTextEditor = true
+                                            } else if (highlightMode) {
+                                                // In highlight mode a plain tap is the
+                                                // quickest stop: it leaves the mode
+                                                // instead of doing nothing.
                                                 highlightMode = false
                                             } else if (!showBars) {
                                                 showBars = true
@@ -405,13 +470,32 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                     val pts = paintingPoints
                                                     paintingPoints = null
                                                     if (pts != null && pts.size >= 2) {
-                                                        highlightStrokes = highlightStrokes + HighlightStrokeDto(
-                                                            page = page,
-                                                            points = pts.flatMap { listOf(it.x, it.y) },
-                                                            color = highlightColor.toArgb(),
-                                                            width = 0.035f
-                                                        )
-                                                        saveHighlights()
+                                                        if (annotationTool == "FREEHAND") {
+                                                            highlightStrokes = highlightStrokes + HighlightStrokeDto(
+                                                                page = page,
+                                                                points = pts.flatMap { listOf(it.x, it.y) },
+                                                                color = highlightColor.toArgb(),
+                                                                width = 0.035f
+                                                            )
+                                                            saveHighlights()
+                                                        } else if (annotationTool != "TEXT") {
+                                                            // Shape tools: drag start -> end.
+                                                            // TEXT comes only from taps (dialog),
+                                                            // never from a drag, so a drag in
+                                                            // TEXT mode must not store anything.
+                                                            val a = pts.first()
+                                                            val b = pts.last()
+                                                            if (a != b) {
+                                                                annotations = annotations + PdfAnnotationDto(
+                                                                    page = page,
+                                                                    type = annotationTool,
+                                                                    x1 = a.x, y1 = a.y, x2 = b.x, y2 = b.y,
+                                                                    text = "",
+                                                                    color = highlightColor.toArgb()
+                                                                )
+                                                                saveAnnotations()
+                                                            }
+                                                        }
                                                     }
                                                 },
                                                 onDragCancel = { paintingPoints = null }
@@ -461,6 +545,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                             )
                             // Highlighter layer: strokes drawn over the page,
                             // inside the same zoom/pan transform as the image.
+                            val textMeasurer = rememberTextMeasurer()
                             Canvas(Modifier.fillMaxSize()) {
                                 val fit = minOf(size.width / bitmap.width, size.height / bitmap.height)
                                 val fittedW = bitmap.width * fit
@@ -488,6 +573,67 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 }
                                 if (isCurrent) paintingPoints?.let {
                                     drawStroke(it, highlightColor.toArgb(), 0.035f)
+                                }
+                                // Shape/text annotations on this page + the
+                                // in-progress shape preview while dragging.
+                                fun drawShape(type: String, ax1: Float, ay1: Float, ax2: Float, ay2: Float, col: Color, strokeW: Float) {
+                                    val left = minOf(ax1, ax2)
+                                    val top = minOf(ay1, ay2)
+                                    val w = abs(ax2 - ax1)
+                                    val h = abs(ay2 - ay1)
+                                    when (type) {
+                                        "RECT" -> {
+                                            drawRect(color = col.copy(alpha = 0.15f), topLeft = Offset(left, top), size = Size(w, h))
+                                            drawRect(color = col, topLeft = Offset(left, top), size = Size(w, h), style = Stroke(width = strokeW))
+                                        }
+                                        "ELLIPSE" -> {
+                                            drawOval(color = col.copy(alpha = 0.15f), topLeft = Offset(left, top), size = Size(w, h))
+                                            drawOval(color = col, topLeft = Offset(left, top), size = Size(w, h), style = Stroke(width = strokeW))
+                                        }
+                                        "ARROW" -> {
+                                            drawLine(color = col, start = Offset(ax1, ay1), end = Offset(ax2, ay2), strokeWidth = strokeW, cap = StrokeCap.Round)
+                                            val ang = kotlin.math.atan2(ay2 - ay1, ax2 - ax1)
+                                            val head = 22f
+                                            drawLine(color = col, start = Offset(ax2, ay2), end = Offset(ax2 - head * kotlin.math.cos(ang - 0.45f), ay2 - head * kotlin.math.sin(ang - 0.45f)), strokeWidth = strokeW, cap = StrokeCap.Round)
+                                            drawLine(color = col, start = Offset(ax2, ay2), end = Offset(ax2 - head * kotlin.math.cos(ang + 0.45f), ay2 - head * kotlin.math.sin(ang + 0.45f)), strokeWidth = strokeW, cap = StrokeCap.Round)
+                                        }
+                                    }
+                                }
+                                annotations.filter { it.page == page }.forEach { ann ->
+                                    val ax1 = offX + ann.x1 * fittedW
+                                    val ay1 = offY + ann.y1 * fittedH
+                                    val ax2 = offX + ann.x2 * fittedW
+                                    val ay2 = offY + ann.y2 * fittedH
+                                    val col = Color(ann.color)
+                                    if (ann.type == "TEXT") {
+                                        val layout = textMeasurer.measure(
+                                            text = AnnotatedString(ann.text),
+                                            style = TextStyle(fontSize = 15.sp, color = Color.Black),
+                                            constraints = Constraints(maxWidth = (fittedW * 0.7f).toInt().coerceAtLeast(100))
+                                        )
+                                        val pad = 8f
+                                        val bw = layout.size.width + pad * 2
+                                        val bh = layout.size.height + pad * 2
+                                        drawRoundRect(color = Color.White.copy(alpha = 0.85f), topLeft = Offset(ax1, ay1), size = Size(bw, bh), cornerRadius = CornerRadius(10f, 10f))
+                                        drawRoundRect(color = col, topLeft = Offset(ax1, ay1), size = Size(bw, bh), cornerRadius = CornerRadius(10f, 10f), style = Stroke(width = 2f))
+                                        drawText(layout, topLeft = Offset(ax1 + pad, ay1 + pad))
+                                    } else {
+                                        drawShape(ann.type, ax1, ay1, ax2, ay2, col, 3f)
+                                    }
+                                }
+                                if (isCurrent && annotationTool != "FREEHAND" && annotationTool != "TEXT") {
+                                    paintingPoints?.let { pts ->
+                                        if (pts.size >= 2) {
+                                            val a = pts.first()
+                                            val b = pts.last()
+                                            drawShape(
+                                                annotationTool,
+                                                offX + a.x * fittedW, offY + a.y * fittedH,
+                                                offX + b.x * fittedW, offY + b.y * fittedH,
+                                                highlightColor, 3f
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -555,6 +701,66 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                             Text("اسحب للتأشير • اضغط للإيقاف", color = Color.White, fontSize = 12.sp)
                             TextButton(onClick = { highlightMode = false }) {
                                 Text("إنهاء التأشير ✓", color = GoldAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        // Annotation tools: freehand strokes plus text boxes
+                        // and shapes, all saved per book like highlights.
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf(
+                                "FREEHAND" to "تأشير",
+                                "TEXT" to "مربع نص",
+                                "RECT" to "مستطيل",
+                                "ELLIPSE" to "بيضوي",
+                                "ARROW" to "سهم"
+                            ).forEach { (tool, label) ->
+                                TextButton(onClick = { annotationTool = tool }) {
+                                    Text(
+                                        label,
+                                        color = if (annotationTool == tool) GoldAccent else Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (annotationTool == tool) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                when (annotationTool) {
+                                    "TEXT" -> "اضغط على الصفحة لوضع مربع نص"
+                                    "FREEHAND" -> "اسحب للتأشير"
+                                    else -> "اسحب لرسم الشكل"
+                                },
+                                color = Color.White, fontSize = 12.sp
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                val hasPageAnnotation = annotations.any { it.page == currentPage }
+                                TextButton(onClick = {
+                                    val idx = annotations.indexOfLast { it.page == currentPage }
+                                    if (idx >= 0) {
+                                        annotations = annotations.toMutableList().also { it.removeAt(idx) }
+                                        saveAnnotations()
+                                    }
+                                }) {
+                                    Text(
+                                        "تراجع تعليق",
+                                        color = Color.White.copy(alpha = if (hasPageAnnotation) 1f else 0.4f),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                TextButton(onClick = {
+                                    annotations = annotations.filter { it.page != currentPage }
+                                    saveAnnotations()
+                                }) {
+                                    Text("مسح تعليقات الصفحة", color = Color.White, fontSize = 12.sp)
+                                }
                             }
                         }
                         Row(
@@ -807,6 +1013,56 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         Text("خروج من ملء الشاشة", color = Color.White)
                     }
                 }
+            }
+
+            // Always-visible highlight exit: the panel button alone was
+            // easy to miss, which made the mode feel like a trap.
+            if (highlightMode) {
+                Box(
+                    Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 16.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Button(
+                        onClick = { highlightMode = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
+                    ) {
+                        Text("إنهاء التأشير ✓", color = Color.White)
+                    }
+                }
+            }
+
+            // Text-box editor: tap in TEXT mode opens it at the tap point.
+            if (showTextEditor) {
+                var textValue by remember { mutableStateOf("") }
+                AlertDialog(
+                    onDismissRequest = { showTextEditor = false; pendingTextAt = null },
+                    title = { Text("مربع نص") },
+                    text = {
+                        TextField(
+                            value = textValue,
+                            onValueChange = { textValue = it },
+                            placeholder = { Text("اكتب النص...") }
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val at = pendingTextAt
+                            if (at != null && textValue.isNotBlank()) {
+                                annotations = annotations + PdfAnnotationDto(
+                                    page = currentPage, type = "TEXT",
+                                    x1 = at.x, y1 = at.y, x2 = at.x, y2 = at.y,
+                                    text = textValue.trim(), color = highlightColor.toArgb()
+                                )
+                                saveAnnotations()
+                            }
+                            showTextEditor = false
+                            pendingTextAt = null
+                        }) { Text("إضافة") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showTextEditor = false; pendingTextAt = null }) { Text("إلغاء") }
+                    }
+                )
             }
 
             // Go-to-page dialog: outside showBars so the auto-hide timer
