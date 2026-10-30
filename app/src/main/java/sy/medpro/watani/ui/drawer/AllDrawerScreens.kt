@@ -564,15 +564,39 @@ fun StudyGuideScreen(onBack: () -> Unit) {
 
 // 7. Wrong Answers
 @Composable
-fun WrongAnswersScreen(onBack: () -> Unit) {
+fun WrongAnswersScreen(onBack: () -> Unit, onOpenAnkiWrong: (() -> Unit)? = null) {
     val context = LocalContext.current
     LaunchedEffect(Unit) { OfflineStudyVault.ensureInitialized(context) }
     val stats by OfflineStudyVault.statsFlow.collectAsState()
 
     DrawerScreenScaffold(title = "سجل أخطائي والاختبارات", onBack = onBack) { padding ->
-        if (stats.savedMistakes.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (stats.wrongFlashcardIds.isNotEmpty() && onOpenAnkiWrong != null) {
+                Card(
+                    onClick = onOpenAnkiWrong,
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("بطاقات Anki الخاطئة", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                            Text(
+                                "${stats.wrongFlashcardIds.size} بطاقة بانتظار المراجعة",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Text("راجعها الآن", color = MaroonPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+            if (stats.savedMistakes.isEmpty()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(64.dp))
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("لا توجد أخطاء مسجلة حالياً.", fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -580,7 +604,7 @@ fun WrongAnswersScreen(onBack: () -> Unit) {
                 }
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaroonPrimary)) {
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -607,6 +631,7 @@ fun WrongAnswersScreen(onBack: () -> Unit) {
                     }
                 }
             }
+        }
         }
     }
 }

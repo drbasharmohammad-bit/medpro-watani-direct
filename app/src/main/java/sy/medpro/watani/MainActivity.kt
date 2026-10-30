@@ -472,8 +472,12 @@ class MainActivity : ComponentActivity() {
                                                 "البطاقات والمراجعة الذكية" -> FlashcardsReviewScreen(onBack = { drawerScreen = null })
                                                 "البطاقات" -> FlashcardsReviewScreen(initialTab = 0, onBack = { drawerScreen = null })
                                                 "دليل الدراسة" -> StudyGuideScreen(onBack = { drawerScreen = null })
-                                                "سجل أخطائي والاختبارات" -> WrongAnswersScreen(onBack = { drawerScreen = null })
+                                                "سجل أخطائي والاختبارات" -> WrongAnswersScreen(
+                                                    onBack = { drawerScreen = null },
+                                                    onOpenAnkiWrong = { drawerScreen = "المراجعة الذكية Anki - الخاطئة" }
+                                                )
                                                 "المراجعة الذكية Anki" -> FlashcardsReviewScreen(initialTab = 1, onBack = { drawerScreen = null })
+                                                "المراجعة الذكية Anki - الخاطئة" -> FlashcardsReviewScreen(initialTab = 1, ankiWrongOnly = true, onBack = { drawerScreen = null })
                                                 "نقاط الضعف" -> WeakPointsScreen(onBack = { drawerScreen = null })
                                                 "مؤقت التركيز" -> FocusTimerScreen(onBack = { drawerScreen = null })
                                                 "الإنجازات والأوسمة" -> BadgesScreen(onBack = { drawerScreen = null })

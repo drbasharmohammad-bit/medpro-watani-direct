@@ -115,7 +115,7 @@ fun LabsCalculatorsScreen(
 }
 
 @Composable
-fun FlashcardsReviewScreen(onBack: () -> Unit, initialTab: Int = 0) {
+fun FlashcardsReviewScreen(onBack: () -> Unit, initialTab: Int = 0, ankiWrongOnly: Boolean = false) {
     var selected by remember { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
     GroupedTabs(
         titles = listOf("البطاقات التعليمية", "المراجعة الذكية Anki"),
@@ -124,7 +124,7 @@ fun FlashcardsReviewScreen(onBack: () -> Unit, initialTab: Int = 0) {
     ) {
         when (selected) {
             0 -> FlashcardsScreen(onBack = onBack)
-            else -> AnkiFlashcardScreen(onBack = onBack)
+            else -> AnkiFlashcardScreen(onBack = onBack, wrongOnly = ankiWrongOnly)
         }
     }
 }

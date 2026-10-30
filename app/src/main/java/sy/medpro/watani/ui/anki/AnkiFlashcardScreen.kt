@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,7 +27,7 @@ import sy.medpro.watani.ui.theme.ErrorRed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AnkiFlashcardScreen(onBack: () -> Unit) {
+fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
     val context = androidx.compose.ui.platform.LocalContext.current
     OfflineStudyVault.ensureInitialized(context)
     val stats by OfflineStudyVault.statsFlow.collectAsState()
@@ -43,6 +44,8 @@ fun AnkiFlashcardScreen(onBack: () -> Unit) {
 
     var selectedSubject by remember { mutableStateOf(ANKI_ALL) }
     var selectedTopic by remember { mutableStateOf(ANKI_ALL) }
+    var wrongOnlyMode by remember { mutableStateOf(wrongOnly) }
+    var sessionStarted by remember { mutableStateOf(false) }
 
     val topicsForSubject = remember(subjects, selectedSubject) {
         subjects.firstOrNull { it.name == selectedSubject }?.topics.orEmpty()
@@ -63,24 +66,61 @@ fun AnkiFlashcardScreen(onBack: () -> Unit) {
     var showAnswer by remember { mutableStateOf(false) }
     var reviewedThisSession by remember { mutableStateOf(0) }
     var newlyMasteredThisSession by remember { mutableStateOf(0) }
-    var initialized by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
 
-    LaunchedEffect(loadedSet, filteredCards) {
-        if (loadedSet != null && !initialized) {
-            queue = unmastered
-            currentIndex = 0
-            initialized = true
+    fun buildQueueFor(subject: String, topic: String, wrong: Boolean): List<AnkiCard> {
+        val masteredIds = OfflineStudyVault.statsFlow.value.masteredFlashcardIds
+        val wrongIds = OfflineStudyVault.statsFlow.value.wrongFlashcardIds
+        return if (wrong) {
+            allCards.filter { it.id in wrongIds && it.id !in masteredIds }
+        } else {
+            allCards.filter { card ->
+                (subject == ANKI_ALL || card.subject == subject) &&
+                    (topic == ANKI_ALL || card.topic == topic) &&
+                    card.id !in masteredIds
+            }
         }
     }
 
-    // Changing the subject/topic filter starts a fresh session over the new queue.
+    fun startSession(subject: String, topic: String, wrong: Boolean) {
+        selectedSubject = subject
+        selectedTopic = topic
+        wrongOnlyMode = wrong
+        queue = buildQueueFor(subject, topic, wrong)
+        currentIndex = 0
+        showAnswer = false
+        reviewedThisSession = 0
+        newlyMasteredThisSession = 0
+        finished = false
+        sessionStarted = true
+    }
+
+    fun backToPicker() {
+        sessionStarted = false
+        wrongOnlyMode = false
+        queue = emptyList()
+        currentIndex = 0
+        showAnswer = false
+        reviewedThisSession = 0
+        newlyMasteredThisSession = 0
+        finished = false
+    }
+
+    // Wrong-only entry (e.g. from the mistakes screen) starts directly; otherwise
+    // the subject picker is the default state — never a mixed all-subjects session.
+    LaunchedEffect(loadedSet) {
+        if (loadedSet != null && wrongOnly && !sessionStarted) {
+            startSession(ANKI_ALL, ANKI_ALL, true)
+        }
+    }
+
+    // Changing the subject/topic filter inside a session starts a fresh session.
     var lastSelection by remember { mutableStateOf(selectedSubject to selectedTopic) }
     LaunchedEffect(selectedSubject, selectedTopic) {
         if (lastSelection == selectedSubject to selectedTopic) return@LaunchedEffect
         lastSelection = selectedSubject to selectedTopic
-        if (initialized) {
-            queue = filteredCards.filter { it.id !in OfflineStudyVault.statsFlow.value.masteredFlashcardIds }
+        if (sessionStarted && !wrongOnlyMode) {
+            queue = buildQueueFor(selectedSubject, selectedTopic, false)
             currentIndex = 0
             showAnswer = false
             reviewedThisSession = 0
@@ -90,11 +130,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit) {
     }
 
     fun rebuildSession() {
-        val filterCards = allCards.filter { card ->
-            (selectedSubject == ANKI_ALL || card.subject == selectedSubject) &&
-                (selectedTopic == ANKI_ALL || card.topic == selectedTopic)
-        }
-        queue = filterCards.filter { it.id !in OfflineStudyVault.statsFlow.value.masteredFlashcardIds }
+        queue = buildQueueFor(selectedSubject, selectedTopic, wrongOnlyMode)
         currentIndex = 0
         showAnswer = false
         reviewedThisSession = 0
@@ -122,18 +158,39 @@ fun AnkiFlashcardScreen(onBack: () -> Unit) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = MaroonPrimary)
                 }
-            } else {
-                AnkiFilterBar(
-                    subjects = subjects.map { it.name },
-                    topics = topicsForSubject.map { it.name },
-                    selectedSubject = selectedSubject,
-                    selectedTopic = selectedTopic,
-                    onSubjectSelected = { name ->
-                        selectedSubject = name
-                        selectedTopic = ANKI_ALL
-                    },
-                    onTopicSelected = { selectedTopic = it }
+            } else if (!sessionStarted) {
+                AnkiSubjectPicker(
+                    subjects = subjects,
+                    allCards = allCards,
+                    mastered = mastered,
+                    wrongCount = stats.wrongFlashcardIds.size,
+                    onSubjectSelected = { name -> startSession(name, ANKI_ALL, false) },
+                    onMixedSelected = { startSession(ANKI_ALL, ANKI_ALL, false) },
+                    onWrongSelected = { startSession(ANKI_ALL, ANKI_ALL, true) }
                 )
+            } else {
+                if (wrongOnlyMode) {
+                    Text(
+                        text = "مراجعة البطاقات الخاطئة",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ErrorRed,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    AnkiFilterBar(
+                        subjects = subjects.map { it.name },
+                        topics = topicsForSubject.map { it.name },
+                        selectedSubject = selectedSubject,
+                        selectedTopic = selectedTopic,
+                        onSubjectSelected = { name ->
+                            selectedSubject = name
+                            selectedTopic = ANKI_ALL
+                        },
+                        onTopicSelected = { selectedTopic = it }
+                    )
+                }
                 Spacer(modifier = Modifier.height(12.dp))
 
                 if (allCards.isEmpty()) {
@@ -182,12 +239,12 @@ fun AnkiFlashcardScreen(onBack: () -> Unit) {
                                     Text("إعادة الجلسة")
                                 }
                                 Button(
-                                    onClick = onBack,
+                                    onClick = { backToPicker() },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                     modifier = Modifier.weight(1f).height(50.dp),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
-                                    Text("العودة للقائمة", color = MaterialTheme.colorScheme.onSurface)
+                                    Text("اختيار مادة أخرى", color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
                         }
@@ -254,6 +311,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Button(
                                 onClick = {
+                                    OfflineStudyVault.addFlashcardWrong(context, card.id)
                                     showAnswer = false
                                     queue = queue + card
                                     currentIndex++
@@ -288,6 +346,108 @@ fun AnkiFlashcardScreen(onBack: () -> Unit) {
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Text("إظهار الإجابة", fontSize = 16.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnkiSubjectPicker(
+    subjects: List<AnkiSubject>,
+    allCards: List<AnkiCard>,
+    mastered: Set<Int>,
+    wrongCount: Int,
+    onSubjectSelected: (String) -> Unit,
+    onMixedSelected: () -> Unit,
+    onWrongSelected: () -> Unit
+) {
+    val totalCards = allCards.size
+    val totalUnmastered = allCards.count { it.id !in mastered }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text("اختر مادة للمراجعة", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            "اختر مادة لمراجعة بطاقاتها فقط، أو راجع بطاقاتك الخاطئة المحفوظة.",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(subjects) { subject ->
+                val subjectCards = subject.topics.flatMap { it.cards }
+                val unmasteredCount = subjectCards.count { it.id !in mastered }
+                Card(
+                    onClick = { onSubjectSelected(subject.name) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(subject.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                            Text(
+                                "${subjectCards.size} بطاقة • $unmasteredCount غير متقنة",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Icon(Icons.Default.ArrowForwardIos, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+            item {
+                Card(
+                    onClick = onMixedSelected,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.08f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("الكل (مختلط)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                            Text(
+                                "$totalCards بطاقة • $totalUnmastered غير متقنة",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Icon(Icons.Default.ArrowForwardIos, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+            item {
+                Card(
+                    onClick = { if (wrongCount > 0) onWrongSelected() },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (wrongCount > 0) ErrorRed.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("راجع بطاقاتي الخاطئة", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = ErrorRed)
+                            Text(
+                                if (wrongCount > 0) "$wrongCount بطاقة خاطئة بانتظار المراجعة" else "لا توجد بطاقات خاطئة حاليًا",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        if (wrongCount > 0) {
+                            Icon(Icons.Default.ArrowForwardIos, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(16.dp))
                         }
                     }
                 }

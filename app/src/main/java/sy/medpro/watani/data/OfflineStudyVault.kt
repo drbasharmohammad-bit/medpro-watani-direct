@@ -25,6 +25,7 @@ data class OfflineStudyStats(
     val completedPlanPhaseIds: Set<String> = emptySet(),
     val masteredEponymIds: Set<String> = emptySet(),
     val masteredFlashcardIds: Set<Int> = emptySet(),
+    val wrongFlashcardIds: Set<Int> = emptySet(),
     val savedMistakes: List<SavedMistakeItem> = emptyList(),
     val specialtyAnswered: Map<String, Int> = emptyMap(),
     val specialtyCorrect: Map<String, Int> = emptyMap()
@@ -39,6 +40,7 @@ object OfflineStudyVault {
     private const val KEY_COMPLETED_PHASES = "completed_plan_phases"
     private const val KEY_MASTERED_EPONYMS = "mastered_eponyms"
     private const val KEY_MASTERED_FLASHCARDS = "mastered_flashcards"
+    private const val KEY_WRONG_FLASHCARDS = "wrong_flashcards"
     private const val KEY_SAVED_MISTAKES_JSON = "saved_mistakes_json"
     private const val KEY_SPECIALTY_STATS_JSON = "specialty_stats_json"
 
@@ -76,6 +78,9 @@ object OfflineStudyVault {
         val masteredFlashcards = (prefs.getStringSet(KEY_MASTERED_FLASHCARDS, emptySet()) ?: emptySet())
             .mapNotNull { it.toIntOrNull() }
             .toSet()
+        val wrongFlashcards = (prefs.getStringSet(KEY_WRONG_FLASHCARDS, emptySet()) ?: emptySet())
+            .mapNotNull { it.toIntOrNull() }
+            .toSet()
 
         val mistakesJson = prefs.getString(KEY_SAVED_MISTAKES_JSON, null)
         val mistakesList = if (!mistakesJson.isNullOrBlank()) {
@@ -100,6 +105,7 @@ object OfflineStudyVault {
             completedPlanPhaseIds = completedPhases,
             masteredEponymIds = masteredEponyms,
             masteredFlashcardIds = masteredFlashcards,
+            wrongFlashcardIds = wrongFlashcards,
             savedMistakes = mistakesList,
             specialtyAnswered = specAns,
             specialtyCorrect = specCor
@@ -225,8 +231,30 @@ object OfflineStudyVault {
     fun addFlashcardMastered(context: Context, cardId: Int) {
         ensureInitialized(context)
         val current = _statsFlow.value
-        if (current.masteredFlashcardIds.contains(cardId)) return
-        val updated = current.copy(masteredFlashcardIds = current.masteredFlashcardIds + cardId)
+        val nextWrong = current.wrongFlashcardIds - cardId
+        if (current.masteredFlashcardIds.contains(cardId) && nextWrong == current.wrongFlashcardIds) return
+        val updated = current.copy(
+            masteredFlashcardIds = current.masteredFlashcardIds + cardId,
+            wrongFlashcardIds = nextWrong
+        )
+        _statsFlow.value = updated
+        persist(context, updated)
+    }
+
+    fun addFlashcardWrong(context: Context, cardId: Int) {
+        ensureInitialized(context)
+        val current = _statsFlow.value
+        if (current.wrongFlashcardIds.contains(cardId)) return
+        val updated = current.copy(wrongFlashcardIds = current.wrongFlashcardIds + cardId)
+        _statsFlow.value = updated
+        persist(context, updated)
+    }
+
+    fun removeFlashcardWrong(context: Context, cardId: Int) {
+        ensureInitialized(context)
+        val current = _statsFlow.value
+        if (!current.wrongFlashcardIds.contains(cardId)) return
+        val updated = current.copy(wrongFlashcardIds = current.wrongFlashcardIds - cardId)
         _statsFlow.value = updated
         persist(context, updated)
     }
@@ -273,6 +301,7 @@ object OfflineStudyVault {
             .putStringSet(KEY_COMPLETED_PHASES, stats.completedPlanPhaseIds)
             .putStringSet(KEY_MASTERED_EPONYMS, stats.masteredEponymIds)
             .putStringSet(KEY_MASTERED_FLASHCARDS, stats.masteredFlashcardIds.map { it.toString() }.toSet())
+            .putStringSet(KEY_WRONG_FLASHCARDS, stats.wrongFlashcardIds.map { it.toString() }.toSet())
             .putString(KEY_SAVED_MISTAKES_JSON, mistakesArr.toString())
             .putString(KEY_SPECIALTY_STATS_JSON, specObj.toString())
             .apply()
