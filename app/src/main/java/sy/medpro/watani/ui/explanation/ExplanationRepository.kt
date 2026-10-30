@@ -8,7 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
-import sy.medpro.watani.data.WataniApi
+import sy.medpro.watani.data.WorkerActivationApi
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.text.Charsets
@@ -83,8 +83,19 @@ class ExplanationRepository(
 
     private suspend fun fetchLayerIndex(): ExplanationIndex? = withContext(Dispatchers.IO) {
         try {
-            val url = "${WataniApi.BASE_URL}${layerBasePath}index.json"
-            client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { resp ->
+            // Same switch point as the question bank: explanations/ is a
+            // restricted prefix, so the index goes via the Worker gateway
+            // with the activation token when activated, and yields null
+            // (no explanation) when not activated — never a crash.
+            val request = WorkerActivationApi.contentRequest(context, "${layerBasePath}index.json")
+                ?: return@withContext null
+            client.newCall(request).execute().use { resp ->
+                if (resp.code == 401 || resp.code == 403) {
+                    // M3: revoked activation — clear + wipe + prompt
+                    // event; never fall back to cached explanations.
+                    WorkerActivationApi.notifyActivationLost(context)
+                    return@withContext null
+                }
                 if (!resp.isSuccessful) return@withContext null
                 val text = resp.body?.string() ?: return@withContext null
                 indexAdapter.fromJson(text)
@@ -110,11 +121,16 @@ class ExplanationRepository(
 
     private suspend fun downloadShard(shardName: String): String? = withContext(Dispatchers.IO) {
         try {
-            val encodedPath = shardName.split("/").joinToString("/") { seg ->
-                java.net.URLEncoder.encode(seg, "UTF-8").replace("+", "%20")
-            }
-            val url = "${WataniApi.BASE_URL}$layerBasePath$encodedPath"
-            client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { resp ->
+            // Same switch point (see fetchLayerIndex). contentRequest
+            // encodes path segments itself, so the raw shard name is passed.
+            val request = WorkerActivationApi.contentRequest(context, "$layerBasePath$shardName")
+                ?: return@withContext null
+            client.newCall(request).execute().use { resp ->
+                if (resp.code == 401 || resp.code == 403) {
+                    // M3: same revocation path as the index fetch.
+                    WorkerActivationApi.notifyActivationLost(context)
+                    return@withContext null
+                }
                 if (!resp.isSuccessful) return@withContext null
                 val text = resp.body?.string() ?: return@withContext null
                 persistShardCache(shardName, text)

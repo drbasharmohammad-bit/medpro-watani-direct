@@ -31,7 +31,8 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.data.SubjectEnvelope
-import sy.medpro.watani.ui.auth.SignInGate
+import sy.medpro.watani.ui.activation.ActivationPromptDialog
+import sy.medpro.watani.ui.welcome.WelcomeScreen
 import sy.medpro.watani.ui.cases.CasePlayerScreen
 import sy.medpro.watani.ui.cases.CasesScreen
 import sy.medpro.watani.ui.clinical.BedsideClinicalTab
@@ -63,7 +64,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        sy.medpro.watani.security.ContentProtection.enableScreenshotPrevention(this)
+        // TEAM-3 device-protection (single wiring line): FLAG_SECURE on this
+        // window (same call as before, via SecurityChecks) + app-close sweep
+        // of plaintext temp files. No auth-gate logic touched.
+        sy.medpro.watani.ui.security.SecurityChecks.install(this)
         if (com.google.firebase.FirebaseApp.getApps(this).isEmpty()) {
             val options = com.google.firebase.FirebaseOptions.Builder()
                 .setApiKey("AIzaSyBlHOicffOYb5W5REVlEsF4KT0gEhzQ-u8")
@@ -89,15 +93,83 @@ class MainActivity : ComponentActivity() {
                 }
             }
             WataniTheme(darkTheme = darkTheme) {
-                var authTrigger by remember { mutableStateOf(false) }
-                val currentUser = remember(authTrigger) { FirebaseAuth.getInstance().currentUser }
+                // Team 1: NO hard sign-in wall. Auth state is observed so
+                // sign-in/out from any screen (welcome, profile, activation
+                // prompt) refreshes the UI without a manual trigger flag.
+                var currentUser by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
+                DisposableEffect(Unit) {
+                    val listener = FirebaseAuth.AuthStateListener { auth -> currentUser = auth.currentUser }
+                    FirebaseAuth.getInstance().addAuthStateListener(listener)
+                    onDispose { FirebaseAuth.getInstance().removeAuthStateListener(listener) }
+                }
+                // Welcome is first-run only (persisted): returning users
+                // go straight to the main interface.
+                var showWelcome by remember { mutableStateOf(!prefs.getBoolean("welcome_seen", false)) }
+                var pendingTab by remember { mutableStateOf<AppTab?>(null) }
+                var pendingDrawer by remember { mutableStateOf<String?>(null) }
+                var showActivationPrompt by remember { mutableStateOf(false) }
+                var gateDialogMessage by remember { mutableStateOf<String?>(null) }
 
-                if (currentUser == null) {
-                    SignInGate(onSignedIn = { authTrigger = !authTrigger })
+                // Gateway revocation event (M3): any repository fetch that
+                // gets 401/403 clears + wipes and emits here; the prompt
+                // opens even when the user is deep in a restricted screen.
+                LaunchedEffect(Unit) {
+                    sy.medpro.watani.data.WorkerActivationApi.activationLostEvents.collect {
+                        viewModel.refreshDownloadedSections()
+                        showActivationPrompt = true
+                    }
+                }
+
+                // Quiz-entry activation request (M4/M8): a restricted
+                // quiz tapped without a live activation opens the prompt
+                // instead of the quiz (see MainViewModel.openTopicQuiz).
+                LaunchedEffect(Unit) {
+                    viewModel.activationPromptRequests.collect {
+                        showActivationPrompt = true
+                    }
+                }
+
+                // Gating point (UI): ONLY Questions (BANK / UNIVERSITIES /
+                // UWORLD) and Library require activation. Everything else
+                // is free. A gated tab tap shows the activation prompt
+                // instead of switching; on success the pending tab opens.
+                // (The fetch layer enforces the same rule independently:
+                // restricted paths without a token are never fetched.)
+                // M8: the device-integrity gate is checked here too, so a
+                // blocked device cannot enter restricted tabs at all.
+                fun requestTab(tab: AppTab) {
+                    val restricted = tab == AppTab.BANK || tab == AppTab.UNIVERSITIES ||
+                        tab == AppTab.UWORLD || tab == AppTab.LIBRARY
+                    if (restricted) {
+                        val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
+                        if (!gate.allowed) {
+                            gateDialogMessage = gate.userMessage
+                            return
+                        }
+                        if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
+                            pendingTab = tab
+                            showActivationPrompt = true
+                            return
+                        }
+                    }
+                    viewModel.setTab(tab)
+                }
+
+                if (showWelcome) {
+                    // Entry point: welcome screen, no sign-in required.
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        WelcomeScreen(onEnter = {
+                            prefs.edit().putBoolean("welcome_seen", true).apply()
+                            showWelcome = false
+                        })
+                    }
                 } else {
                     val contextForSync = androidx.compose.ui.platform.LocalContext.current
                     LaunchedEffect(currentUser) {
-                        sy.medpro.watani.data.WataniFirestoreSync.ensureAndSyncUser(contextForSync, currentUser)
+                        val user = currentUser
+                        if (user != null) {
+                            sy.medpro.watani.data.WataniFirestoreSync.ensureAndSyncUser(contextForSync, user)
+                        }
                     }
                     val uiState by viewModel.uiState.collectAsState()
                     val downloadedSections by viewModel.downloadedSections.collectAsState()
@@ -107,6 +179,39 @@ class MainActivity : ComponentActivity() {
                     var casesList by remember { mutableStateOf<List<ClinicalCaseDto>>(emptyList()) }
                     var activeSubjectEnvelope by remember { mutableStateOf<SubjectEnvelope?>(null) }
                     var drawerScreen by remember { mutableStateOf<String?>(null) }
+
+                    // Shared guarded entry for restricted drawer screens,
+                    // used by drawer taps AND home shortcuts alike:
+                    // device gate first, then activation; on success the
+                    // screen opens, else the prompt (with a pending drawer
+                    // target) or the gate message.
+                    fun openRestrictedDrawer(title: String) {
+                        val drawerGate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
+                        if (!drawerGate.allowed) {
+                            gateDialogMessage = drawerGate.userMessage
+                        } else if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
+                            pendingDrawer = title
+                            showActivationPrompt = true
+                        } else {
+                            drawerScreen = title
+                        }
+                    }
+
+                    // M4: on activation loss, close restricted UI state
+                    // too — an open quiz keeps its questions in memory,
+                    // and the wipe only deletes files. (The outer
+                    // collector above opens the prompt; this one resets
+                    // the screens underneath it.)
+                    LaunchedEffect(Unit) {
+                        sy.medpro.watani.data.WorkerActivationApi.activationLostEvents.collect {
+                            drawerScreen = null
+                            viewModel.navigateToHome()
+                            if (uiState.currentTab == AppTab.BANK || uiState.currentTab == AppTab.UNIVERSITIES ||
+                                uiState.currentTab == AppTab.UWORLD || uiState.currentTab == AppTab.LIBRARY) {
+                                viewModel.setTab(AppTab.HOME)
+                            }
+                        }
+                    }
 
                     LaunchedEffect(downloadedSections) {
                         val casesEnv = viewModel.getCasesEnvelope()
@@ -217,11 +322,27 @@ class MainActivity : ComponentActivity() {
                                                     onClick = {
                                                         coroutineScope.launch { drawerState.close() }
                                                         if (title == "تسجيل الخروج") {
+                                                            // AuthStateListener above refreshes currentUser;
+                                                            // sign-out no longer drops the user to a gate —
+                                                            // the app stays browsable, signed out.
+                                                            // M2: activation is cleared AND restricted
+                                                            // downloads are wiped, so a second user on
+                                                            // this device inherits nothing.
                                                             FirebaseAuth.getInstance().signOut()
-                                                            authTrigger = !authTrigger
+                                                            sy.medpro.watani.data.WorkerActivationApi.clearActivationAndWipe(context)
+                                                            viewModel.refreshDownloadedSections()
                                                         } else if (title == "المريض الافتراضي") {
                                                             drawerScreen = null
                                                             viewModel.setTab(AppTab.CASES)
+                                                        } else if (title == "محاكاة الامتحان" || title == "التحدي اليومي" ||
+                                                            title == "البطاقات والمراجعة الذكية" || title == "البطاقات" ||
+                                                            title == "المراجعة الذكية Anki") {
+                                                            // M8 + activation: these drawer screens
+                                                            // read downloaded question banks directly
+                                                            // (sections_cache), so they must pass the
+                                                            // same gates as the bank tabs instead of
+                                                            // opening ungated from the drawer.
+                                                            openRestrictedDrawer(title)
                                                         } else {
                                                             drawerScreen = title
                                                         }
@@ -277,7 +398,7 @@ class MainActivity : ComponentActivity() {
                                             val selected = uiState.currentTab == tab
                                             NavigationBarItem(
                                                 selected = selected,
-                                                onClick = { viewModel.setTab(tab) },
+                                                onClick = { requestTab(tab) },
                                                 icon = {
                                                     Icon(
                                                         icon,
@@ -308,7 +429,10 @@ class MainActivity : ComponentActivity() {
                                         if (activeDrawer != null) {
                                             when (activeDrawer) {
                                                 "الملف الشخصي" -> ProfileScreen(onBack = { drawerScreen = null })
-                                                "الاشتراك وتفعيل الحساب" -> ActivationScreen(onBack = { drawerScreen = null })
+                                                "الاشتراك وتفعيل الحساب" -> ActivationScreen(
+                                                    onBack = { drawerScreen = null },
+                                                    onActivationChanged = { viewModel.refreshDownloadedSections() }
+                                                )
                                                 "الكورسات" -> CoursesScreen(onBack = { drawerScreen = null })
                                                 "التحدي اليومي" -> DailyChallengeScreen(onBack = { drawerScreen = null })
                                                 "البطاقات والمراجعة الذكية" -> FlashcardsReviewScreen(onBack = { drawerScreen = null })
@@ -366,10 +490,10 @@ class MainActivity : ComponentActivity() {
                                                         AppTab.HOME -> {
                                                             HomeDashboardScreen(
                                                                 manifestVersion = uiState.manifestVersion,
-                                                                onNavigateBank = { viewModel.setTab(AppTab.BANK) },
+                                                                onNavigateBank = { requestTab(AppTab.BANK) },
                                                                 onNavigateCases = { viewModel.setTab(AppTab.CASES) },
                                                                 onNavigateLeaderboard = { viewModel.setTab(AppTab.LEADERBOARD) },
-                                                                onOpenDailyChallenge = { drawerScreen = "التحدي اليومي" },
+                                                                onOpenDailyChallenge = { openRestrictedDrawer("التحدي اليومي") },
                                                                 onOpenAlgorithms = { drawerScreen = "خوارزميات التدبير" },
                                                                 onOpenFirstLineDrugs = { drawerScreen = "الخطوط العلاجية الأولى" },
                                                                 onOpenGoldenPearls = { drawerScreen = "النقاط الذهبية" },
@@ -382,17 +506,45 @@ class MainActivity : ComponentActivity() {
                                                             )
                                                         }
                                                         AppTab.BANK, AppTab.UNIVERSITIES, AppTab.UWORLD -> {
-                                                            HomeScreen(
-                                                                currentTab = uiState.currentTab,
-                                                                manifestVersion = uiState.manifestVersion,
-                                                                files = uiState.files,
-                                                                isLoadingManifest = uiState.isLoadingManifest,
-                                                                manifestError = uiState.manifestError,
-                                                                downloadedSections = downloadedSections,
-                                                                downloadingPaths = uiState.downloadingPaths,
-                                                                downloadError = uiState.downloadError,
-                                                                casesList = casesList,
-                                                                onTabSelected = { viewModel.setTab(it) },
+                                                            // M8: re-checked at composition, so a device
+                                                            // that becomes blocked mid-session (debugger
+                                                            // attached after entry) cannot keep browsing
+                                                            // restricted tabs.
+                                                            val tabGate = remember(uiState.currentTab) {
+                                                                sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
+                                                            }
+                                                            if (!tabGate.allowed) {
+                                                                GateBlockedMessage(
+                                                                    message = tabGate.userMessage
+                                                                        ?: "المحتوى المحمي غير متاح على هذا الجهاز.",
+                                                                    onBackHome = { requestTab(AppTab.HOME) }
+                                                                )
+                                                            } else if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
+                                                                // M4: activation expired mid-session —
+                                                                // never render restricted content from
+                                                                // local files without a live activation.
+                                                                ActivationNeededMessage(
+                                                                    onOpenActivation = {
+                                                                        pendingTab = uiState.currentTab
+                                                                        showActivationPrompt = true
+                                                                    },
+                                                                    onBackHome = { requestTab(AppTab.HOME) }
+                                                                )
+                                                            } else {
+                                                                HomeScreen(
+                                                                    currentTab = uiState.currentTab,
+                                                                    manifestVersion = uiState.manifestVersion,
+                                                                    files = uiState.files,
+                                                                    isLoadingManifest = uiState.isLoadingManifest,
+                                                                    manifestError = uiState.manifestError,
+                                                                    downloadedSections = downloadedSections,
+                                                                    downloadingPaths = uiState.downloadingPaths,
+                                                                    downloadError = uiState.downloadError,
+                                                                    casesList = casesList,
+                                                                    // M5: the in-bank tab selector goes
+                                                                    // through requestTab (activation +
+                                                                    // device gate), never setTab directly.
+                                                                    onTabSelected = { requestTab(it) },
                                                                 onRefreshManifest = { viewModel.fetchManifest() },
                                                                 onDownloadSection = { path, entry -> viewModel.downloadSection(path, entry) },
                                                                 onOpenSubject = { path, name, tab ->
@@ -403,7 +555,8 @@ class MainActivity : ComponentActivity() {
                                                                 },
                                                                 onOpenUniversity = { key, name -> viewModel.openUniversity(key, name) },
                                                                 onCaseClick = { caseItem -> viewModel.openCasePlayer(caseItem) }
-                                                            )
+                                                                )
+                                                            }
                                                         }
                                                         AppTab.CASES -> {
                                                             if (casesList.isEmpty()) {
@@ -490,7 +643,30 @@ class MainActivity : ComponentActivity() {
                                                             LeaderboardScreen()
                                                         }
                                                         AppTab.LIBRARY -> {
-                                                            LibraryScreen()
+                                                            // M8: same mid-session re-check as the
+                                                            // bank tabs (see above).
+                                                            val libGate = remember(uiState.currentTab) {
+                                                                sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
+                                                            }
+                                                            if (!libGate.allowed) {
+                                                                GateBlockedMessage(
+                                                                    message = libGate.userMessage
+                                                                        ?: "المحتوى المحمي غير متاح على هذا الجهاز.",
+                                                                    onBackHome = { requestTab(AppTab.HOME) }
+                                                                )
+                                                            } else if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
+                                                                // M4: same mid-session activation
+                                                                // re-check as the bank tabs above.
+                                                                ActivationNeededMessage(
+                                                                    onOpenActivation = {
+                                                                        pendingTab = AppTab.LIBRARY
+                                                                        showActivationPrompt = true
+                                                                    },
+                                                                    onBackHome = { requestTab(AppTab.HOME) }
+                                                                )
+                                                            } else {
+                                                                LibraryScreen()
+                                                            }
                                                         }
                                                         AppTab.PROGRESS -> {
                                                             ProgressDashboardScreen(
@@ -556,7 +732,121 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                    // Device-gate block dialog (M8): from requestTab or
+                    // from the ViewModel quiz-entry check. Dismissing
+                    // clears both sources so it cannot stick.
+                    val gateMessage = gateDialogMessage ?: uiState.gateMessage
+                    if (gateMessage != null) {
+                        AlertDialog(
+                            onDismissRequest = {
+                                gateDialogMessage = null
+                                viewModel.clearGateMessage()
+                            },
+                            title = { Text("المحتوى المحمي غير متاح", fontWeight = FontWeight.Bold) },
+                            text = { Text(gateMessage, fontSize = 14.sp) },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    gateDialogMessage = null
+                                    viewModel.clearGateMessage()
+                                }) {
+                                    Text("حسنًا")
+                                }
+                            }
+                        )
+                    }
+                    // Activation prompt overlay (Team 1 gating point):
+                    // shown instead of switching to a restricted tab.
+                    if (showActivationPrompt) {
+                        ActivationPromptDialog(
+                            onDismiss = {
+                                showActivationPrompt = false
+                                pendingTab = null
+                                pendingDrawer = null
+                            },
+                            onActivated = {
+                                showActivationPrompt = false
+                                val target = pendingTab
+                                pendingTab = null
+                                val drawerTarget = pendingDrawer
+                                pendingDrawer = null
+                                // M5: uniform path — activation just
+                                // succeeded, so requestTab switches.
+                                // Detector fix (b4.5): a drawer target
+                                // re-passes the device gate too (a
+                                // debugger attached during the prompt
+                                // window must not open a restricted
+                                // drawer screen unchecked).
+                                if (drawerTarget != null) {
+                                    openRestrictedDrawer(drawerTarget)
+                                } else if (target != null) {
+                                    requestTab(target)
+                                }
+                            }
+                        )
+                    }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * M4: full-screen block shown INSTEAD of a restricted tab's content when
+ * the activation expired mid-session (no live activation, no local
+ * content). Offers the activation prompt, or the way back home.
+ */
+@Composable
+private fun ActivationNeededMessage(onOpenActivation: () -> Unit, onBackHome: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "انتهى التفعيل — هذا القسم يحتاج كود تفعيل ساريًا.",
+                fontSize = 15.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = onOpenActivation,
+                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("فتح شاشة التفعيل", fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            TextButton(onClick = onBackHome) {
+                Text("العودة إلى الرئيسية")
+            }
+        }
+    }
+}
+
+/**
+ * M8: full-screen block shown INSTEAD of a restricted tab's content when
+ * the device gate blocks mid-session. Free sections keep working; this
+ * screen only replaces restricted content, and offers the way back home.
+ */
+@Composable
+private fun GateBlockedMessage(message: String, onBackHome: () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                message,
+                fontSize = 15.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = onBackHome,
+                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("العودة إلى الرئيسية", fontWeight = FontWeight.Bold)
             }
         }
     }

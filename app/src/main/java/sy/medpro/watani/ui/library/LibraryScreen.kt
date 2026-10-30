@@ -39,8 +39,13 @@ data class LibraryReaderState(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(viewModel: LibraryViewModel = viewModel()) {
-    // المكتبة مجانية حاليًا بقرار الدكتور (28 أكتوبر 2026): أُزيل حجب التفعيل
-    // بالكامل من هذه الشاشة. التفعيل باقٍ لباقي أقسام التطبيق المدفوعة.
+    // Team 1 (entry-activation): the Library is gated again per the
+    // 30 Oct entry spec — Questions + Library require activation, all
+    // other sections are free. Enforcement is the bottom-tab gate in
+    // MainActivity (requestTab) plus the fetch-layer switch in
+    // WorkerActivationApi (library.json + books/ via the Worker gateway);
+    // this screen itself renders whatever the repository returns.
+    // (The 28 Oct "library is free" note above is superseded.)
     val state by viewModel.state.collectAsState()
     var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(state.isLoading) {

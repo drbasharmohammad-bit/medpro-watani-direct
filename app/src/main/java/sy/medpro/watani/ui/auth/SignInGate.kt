@@ -1,6 +1,5 @@
 package sy.medpro.watani.ui.auth
 
-import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,16 +14,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.credentials.CredentialManager
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialException
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.launch
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
+/**
+ * Team 1 note: this screen is NO LONGER the app entry gate (MainActivity
+ * no longer shows it when the user is signed out — the welcome screen is
+ * the entry point and every section except Questions/Library is free).
+ * It is kept as a reusable full-screen sign-in card; its Google flow now
+ * delegates to [GoogleSignInHelper], the same helper used by the welcome
+ * screen, the profile screen and the activation prompt.
+ */
 @Composable
 fun SignInGate(onSignedIn: () -> Unit) {
     val context = LocalContext.current
@@ -36,42 +36,12 @@ fun SignInGate(onSignedIn: () -> Unit) {
         scope.launch {
             isLoading = true
             errorMessage = null
-            try {
-                val credentialManager = CredentialManager.create(context)
-                val googleIdOption = GetSignInWithGoogleOption.Builder(
-                    serverClientId = "660952704333-8cdodgfk7prfj3sv70725fu6oq9h0mjr.apps.googleusercontent.com"
-                ).build()
-
-                val request = GetCredentialRequest.Builder()
-                    .addCredentialOption(googleIdOption)
-                    .build()
-
-                val result = credentialManager.getCredential(context as Activity, request)
-                val credential = result.credential
-                if (credential is androidx.credentials.CustomCredential &&
-                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-                ) {
-                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                    val authCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
-                    FirebaseAuth.getInstance().signInWithCredential(authCredential).addOnCompleteListener { task ->
-                        isLoading = false
-                        if (task.isSuccessful) {
-                            onSignedIn()
-                        } else {
-                            errorMessage = "فشل تسجيل الدخول عبر Firebase: ${task.exception?.localizedMessage}"
-                        }
-                    }
-                } else {
-                    isLoading = false
-                    errorMessage = "نوع الاعتماد غير متوافق."
-                }
-            } catch (e: GetCredentialException) {
-                isLoading = false
-                errorMessage = "تم إلغاء تسجيل الدخول أو حدث خطأ: ${e.localizedMessage}"
-            } catch (e: Exception) {
-                isLoading = false
-                errorMessage = "خطأ غير متوقع: ${e.localizedMessage}"
-            }
+            val result = GoogleSignInHelper.signInWithGoogle(context)
+            isLoading = false
+            result.fold(
+                onSuccess = { onSignedIn() },
+                onFailure = { errorMessage = it.localizedMessage }
+            )
         }
     }
 
