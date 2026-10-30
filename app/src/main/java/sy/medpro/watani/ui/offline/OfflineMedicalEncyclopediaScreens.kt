@@ -10,6 +10,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +26,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -35,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import sy.medpro.watani.R
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.ui.theme.*
 import kotlin.math.PI
@@ -68,12 +72,14 @@ data class EcgAtlasCase(
     val id: String,
     val title: String,
     val pattern: EcgWavePattern,
+    val imageRes: Int,
     val heartRateAndRhythm: String,
     val culpritOrMechanism: String,
     val ecgCriteria: List<String>,
     val firstLineManagement: String,
     val examTrap: String,
-    val reference: String
+    val reference: String,
+    val attribution: String
 )
 
 data class StudyPhaseAllocation(
@@ -183,6 +189,7 @@ private val offlineEcgCases = listOf(
         id = "ecg_stemi_ant",
         title = "احتشاء العضلة القلبية الأمامي الواسع (Anterior STEMI)",
         pattern = EcgWavePattern.STEMI_ANTERIOR,
+        imageRes = R.drawable.ecg_stemi_ant,
         heartRateAndRhythm = "نظم جيبي منتظم • 88 نبضة/دقيقة",
         culpritOrMechanism = "انسداد الشريان الأمامي بين البطينين النازل (LAD - Left Anterior Descending)",
         ecgCriteria = listOf(
@@ -193,11 +200,13 @@ private val offlineEcgCases = listOf(
         firstLineManagement = "تفعيل بروتوكول القثطرة القلبية البدئية الفورية (Primary PCI خلال ≤ 90 دقيقة) + أسبرين مضغاً + مثبط P2Y12 + هيبارين.",
         examTrap = "الاحتشاء الأمامي الواسع يترافق مع صدمة قلبية المنشأ وحصار فرع الحزمة الأيسر الحديث (New LBBB يعامل معاملة STEMI).",
         reference = "ESC / AHA STEMI Guidelines"
+        attribution = "المصدر: Cureus 2018 — CC BY",
     ),
     EcgAtlasCase(
         id = "ecg_stemi_inf",
         title = "احتشاء العضلة القلبية السفلي (Inferior STEMI)",
         pattern = EcgWavePattern.STEMI_INFERIOR,
+        imageRes = R.drawable.ecg_stemi_inf,
         heartRateAndRhythm = "بطء جيبي أو حصار أذيني بطيني • 56 نبضة/دقيقة",
         culpritOrMechanism = "انسداد الشريان الإكليلي الأيمن (RCA في 80% من الحالات) المغذي للعقدة AV والجدار السفلي",
         ecgCriteria = listOf(
@@ -208,11 +217,13 @@ private val offlineEcgCases = listOf(
         firstLineManagement = "إعادة التروية الفورية + سوائل وريدية في حال إشراك البطين الأيمن.",
         examTrap = "يُمنع إعطاء النترات (Nitroglycerin) والمورفين والمدرات عند ترافق الاحتشاء السفلي باحتشاء البطين الأيمن لتجنب الهبوط الصاعق للضغط.",
         reference = "Braunwald's Heart Disease"
+        attribution = "المصدر: Patho — CC BY-SA 3.0",
     ),
     EcgAtlasCase(
         id = "ecg_afib",
         title = "الرجفان الأذيني (Atrial Fibrillation - AFib)",
         pattern = EcgWavePattern.AFIB,
+        imageRes = R.drawable.ecg_afib,
         heartRateAndRhythm = "لانظمي بشكل غير منتظم إطلاقاً (Irregularly Irregular) • 115 نبضة/دقيقة",
         culpritOrMechanism = "دارات عودة دخول متعددة وعشوائية في الأذينتين (غالباً من فوهات الأوردة الرئوية)",
         ecgCriteria = listOf(
@@ -223,11 +234,13 @@ private val offlineEcgCases = listOf(
         firstLineManagement = "إذا كان غير مستقر هيموديناميكياً -> صدمة كهربائية متزامنة فورية. إذا كان مستقراً -> ضبط السرعة بحاصرات بيتا أو حاصرات الكالسيوم اللاثنائية الهيدروبيريدين (Diltiazem/Verapamil) + تقييم التميع بحرز CHA2DS2-VASc.",
         examTrap = "الرجفان الأذيني الصمامي (تضيق التاجي المتوسط/الشديد أو صمام صنعي ميكانيكي) يُميّع حصراً بالوارفارين وليس بمضادات التخثر الفموية المباشرة (DOACs).",
         reference = "ESC Atrial Fibrillation Guidelines"
+        attribution = "المصدر: R.W. Koster (ECGPedia) — CC BY-SA 3.0",
     ),
     EcgAtlasCase(
         id = "ecg_flutter",
         title = "الرفرفة الأذينية (Atrial Flutter - Sawtooth Pattern)",
         pattern = EcgWavePattern.AFLUTTER_SAWTOOTH,
+        imageRes = R.drawable.ecg_flutter,
         heartRateAndRhythm = "نظم منتظم غالباً بسرعة بطينية ~150 نبضة/دقيقة (نقل 2:1)",
         culpritOrMechanism = "دارة عودة دخول كبيرة (Macro-reentry) في الأذينة اليمنى عبر البرزخ الأجوفي مثلث الشرف (Cavotricuspid Isthmus)",
         ecgCriteria = listOf(
@@ -237,11 +250,13 @@ private val offlineEcgCases = listOf(
         firstLineManagement = "العلاج الشافي النهائي والأكثر فعالية هو الكي بالقثطرة للبرزخ الأجوفي مثلث الشرف (Catheter Ablation).",
         examTrap = "قواعد منع التخثر والوقاية من الصمات الدماغية في الرفرفة الأذينية مطابقة تماماً لقواعد الرجفان الأذيني.",
         reference = "AHA / ESC Supraventricular Tachycardia Guidelines"
+        attribution = "المصدر: James Heilman, MD — CC BY-SA 4.0",
     ),
     EcgAtlasCase(
         id = "ecg_vtach",
         title = "تسرع القلب البطيني وحيد الشكل (Monomorphic Ventricular Tachycardia)",
         pattern = EcgWavePattern.VTACH_MONOMORPHIC,
+        imageRes = R.drawable.ecg_vtach,
         heartRateAndRhythm = "تسرع منتظم عريض المركب • 170 نبضة/دقيقة",
         culpritOrMechanism = "دارة عودة دخول حول ندبة احتشاء عضلي قلبي سابق في البطين",
         ecgCriteria = listOf(
@@ -251,11 +266,13 @@ private val offlineEcgCases = listOf(
         firstLineManagement = "• نبض غائب (Pulseless VT): صدمة غير متزامنة (Defibrillation) + إنعاش قلبي رئوي.\n• نبض موجود وغير مستقر: صدمة كهربائية متزامنة.\n• نبض موجود ومستقر: Amiodarone أو Procainamide وريدياً.",
         examTrap = "أي تسرع قلب عريض المركب لدى مريض لديه قصة احتشاء عضلة قلبية سابق يُعامل على أنه تسرع بطيني (VT) حتى يثبت العكس، ويُمنع إعطاء الفيراباميل.",
         reference = "AHA ACLS Guidelines"
+        attribution = "المصدر: Glenlarson — ملكية عامة",
     ),
     EcgAtlasCase(
         id = "ecg_hyperk",
         title = "فرط بوتاسيوم الدم الحرج (Severe Hyperkalemia ECG)",
         pattern = EcgWavePattern.HYPERKALEMIA_PEAKED_T,
+        imageRes = R.drawable.ecg_hyperk,
         heartRateAndRhythm = "بطء توصيل متصاعد • 62 نبضة/دقيقة",
         culpritOrMechanism = "ارتفاع البوتاسيوم المصلي (> 6.5 mEq/L) بسبب قصور كلوي أو انحلال خلوي أو أدوية",
         ecgCriteria = listOf(
@@ -266,11 +283,13 @@ private val offlineEcgCases = listOf(
         firstLineManagement = "الخطوة الأولى الفورية لحماية غشاء الخلية القلبية هي: غلوكونات الكالسيوم الوريدية (IV Calcium Gluconate)، يتبعها الأنسولين مع الغلوكوز لإدخال البوتاسيوم للخلايا.",
         examTrap = "غلوكونات الكالسيوم لا تخفض رقم البوتاسيوم في الدم بل تثبت غشاء العضلة القلبية فوراً ريثما تعمل الأدوية الخافضة للبوتاسيوم.",
         reference = "Harrison's Internal Medicine"
+        attribution = "المصدر: Agbayani وGonzales — CC BY 4.0",
     ),
     EcgAtlasCase(
         id = "ecg_pericarditis",
         title = "التهاب التامور الحاد (Acute Pericarditis)",
         pattern = EcgWavePattern.PERICARDITIS_CONCAVE_ST,
+        imageRes = R.drawable.ecg_pericarditis,
         heartRateAndRhythm = "تسرع جيبي • 96 نبضة/دقيقة",
         culpritOrMechanism = "التهاب وريقات التامور (غالباً فيروسي كوكساكي أو مجهول السبب أو بعد احتشاء متلازمة دريسلر)",
         ecgCriteria = listOf(
@@ -281,11 +300,13 @@ private val offlineEcgCases = listOf(
         firstLineManagement = "مضادات الالتهاب غير الستيروئيدية (NSAIDs أو الأسبرين في التهاب التامور تلو الاحتشاء) + الكولشيسين (Colchicine) لمنع النكس.",
         examTrap = "تجنب الستيروئيدات الجهازية كخط أول لأنها تزيد معدل نكس التهاب التامور عند سحبها.",
         reference = "ESC Pericardial Diseases Guidelines"
+        attribution = "المصدر: James Heilman, MD — CC BY-SA 3.0",
     ),
     EcgAtlasCase(
         id = "ecg_chb",
         title = "حصار القلب التام من الدرجة الثالثة (3rd-Degree Complete Heart Block)",
         pattern = EcgWavePattern.COMPLETE_HEART_BLOCK,
+        imageRes = R.drawable.ecg_chb,
         heartRateAndRhythm = "بطء بطيني شديد منتظم • 35 نبضة/دقيقة مع افتراق أذيني بطيني تام",
         culpritOrMechanism = "انقطاع كامل للنقل الكهربائي بين الأذينتين والبطينين",
         ecgCriteria = listOf(
@@ -295,6 +316,7 @@ private val offlineEcgCases = listOf(
         firstLineManagement = "تنظيم الخطى عبر الجلد مؤقتاً (Transcutaneous Pacing) ثم زرع ناظم خطى دائم (Permanent Pacemaker - PPM).",
         examTrap = "في حصار الدرجة الثانية Mobitz II وحصار الدرجة الثالثة التام يستطب زرع ناظم الخطى الدائم حتى لو كان المريض لا عرضياً.",
         reference = "ESC Cardiac Pacing Guidelines"
+        attribution = "المصدر: James Heilman, MD — CC BY-SA 3.0",
     )
 )
 
@@ -480,18 +502,6 @@ fun EponymsAtlasScreen(onBack: () -> Unit) {
 fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     var selectedCase by remember { mutableStateOf(offlineEcgCases.first()) }
-    var animateSweep by remember { mutableStateOf(true) }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "ecgSweep")
-    val phaseShift by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3600, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ecgPhase"
-    )
 
     Scaffold(
         topBar = {
@@ -499,21 +509,12 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
                 title = {
                     Column {
                         Text("أطلس تخطيط القلب التفاعلي (ECG)", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("راسم موجات أوفلاين 100% للحالات الامتحانية الحرجة", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f))
+                        Text("تخطيطات حقيقية أوفلاين 100% للحالات الامتحانية الحرجة", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f))
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { animateSweep = !animateSweep }) {
-                        Icon(
-                            imageVector = if (animateSweep) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
-                            contentDescription = "تحريك التخطيط",
-                            tint = GoldAccent
-                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -533,7 +534,7 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
-                Text("اختر التخطيط الامتحاني للمعاينة الحية:", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
+                Text("اختر التخطيط الامتحاني للمعاينة:", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(offlineEcgCases, key = { it.id }) { ecgCase ->
@@ -575,26 +576,18 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        EcgPaperWaveformCanvas(
-                            pattern = selectedCase.pattern,
-                            phase = if (animateSweep) phaseShift else 0f,
+                        Image(
+                            painter = painterResource(id = selectedCase.imageRes),
+                            contentDescription = selectedCase.title,
+                            contentScale = ContentScale.FillWidth,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(165.dp)
                                 .clip(RoundedCornerShape(12.dp))
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(selectedCase.heartRateAndRhythm, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaroonPrimary)
-                            TextButton(onClick = { animateSweep = !animateSweep }) {
-                                Text(if (animateSweep) "تثبيت الموجة للمعاينة" else "تشغيل النبض الحي", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaroonPrimary)
-                            }
-                        }
+                        Text(selectedCase.heartRateAndRhythm, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaroonPrimary)
+                        Text(selectedCase.attribution, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                 }
             }
@@ -689,141 +682,6 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun EcgPaperWaveformCanvas(
-    pattern: EcgWavePattern,
-    phase: Float,
-    modifier: Modifier = Modifier
-) {
-    Canvas(modifier = modifier.background(Color(0xFFFFF5F5))) {
-        val w = size.width
-        val h = size.height
-        val minorStep = 12.dp.toPx()
-        val majorStep = minorStep * 5f
-
-        val minorGridColor = Color(0xFFF5C6CB).copy(alpha = 0.55f)
-        val majorGridColor = Color(0xFFE5989B).copy(alpha = 0.85f)
-
-        var x = 0f
-        while (x <= w) {
-            drawLine(
-                color = minorGridColor,
-                start = Offset(x, 0f),
-                end = Offset(x, h),
-                strokeWidth = 1f
-            )
-            x += minorStep
-        }
-        var y = 0f
-        while (y <= h) {
-            drawLine(
-                color = minorGridColor,
-                start = Offset(0f, y),
-                end = Offset(w, y),
-                strokeWidth = 1f
-            )
-            y += minorStep
-        }
-
-        x = 0f
-        while (x <= w) {
-            drawLine(
-                color = majorGridColor,
-                start = Offset(x, 0f),
-                end = Offset(x, h),
-                strokeWidth = 1.8f
-            )
-            x += majorStep
-        }
-        y = 0f
-        while (y <= h) {
-            drawLine(
-                color = majorGridColor,
-                start = Offset(0f, y),
-                end = Offset(w, y),
-                strokeWidth = 1.8f
-            )
-            y += majorStep
-        }
-
-        val midY = h * 0.58f
-        val amp = h * 0.34f
-        val path = Path()
-        val samples = 360
-        for (i in 0..samples) {
-            val px = (i.toFloat() / samples) * w
-            val t = ((i.toFloat() / samples) * 3.2f + phase) % 3.2f
-            val dy = computeEcgSample(pattern, t) * amp
-            val py = (midY - dy).coerceIn(8f, h - 8f)
-            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
-        }
-
-        drawPath(
-            path = path,
-            color = Color(0xFF1B1F24),
-            style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-        )
-    }
-}
-
-private fun computeEcgSample(pattern: EcgWavePattern, totalT: Float): Float {
-    val cycle = totalT % 1.0f
-    fun gauss(x: Float, mu: Float, sigma: Float, height: Float): Float {
-        val z = (x - mu) / sigma
-        return height * exp(-0.5f * z * z)
-    }
-
-    return when (pattern) {
-        EcgWavePattern.STEMI_ANTERIOR -> {
-            val p = gauss(cycle, 0.16f, 0.025f, 0.15f)
-            val q = gauss(cycle, 0.27f, 0.010f, -0.22f)
-            val r = gauss(cycle, 0.30f, 0.012f, 0.95f)
-            val stTombstone = gauss(cycle, 0.42f, 0.085f, 0.58f)
-            p + q + r + stTombstone
-        }
-        EcgWavePattern.STEMI_INFERIOR -> {
-            val p = gauss(cycle, 0.18f, 0.025f, 0.14f)
-            val q = gauss(cycle, 0.28f, 0.012f, -0.30f)
-            val r = gauss(cycle, 0.31f, 0.014f, 0.82f)
-            val stElev = gauss(cycle, 0.44f, 0.09f, 0.46f)
-            p + q + r + stElev
-        }
-        EcgWavePattern.AFIB -> {
-            val fib = 0.07f * sin(totalT * 42f) + 0.05f * sin(totalT * 67f)
-            val r1 = gauss(totalT % 1.6f, 0.22f, 0.010f, 0.92f)
-            val r2 = gauss(totalT % 1.6f, 0.61f, 0.010f, 0.88f)
-            val r3 = gauss(totalT % 1.6f, 1.18f, 0.010f, 0.95f)
-            fib + r1 + r2 + r3
-        }
-        EcgWavePattern.AFLUTTER_SAWTOOTH -> {
-            val saw = -0.18f * (((totalT * 4f) % 1.0f) - 0.5f)
-            val r = gauss(cycle, 0.30f, 0.011f, 0.90f)
-            saw + r
-        }
-        EcgWavePattern.VTACH_MONOMORPHIC -> {
-            0.78f * sin(totalT * 2f * PI.toFloat() * 2.2f) + 0.22f * sin(totalT * 2f * PI.toFloat() * 4.4f)
-        }
-        EcgWavePattern.HYPERKALEMIA_PEAKED_T -> {
-            val r = gauss(cycle, 0.28f, 0.022f, 0.72f)
-            val s = gauss(cycle, 0.33f, 0.020f, -0.28f)
-            val peakedT = gauss(cycle, 0.54f, 0.028f, 0.96f)
-            r + s + peakedT
-        }
-        EcgWavePattern.PERICARDITIS_CONCAVE_ST -> {
-            val p = gauss(cycle, 0.15f, 0.022f, 0.14f)
-            val prDep = gauss(cycle, 0.22f, 0.020f, -0.14f)
-            val r = gauss(cycle, 0.29f, 0.012f, 0.92f)
-            val concaveSt = gauss(cycle, 0.39f, 0.05f, 0.26f) + gauss(cycle, 0.50f, 0.045f, 0.38f)
-            p + prDep + r + concaveSt
-        }
-        EcgWavePattern.COMPLETE_HEART_BLOCK -> {
-            val pWave = gauss((totalT * 1.7f) % 1.0f, 0.2f, 0.025f, 0.18f)
-            val escapeQrs = gauss((totalT * 0.65f) % 1.0f, 0.45f, 0.024f, 0.85f)
-            pWave + escapeQrs
         }
     }
 }

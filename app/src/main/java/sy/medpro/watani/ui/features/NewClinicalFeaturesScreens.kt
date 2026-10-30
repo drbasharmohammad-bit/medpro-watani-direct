@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -26,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import sy.medpro.watani.R
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.theme.*
 import java.util.Locale
@@ -101,16 +105,24 @@ fun AbgLabScreen(onBack: () -> Unit) {
     }
 }
 
+private data class TrainerTrace(
+    val title: String,
+    val description: String,
+    val isNormal: Boolean,
+    val imageRes: Int,
+    val attribution: String
+)
+
 // 2. ECG Trainer (مدرب تخطيط القلب مع عزل LTR للمخططات)
 @Composable
 fun EcgTrainerScreen(onBack: () -> Unit) {
     BackHandler { onBack() }
     var selectedTrace by remember { mutableIntStateOf(0) }
     val traces = listOf(
-        Triple("النظم الجيبي الطبيعي (Normal Sinus Rhythm)", "معدل 75 ضربة/دقيقة، أمواج P نظامية تليها QRS ومسافة PR طبيعية (0.12–0.20s).", true),
-        Triple("احتشاء العضلة القلبية حاد (STEMI - ST Elevation)", "ارتفاع قطعة ST مقعر للأعلى مع أمواج T حادة شاهقة في المساري المخبرية الأمامية V1-V4.", false),
-        Triple("الرجفان الأذيني (Atrial Fibrillation)", "غياب أمواج P الواضحة، عدم انتظام مسافات R-R تماماً، وظهور خط الأساس المتعرج (Baseline Fibrillatory waves).", false),
-        Triple("تسرع القلب البطيني (Ventricular Tachycardia - VT)", "مركبات QRS عريضة ومنتظمة وسريعة (> 150 bpm) دون أمواج P سابقة.", false)
+        TrainerTrace("النظم الجيبي الطبيعي (Normal Sinus Rhythm)", "معدل 75 ضربة/دقيقة، أمواج P نظامية تليها QRS ومسافة PR طبيعية (0.12–0.20s).", true, R.drawable.ecg_nsr, "المصدر: Ptrump16 — CC BY-SA 4.0 (مقصوصة الترويسة)"),
+        TrainerTrace("احتشاء العضلة القلبية حاد (STEMI - ST Elevation)", "ارتفاع قطعة ST مقعر للأعلى مع أمواج T حادة شاهقة في المساري المخبرية الأمامية V1-V4.", false, R.drawable.ecg_stemi_ant, "المصدر: Cureus 2018 — CC BY"),
+        TrainerTrace("الرجفان الأذيني (Atrial Fibrillation)", "غياب أمواج P الواضحة، عدم انتظام مسافات R-R تماماً، وظهور خط الأساس المتعرج (Baseline Fibrillatory waves).", false, R.drawable.ecg_afib, "المصدر: R.W. Koster (ECGPedia) — CC BY-SA 3.0"),
+        TrainerTrace("تسرع القلب البطيني (Ventricular Tachycardia - VT)", "مركبات QRS عريضة ومنتظمة وسريعة (> 150 bpm) دون أمواج P سابقة.", false, R.drawable.ecg_vtach, "المصدر: Glenlarson — ملكية عامة")
     )
 
     DrawerScreenScaffold(title = "مدرب قراءة تخطيط القلب (ECG Trainer)", onBack = onBack) { padding ->
@@ -124,7 +136,7 @@ fun EcgTrainerScreen(onBack: () -> Unit) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("تدريب قراءة تخطيط القلب الحالات الحرجة", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("كل مخطط مرسوم داخل بيئة LTR معزولة لضمان دقة المحور والأمواج.", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                        Text("تخطيطات حقيقية لمرضى معروضة داخل بيئة LTR معزولة لضمان دقة المحور.", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
                     }
                 }
             }
@@ -138,64 +150,23 @@ fun EcgTrainerScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().clickable { selectedTrace = idx }
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(trace.first, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                        Text(trace.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // LTR Isolated ECG Grid Canvas
+                        // LTR Isolated ECG image (real patient tracing)
                         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            Box(
+                            Image(
+                                painter = painterResource(id = trace.imageRes),
+                                contentDescription = trace.title,
+                                contentScale = ContentScale.FillWidth,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(110.dp)
-                                    .background(Color(0xFF0D1B2A), shape = RoundedCornerShape(8.dp))
-                                    .padding(8.dp)
-                            ) {
-                                Canvas(modifier = Modifier.fillMaxSize()) {
-                                    val w = size.width
-                                    val h = size.height
-                                    val midY = h / 2f
-                                    val path = Path().apply {
-                                        moveTo(0f, midY)
-                                        var x = 0f
-                                        while (x < w) {
-                                            when (idx) {
-                                                0 -> {
-                                                    lineTo(x + 20f, midY)
-                                                    lineTo(x + 25f, midY - 8f)
-                                                    lineTo(x + 30f, midY)
-                                                    lineTo(x + 35f, midY - 45f)
-                                                    lineTo(x + 40f, midY + 15f)
-                                                    lineTo(x + 60f, midY)
-                                                    x += 80f
-                                                }
-                                                1 -> {
-                                                    lineTo(x + 20f, midY)
-                                                    lineTo(x + 30f, midY - 50f)
-                                                    lineTo(x + 50f, midY - 42f)
-                                                    lineTo(x + 70f, midY)
-                                                    x += 90f
-                                                }
-                                                2 -> {
-                                                    lineTo(x + 15f, midY + (Math.sin(x.toDouble()).toFloat() * 6f))
-                                                    lineTo(x + 25f, midY - 35f)
-                                                    lineTo(x + 35f, midY + 10f)
-                                                    x += 55f
-                                                }
-                                                else -> {
-                                                    lineTo(x + 10f, midY - 40f)
-                                                    lineTo(x + 20f, midY + 40f)
-                                                    x += 35f
-                                                }
-                                            }
-                                        }
-                                    }
-                                    drawPath(path = path, color = Color(0xFF00FFCC), style = Stroke(width = 2.5f))
-                                }
-                            }
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
                         }
-
+                        Text(trace.attribution, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(trace.second, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                        Text(trace.description, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
                     }
                 }
             }
