@@ -3,6 +3,8 @@ package sy.medpro.watani.ui.features
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -25,7 +27,7 @@ import sy.medpro.watani.ui.theme.*
 // One case is loaded at a time. Vitals change ONLY when a decision moves the
 // case to the next predetermined node. Every case, every action, every
 // outcome and every feedback text below is written and reviewed in advance:
-// nothing is generated at runtime. Pilot set: 5 cases.
+// nothing is generated at runtime. Bank: 189 cases, grouped by specialty.
 // ---------------------------------------------------------------------------
 
 data class ErVitals(
@@ -433,10 +435,208 @@ private val erCasesPilot: List<ErCase> = listOf(
     )
 )
 
-// Pilot bank (5 cases, untouched) + the four merged waves (184 cases).
+// The original 5 pilot cases + the four merged waves (184 cases) = 189.
 // Wave lists live in waveA.kt / waveB.kt / waveC.kt / waveD.kt in this package.
+// The pilots are ordinary cases now: grouped by specialty like all others,
+// with no separate "pilot" label anywhere in the UI.
 private val erCases: List<ErCase> =
     erCasesPilot + erCasesWaveA + erCasesWaveB + erCasesWaveC + erCasesWaveD
+
+// Specialty of each ER case (classified from its title/presentation).
+// Used only for grouping/filtering the case list — never for scoring.
+private val erCaseSpecialty: Map<String, String> = mapOf(
+    "stemi" to "قلبية",
+    "anaphylaxis" to "تحسسية",
+    "sepsis" to "إنتانية",
+    "asthma" to "تنفسية",
+    "hypo" to "غدد وسكري",
+    "a_nstemi" to "قلبية",
+    "a_svt" to "قلبية",
+    "a_af_rvr" to "قلبية",
+    "a_flutter_rvr" to "قلبية",
+    "a_vt_stable" to "قلبية",
+    "a_vf_arrest" to "قلبية",
+    "a_pea_arrest" to "قلبية",
+    "a_asystole" to "قلبية",
+    "a_chb" to "قلبية",
+    "a_sinus_brady" to "قلبية",
+    "a_ape" to "قلبية",
+    "a_adhf" to "قلبية",
+    "a_cardiogenic_shock" to "قلبية",
+    "a_tamponade" to "قلبية",
+    "a_dissection_a" to "قلبية",
+    "a_aaa_rupture" to "قلبية",
+    "a_htn_emergency" to "قلبية",
+    "a_htn_urgency" to "قلبية",
+    "a_pe" to "قلبية",
+    "a_dvt_phlegmasia" to "دموية",
+    "a_limb_ischemia" to "جراحية ورضوض",
+    "a_mesenteric" to "هضمية",
+    "a_ischemic_stroke" to "عصبية",
+    "a_ich" to "قلبية",
+    "a_myocarditis" to "قلبية",
+    "a_pericarditis" to "قلبية",
+    "a_endocarditis_emboli" to "إنتانية",
+    "a_valve_thrombosis" to "قلبية",
+    "a_pacemaker_failure" to "قلبية",
+    "a_pmt" to "قلبية",
+    "a_icd_storm" to "جراحية ورضوض",
+    "a_digoxin" to "سموم",
+    "a_bb_overdose" to "هضمية",
+    "a_ccb_overdose" to "هضمية",
+    "a_torsades" to "قلبية",
+    "a_wpw_af" to "قلبية",
+    "a_hyperkalemia" to "كلوية",
+    "a_syncope" to "عصبية",
+    "a_postarrest" to "عصبية",
+    "a_takotsubo" to "قلبية",
+    "a_papillary_rupture" to "جراحية ورضوض",
+    "a_vsd_rupture" to "قلبية",
+    "a_rv_infarct" to "قلبية",
+    "a_vasospastic" to "قلبية",
+    "a_cocaine_chest" to "قلبية",
+    "a_critical_as" to "قلبية",
+    "a_hcm_syncope" to "قلبية",
+    "a_carotid_dissection" to "عصبية",
+    "a_hit_thrombosis" to "جراحية ورضوض",
+    "a_brugada" to "قلبية",
+    "b_sah" to "جراحية ورضوض",
+    "b_status_epilepticus" to "عصبية",
+    "b_first_seizure" to "عصبية",
+    "b_meningitis_bacterial" to "عصبية",
+    "b_encephalitis_herpes" to "عصبية",
+    "b_guillain_barre" to "عصبية",
+    "b_myasthenic_crisis" to "عصبية",
+    "b_spinal_cord_compression" to "عصبية",
+    "b_head_injury_severe" to "عصبية",
+    "b_tension_pnx" to "قلبية",
+    "b_hemothorax_massive" to "جراحية ورضوض",
+    "b_flail_chest" to "تنفسية",
+    "b_pelvic_fracture" to "جراحية ورضوض",
+    "b_splenic_rupture" to "جراحية ورضوض",
+    "b_liver_injury" to "هضمية",
+    "b_amputation" to "جراحية ورضوض",
+    "b_compartment" to "جراحية ورضوض",
+    "b_burns_major" to "سموم",
+    "b_electrical_injury" to "جراحية ورضوض",
+    "b_drowning" to "جراحية ورضوض",
+    "b_hypothermia" to "عامة",
+    "b_heat_stroke" to "كلوية",
+    "b_co_poisoning" to "تنفسية",
+    "b_snake_bite" to "سموم",
+    "b_tia" to "عصبية",
+    "b_cvst" to "عصبية",
+    "b_epidural_hematoma" to "عصبية",
+    "b_subdural_hematoma" to "عصبية",
+    "b_cervical_cord_injury" to "عصبية",
+    "b_open_fracture" to "جراحية ورضوض",
+    "b_blunt_aortic_injury" to "قلبية",
+    "b_cardiac_tamponade" to "قلبية",
+    "b_diaphragm_rupture" to "جراحية ورضوض",
+    "b_renal_trauma" to "كلوية",
+    "b_bladder_rupture" to "جراحية ورضوض",
+    "b_inhalation_injury" to "تنفسية",
+    "b_crush_syndrome" to "جراحية ورضوض",
+    "b_fat_embolism" to "قلبية",
+    "b_neurogenic_shock" to "جراحية ورضوض",
+    "b_cauda_equina" to "عصبية",
+    "b_hydrocephalus_acute" to "عصبية",
+    "b_herniation" to "عصبية",
+    "b_trauma_pregnancy" to "جراحية ورضوض",
+    "b_abdominal_compartment" to "هضمية",
+    "b_basilar_skull_fracture" to "عصبية",
+    "b_scorpion_sting" to "سموم",
+    "b_rabies_exposure" to "إنتانية",
+    "c_copd_exacerbation" to "تنفسية",
+    "c_severe_pneumonia" to "تنفسية",
+    "c_spontaneous_pneumothorax" to "قلبية",
+    "c_pleural_effusion" to "تنفسية",
+    "c_ards" to "تنفسية",
+    "c_foreign_body_aspiration" to "تنفسية",
+    "c_epiglottitis" to "تنفسية",
+    "c_croup" to "تنفسية",
+    "c_bronchiectasis_exacerbation" to "تنفسية",
+    "c_ipf_exacerbation" to "تنفسية",
+    "c_hereditary_angioedema" to "تحسسية",
+    "c_massive_hemoptysis" to "تنفسية",
+    "c_dka" to "غدد وسكري",
+    "c_hhs" to "سموم",
+    "c_hyponatremia_severe" to "كلوية",
+    "c_hypernatremia" to "كلوية",
+    "c_hypercalcemia" to "كلوية",
+    "c_hypocalcemia_tetany" to "كلوية",
+    "c_aki" to "كلوية",
+    "c_rhabdomyolysis" to "دموية",
+    "c_tumor_lysis_syndrome" to "دموية",
+    "c_thyroid_storm" to "غدد وسكري",
+    "c_myxedema_coma" to "عصبية",
+    "c_adrenal_crisis" to "غدد وسكري",
+    "c_pheochromocytoma_crisis" to "غدد وسكري",
+    "c_alcoholic_ketoacidosis" to "غدد وسكري",
+    "c_severe_hypokalemia" to "كلوية",
+    "c_salicylate_poisoning" to "سموم",
+    "c_paracetamol_poisoning" to "سموم",
+    "c_opioid_overdose" to "هضمية",
+    "c_alcohol_withdrawal_dt" to "سموم",
+    "c_methanol_poisoning" to "سموم",
+    "c_organophosphate_poisoning" to "سموم",
+    "c_tricyclic_overdose" to "هضمية",
+    "c_lithium_toxicity" to "سموم",
+    "c_serotonin_syndrome" to "سموم",
+    "c_neuroleptic_malignant_syndrome" to "نفسية",
+    "c_carbon_monoxide_poisoning" to "تنفسية",
+    "c_cyanide_poisoning" to "سموم",
+    "c_iron_poisoning" to "سموم",
+    "c_benzodiazepine_overdose" to "هضمية",
+    "c_cocaine_toxicity" to "سموم",
+    "c_ethylene_glycol_poisoning" to "سموم",
+    "c_theophylline_toxicity" to "سموم",
+    "d_ugib" to "هضمية",
+    "d_variceal_bleed" to "هضمية",
+    "d_lgib" to "هضمية",
+    "d_appendicitis" to "هضمية",
+    "d_cholecystitis" to "هضمية",
+    "d_cholangitis" to "هضمية",
+    "d_pancreatitis" to "هضمية",
+    "d_sbo" to "هضمية",
+    "d_perforated_ulcer" to "هضمية",
+    "d_diverticulitis" to "جراحية ورضوض",
+    "d_volvulus" to "هضمية",
+    "d_hernia" to "هضمية",
+    "d_toxic_megacolon" to "هضمية",
+    "d_torsion" to "جراحية ورضوض",
+    "d_priapism" to "جراحية ورضوض",
+    "d_retention" to "كلوية",
+    "d_pyelo" to "كلوية",
+    "d_renal_colic" to "كلوية",
+    "d_epididymitis" to "جراحية ورضوض",
+    "d_paraphimosis" to "جراحية ورضوض",
+    "d_prostatitis" to "كلوية",
+    "d_ectopic" to "هضمية",
+    "d_preeclampsia" to "كلوية",
+    "d_eclampsia" to "عصبية",
+    "d_pph" to "جراحية ورضوض",
+    "d_abruption" to "هضمية",
+    "d_praevia" to "جراحية ورضوض",
+    "d_uterine_rupture" to "هضمية",
+    "d_cord_prolapse" to "نسائية وتوليد",
+    "d_febrile_seizure" to "عصبية",
+    "d_dehydration" to "هضمية",
+    "d_intussusception" to "هضمية",
+    "d_bronchiolitis" to "جراحية ورضوض",
+    "d_pyloric" to "هضمية",
+    "d_kawasaki" to "أطفال",
+    "d_ped_meningitis" to "عصبية",
+    "d_ped_fba" to "تنفسية",
+    "d_hsp" to "هضمية",
+    "d_dfu" to "غدد وسكري",
+    "d_nec_fasciitis" to "إنتانية",
+    "d_glaucoma" to "حواس",
+    "d_epistaxis" to "حواس",
+    "d_ludwig" to "قلبية",
+)
+
+private val ErCase.specialty: String get() = erCaseSpecialty[id] ?: "عامة"
 
 // ---------------------------------------------------------------------------
 // UI state: one case at a time, one node at a time.
@@ -458,10 +658,20 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
     var shiftDone by remember { mutableStateOf(false) }
     var mistakes by remember { mutableStateOf<List<ErMistake>>(emptyList()) }
     var caseScores by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
+    var selectedSpecialty by remember { mutableStateOf("الكل") }
+    // Specialty grouping: the working list is the selected specialty (or
+    // all 189); the shift, numbering and next-case all run inside it.
+    val visibleCases = remember(selectedSpecialty) {
+        if (selectedSpecialty == "الكل") erCases else erCases.filter { it.specialty == selectedSpecialty }
+    }
+    val specialtyOrder = remember {
+        listOf("الكل") + erCases.groupingBy { it.specialty }.eachCount()
+            .entries.sortedByDescending { it.value }.map { it.key }
+    }
 
     fun startCase(index: Int) {
         caseIndex = index
-        nodeId = erCases[index].startNodeId
+        nodeId = visibleCases[index].startNodeId
         caseScore = 0
         pendingFeedback = null
         pendingNextNode = null
@@ -481,7 +691,7 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("تقرير المناوبة", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             Text("مجموع نقاط المناوبة: $totalScore", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            Text("الحالات المنجزة: ${caseScores.size} من ${erCases.size}", color = Color.White, fontSize = 13.sp)
+                            Text("الحالات المنجزة: ${caseScores.size} من ${visibleCases.size}", color = Color.White, fontSize = 13.sp)
                         }
                     }
                     Text("نتائج الحالات:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
@@ -521,13 +731,28 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
                     Card(colors = CardDefaults.cardColors(containerColor = MaroonDeep), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("غرفة الطوارئ — مناوبة فردية أوفلاين", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text("5 حالات تجريبية. كل حالة: عرض وعلامات حيوية، ثم اختر إجراءً من 3-4 إجراءات. العلامات تتغير فقط مع قرارك، والتغذية الراجعة تشرح لماذا الصح صحيح ولماذا الخطأ خطأ، مع مرجع إرشادي. بلا اتصال أثناء اللعب.", color = Color.White, fontSize = 13.sp)
+                            Text("189 حالة طارئة مقسمة حسب الاختصاص. كل حالة: عرض وعلامات حيوية، ثم اختر إجراءً من 3-4 إجراءات. العلامات تتغير فقط مع قرارك، والتغذية الراجعة تشرح لماذا الصح صحيح ولماذا الخطأ خطأ، مع مرجع إرشادي. بلا اتصال أثناء اللعب.", color = Color.White, fontSize = 13.sp)
                         }
                     }
-                    erCases.forEachIndexed { index, c ->
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(specialtyOrder) { spec ->
+                            val count = if (spec == "الكل") erCases.size else erCases.count { it.specialty == spec }
+                            FilterChip(
+                                selected = selectedSpecialty == spec,
+                                onClick = { selectedSpecialty = spec },
+                                label = { Text("$spec ($count)", fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaroonPrimary,
+                                    selectedLabelColor = Color.White
+                                )
+                            )
+                        }
+                    }
+                    visibleCases.forEachIndexed { index, c ->
                         Card(shape = RoundedCornerShape(12.dp)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text("${index + 1}. ${c.title}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
+                                Text("الاختصاص: ${c.specialty}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                                 Text(c.presentation, fontSize = 12.sp)
                                 Button(shape = MaterialTheme.shapes.medium,
                                     onClick = { startCase(index) },
@@ -540,15 +765,15 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
                         onClick = { startCase(0) },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("ابدأ المناوبة كاملة (5 حالات)", color = Color.Black, fontWeight = FontWeight.Bold) }
+                    ) { Text("ابدأ المناوبة كاملة (${visibleCases.size} حالة)", color = Color.Black, fontWeight = FontWeight.Bold) }
                 }
 
                 else -> {
-                    val c = erCases[caseIndex]
+                    val c = visibleCases[caseIndex]
                     val node = c.node(nodeId ?: c.startNodeId)
                     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.1f))) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("الحالة ${caseIndex + 1} من ${erCases.size}: ${c.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                            Text("الحالة ${caseIndex + 1} من ${visibleCases.size}: ${c.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
                             Text(c.presentation, fontSize = 13.sp)
                             Text("المرجع: ${c.guidelineRef}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         }
@@ -567,11 +792,11 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
                         Button(shape = MaterialTheme.shapes.medium,
                             onClick = {
                                 caseScores = caseScores + (c.title to caseScore)
-                                if (caseIndex + 1 < erCases.size) startCase(caseIndex + 1) else shiftDone = true
+                                if (caseIndex + 1 < visibleCases.size) startCase(caseIndex + 1) else shiftDone = true
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (caseIndex + 1 < erCases.size) "الحالة التالية" else "تقرير المناوبة") }
+                        ) { Text(if (caseIndex + 1 < visibleCases.size) "الحالة التالية" else "تقرير المناوبة") }
                     } else if (pendingFeedback != null) {
                         val fb = pendingFeedback!!
                         Card(

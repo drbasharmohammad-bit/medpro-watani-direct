@@ -9,6 +9,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +21,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -81,7 +85,7 @@ fun ProfileScreen(onBack: () -> Unit) {
     var profileSaveMessage by remember { mutableStateOf<String?>(null) }
 
     DrawerScreenScaffold(title = "الملف الشخصي", onBack = onBack) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding).padding(16.dp).padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Surface(shape = RoundedCornerShape(50.dp), color = MaroonPrimary.copy(alpha = 0.2f), modifier = Modifier.size(96.dp)) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(Icons.Default.Person, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(48.dp))
@@ -484,13 +488,17 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
 @Composable
 fun FlashcardsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    var flashcards by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    // Triple: subject, question, answer. The subject used to be dropped
+    // entirely (one flat mixed list) — now every card keeps its section's
+    // subject so the list can be filtered per subject like the Anki tab.
+    var flashcards by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
     var currentIndex by remember { mutableStateOf(0) }
     var showAnswer by remember { mutableStateOf(false) }
+    var selectedSubject by remember { mutableStateOf("الكل") }
 
     LaunchedEffect(Unit) {
         val dir = File(context.filesDir, "sections_cache")
-        val list = mutableListOf<Pair<String, String>>()
+        val list = mutableListOf<Triple<String, String, String>>()
         if (dir.exists() && dir.isDirectory) {
             dir.listFiles()?.forEach { file ->
                 if (file.name.endsWith(".json") && !file.name.contains("cases") && !file.name.contains("guide") && !file.name.contains("osce")) {
@@ -498,6 +506,12 @@ fun FlashcardsScreen(onBack: () -> Unit) {
                         val text = file.readText(Charsets.UTF_8)
                         val moshi = com.squareup.moshi.Moshi.Builder().add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
                         val env = moshi.adapter(SubjectEnvelope::class.java).fromJson(text)
+                        // Subject name from the envelope when present, else
+                        // from the cached file name (slashes were stored as
+                        // underscores, e.g. dawrat_jami3at_damascus_أطفال).
+                        val subject = env?.subjectName?.takeIf { it.isNotBlank() }
+                            ?: file.name.removeSuffix(".json").removeSuffix(".json").substringAfterLast("_")
+                                .takeIf { it.isNotBlank() } ?: "عام"
                         env?.topics?.forEach { topic ->
                             topic.questions?.forEach { q ->
                                 val qText = q.text
@@ -505,7 +519,18 @@ fun FlashcardsScreen(onBack: () -> Unit) {
                                 val correctIndices = getCorrectIndices(q, options)
                                 val correctAns = correctIndices.firstOrNull()?.let { options?.getOrNull(it) } ?: q.explanation
                                 if (!qText.isNullOrBlank() && !correctAns.isNullOrBlank()) {
-                                    list.add(Pair(qText, correctAns))
+                                    list.add(Triple(subject, qText, correctAns))
+                                }
+                            }
+                        }
+                        env?.sessions?.forEach { session ->
+                            session.questions?.forEach { q ->
+                                val qText = q.text
+                                val options = q.options
+                                val correctIndices = getCorrectIndices(q, options)
+                                val correctAns = correctIndices.firstOrNull()?.let { options?.getOrNull(it) } ?: q.explanation
+                                if (!qText.isNullOrBlank() && !correctAns.isNullOrBlank()) {
+                                    list.add(Triple(subject, qText, correctAns))
                                 }
                             }
                         }
@@ -514,6 +539,19 @@ fun FlashcardsScreen(onBack: () -> Unit) {
             }
         }
         flashcards = list
+    }
+
+    val subjects = remember(flashcards) {
+        listOf("الكل") + flashcards.map { it.first }.distinct().sorted()
+    }
+    val filtered = remember(flashcards, selectedSubject) {
+        if (selectedSubject == "الكل") flashcards else flashcards.filter { it.first == selectedSubject }
+    }
+    // Switching subject resets the position: the old code kept the index
+    // across a shrinking list, which could read past the end.
+    LaunchedEffect(selectedSubject) {
+        currentIndex = 0
+        showAnswer = false
     }
 
     DrawerScreenScaffold(title = "البطاقات التعليمية (Flashcards)", onBack = onBack) { padding ->
@@ -528,41 +566,63 @@ fun FlashcardsScreen(onBack: () -> Unit) {
                 }
             }
         } else {
-            val currentCard = flashcards[currentIndex]
+            val currentCard = filtered.getOrNull(currentIndex.coerceAtMost(filtered.lastIndex.coerceAtLeast(0)))
             Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween) {
-                LinearProgressIndicator(progress = { (currentIndex + 1).toFloat() / flashcards.size.toFloat() }, modifier = Modifier.fillMaxWidth().height(8.dp), color = MaroonPrimary)
-                Card(
-                    modifier = Modifier.fillMaxWidth().weight(1f).padding(vertical = 16.dp).clickable { showAnswer = !showAnswer },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    shape = MaterialTheme.shapes.large
-                ) {
-                    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(if (!showAnswer) "السؤال (انقر للقلب)" else "الإجابة النموذجية:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaroonPrimary)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = if (!showAnswer) currentCard.first else currentCard.second,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                lineHeight = 28.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    items(subjects) { subject ->
+                        FilterChip(
+                            selected = selectedSubject == subject,
+                            onClick = { selectedSubject = subject },
+                            label = { Text(subject, fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaroonPrimary,
+                                selectedLabelColor = Color.White
                             )
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Text(if (!showAnswer) "انقر لعرض الجواب" else "انقر للعودة للسؤال", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(progress = { if (filtered.isEmpty()) 0f else (currentIndex + 1).toFloat() / filtered.size.toFloat() }, modifier = Modifier.fillMaxWidth().height(8.dp), color = MaroonPrimary)
+                if (currentCard == null) {
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                        Text("لا توجد بطاقات لهذه المادة.", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                } else {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().weight(1f).padding(vertical = 16.dp).clickable { showAnswer = !showAnswer },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        shape = MaterialTheme.shapes.large
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("المادة: ${currentCard.first}", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaroonPrimary)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(if (!showAnswer) "السؤال (انقر للقلب)" else "الإجابة النموذجية:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaroonPrimary)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = if (!showAnswer) currentCard.second else currentCard.third,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    lineHeight = 28.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                                Text(if (!showAnswer) "انقر لعرض الجواب" else "انقر للعودة للسؤال", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            }
                         }
                     }
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = {
                         showAnswer = false
-                        currentIndex = (currentIndex + 1) % flashcards.size
+                        if (filtered.isNotEmpty()) currentIndex = (currentIndex + 1) % filtered.size
                     }, modifier = Modifier.weight(1f).height(48.dp)) {
                         Text("التالي (مراجعة لاحقاً)")
                     }
                     Button(shape = MaterialTheme.shapes.medium, onClick = {
                         showAnswer = false
-                        currentIndex = (currentIndex + 1) % flashcards.size
+                        if (filtered.isNotEmpty()) currentIndex = (currentIndex + 1) % filtered.size
                     }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary), modifier = Modifier.weight(1f).height(48.dp)) {
                         Text("أتقنتها ✓")
                     }

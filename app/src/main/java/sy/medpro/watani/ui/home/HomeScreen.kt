@@ -56,6 +56,7 @@ fun HomeScreen(
     downloadingPaths: Set<String>,
     downloadingProgress: Map<String, Float> = emptyMap(),
     downloadError: String?,
+    onRetryExplanations: (() -> Unit)? = null,
     casesList: List<sy.medpro.watani.data.ClinicalCaseDto>,
     onTabSelected: (AppTab) -> Unit,
     onRefreshManifest: () -> Unit,
@@ -113,12 +114,22 @@ fun HomeScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     shape = MaterialTheme.shapes.small
                 ) {
-                    Text(
-                        text = downloadError,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(12.dp)
-                    )
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = downloadError,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontSize = 13.sp
+                        )
+                        if (onRetryExplanations != null) {
+                            Button(
+                                onClick = onRetryExplanations,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text("إعادة محاولة الشروحات", fontSize = 13.sp)
+                            }
+                        }
+                    }
                 }
             }
 

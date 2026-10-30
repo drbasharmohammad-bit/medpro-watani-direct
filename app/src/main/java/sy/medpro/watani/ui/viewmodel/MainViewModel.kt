@@ -46,6 +46,14 @@ data class UiState(
      * spinner — the same fix as the library book downloads. */
     val downloadingProgress: Map<String, Float> = emptyMap(),
     val downloadError: String? = null,
+    /** Section path whose questions downloaded but whose explanations did
+     * not finish prefetching (bundle rule) — the Home error banner offers
+     * a retry for this path only, without re-downloading the questions. */
+    val explanationFailedPath: String? = null,
+    /** Back-stack of detail screens (Quiz → TopicSelection → … → Home),
+     * so back steps through the menus the user came through instead of
+     * jumping straight to Home. Cleared on tab switch and on Home. */
+    val backStack: List<ScreenState> = emptyList(),
     /** Device-gate block message (M8), shown as a dialog by MainActivity. */
     val gateMessage: String? = null,
     val screenState: ScreenState = ScreenState.Home
@@ -95,7 +103,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setTab(tab: AppTab) {
-        _uiState.update { it.copy(currentTab = tab, screenState = ScreenState.Home) }
+        _uiState.update { it.copy(currentTab = tab, backStack = emptyList(), screenState = ScreenState.Home) }
     }
 
     fun downloadSection(path: String, entry: ManifestFileEntry) {
@@ -112,10 +120,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             result.fold(
                 onSuccess = { _ ->
-                    _uiState.update {
-                        it.copy(
-                            downloadingPaths = it.downloadingPaths - path,
-                            downloadingProgress = it.downloadingProgress - path
+                    // Bundle rule: a section download is not complete until
+                    // its explanations are on the device too.
+                    val prefetchError = prefetchExplanations(path)
+                    _uiState.update { st ->
+                        st.copy(
+                            downloadingPaths = st.downloadingPaths - path,
+                            downloadingProgress = st.downloadingProgress - path,
+                            downloadError = if (prefetchError != null) prefetchError
+                                else if (st.explanationFailedPath == path) null else st.downloadError,
+                            explanationFailedPath = if (prefetchError != null) path
+                                else if (st.explanationFailedPath == path) null else st.explanationFailedPath
                         )
                     }
                 },
@@ -147,24 +162,78 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.refreshDownloadedSections()
     }
 
+    /** Prefetches the explanation shards for a downloaded section's questions.
+     * Returns null when explanations are complete (or the section has no
+     * questions / no layer), else the Arabic incomplete message for the banner. */
+    private suspend fun prefetchExplanations(path: String): String? {
+        val incomplete =
+            "تم تحميل أسئلة القسم، لكن شروحاتها لم تكتمل — اضغط «إعادة محاولة الشروحات» لإكمالها."
+        return try {
+            val envelope = repository.getSubjectEnvelope(path) ?: return null
+            val ids = (envelope.topics.orEmpty().flatMap { it.questions.orEmpty() } +
+                envelope.sessions.orEmpty().flatMap { it.questions.orEmpty() })
+                .mapNotNull { it.id }
+            if (ids.isEmpty()) return null
+            val repo = sy.medpro.watani.ui.explanation.ExplanationRepository(
+                getApplication<Application>().applicationContext
+            )
+            if (repo.prefetchForQuestionIds(ids).isSuccess) null else incomplete
+        } catch (_: Exception) {
+            incomplete
+        }
+    }
+
+    /** Retries only the explanation prefetch for the failed path — the
+     * questions are already on disk and are never re-downloaded. */
+    fun retryExplanationPrefetch() {
+        val path = _uiState.value.explanationFailedPath ?: return
+        viewModelScope.launch {
+            val error = prefetchExplanations(path)
+            _uiState.update { st ->
+                st.copy(
+                    downloadError = if (error != null) error
+                        else if (st.explanationFailedPath == path) null else st.downloadError,
+                    explanationFailedPath = if (error != null) path
+                        else if (st.explanationFailedPath == path) null else st.explanationFailedPath
+                )
+            }
+        }
+    }
+
+    /** Step-by-step back navigation: every detail screen pushes the screen
+     * it came from, so back restores it instead of jumping to Home. */
+    private fun navigateTo(state: ScreenState) {
+        _uiState.update { current ->
+            if (current.screenState == state) current
+            else current.copy(
+                backStack = (current.backStack + current.screenState).takeLast(24),
+                screenState = state
+            )
+        }
+    }
+
+    fun goBack() {
+        _uiState.update { current ->
+            val previous = current.backStack.lastOrNull()
+            if (previous != null) current.copy(
+                backStack = current.backStack.dropLast(1),
+                screenState = previous
+            )
+            else current.copy(backStack = emptyList(), screenState = ScreenState.Home)
+        }
+    }
+
     fun clearGateMessage() {
         _uiState.update { it.copy(gateMessage = null) }
     }
 
     fun navigateToHome() {
-        _uiState.update { it.copy(screenState = ScreenState.Home) }
+        _uiState.update { it.copy(backStack = emptyList(), screenState = ScreenState.Home) }
     }
 
     fun openSubject(path: String, subjectName: String, tab: AppTab) {
         viewModelScope.launch {
-            when (tab) {
-                AppTab.BANK, AppTab.UNIVERSITIES, AppTab.UWORLD -> {
-                    _uiState.update { it.copy(screenState = ScreenState.TopicSelection(path, subjectName)) }
-                }
-                else -> {
-                    _uiState.update { it.copy(screenState = ScreenState.TopicSelection(path, subjectName)) }
-                }
-            }
+            navigateTo(ScreenState.TopicSelection(path, subjectName))
         }
     }
 
@@ -202,16 +271,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val envelope = repository.getSubjectEnvelope(path)
             val topic = envelope?.topics?.find { it.name == topicName }
             val questions = topic?.questions ?: emptyList()
-            _uiState.update { it.copy(screenState = ScreenState.Quiz(topicName, questions)) }
+            navigateTo(ScreenState.Quiz(topicName, questions))
         }
     }
 
     fun openUniversity(universityKey: String, universityName: String) {
-        _uiState.update { it.copy(screenState = ScreenState.UniversitySubjects(universityKey, universityName)) }
+        navigateTo(ScreenState.UniversitySubjects(universityKey, universityName))
     }
 
     fun openCasePlayer(caseItem: ClinicalCaseDto) {
-        _uiState.update { it.copy(screenState = ScreenState.CasePlayer(caseItem)) }
+        navigateTo(ScreenState.CasePlayer(caseItem))
     }
 
     suspend fun getSubjectEnvelope(path: String): SubjectEnvelope? {

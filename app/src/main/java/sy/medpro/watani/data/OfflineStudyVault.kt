@@ -20,7 +20,19 @@ data class SavedMistakeItem(
 data class OfflineStudyStats(
     val totalAnswered: Int = 0,
     val totalCorrect: Int = 0,
+    /** Displayed countdown. When an exam date is set (student's own date,
+     * else the admin panel's date) this is recomputed from the date on
+     * every app start — the old frozen "60" never counted down, so it
+     * was wrong the moment time passed. Manual days (chips) are kept in
+     * [manualExamDays] and rule only in manual mode. */
     val examDaysRemaining: Int = 60,
+    val manualExamDays: Int = 60,
+    /** Student-chosen exam date (epoch millis, local midnight), or null. */
+    val examDateMillis: Long? = null,
+    /** Last exam date fetched from the admin panel, or null. */
+    val adminExamDateMillis: Long? = null,
+    /** True when the student picked manual days (chips) — dates ignored. */
+    val examModeManual: Boolean = false,
     val dailyStudyHours: Int = 8,
     val completedPlanPhaseIds: Set<String> = emptySet(),
     val masteredEponymIds: Set<String> = emptySet(),
@@ -36,6 +48,9 @@ object OfflineStudyVault {
     private const val KEY_TOTAL_ANSWERED = "total_answered"
     private const val KEY_TOTAL_CORRECT = "total_correct"
     private const val KEY_EXAM_DAYS = "exam_days_remaining"
+    private const val KEY_EXAM_DATE = "exam_date_millis"
+    private const val KEY_ADMIN_EXAM_DATE = "admin_exam_date_millis"
+    private const val KEY_EXAM_MODE_MANUAL = "exam_mode_manual"
     private const val KEY_DAILY_HOURS = "daily_study_hours"
     private const val KEY_COMPLETED_PHASES = "completed_plan_phases"
     private const val KEY_MASTERED_EPONYMS = "mastered_eponyms"
@@ -53,11 +68,30 @@ object OfflineStudyVault {
             totalAnswered = 0,
             totalCorrect = 0,
             examDaysRemaining = 60,
+            manualExamDays = 60,
             dailyStudyHours = 8,
             savedMistakes = emptyList(),
             specialtyAnswered = emptyMap(),
             specialtyCorrect = emptyMap()
         )
+    }
+
+    /** Days from today (local) until the given date millis; past dates read 0. */
+    fun daysUntilExam(dateMillis: Long): Int {
+        return try {
+            val zone = java.time.ZoneId.systemDefault()
+            val today = java.time.LocalDate.now(zone)
+            val target = java.time.Instant.ofEpochMilli(dateMillis).atZone(zone).toLocalDate()
+            java.time.temporal.ChronoUnit.DAYS.between(today, target).toInt().coerceAtLeast(0)
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    private fun effectiveDays(stats: OfflineStudyStats): Int {
+        if (stats.examModeManual) return stats.manualExamDays
+        val date = stats.examDateMillis ?: stats.adminExamDateMillis
+        return date?.let { daysUntilExam(it) } ?: stats.manualExamDays
     }
 
     fun ensureInitialized(context: Context) {
@@ -66,12 +100,16 @@ object OfflineStudyVault {
         if (!prefs.contains(KEY_TOTAL_ANSWERED)) {
             isInitialized = true
             persist(context, _statsFlow.value)
+            fetchAdminExamDate(context)
             return
         }
 
         val totalAns = prefs.getInt(KEY_TOTAL_ANSWERED, 0)
         val totalCor = prefs.getInt(KEY_TOTAL_CORRECT, 0)
         val examDays = prefs.getInt(KEY_EXAM_DAYS, 60)
+        val examDate = prefs.getLong(KEY_EXAM_DATE, -1L).takeIf { it >= 0L }
+        val adminExamDate = prefs.getLong(KEY_ADMIN_EXAM_DATE, -1L).takeIf { it >= 0L }
+        val examManual = prefs.getBoolean(KEY_EXAM_MODE_MANUAL, false)
         val dailyHrs = prefs.getInt(KEY_DAILY_HOURS, 8)
         val completedPhases = prefs.getStringSet(KEY_COMPLETED_PHASES, emptySet()) ?: emptySet()
         val masteredEponyms = prefs.getStringSet(KEY_MASTERED_EPONYMS, emptySet()) ?: emptySet()
@@ -97,10 +135,14 @@ object OfflineStudyVault {
             d.specialtyAnswered to d.specialtyCorrect
         }
 
-        _statsFlow.value = OfflineStudyStats(
+        val baseStats = OfflineStudyStats(
             totalAnswered = totalAns,
             totalCorrect = totalCor,
             examDaysRemaining = examDays,
+            manualExamDays = examDays,
+            examDateMillis = examDate,
+            adminExamDateMillis = adminExamDate,
+            examModeManual = examManual,
             dailyStudyHours = dailyHrs,
             completedPlanPhaseIds = completedPhases,
             masteredEponymIds = masteredEponyms,
@@ -110,7 +152,9 @@ object OfflineStudyVault {
             specialtyAnswered = specAns,
             specialtyCorrect = specCor
         )
+        _statsFlow.value = baseStats.copy(examDaysRemaining = effectiveDays(baseStats))
         isInitialized = true
+        fetchAdminExamDate(context)
     }
 
     fun recordQuestionAttempt(
@@ -179,12 +223,75 @@ object OfflineStudyVault {
         persist(context, updated)
     }
 
+    /** Manual days (chips): the student's explicit choice wins over any
+     * date — the student's own date is cleared and dates are ignored
+     * until the student picks a date again. */
     fun updateStudyPlannerConfig(context: Context, daysRemaining: Int, dailyHours: Int) {
         ensureInitialized(context)
+        val days = daysRemaining.coerceIn(7, 180)
         val updated = _statsFlow.value.copy(
-            examDaysRemaining = daysRemaining.coerceIn(7, 180),
+            examDaysRemaining = days,
+            manualExamDays = days,
+            examDateMillis = null,
+            examModeManual = true,
             dailyStudyHours = dailyHours.coerceIn(2, 16)
         )
+        _statsFlow.value = updated
+        persist(context, updated)
+    }
+
+    /** Daily hours only — must never disturb the exam date or the mode. */
+    fun updateDailyHours(context: Context, dailyHours: Int) {
+        ensureInitialized(context)
+        val updated = _statsFlow.value.copy(
+            dailyStudyHours = dailyHours.coerceIn(2, 16)
+        )
+        _statsFlow.value = updated
+        persist(context, updated)
+    }
+
+    /** Student-chosen exam date (epoch millis, local midnight), or null to
+     * clear it (falls back to the admin panel date, else manual days). */
+    fun setExamDate(context: Context, dateMillis: Long?) {
+        ensureInitialized(context)
+        val base = _statsFlow.value.copy(
+            examDateMillis = dateMillis,
+            examModeManual = false
+        )
+        val updated = base.copy(examDaysRemaining = effectiveDays(base))
+        _statsFlow.value = updated
+        persist(context, updated)
+    }
+
+    /** Admin panel date (Firestore app_config/exam.examDate, "yyyy-MM-dd").
+     * Fire-and-forget, once per process: one doc read per app start.
+     * Offline or a missing doc is silently ignored; the student's own
+     * date always wins over the panel date. */
+    private fun fetchAdminExamDate(context: Context) {
+        try {
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("app_config").document("exam").get()
+                .addOnSuccessListener { doc ->
+                    val raw = doc?.getString("examDate") ?: return@addOnSuccessListener
+                    applyAdminExamDate(context, raw)
+                }
+        } catch (_: Exception) {
+        }
+    }
+
+    fun applyAdminExamDate(context: Context, dateString: String?) {
+        if (dateString.isNullOrBlank()) return
+        val millis = try {
+            val zone = java.time.ZoneId.systemDefault()
+            java.time.LocalDate.parse(dateString.trim()).atStartOfDay(zone).toInstant().toEpochMilli()
+        } catch (_: Exception) {
+            return
+        }
+        ensureInitialized(context)
+        val current = _statsFlow.value
+        if (current.adminExamDateMillis == millis) return
+        val base = current.copy(adminExamDateMillis = millis)
+        val updated = base.copy(examDaysRemaining = effectiveDays(base))
         _statsFlow.value = updated
         persist(context, updated)
     }
@@ -293,10 +400,16 @@ object OfflineStudyVault {
         specObj.put("answered", ansObj)
         specObj.put("correct", corObj)
 
-        prefs.edit()
+        val editor = prefs.edit()
             .putInt(KEY_TOTAL_ANSWERED, stats.totalAnswered)
             .putInt(KEY_TOTAL_CORRECT, stats.totalCorrect)
-            .putInt(KEY_EXAM_DAYS, stats.examDaysRemaining)
+            .putInt(KEY_EXAM_DAYS, stats.manualExamDays)
+            .putBoolean(KEY_EXAM_MODE_MANUAL, stats.examModeManual)
+        if (stats.examDateMillis != null) editor.putLong(KEY_EXAM_DATE, stats.examDateMillis)
+        else editor.remove(KEY_EXAM_DATE)
+        if (stats.adminExamDateMillis != null) editor.putLong(KEY_ADMIN_EXAM_DATE, stats.adminExamDateMillis)
+        else editor.remove(KEY_ADMIN_EXAM_DATE)
+        editor
             .putInt(KEY_DAILY_HOURS, stats.dailyStudyHours)
             .putStringSet(KEY_COMPLETED_PHASES, stats.completedPlanPhaseIds)
             .putStringSet(KEY_MASTERED_EPONYMS, stats.masteredEponymIds)

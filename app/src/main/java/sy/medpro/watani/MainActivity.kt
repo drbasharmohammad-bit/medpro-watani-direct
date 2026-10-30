@@ -361,7 +361,7 @@ class MainActivity : ComponentActivity() {
                                 when {
                                     drawerState.isOpen -> coroutineScope.launch { drawerState.close() }
                                     drawerScreen != null -> drawerScreen = null
-                                    uiState.screenState != ScreenState.Home -> viewModel.navigateToHome()
+                                    uiState.screenState != ScreenState.Home -> viewModel.goBack()
                                     uiState.currentTab != AppTab.HOME -> viewModel.setTab(AppTab.HOME)
                                     else -> showExitConfirm = true
                                 }
@@ -612,6 +612,9 @@ class MainActivity : ComponentActivity() {
                                                                     downloadingPaths = uiState.downloadingPaths,
                                                                     downloadingProgress = uiState.downloadingProgress,
                                                                     downloadError = uiState.downloadError,
+                                                                    onRetryExplanations = if (uiState.explanationFailedPath != null) {
+                                                                        { viewModel.retryExplanationPrefetch() }
+                                                                    } else null,
                                                                     casesList = casesList,
                                                                     // M5: the in-bank tab selector goes
                                                                     // through requestTab (activation +
@@ -765,7 +768,7 @@ class MainActivity : ComponentActivity() {
                                                         onTopicClick = { topicName ->
                                                             viewModel.openTopicQuiz(screen.path, topicName)
                                                         },
-                                                        onBack = { viewModel.navigateToHome() }
+                                                        onBack = { viewModel.goBack() }
                                                     )
                                                 }
                                                 is ScreenState.UniversitySubjects -> {
@@ -783,20 +786,20 @@ class MainActivity : ComponentActivity() {
                                                                 viewModel.openSubject(path, name, AppTab.UNIVERSITIES)
                                                             }
                                                         },
-                                                        onBack = { viewModel.navigateToHome() }
+                                                        onBack = { viewModel.goBack() }
                                                     )
                                                 }
                                                 is ScreenState.Quiz -> {
                                                     QuizScreen(
                                                         title = screen.title,
                                                         questions = screen.questions,
-                                                        onBack = { viewModel.navigateToHome() }
+                                                        onBack = { viewModel.goBack() }
                                                     )
                                                 }
                                                 is ScreenState.CasePlayer -> {
                                                     CasePlayerScreen(
                                                         caseItem = screen.caseItem,
-                                                        onBack = { viewModel.navigateToHome() }
+                                                        onBack = { viewModel.goBack() }
                                                     )
                                                 }
                                             }

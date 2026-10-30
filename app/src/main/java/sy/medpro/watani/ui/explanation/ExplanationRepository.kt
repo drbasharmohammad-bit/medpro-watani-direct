@@ -127,6 +127,43 @@ class ExplanationRepository(
             }
         }
 
+    /**
+     * Bundle rule (Oct 2026): a section download is not complete until its
+     * explanations are on the device too — downloading questions and leaving
+     * their explanations behind is not a complete download. After a section's
+     * questions land, the caller passes their normalized keys here; only the
+     * shards that actually hold those questions are fetched (via the same
+     * resumable, cached [loadShard] path as lazy lookup), so a section's
+     * explanations work offline without re-downloading the whole layer.
+     * Keys with no qid_index entry have no explanation in the layer and are
+     * skipped (a content gap, not a download failure). Any needed shard
+     * failing to load fails the whole prefetch so the caller reports the
+     * section as incomplete instead of silently succeeding.
+     */
+    suspend fun prefetchForQuestionIds(questionIds: List<String>): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            try {
+                val keys = questionIds.mapNotNull { normalizeExplanationKey(it) }.distinct()
+                if (keys.isEmpty()) return@withContext Result.success(Unit)
+                val indexResult = fetchLayerIndex()
+                if (indexResult.isFailure) {
+                    return@withContext Result.failure(indexResult.exceptionOrNull()!!)
+                }
+                val index = indexResult.getOrNull() ?: return@withContext Result.success(Unit)
+                val qidIndex = index.qidIndex ?: return@withContext Result.success(Unit)
+                val shards = keys.mapNotNull { qidIndex[it] }.distinct()
+                for (shardName in shards) {
+                    val shardResult = loadShard(shardName)
+                    if (shardResult.isFailure) {
+                        return@withContext Result.failure(shardResult.exceptionOrNull()!!)
+                    }
+                }
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
     private suspend fun fetchLayerIndex(): Result<ExplanationIndex?> = withContext(Dispatchers.IO) {
         cachedIndex?.let { return@withContext Result.success(it) }
         val diskFile = indexCacheFile()

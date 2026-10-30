@@ -229,6 +229,16 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
             var showGoToPage by remember { mutableStateOf(false) }
             var goToPageText by remember { mutableStateOf("") }
 
+            // While highlighting, the bars (which hold the off switch) must
+            // never auto-hide — losing the off switch mid-stroke is what
+            // made stopping highlight mode feel difficult.
+            LaunchedEffect(highlightMode) {
+                if (highlightMode) {
+                    hideBarJob?.cancel()
+                    showBars = true
+                }
+            }
+
             // Touch point -> page-normalized point (0..1 across the fitted
             // page rect), so strokes survive zoom and screen sizes.
             fun toNormalized(px: Offset, bmp: Bitmap): Offset {
@@ -293,6 +303,9 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                                     (pg.height * 2f).toInt(),
                                     Bitmap.Config.ARGB_8888
                                 )
+                                // Fill white first: some PDFs leave the page
+                                // background transparent, which showed as black.
+                                bmp.eraseColor(android.graphics.Color.WHITE)
                                 pg.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                                 pg.close()
                                 bitmapCache[page] = bmp
@@ -307,6 +320,11 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                         Box(
                             Modifier
                                 .fillMaxSize()
+                                // White page background: PdfRenderer does not clear
+                                // the bitmap, so pages with a transparent background
+                                // rendered as black text on the black canvas. The
+                                // page area is always white now, whatever the PDF.
+                                .background(Color.White)
                                 .graphicsLayer(
                                     scaleX = if (isCurrent) zoom else 1f,
                                     scaleY = if (isCurrent) zoom else 1f,
@@ -316,8 +334,14 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                                 .pointerInput(Unit) {
                                     detectTapGestures(
                                         onTap = {
-                                            showBars = !showBars
-                                            resetHideBarTimer()
+                                            // While highlighting, taps must never hide
+                                            // the bars — the off switch lives in them.
+                                            if (!showBars) {
+                                                showBars = true
+                                                resetHideBarTimer()
+                                            } else if (!highlightMode) {
+                                                showBars = false
+                                            }
                                         },
                                         onDoubleTap = { toggleZoom() }
                                     )
@@ -352,24 +376,34 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                                     } else Modifier
                                 )
                                 .then(
-                                    if (isCurrent && zoom > 1.01f && !highlightMode) {
+                                    if (isCurrent && !highlightMode) {
                                         Modifier.pointerInput(Unit) {
-                                            detectTransformGestures { _, panChange, _, _ ->
-                                                // Clamp the pan so the page cannot
-                                                // be dragged off-screen: max pan is
-                                                // half the overflow on each axis.
-                                                val fit = minOf(
-                                                    boxSize.width.toFloat() / bitmap.width,
-                                                    boxSize.height.toFloat() / bitmap.height
-                                                )
-                                                val dispW = bitmap.width * fit * zoom
-                                                val dispH = bitmap.height * fit * zoom
-                                                val maxX = max(0f, (dispW - boxSize.width) / 2f)
-                                                val maxY = max(0f, (dispH - boxSize.height) / 2f)
-                                                pan = Offset(
-                                                    (pan.x + panChange.x).coerceIn(-maxX, maxX),
-                                                    (pan.y + panChange.y).coerceIn(-maxY, maxY)
-                                                )
+                                            detectTransformGestures { _, panChange, zoomChange, _ ->
+                                                // Pinch zoom (two fingers, like any phone
+                                                // app) + single-finger pan while zoomed.
+                                                // Pan is clamped so the page cannot be
+                                                // dragged off-screen: max pan is half
+                                                // the overflow on each axis.
+                                                fun clampPan(p: Offset, z: Float): Offset {
+                                                    val fit = minOf(
+                                                        boxSize.width.toFloat() / bitmap.width,
+                                                        boxSize.height.toFloat() / bitmap.height
+                                                    )
+                                                    val dispW = bitmap.width * fit * z
+                                                    val dispH = bitmap.height * fit * z
+                                                    val maxX = max(0f, (dispW - boxSize.width) / 2f)
+                                                    val maxY = max(0f, (dispH - boxSize.height) / 2f)
+                                                    return Offset(
+                                                        p.x.coerceIn(-maxX, maxX),
+                                                        p.y.coerceIn(-maxY, maxY)
+                                                    )
+                                                }
+                                                if (zoomChange != 1f) {
+                                                    zoom = (zoom * zoomChange).coerceIn(1f, 4f)
+                                                    pan = if (zoom <= 1.01f) Offset.Zero else clampPan(pan, zoom)
+                                                } else if (zoom > 1.01f) {
+                                                    pan = clampPan(pan + panChange, zoom)
+                                                }
                                             }
                                         }
                                     } else Modifier
@@ -450,44 +484,59 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit) {
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary)
                 )
 
-                // Highlighter panel: pen colors + clear this page.
+                // Highlighter panel: pen colors + finish + clear this page.
+                // Two rows so nothing squeezes or overlaps on narrow phones.
                 if (highlightMode) {
-                    Row(
+                    Column(
                         Modifier
                             .fillMaxWidth()
                             .align(Alignment.TopCenter)
                             .padding(top = 64.dp)
                             .background(MaroonPrimary.copy(alpha = 0.9f))
                             .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text("اسحب بإصبعك للتأشير", color = Color.White, fontSize = 12.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(
-                                Color.Yellow,
-                                Color(0xFFFF8FA3),
-                                Color(0xFF90EE90),
-                                Color(0xFF87CEEB)
-                            ).forEach { c ->
-                                Box(
-                                    Modifier
-                                        .size(28.dp)
-                                        .background(c, CircleShape)
-                                        .border(
-                                            width = if (highlightColor == c) 2.dp else 0.dp,
-                                            color = GoldAccent,
-                                            shape = CircleShape
-                                        )
-                                        .clickable { highlightColor = c }
-                                )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("اسحب للتأشير", color = Color.White, fontSize = 12.sp)
+                            TextButton(onClick = { highlightMode = false }) {
+                                Text("إنهاء التأشير ✓", color = GoldAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
-                        TextButton(onClick = {
-                            highlightStrokes = highlightStrokes.filter { it.page != currentPage }
-                            saveHighlights()
-                        }) {
-                            Text("مسح تأشير الصفحة", color = Color.White, fontSize = 12.sp)
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf(
+                                    Color.Yellow,
+                                    Color(0xFFFF8FA3),
+                                    Color(0xFF90EE90),
+                                    Color(0xFF87CEEB)
+                                ).forEach { c ->
+                                    Box(
+                                        Modifier
+                                            .size(28.dp)
+                                            .background(c, CircleShape)
+                                            .border(
+                                                width = if (highlightColor == c) 2.dp else 0.dp,
+                                                color = GoldAccent,
+                                                shape = CircleShape
+                                            )
+                                            .clickable { highlightColor = c }
+                                    )
+                                }
+                            }
+                            TextButton(onClick = {
+                                highlightStrokes = highlightStrokes.filter { it.page != currentPage }
+                                saveHighlights()
+                            }) {
+                                Text("مسح تأشير الصفحة", color = Color.White, fontSize = 12.sp)
+                            }
                         }
                     }
                 }

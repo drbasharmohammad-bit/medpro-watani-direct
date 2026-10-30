@@ -687,6 +687,7 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SmartStudyPlannerScreen(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
@@ -822,7 +823,7 @@ fun SmartStudyPlannerScreen(onBack: () -> Unit) {
                             items(listOf(4, 6, 8, 10, 12)) { hrs ->
                                 FilterChip(
                                     selected = stats.dailyStudyHours == hrs,
-                                    onClick = { OfflineStudyVault.updateStudyPlannerConfig(context, stats.examDaysRemaining, hrs) },
+                                    onClick = { OfflineStudyVault.updateDailyHours(context, hrs) },
                                     label = { Text("$hrs ساعات/يوم", fontSize = 12.sp, fontWeight = FontWeight.Bold) },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaroonPrimary,
@@ -830,6 +831,75 @@ fun SmartStudyPlannerScreen(onBack: () -> Unit) {
                                     )
                                 )
                             }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        // Exam date: the student's own date wins, else the
+                        // admin panel's date, else manual days. The old
+                        // frozen "60" never counted down, so it was wrong
+                        // the moment time passed — a date counts down daily.
+                        var showExamDatePicker by remember { mutableStateOf(false) }
+                        val examDateMillis = if (stats.examModeManual) null else (stats.examDateMillis ?: stats.adminExamDateMillis)
+                        Text("تاريخ الامتحان الوطني:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        if (examDateMillis != null) {
+                            val examDateText = try {
+                                val zone = java.time.ZoneId.systemDefault()
+                                val d = java.time.Instant.ofEpochMilli(examDateMillis).atZone(zone).toLocalDate()
+                                "%02d/%02d/%04d".format(d.dayOfMonth, d.monthValue, d.year)
+                            } catch (_: Exception) { "" }
+                            Text(
+                                "الامتحان: $examDateText — باقي ${stats.examDaysRemaining} يوماً (${if (stats.examDateMillis != null) "اخترته أنت" else "من لوحة الإدارة"})",
+                                fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                            )
+                        } else {
+                            Text(
+                                "العداد يدوي حاليًا: ${stats.examDaysRemaining} يوماً — حدّد تاريخ الامتحان ليحسب العداد تلقائيًا كل يوم.",
+                                fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { showExamDatePicker = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text("تحديد تاريخ الامتحان", fontSize = 13.sp)
+                            }
+                            if (stats.examDateMillis != null) {
+                                OutlinedButton(
+                                    onClick = { OfflineStudyVault.setExamDate(context, null) },
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text("إلغاء تاريخي", fontSize = 13.sp)
+                                }
+                            }
+                        }
+                        if (showExamDatePicker) {
+                            val pickerState = rememberDatePickerState(
+                                initialSelectedDateMillis = examDateMillis?.let {
+                                    java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.of("UTC")).toLocalDate()
+                                        .atStartOfDay(java.time.ZoneId.of("UTC")).toInstant().toEpochMilli()
+                                }
+                            )
+                            DatePickerDialog(
+                                onDismissRequest = { showExamDatePicker = false },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        pickerState.selectedDateMillis?.let { utcMillis ->
+                                            val zone = java.time.ZoneId.systemDefault()
+                                            val localDate = java.time.Instant.ofEpochMilli(utcMillis).atZone(java.time.ZoneId.of("UTC")).toLocalDate()
+                                            OfflineStudyVault.setExamDate(context, localDate.atStartOfDay(zone).toInstant().toEpochMilli())
+                                        }
+                                        showExamDatePicker = false
+                                    }) { Text("تأكيد") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showExamDatePicker = false }) { Text("إلغاء") }
+                                }
+                            ) {
+                                DatePicker(state = pickerState, showModeToggle = false)
+                            }
+                        }
                         }
                     }
                 }

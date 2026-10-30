@@ -3,6 +3,7 @@ package sy.medpro.watani.ui.anki
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -504,9 +505,19 @@ private fun AnkiDropdown(
                 Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = MaroonPrimary)
             }
         }
+        // Plain scrollable Column, not a LazyColumn: a lazy list inside a
+        // dropdown menu is the fragile combination on this exact path
+        // (subject selection) — the menu measures its popup content
+        // loosely, and a lazy list inside it is the one construct that
+        // can blow up on some devices. A fixed-height scroll column
+        // cannot.
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                items(options) { option ->
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState())
+            ) {
+                options.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(option, fontSize = 14.sp) },
                         onClick = {
