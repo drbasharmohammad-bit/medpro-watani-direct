@@ -22,9 +22,14 @@ import java.io.File
  *    deleted on close (see the close-path list below).
  *
  * COVERED FILE TYPES (restricted set = Questions section + Library):
- *  - Question banks: questions/*.json, dawrat/*.json,
- *    dawrat_jami3at/*\/*.json, uworld/*.json (via [isRestrictedPath]).
- *  - Explanations: explanations/*.json.
+ *  - Question banks: questions/<name>.json, dawrat/<name>.json,
+ *    dawrat_jami3at/<sub>/<name>.json, uworld/<name>.json (via
+ *    [isRestrictedPath]).
+ *  - Explanations: explanations/<name>.json.
+ *  NOTE: do not write glob patterns with a slash followed by a star
+ *  inside this KDoc — Kotlin block comments NEST, so such a sequence
+ *  opens a nested comment and breaks compilation (this file shipped
+ *  with that exact latent bug: it never compiled before this fix).
  *  - Library index: library.json.
  *  - Library items (books/videos): already encrypted by the repository's
  *    library path; this store gives them the same temp registry so the
