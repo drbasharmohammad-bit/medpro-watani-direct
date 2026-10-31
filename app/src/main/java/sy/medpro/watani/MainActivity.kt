@@ -47,7 +47,7 @@ import sy.medpro.watani.ui.leaderboard.LeaderboardScreen
 import sy.medpro.watani.ui.library.LibraryScreen
 import sy.medpro.watani.ui.offline.EponymsAtlasScreen
 import sy.medpro.watani.ui.offline.SmartStudyPlannerScreen
-import sy.medpro.watani.ui.progress.ProgressDashboardScreen
+import sy.medpro.watani.ui.tools.ToolsScreen
 import sy.medpro.watani.ui.quiz.QuizScreen
 import sy.medpro.watani.ui.reference.*
 import sy.medpro.watani.ui.osce.OsceStationsScreen
@@ -435,7 +435,7 @@ class MainActivity : ComponentActivity() {
                                 AppTab.CASES -> "المريض الافتراضي"
                                 AppTab.LIBRARY -> "المكتبة"
                                 AppTab.LEADERBOARD -> "الصدارة"
-                                AppTab.PROGRESS -> "تقدمي"
+                                AppTab.TOOLS -> "أدوات"
                                 else -> "Med Pro - وطني"
                             }
                             Scaffold(
@@ -493,7 +493,7 @@ class MainActivity : ComponentActivity() {
                                             Triple(AppTab.CASES, "المريض", Icons.Default.LocalHospital),
                                             Triple(AppTab.LIBRARY, "المكتبة", Icons.Default.Book),
                                             Triple(AppTab.LEADERBOARD, "الصدارة", Icons.Default.EmojiEvents),
-                                            Triple(AppTab.PROGRESS, "تقدمي", Icons.Default.WorkspacePremium)
+                                            Triple(AppTab.TOOLS, "أدوات", Icons.Default.Build)
                                         )
                                         tabs.forEach { (tab, label, icon) ->
                                             val selected = uiState.currentTab == tab
@@ -798,13 +798,12 @@ class MainActivity : ComponentActivity() {
                                                                 LibraryScreen(onReaderFullscreenChange = { readerFullscreen = it })
                                                             }
                                                         }
-                                                        AppTab.PROGRESS -> {
-                                                            ProgressDashboardScreen(
-                                                                 onOpenStudyPlanner = { drawerScreen = "مخطط جدول الدراسة" },
-                                                                 onOpenEponyms = { drawerScreen = "موسوعة المتلازمات" },
-                                                                 onOpenEcgAtlas = { drawerScreen = "أطلس تخطيط القلب" },
-                                                                 onOpenCalculators = { drawerScreen = "الحاسبات السريرية" }
-                                                             )
+                                                        AppTab.TOOLS -> {
+                                                            ToolsScreen(
+                                                                onToolClick = { title ->
+                                                                    if (title == "البطاقات والمراجعة الذكية") openRestrictedDrawer(title) else drawerScreen = title
+                                                                }
+                                                            )
                                                         }
                                                     }
                                                     }

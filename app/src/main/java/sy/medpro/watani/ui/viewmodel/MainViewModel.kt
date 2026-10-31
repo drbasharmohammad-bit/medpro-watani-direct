@@ -23,7 +23,7 @@ enum class AppTab(val title: String) {
     CASES("المريض الافتراضي"),
     LIBRARY("المكتبة"),
     LEADERBOARD("الصدارة"),
-    PROGRESS("تقدمي")
+    TOOLS("أدوات")
 }
 
 sealed class ScreenState {
