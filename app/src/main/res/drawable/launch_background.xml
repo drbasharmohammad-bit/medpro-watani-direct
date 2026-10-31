@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Launch-window background: replaces the plain grey window the student
-  sees on cold start before Compose draws. Maroon brand background with
-  the app icon's own artwork centred (used as-is, never redesigned),
-  matching the WelcomeScreen hero behind it so the transition is seamless.
+  sees on cold start before Compose draws. The solid colour is the
+  artwork tile's EXACT colour (#2D1015), so the artwork's square edge
+  disappears completely (Nov 2026, doctor's order: exactly one colour,
+  no visible square). The video splash follows in the same dark family.
+  The artwork itself is used as-is, never redesigned.
   No animation here by design — window backgrounds are static; the
-  entrance animation lives in WelcomeScreen and plays with zero added delay.
+  animation lives in the video splash.
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape>
-            <solid android:color="#7A1F2B" />
+            <solid android:color="#2D1015" />
         </shape>
     </item>
     <item

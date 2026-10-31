@@ -4,6 +4,8 @@ import android.content.Context
 import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -237,7 +239,7 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
                             if (qClip != null) {
                                 val qAr = arabicClips[qClip.id ?: ""]
                                 val qCorrect = qAr?.arTitle ?: qClip.label ?: ""
-                                Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                                         Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text("استمع للصوت وحدد النتيجة السريرية الأرجح:", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaroonPrimary)

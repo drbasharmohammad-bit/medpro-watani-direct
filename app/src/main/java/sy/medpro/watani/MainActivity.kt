@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
 import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.ui.activation.ActivationPromptDialog
-import sy.medpro.watani.ui.welcome.WelcomeScreen
+import sy.medpro.watani.ui.welcome.VideoSplashScreen
 import sy.medpro.watani.ui.cases.CasePlayerScreen
 import sy.medpro.watani.ui.cases.CasesScreen
 import sy.medpro.watani.ui.clinical.BedsideClinicalTab
@@ -113,9 +113,11 @@ class MainActivity : ComponentActivity() {
                     FirebaseAuth.getInstance().addAuthStateListener(listener)
                     onDispose { FirebaseAuth.getInstance().removeAuthStateListener(listener) }
                 }
-                // Welcome is first-run only (persisted): returning users
-                // go straight to the main interface.
-                var showWelcome by remember { mutableStateOf(!prefs.getBoolean("welcome_seen", false)) }
+                // Video splash on every cold start (Nov 2026, doctor's
+                // order): the old first-run welcome screen is abolished —
+                // no buttons, no sign-in prompt; the video plays, tap
+                // skips, and it advances to the main interface on end.
+                var showSplash by remember { mutableStateOf(true) }
                 var pendingTab by remember { mutableStateOf<AppTab?>(null) }
                 var pendingDrawer by remember { mutableStateOf<String?>(null) }
                 var showActivationPrompt by remember { mutableStateOf(false) }
@@ -167,13 +169,9 @@ class MainActivity : ComponentActivity() {
                     return true
                 }
 
-                if (showWelcome) {
-                    // Entry point: welcome screen, no sign-in required.
+                if (showSplash) {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        WelcomeScreen(onEnter = {
-                            prefs.edit().putBoolean("welcome_seen", true).apply()
-                            showWelcome = false
-                        })
+                        VideoSplashScreen(onDone = { showSplash = false })
                     }
                 } else {
                     val contextForSync = androidx.compose.ui.platform.LocalContext.current
