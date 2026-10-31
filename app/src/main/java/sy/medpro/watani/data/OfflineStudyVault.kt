@@ -104,15 +104,15 @@ object OfflineStudyVault {
         }
     }
 
-    /** The admin panel's date rules whenever it exists — it is set
-     * for every user, so it beats manual days and any student date.
-     * Manual days (and the student's own date) are only fallbacks
-     * while the panel has set no date. */
+    /** The STUDENT's own date rules whenever it exists — the student
+     * picks his exam date (Nov 2026, doctor's order: the timer is the
+     * student's, not the panel's). The admin panel date is only a
+     * fallback while the student has set no date; manual days are the
+     * last fallback. */
     private fun effectiveDays(stats: OfflineStudyStats): Int {
+        stats.examDateMillis?.let { return daysUntilExam(it) }
         stats.adminExamDateMillis?.let { return daysUntilExam(it) }
-        if (stats.examModeManual) return stats.manualExamDays
-        val date = stats.examDateMillis
-        return date?.let { daysUntilExam(it) } ?: stats.manualExamDays
+        return stats.manualExamDays
     }
 
     fun ensureInitialized(context: Context) {

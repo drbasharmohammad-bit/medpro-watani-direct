@@ -31,6 +31,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.ui.reference.AccreditedMedicalData
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
@@ -63,6 +67,9 @@ fun HomeDashboardScreen(
     }
 
     val stats by OfflineStudyVault.statsFlow.collectAsState()
+    // No date anywhere (student, panel, manual) → no fake number: the
+    // ring shows a dash until the student picks his exam date.
+    val hasExamDate = stats.examDateMillis != null || stats.adminExamDateMillis != null || stats.examModeManual
     val days = stats.examDaysRemaining
     val totalAns = stats.totalAnswered
     val totalCor = stats.totalCorrect
@@ -89,6 +96,13 @@ fun HomeDashboardScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
+        // Student-set offline exam countdown — its own section directly
+        // under the top bar. The student picks the date; it ticks
+        // locally (days / hours / minutes / seconds) with no network.
+        item {
+            ExamCountdownCard()
+        }
+
         item {
             Card(
                 shape = MaterialTheme.shapes.extraLarge,
@@ -132,7 +146,7 @@ fun HomeDashboardScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "نجاحك في الوطني يبدأ من هنا • تدريب سريري بمعايير عالمية",
+                                    text = "نجاحك في الوطني يبدأ من هنا",
                                     color = Color.White.copy(alpha = 0.85f),
                                     fontSize = 12.sp
                                 )
@@ -161,7 +175,7 @@ fun HomeDashboardScreen(
                                     )
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("$days", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                    Text(if (hasExamDate) "$days" else "—", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                                     Text("يوماً", color = GoldAccent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                                 }
                             }
@@ -176,24 +190,9 @@ fun HomeDashboardScreen(
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                horizontalArrangement = Arrangement.End,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.Verified, contentDescription = null, tint = GoldAccent, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "المراجع المعتمدة: Harrison's • Oxford • ATLS • Nelson",
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = if (totalAns == 0) "جاهزية البنك: مبدئي" else "جاهزية $accuracy%",
                                     color = GoldAccent,
@@ -685,6 +684,181 @@ fun QuickActionCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
             }
+        }
+    }
+}
+
+/**
+ * Student-set offline exam countdown (Nov 2026, doctor's order).
+ *
+ * The student picks his own exam date — nobody else's date (panel or
+ * default) decides it. The date is stored in OfflineStudyVault prefs
+ * (setExamDate, local midnight) and the countdown is pure local math
+ * ticking every second: days / hours / minutes / seconds until that
+ * day. No network call happens here at all.
+ *
+ * Target precedence mirrors the vault: the student's date first, the
+ * admin panel date only as a fallback while the student has set none.
+ * With no date anywhere, the card shows the picker prompt instead of
+ * any made-up number.
+ */
+@Composable
+private fun ExamCountdownCard() {
+    val context = LocalContext.current
+    val stats by OfflineStudyVault.statsFlow.collectAsState()
+    val target = stats.examDateMillis ?: stats.adminExamDateMillis
+    var showPicker by remember { mutableStateOf(false) }
+
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(target) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+
+    if (showPicker) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = target?.let { localMidnight ->
+                Instant.ofEpochMilli(localMidnight).atZone(ZoneId.systemDefault())
+                    .toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+            }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let { utcMidnight ->
+                        val localDate = Instant.ofEpochMilli(utcMidnight)
+                            .atZone(ZoneOffset.UTC).toLocalDate()
+                        val localMidnight = localDate.atStartOfDay(ZoneId.systemDefault())
+                            .toInstant().toEpochMilli()
+                        OfflineStudyVault.setExamDate(context, localMidnight)
+                    }
+                    showPicker = false
+                }) { Text("تأكيد") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("إلغاء") }
+            }
+        ) {
+            DatePicker(state = pickerState, showModeToggle = false)
+        }
+    }
+
+    Card(
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.5.dp, GoldAccent.copy(alpha = 0.65f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Event, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(22.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "العد التنازلي للامتحان الوطني",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = MaroonPrimary
+                    )
+                    Text(
+                        "يُحفظ على جهازك ويعمل دون إنترنت",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            when {
+                target == null -> {
+                    Text(
+                        "حدد تاريخ امتحانك ليبدأ العد التنازلي.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { showPicker = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = MaroonDeep),
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text("تحديد تاريخ الامتحان", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    }
+                }
+                target - now <= 0L -> {
+                    Text(
+                        "حان موعد الامتحان! بالتوفيق يا طبيب المستقبل",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = MaroonPrimary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { showPicker = true },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text("تغيير التاريخ", fontSize = 14.sp)
+                    }
+                }
+                else -> {
+                    val remaining = target - now
+                    val days = remaining / 86_400_000L
+                    val hours = (remaining % 86_400_000L) / 3_600_000L
+                    val minutes = (remaining % 3_600_000L) / 60_000L
+                    val seconds = (remaining % 60_000L) / 1_000L
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CountdownUnit(value = "$days", label = "يوماً")
+                        Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
+                        CountdownUnit(value = "%02d".format(hours), label = "ساعة")
+                        Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
+                        CountdownUnit(value = "%02d".format(minutes), label = "دقيقة")
+                        Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
+                        CountdownUnit(value = "%02d".format(seconds), label = "ثانية")
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    val dateText = Instant.ofEpochMilli(target).atZone(ZoneId.systemDefault())
+                        .toLocalDate().toString()
+                    Text(
+                        "تاريخ الامتحان: $dateText",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { showPicker = true },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text("تغيير التاريخ", fontSize = 14.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CountdownUnit(value: String, label: String) {
+    Surface(
+        color = MaroonPrimary.copy(alpha = 0.08f),
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.weight(1f)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(vertical = 10.dp)
+        ) {
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaroonPrimary)
+            Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
         }
     }
 }
