@@ -33,13 +33,33 @@ object WataniFirestoreSync {
                 userRef.set(initialData, SetOptions.merge()).await()
             }
 
-            // Pull & Merge / Push local stats
+            // Account binding: the vault must belong to THIS user before
+            // any stat is read or pushed — otherwise the device's previous
+            // account progress would be pushed to the new account.
+            OfflineStudyVault.switchAccount(context, user.uid)
             OfflineStudyVault.ensureInitialized(context)
+            val statsBeforePull = OfflineStudyVault.statsFlow.value
+
+            // Pull remote FIRST: a fresh per-uid vault starts at zero, so
+            // the account's own server totals must be restored BEFORE
+            // anything is pushed — pushing first would overwrite the
+            // server totals with zero. Only higher remote totals win.
+            val remoteData = userRef.get().await()
+            val remoteXp = remoteData.getLong("xp") ?: 0L
+            if (remoteXp > statsBeforePull.totalCorrect * 25) {
+                val rAns = (remoteData.getLong("totalAnswered") ?: statsBeforePull.totalAnswered.toLong()).toInt()
+                val rCor = (remoteData.getLong("totalCorrect") ?: statsBeforePull.totalCorrect.toLong()).toInt()
+                OfflineStudyVault.adoptRemoteTotals(context, rAns, rCor)
+            }
             val stats = OfflineStudyVault.statsFlow.value
-            val favsPrefs = context.getSharedPreferences("watani_favorites", Context.MODE_PRIVATE)
+
+            // Favorites/notes are per-account too (same leak class).
+            val favsPrefsName = if (user.uid.isBlank()) "watani_favorites" else "watani_favorites_${user.uid}"
+            val favsPrefs = context.getSharedPreferences(favsPrefsName, Context.MODE_PRIVATE)
             val favs = favsPrefs.getStringSet("fav_list", emptySet())?.toList() ?: emptyList()
 
-            val notesPrefs = context.getSharedPreferences("watani_notes", Context.MODE_PRIVATE)
+            val notesPrefsName = if (user.uid.isBlank()) "watani_notes" else "watani_notes_${user.uid}"
+            val notesPrefs = context.getSharedPreferences(notesPrefsName, Context.MODE_PRIVATE)
             val notesJson = notesPrefs.getString("notes_json", "[]") ?: "[]"
 
             val mistakesList = stats.savedMistakes.map { m ->
@@ -65,20 +85,6 @@ object WataniFirestoreSync {
             )
 
             userRef.set(syncMap, SetOptions.merge()).await()
-
-            // Pull remote if newer
-            val remoteData = userRef.get().await()
-            val remoteXp = remoteData.getLong("xp") ?: 0L
-            val localXp = stats.totalCorrect * 25
-            if (remoteXp > localXp) {
-                val rAns = (remoteData.getLong("totalAnswered") ?: stats.totalAnswered.toLong()).toInt()
-                val rCor = (remoteData.getLong("totalCorrect") ?: stats.totalCorrect.toLong()).toInt()
-                val prefs = context.getSharedPreferences("watani_offline_study_vault", Context.MODE_PRIVATE)
-                prefs.edit()
-                    .putInt("total_answered", rAns)
-                    .putInt("total_correct", rCor)
-                    .apply()
-            }
 
             // تثبيت النقاط على الـWorker (بذر الصدارة الجديدة؛ فشلها صامت ولا يمس مزامنة Firestore)
             try {

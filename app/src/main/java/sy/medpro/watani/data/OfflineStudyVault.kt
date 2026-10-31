@@ -44,7 +44,23 @@ data class OfflineStudyStats(
 )
 
 object OfflineStudyVault {
-    private const val PREF_NAME = "watani_offline_study_vault"
+    // Account binding (Oct 2026 — the doctor's bug report): progress used
+    // to live in ONE store shared by every account on the device, so a
+    // second Google account inherited the first account's points, and the
+    // sync then pushed them to the new account's leaderboard row. Every
+    // store is now per-account: the signed-out (guest) store plus one
+    // store per Google uid. A new account starts at zero; the previous
+    // account's progress stays under its own uid and returns when that
+    // account signs in again. Switching accounts never deletes anything.
+    private const val PREF_BASE = "watani_offline_study_vault"
+    private var currentOwnerUid: String? = null
+    private var ownerLoaded = false
+
+    private fun prefsNameFor(uid: String?): String =
+        if (uid.isNullOrBlank()) PREF_BASE else "${PREF_BASE}_$uid"
+
+    private fun prefsFor(context: Context): android.content.SharedPreferences =
+        context.applicationContext.getSharedPreferences(prefsNameFor(currentOwnerUid), Context.MODE_PRIVATE)
     private const val KEY_TOTAL_ANSWERED = "total_answered"
     private const val KEY_TOTAL_CORRECT = "total_correct"
     private const val KEY_EXAM_DAYS = "exam_days_remaining"
@@ -101,7 +117,7 @@ object OfflineStudyVault {
 
     fun ensureInitialized(context: Context) {
         if (isInitialized) return
-        val prefs = context.applicationContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val prefs = prefsFor(context)
         if (!prefs.contains(KEY_TOTAL_ANSWERED)) {
             isInitialized = true
             persist(context, _statsFlow.value)
@@ -160,6 +176,34 @@ object OfflineStudyVault {
         _statsFlow.value = baseStats.copy(examDaysRemaining = effectiveDays(baseStats))
         isInitialized = true
         fetchAdminExamDate(context)
+    }
+
+    /**
+     * Binds the vault to a Google account. Call on every auth change
+     * (MainActivity's listener) and at the start of every sync. Switching
+     * reloads the flow from that account's own store; signing out loads
+     * the guest store, so nothing of the previous account shows. Fresh
+     * per-uid stores start at zero — the sync's pull-remote step restores
+     * that account's own server totals on first sign-in.
+     */
+    fun switchAccount(context: Context, uid: String?) {
+        if (ownerLoaded && currentOwnerUid == uid) return
+        ownerLoaded = true
+        currentOwnerUid = uid
+        isInitialized = false
+        ensureInitialized(context)
+    }
+
+    /** Adopts server totals into the current account's vault (flow + disk).
+     * Used by the sync's pull-remote step; never writes another account's file. */
+    fun adoptRemoteTotals(context: Context, totalAnswered: Int, totalCorrect: Int) {
+        ensureInitialized(context)
+        val updated = _statsFlow.value.copy(
+            totalAnswered = totalAnswered,
+            totalCorrect = totalCorrect
+        )
+        _statsFlow.value = updated
+        persist(context, updated)
     }
 
     fun recordQuestionAttempt(
@@ -383,7 +427,7 @@ object OfflineStudyVault {
     }
 
     private fun persist(context: Context, stats: OfflineStudyStats) {
-        val prefs = context.applicationContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val prefs = prefsFor(context)
         val mistakesArr = JSONArray()
         stats.savedMistakes.forEach { m ->
             val obj = JSONObject()

@@ -77,10 +77,15 @@ fun ProfileScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) { OfflineStudyVault.ensureInitialized(context) }
     val stats by OfflineStudyVault.statsFlow.collectAsState()
 
-    // حقول الملف المعروض بالصدارة (تُحفظ محليًا بعد نجاح الحفظ بالـWorker)
-    val profilePrefs = remember { context.getSharedPreferences("watani_profile", Context.MODE_PRIVATE) }
-    var displayName by remember { mutableStateOf(profilePrefs.getString("display_name", firebaseUser?.displayName ?: "") ?: "") }
-    var university by remember { mutableStateOf(profilePrefs.getString("university", "") ?: "") }
+    // حقول الملف المعروض بالصدارة (تُحفظ محليًا بعد نجاح الحفظ بالـWorker).
+    // Account binding: the leaderboard name/university live per account,
+    // never in one shared store — that shared store is how the previous
+    // account's edited name reappeared after switching accounts.
+    val profileUid = firebaseUser?.uid
+    val profilePrefsName = if (profileUid.isNullOrBlank()) "watani_profile" else "watani_profile_$profileUid"
+    val profilePrefs = remember(profileUid) { context.getSharedPreferences(profilePrefsName, Context.MODE_PRIVATE) }
+    var displayName by remember(profileUid) { mutableStateOf(profilePrefs.getString("display_name", firebaseUser?.displayName ?: "") ?: "") }
+    var university by remember(profileUid) { mutableStateOf(profilePrefs.getString("university", "") ?: "") }
     var isSavingProfile by remember { mutableStateOf(false) }
     var profileSaveMessage by remember { mutableStateOf<String?>(null) }
 
@@ -1013,8 +1018,11 @@ fun GlobalSearchScreen(onBack: () -> Unit) {
 @Composable
 fun FavoritesScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("watani_favorites", Context.MODE_PRIVATE) }
-    var favs by remember { mutableStateOf(prefs.getStringSet("fav_list", emptySet()) ?: emptySet()) }
+    // Account binding: favorites live per account, never in one shared store.
+    val favUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val favPrefsName = if (favUid.isNullOrBlank()) "watani_favorites" else "watani_favorites_$favUid"
+    val prefs = remember(favUid) { context.getSharedPreferences(favPrefsName, Context.MODE_PRIVATE) }
+    var favs by remember(favUid) { mutableStateOf(prefs.getStringSet("fav_list", emptySet()) ?: emptySet()) }
 
     DrawerScreenScaffold(title = "المفضلة", onBack = onBack) { padding ->
         if (favs.isEmpty()) {
@@ -1075,9 +1083,12 @@ fun FavoritesScreen(onBack: () -> Unit) {
 @Composable
 fun MyNotesScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("watani_notes", Context.MODE_PRIVATE) }
-    var noteText by remember { mutableStateOf("") }
-    var notesList by remember { mutableStateOf(prefs.getString("notes_json", "[]")?.let { json ->
+    // Account binding: notes live per account, never in one shared store.
+    val notesUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val notesPrefsName = if (notesUid.isNullOrBlank()) "watani_notes" else "watani_notes_$notesUid"
+    val prefs = remember(notesUid) { context.getSharedPreferences(notesPrefsName, Context.MODE_PRIVATE) }
+    var noteText by remember(notesUid) { mutableStateOf("") }
+    var notesList by remember(notesUid) { mutableStateOf(prefs.getString("notes_json", "[]")?.let { json ->
         try {
             val arr = JSONArray(json)
             buildList { for (i in 0 until arr.length()) add(arr.getString(i)) }

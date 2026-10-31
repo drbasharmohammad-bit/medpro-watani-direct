@@ -124,8 +124,11 @@ fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> 
 fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
     BackHandler { onBack() }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val favPrefs = remember { context.getSharedPreferences("watani_favorites", android.content.Context.MODE_PRIVATE) }
-    var favList by remember { mutableStateOf(favPrefs.getStringSet("fav_list", emptySet()) ?: emptySet()) }
+    // Account binding: favorites live per account, never in one shared store.
+    val favUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val favPrefsName = if (favUid.isNullOrBlank()) "watani_favorites" else "watani_favorites_$favUid"
+    val favPrefs = remember(favUid) { context.getSharedPreferences(favPrefsName, android.content.Context.MODE_PRIVATE) }
+    var favList by remember(favUid) { mutableStateOf(favPrefs.getStringSet("fav_list", emptySet()) ?: emptySet()) }
     val cId = caseItem.id ?: caseItem.title ?: "حالة"
     val isFav = favList.contains(cId)
 

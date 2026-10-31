@@ -329,8 +329,11 @@ fun QuestionCard(
     onOptionSelected: (Int) -> Unit
 ) {
     val context = LocalContext.current
-    val favPrefs = remember { context.getSharedPreferences("watani_favorites", android.content.Context.MODE_PRIVATE) }
-    var favList by remember { mutableStateOf(favPrefs.getStringSet("fav_list", emptySet()) ?: emptySet()) }
+    // Account binding: favorites live per account, never in one shared store.
+    val favUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+    val favPrefsName = if (favUid.isNullOrBlank()) "watani_favorites" else "watani_favorites_$favUid"
+    val favPrefs = remember(favUid) { context.getSharedPreferences(favPrefsName, android.content.Context.MODE_PRIVATE) }
+    var favList by remember(favUid) { mutableStateOf(favPrefs.getStringSet("fav_list", emptySet()) ?: emptySet()) }
     val qId = question.id ?: question.text ?: "سؤال $questionNumber"
     val qLookupKey = normalizeExplanationKey(question.id)
     val explanationState = rememberExplanationState(qLookupKey)

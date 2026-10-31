@@ -102,7 +102,14 @@ class MainActivity : ComponentActivity() {
                 // prompt) refreshes the UI without a manual trigger flag.
                 var currentUser by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
                 DisposableEffect(Unit) {
-                    val listener = FirebaseAuth.AuthStateListener { auth -> currentUser = auth.currentUser }
+                    val listener = FirebaseAuth.AuthStateListener { auth ->
+                        currentUser = auth.currentUser
+                        // Account binding: the progress vault follows the
+                        // account, so a second account on this phone never
+                        // inherits the first one's points (and sign-out
+                        // drops to the empty guest store).
+                        sy.medpro.watani.data.OfflineStudyVault.switchAccount(context, auth.currentUser?.uid)
+                    }
                     FirebaseAuth.getInstance().addAuthStateListener(listener)
                     onDispose { FirebaseAuth.getInstance().removeAuthStateListener(listener) }
                 }
