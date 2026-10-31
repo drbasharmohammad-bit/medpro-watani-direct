@@ -702,6 +702,7 @@ fun QuickActionCard(
  * With no date anywhere, the card shows the picker prompt instead of
  * any made-up number.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExamCountdownCard() {
     val context = LocalContext.current
@@ -816,13 +817,13 @@ private fun ExamCountdownCard() {
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        CountdownUnit(value = "$days", label = "يوماً")
+                        CountdownUnit(modifier = Modifier.weight(1f), value = "$days", label = "يوماً")
                         Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
-                        CountdownUnit(value = "%02d".format(hours), label = "ساعة")
+                        CountdownUnit(modifier = Modifier.weight(1f), value = "%02d".format(hours), label = "ساعة")
                         Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
-                        CountdownUnit(value = "%02d".format(minutes), label = "دقيقة")
+                        CountdownUnit(modifier = Modifier.weight(1f), value = "%02d".format(minutes), label = "دقيقة")
                         Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
-                        CountdownUnit(value = "%02d".format(seconds), label = "ثانية")
+                        CountdownUnit(modifier = Modifier.weight(1f), value = "%02d".format(seconds), label = "ثانية")
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     val dateText = Instant.ofEpochMilli(target).atZone(ZoneId.systemDefault())
@@ -847,11 +848,11 @@ private fun ExamCountdownCard() {
 }
 
 @Composable
-private fun CountdownUnit(value: String, label: String) {
+private fun CountdownUnit(modifier: Modifier = Modifier, value: String, label: String) {
     Surface(
         color = MaroonPrimary.copy(alpha = 0.08f),
         shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.weight(1f)
+        modifier = modifier
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
