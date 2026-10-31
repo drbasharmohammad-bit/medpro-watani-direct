@@ -174,6 +174,28 @@ class MainActivity : ComponentActivity() {
                         val user = currentUser
                         if (user != null) {
                             sy.medpro.watani.data.WataniFirestoreSync.ensureAndSyncUser(contextForSync, user)
+                            // Best-effort FCM token upload on sign-in
+                            // (deduped inside; never blocks the UI).
+                            try { sy.medpro.watani.data.WorkerActivationApi.uploadFcmToken(contextForSync) } catch (_: Exception) { }
+                        }
+                    }
+                    // POST_NOTIFICATIONS (Android 13+): ask once after
+                    // sign-in, never blocking activation or content —
+                    // denial only means no system notifications; the
+                    // in-app notification list keeps working.
+                    val notificationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+                    ) { }
+                    LaunchedEffect(currentUser) {
+                        if (currentUser != null &&
+                            android.os.Build.VERSION.SDK_INT >= 33 &&
+                            androidx.core.content.ContextCompat.checkSelfPermission(
+                                contextForSync, android.Manifest.permission.POST_NOTIFICATIONS
+                            ) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
+                            !prefs.getBoolean("notif_perm_asked", false)
+                        ) {
+                            prefs.edit().putBoolean("notif_perm_asked", true).apply()
+                            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                         }
                     }
                     val uiState by viewModel.uiState.collectAsState()

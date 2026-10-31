@@ -73,6 +73,9 @@ object WorkerActivationApi {
     private const val KEY_EXPIRES_AT = "activation_expires_at"
     private const val KEY_DEVICE_UUID = "device_uuid_fallback"
 
+    /** Last FCM token uploaded to /v1/devices/register (dedup key). */
+    private const val KEY_LAST_FCM_TOKEN = "last_fcm_token"
+
     /** Restricted prefixes under v1/ (contract) + the exact library.json file. */
     private val RESTRICTED_PREFIXES = listOf(
         "questions/",
@@ -272,6 +275,8 @@ object WorkerActivationApi {
                         return@withContext Pair(false, "استجابة التفعيل بلا رمز — أعد المحاولة.")
                     }
                     storeActivation(context, trimmed, token, parseExpiresAt(json))
+                    // Best-effort FCM token upload: never fails activation.
+                    try { uploadFcmToken(context) } catch (_: Exception) { }
                     Pair(true, "تم تفعيل الحساب والجهاز بنجاح!")
                 }
             } catch (e: Exception) {
@@ -279,6 +284,52 @@ object WorkerActivationApi {
                 Pair(false, "تعذر الاتصال بخادم التفعيل — تحقق من الشبكة وحاول مجددًا.")
             }
         }
+
+    /**
+     * Uploads the current FCM token to POST /v1/devices/register so the
+     * admin panel can push to this device. Best-effort and idempotent:
+     * never throws, uploads only when the token changed since the last
+     * successful upload, and silently skips when nobody is signed in
+     * (the next sign-in/activation upload covers it). Called at
+     * activation, at sign-in, and from onNewToken.
+     */
+    suspend fun uploadFcmToken(context: Context) {
+        try {
+            withContext(Dispatchers.IO) {
+                val token = try {
+                    com.google.firebase.messaging.FirebaseMessaging.getInstance().token.await()
+                } catch (_: Exception) {
+                    return@withContext
+                }
+                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                if (prefs.getString(KEY_LAST_FCM_TOKEN, null) == token) return@withContext
+                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return@withContext
+                val idToken = try {
+                    user.getIdToken(false).await().token
+                } catch (_: Exception) {
+                    null
+                } ?: return@withContext
+                val bodyJson = JSONObject().apply {
+                    put("idToken", idToken)
+                    put("deviceId", deviceId(context))
+                    put("fcmToken", token)
+                }.toString()
+                val request = Request.Builder()
+                    .url("$WORKER_BASE/v1/devices/register")
+                    .header("Authorization", "Bearer $idToken")
+                    .post(bodyJson.toRequestBody(JSON_MEDIA_TYPE))
+                    .build()
+                client.newCall(request).execute().use { resp ->
+                    val text = resp.body?.string() ?: "{}"
+                    if (resp.isSuccessful && JSONObject(text).optBoolean("ok", false)) {
+                        prefs.edit().putString(KEY_LAST_FCM_TOKEN, token).apply()
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // Best-effort: a later sign-in/activation upload retries.
+        }
+    }
 
     /**
      * Tries a token refresh when the stored token expired. Distinguishes
