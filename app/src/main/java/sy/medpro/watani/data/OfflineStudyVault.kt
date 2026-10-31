@@ -206,6 +206,16 @@ object OfflineStudyVault {
         persist(context, updated)
     }
 
+    /** Adopts the account's own saved-mistakes list from the server
+     * (first sync on a fresh per-uid store only — the sync gates this on
+     * the local list being empty, so newer local data is never overwritten). */
+    fun adoptRemoteMistakes(context: Context, mistakes: List<SavedMistakeItem>) {
+        ensureInitialized(context)
+        val updated = _statsFlow.value.copy(savedMistakes = mistakes)
+        _statsFlow.value = updated
+        persist(context, updated)
+    }
+
     fun recordQuestionAttempt(
         context: Context,
         subjectTitle: String,

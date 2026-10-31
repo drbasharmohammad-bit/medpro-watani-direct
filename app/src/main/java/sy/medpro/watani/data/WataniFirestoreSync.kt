@@ -56,13 +56,54 @@ object WataniFirestoreSync {
             // Favorites/notes are per-account too (same leak class).
             val favsPrefsName = if (user.uid.isBlank()) "watani_favorites" else "watani_favorites_${user.uid}"
             val favsPrefs = context.getSharedPreferences(favsPrefsName, Context.MODE_PRIVATE)
-            val favs = favsPrefs.getStringSet("fav_list", emptySet())?.toList() ?: emptyList()
+            var favs = favsPrefs.getStringSet("fav_list", emptySet())?.toList() ?: emptyList()
 
             val notesPrefsName = if (user.uid.isBlank()) "watani_notes" else "watani_notes_${user.uid}"
             val notesPrefs = context.getSharedPreferences(notesPrefsName, Context.MODE_PRIVATE)
-            val notesJson = notesPrefs.getString("notes_json", "[]") ?: "[]"
+            var notesJson = notesPrefs.getString("notes_json", "[]") ?: "[]"
 
-            val mistakesList = stats.savedMistakes.map { m ->
+            // Restore the account's own detail lists on first sync only:
+            // the local stores are empty on a fresh per-uid vault, so the
+            // server copies refill them — and the push below then keeps
+            // them instead of overwriting the cloud lists with empty ones.
+            if (stats.savedMistakes.isEmpty()) {
+                val remoteMistakes = (remoteData.get("mistakes") as? List<*>)?.mapNotNull { item ->
+                    val m = item as? Map<*, *> ?: return@mapNotNull null
+                    try {
+                        SavedMistakeItem(
+                            id = m["id"] as? String ?: return@mapNotNull null,
+                            subjectTitle = m["subjectTitle"] as? String ?: "",
+                            questionText = m["questionText"] as? String ?: "",
+                            selectedAnswer = m["selectedAnswer"] as? String ?: "",
+                            correctAnswer = m["correctAnswer"] as? String ?: "",
+                            explanation = m["explanation"] as? String ?: "",
+                            timestamp = (m["timestamp"] as? Number)?.toLong() ?: 0L
+                        )
+                    } catch (_: Exception) {
+                        null
+                    }
+                } ?: emptyList()
+                if (remoteMistakes.isNotEmpty()) OfflineStudyVault.adoptRemoteMistakes(context, remoteMistakes)
+            }
+            if (favs.isEmpty()) {
+                val remoteFavs = (remoteData.get("favorites") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                if (remoteFavs.isNotEmpty()) {
+                    favsPrefs.edit().putStringSet("fav_list", remoteFavs.toSet()).apply()
+                    favs = remoteFavs
+                }
+            }
+            if (notesJson.isBlank() || notesJson == "[]") {
+                val remoteNotes = remoteData.getString("notes") ?: ""
+                if (remoteNotes.isNotBlank() && remoteNotes != "[]") {
+                    notesPrefs.edit().putString("notes_json", remoteNotes).apply()
+                    notesJson = remoteNotes
+                }
+            }
+
+            // Fresh flow read: the detail-pull above may have restored the
+            // mistakes list into the vault — pushing the stale copy would
+            // overwrite the cloud list with empty.
+            val mistakesList = OfflineStudyVault.statsFlow.value.savedMistakes.map { m ->
                 mapOf(
                     "id" to m.id,
                     "subjectTitle" to m.subjectTitle,
