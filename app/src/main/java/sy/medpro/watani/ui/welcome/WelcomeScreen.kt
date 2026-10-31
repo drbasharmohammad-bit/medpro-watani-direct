@@ -1,5 +1,8 @@
 package sy.medpro.watani.ui.welcome
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
@@ -9,7 +12,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +51,29 @@ fun WelcomeScreen(
     var signInError by remember { mutableStateOf<String?>(null) }
     var signedInName by remember { mutableStateOf<String?>(null) }
 
+    // Splash hero animation: the branded launch window (maroon + logo
+    // artwork, see launch_background.xml) flows into this hero, which
+    // scales/fades in while the slogan slides up. Purely visual — zero
+    // added wait: navigation is never delayed by the animation.
+    var heroVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { heroVisible = true }
+    val logoScale by animateFloatAsState(
+        targetValue = if (heroVisible) 1f else 0.85f,
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "splashLogoScale"
+    )
+    val logoAlpha by animateFloatAsState(
+        targetValue = if (heroVisible) 1f else 0f,
+        animationSpec = tween(700),
+        label = "splashLogoAlpha"
+    )
+    val sloganAlpha by animateFloatAsState(
+        targetValue = if (heroVisible) 1f else 0f,
+        animationSpec = tween(800, delayMillis = 150),
+        label = "splashSloganAlpha"
+    )
+    val sloganSlidePx = with(LocalDensity.current) { 16.dp.toPx() }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -69,6 +97,7 @@ fun WelcomeScreen(
                 Box(
                     modifier = Modifier
                         .size(120.dp)
+                        .graphicsLayer(scaleX = logoScale, scaleY = logoScale, alpha = logoAlpha)
                         .background(androidx.compose.ui.graphics.Color(0xFF2D1015)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -91,7 +120,11 @@ fun WelcomeScreen(
                     "نجاحك في الوطني يبدأ من هنا",
                     fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.graphicsLayer(
+                        alpha = sloganAlpha,
+                        translationY = (1f - sloganAlpha) * sloganSlidePx
+                    )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(

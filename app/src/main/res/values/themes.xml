@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar">
+        <!-- Branded launch window: maroon + logo artwork instead of the
+             plain grey window on cold start (see launch_background.xml). -->
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
 </resources>

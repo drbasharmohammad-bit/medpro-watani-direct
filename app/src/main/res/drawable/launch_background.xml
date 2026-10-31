@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launch-window background: replaces the plain grey window the student
+  sees on cold start before Compose draws. Maroon brand background with
+  the app icon's own artwork centred (used as-is, never redesigned),
+  matching the WelcomeScreen hero behind it so the transition is seamless.
+  No animation here by design — window backgrounds are static; the
+  entrance animation lives in WelcomeScreen and plays with zero added delay.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <solid android:color="#7A1F2B" />
+        </shape>
+    </item>
+    <item
+        android:width="120dp"
+        android:height="120dp"
+        android:gravity="center">
+        <bitmap
+            android:src="@drawable/ic_launcher_artwork"
+            android:gravity="fill" />
+    </item>
+</layer-list>
