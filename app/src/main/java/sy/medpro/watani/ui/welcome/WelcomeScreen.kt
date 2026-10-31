@@ -1,45 +1,48 @@
 package sy.medpro.watani.ui.welcome
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.launch
 import sy.medpro.watani.R
 import sy.medpro.watani.ui.auth.GoogleSignInHelper
-import sy.medpro.watani.ui.theme.MaroonPrimary
 
 /**
  * Team 1 — welcome screen, the new entry point of the app.
  *
  * No sign-in is required to see it or to enter: [onEnter] opens the main
- * interface directly. The hero image is the app icon's own photo
- * (R.drawable.ic_launcher_artwork — the doctor's own image, used as-is,
- * never redesigned).
+ * interface directly.
  *
- * Crash fix (30 Oct 2026): the first version loaded R.mipmap.ic_launcher
- * via painterResource. On API 26+ that ID resolves to the ADAPTIVE icon
- * (mipmap-anydpi-v26/ic_launcher.xml), which Compose cannot draw, so the
- * app died on the very first frame (grey window, then exit). The artwork
- * raster loads safely on every API level; the dark box behind it
- * reproduces the icon's own background colour (#2D1015).
+ * The hero is the Med Pro logo animation (R.raw.welcome_logo, portrait
+ * 720x1280, converted from the doctor's landscape video): it plays once
+ * over the full screen and holds its final clean-logo frame behind the
+ * title and buttons. It replaced the earlier scale/fade hero animation
+ * (Oct 2026, the doctor's word: the old one was not nice). If playback
+ * ever fails, the screen simply stays dark and fully functional — never
+ * a black-screen dead end.
+ *
+ * The background colour (#1A1212) is the video's own edge colour, so the
+ * letterbox bars (phones are slightly taller than 9:16) are invisible.
  */
+@OptIn(UnstableApi::class)
 @Composable
 fun WelcomeScreen(
     onEnter: () -> Unit,
@@ -50,146 +53,132 @@ fun WelcomeScreen(
     var isSigningIn by remember { mutableStateOf(false) }
     var signInError by remember { mutableStateOf<String?>(null) }
     var signedInName by remember { mutableStateOf<String?>(null) }
+    var videoError by remember { mutableStateOf(false) }
 
-    // Splash hero animation: the branded launch window (maroon + logo
-    // artwork, see launch_background.xml) flows into this hero, which
-    // scales/fades in while the slogan slides up. Purely visual — zero
-    // added wait: navigation is never delayed by the animation.
-    var heroVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { heroVisible = true }
-    val logoScale by animateFloatAsState(
-        targetValue = if (heroVisible) 1f else 0.85f,
-        animationSpec = tween(700, easing = FastOutSlowInEasing),
-        label = "splashLogoScale"
-    )
-    val logoAlpha by animateFloatAsState(
-        targetValue = if (heroVisible) 1f else 0f,
-        animationSpec = tween(700),
-        label = "splashLogoAlpha"
-    )
-    val sloganAlpha by animateFloatAsState(
-        targetValue = if (heroVisible) 1f else 0f,
-        animationSpec = tween(800, delayMillis = 150),
-        label = "splashSloganAlpha"
-    )
-    val sloganSlidePx = with(LocalDensity.current) { 16.dp.toPx() }
+    val videoBg = Color(0xFF1A1212)
+    val gold = Color(0xFFD4AF37)
+
+    val player = remember {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(
+                MediaItem.fromUri(
+                    "android.resource://${context.packageName}/${R.raw.welcome_logo}"
+                )
+            )
+            addListener(object : Player.Listener {
+                override fun onPlayerError(error: PlaybackException) {
+                    videoError = true
+                }
+            })
+            prepare()
+            playWhenReady = true
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { player.release() }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaroonPrimary)
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
+            .background(videoBg)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            modifier = Modifier.fillMaxWidth()
+        if (!videoError) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        this.player = player
+                        useController = false
+                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // App icon's own photo (raster artwork, never the adaptive
-                // mipmap — see the KDoc above). The dark box reproduces the
-                // icon's own background colour.
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .graphicsLayer(scaleX = logoScale, scaleY = logoScale, alpha = logoAlpha)
-                        .background(androidx.compose.ui.graphics.Color(0xFF2D1015)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_launcher_artwork),
-                        contentDescription = "أيقونة تطبيق Med Pro - وطني",
-                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                "Med Pro - وطني",
+                fontWeight = FontWeight.Bold,
+                fontSize = 24.sp,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                "نجاحك في الوطني يبدأ من هنا",
+                fontSize = 15.sp,
+                color = Color.White.copy(alpha = 0.85f),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "تصفح الأقسام المجانية مباشرة — بنك الأسئلة والمكتبة فقط يحتاجان كود تفعيل.",
+                fontSize = 13.sp,
+                color = Color.White.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onEnter,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = videoBg),
+                shape = MaterialTheme.shapes.medium) {
+                Text("الدخول إلى التطبيق", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            if (signedInName != null) {
                 Text(
-                    "Med Pro - وطني",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
-                    color = MaroonPrimary
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    "نجاحك في الوطني يبدأ من هنا",
-                    fontSize = 15.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.graphicsLayer(
-                        alpha = sloganAlpha,
-                        translationY = (1f - sloganAlpha) * sloganSlidePx
-                    )
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "تصفح الأقسام المجانية مباشرة — بنك الأسئلة والمكتبة فقط يحتاجان كود تفعيل.",
+                    "تم تسجيل الدخول: $signedInName",
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = gold,
                     textAlign = TextAlign.Center
                 )
-                Spacer(modifier = Modifier.height(24.dp))
-                Button(
-                    onClick = onEnter,
+            } else if (isSigningIn) {
+                CircularProgressIndicator(color = gold, modifier = Modifier.size(28.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("جاري تسجيل الدخول...", fontSize = 13.sp, color = Color.White)
+            } else {
+                OutlinedButton(border = BorderStroke(1.dp, Color.White),
+                    onClick = {
+                        signInError = null
+                        isSigningIn = true
+                        scope.launch {
+                            val result = GoogleSignInHelper.signInWithGoogle(context)
+                            isSigningIn = false
+                            result.fold(
+                                onSuccess = {
+                                    signedInName =
+                                        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.displayName
+                                            ?: "حساب Google"
+                                    onSignedIn()
+                                },
+                                onFailure = { signInError = it.localizedMessage }
+                            )
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                        .height(50.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                     shape = MaterialTheme.shapes.medium) {
-                    Text("الدخول إلى التطبيق", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("تسجيل الدخول بحساب Google (اختياري)", fontSize = 14.sp)
                 }
+            }
+            if (signInError != null) {
                 Spacer(modifier = Modifier.height(12.dp))
-                if (signedInName != null) {
-                    Text(
-                        "تم تسجيل الدخول: $signedInName",
-                        fontSize = 13.sp,
-                        color = MaroonPrimary,
-                        textAlign = TextAlign.Center
-                    )
-                } else if (isSigningIn) {
-                    CircularProgressIndicator(color = MaroonPrimary, modifier = Modifier.size(28.dp))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("جاري تسجيل الدخول...", fontSize = 13.sp)
-                } else {
-                    OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary),
-                        onClick = {
-                            signInError = null
-                            isSigningIn = true
-                            scope.launch {
-                                val result = GoogleSignInHelper.signInWithGoogle(context)
-                                isSigningIn = false
-                                result.fold(
-                                    onSuccess = {
-                                        signedInName =
-                                            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.displayName
-                                                ?: "حساب Google"
-                                        onSignedIn()
-                                    },
-                                    onFailure = { signInError = it.localizedMessage }
-                                )
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        shape = MaterialTheme.shapes.medium) {
-                        Text("تسجيل الدخول بحساب Google (اختياري)", fontSize = 14.sp)
-                    }
-                }
-                if (signInError != null) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        signInError!!,
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                Text(
+                    signInError!!,
+                    color = Color(0xFFFF8A80),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }

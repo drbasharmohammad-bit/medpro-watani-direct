@@ -29,12 +29,17 @@ android {
   // per-run fresh keystore is gone: it made every build a "different
   // app" (fresh install + new fingerprint every time).
   signingConfigs {
+    // Release uses the SAME restored keystore as debug (one stable
+    // signature for every build, so the Firebase SHA-1 never changes and
+    // updates install over the old version). The old my-upload-key.jks /
+    // "upload" alias never existed on CI — a release built against it
+    // would fail, or worse, sign with a different key.
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      storeFile = file("${rootDir}/debug.keystore")
+      storeType = System.getenv("WATANI_KEYSTORE_TYPE") ?: "JKS"
+      storePassword = System.getenv("WATANI_KEYSTORE_PASSWORD") ?: "android"
+      keyAlias = System.getenv("WATANI_KEY_ALIAS") ?: "watani"
+      keyPassword = System.getenv("WATANI_KEY_PASSWORD") ?: "android"
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
@@ -48,9 +53,12 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = true
-      isShrinkResources = true
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      // No R8 yet: obfuscation + shrinking without a device-proven rule
+      // set risks breaking Moshi/Room/Firebase reflection at runtime.
+      // The release variant differs from debug in debuggable=false and
+      // the file name — that is what makes it "final", not shrinking.
+      isMinifyEnabled = false
+      isShrinkResources = false
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
