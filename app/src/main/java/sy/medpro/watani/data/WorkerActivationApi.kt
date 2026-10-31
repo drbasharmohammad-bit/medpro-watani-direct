@@ -55,16 +55,24 @@ enum class RefreshOutcome {
  * Free paths keep fetching directly from Pages unchanged.
  *
  * No secret is hardcoded here: the only credential is the activation token
- * returned by POST /v1/activate, stored in prefs `watani_activation`
- * (is_activated + activated_code + activation_token +
- * activation_expires_at). The code itself is stored; no code secret exists
- * beyond the code.
+ * returned by POST /v1/activate, stored per account (Nov 2026: the
+ * activation is saved WITH the Google account, so signing out and back
+ * in with the same account keeps it, while a different account finds
+ * no token and must activate itself). Per-account files are
+ * `watani_activation_<uid>` (is_activated + activated_code +
+ * activation_token + activation_expires_at); the legacy global file
+ * `watani_activation` is only a one-time migration source (see
+ * adoptLegacyTokenIfOwned). Device-level keys (device uuid, last FCM
+ * token) stay in the global file. The code itself is stored; no code
+ * secret exists beyond the code.
  */
 object WorkerActivationApi {
 
     const val WORKER_BASE = "https://watani-api.drbasharmohammad.workers.dev"
 
-    /** Prefs file shared with the old activation screen (same keys kept). */
+    /** Legacy global prefs file (pre-per-account storage; kept as the
+     * migration source and for device-level keys). Per-account files
+     * are `watani_activation_<uid>` (see activationPrefs). */
     const val PREFS_NAME = "watani_activation"
 
     private const val KEY_ACTIVATED = "is_activated"
@@ -129,8 +137,63 @@ object WorkerActivationApi {
     // Activation state (prefs only — safe to call from the UI thread).
     // ------------------------------------------------------------------
 
+    /** Per-account activation storage (Nov 2026, sign-out bug fix):
+     * the activation token lives in the signed-in account's own prefs
+     * file, so it survives sign-out/sign-in with the same account and
+     * is never inherited by a different account on this device. A null
+     * uid (signed out) resolves to the legacy global file, whose
+     * activation keys are only ever read for one-time migration. */
+    private fun activationPrefs(context: Context, uid: String?) =
+        context.getSharedPreferences(
+            if (uid.isNullOrBlank()) PREFS_NAME else PREFS_NAME + "_" + uid,
+            Context.MODE_PRIVATE
+        )
+
+    private fun currentUid(): String? =
+        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+
+    /** Uid carried by a server token's payload (decoded, never trusted
+     * for access — the server re-verifies the signature on every call).
+     * Used only to decide whether a legacy global token belongs to the
+     * currently signed-in account during one-time migration. */
+    private fun tokenPayloadUid(token: String): String? {
+        return try {
+            val payload = token.substringBefore(".")
+            val decoded = android.util.Base64.decode(payload, android.util.Base64.URL_SAFE)
+            org.json.JSONObject(String(decoded, Charsets.UTF_8)).optString("uid").takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** One-time migration (Nov 2026): tokens stored before per-account
+     * storage live in the legacy global file. Adopt one into the
+     * current account's file ONLY when the token's own payload uid
+     * matches the signed-in uid; a foreign token is left untouched for
+     * its own account's later adoption. Runs only when the account's
+     * file has no token yet, so it never overwrites a live activation. */
+    private fun adoptLegacyTokenIfOwned(context: Context, uid: String) {
+        val owned = activationPrefs(context, uid)
+        if (!owned.getString(KEY_TOKEN, null).isNullOrBlank()) return
+        val legacy = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val token = legacy.getString(KEY_TOKEN, null) ?: return
+        if (token.isBlank()) return
+        if (tokenPayloadUid(token) != uid) return
+        owned.edit()
+            .putBoolean(KEY_ACTIVATED, legacy.getBoolean(KEY_ACTIVATED, false))
+            .putString(KEY_CODE, legacy.getString(KEY_CODE, null))
+            .putString(KEY_TOKEN, token)
+            .putLong(KEY_EXPIRES_AT, legacy.getLong(KEY_EXPIRES_AT, 0L))
+            .apply()
+        legacy.edit()
+            .remove(KEY_ACTIVATED).remove(KEY_CODE).remove(KEY_TOKEN).remove(KEY_EXPIRES_AT)
+            .apply()
+    }
+
     fun isActivated(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val uid = currentUid() ?: return false
+        adoptLegacyTokenIfOwned(context, uid)
+        val prefs = activationPrefs(context, uid)
         if (!prefs.getBoolean(KEY_ACTIVATED, false)) return false
         val token = prefs.getString(KEY_TOKEN, null)
         if (token.isNullOrBlank()) return false
@@ -141,7 +204,9 @@ object WorkerActivationApi {
 
     /** True when the account was activated before but the token has expired. */
     fun hasExpiredToken(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val uid = currentUid() ?: return false
+        adoptLegacyTokenIfOwned(context, uid)
+        val prefs = activationPrefs(context, uid)
         if (!prefs.getBoolean(KEY_ACTIVATED, false)) return false
         if (prefs.getString(KEY_TOKEN, null).isNullOrBlank()) return false
         val expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0L)
@@ -149,12 +214,14 @@ object WorkerActivationApi {
     }
 
     fun activatedCode(context: Context): String? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val uid = currentUid() ?: return null
+        adoptLegacyTokenIfOwned(context, uid)
+        val prefs = activationPrefs(context, uid)
         return prefs.getString(KEY_CODE, null)
     }
 
     fun clearLocalActivation(context: Context) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+        activationPrefs(context, currentUid()).edit()
             .putBoolean(KEY_ACTIVATED, false)
             .remove(KEY_CODE)
             .remove(KEY_TOKEN)
@@ -169,9 +236,11 @@ object WorkerActivationApi {
     /**
      * Clears the local activation AND wipes restricted downloads (M4:
      * decided by the doctor — ended/cancelled activation must not keep
-     * working offline). Silent: no UI event. Used by sign-out (M2: a
-     * second user on this device must not inherit anything) and by the
-     * deliberate deactivation button.
+     * working offline). Silent: no UI event. Used by the deliberate
+     * deactivation button and by gateway revocation. Sign-out
+     * deliberately does NOT call it anymore (Nov 2026): activation is
+     * stored per account, so a different account signing in finds no
+     * token and must activate itself.
      */
     fun clearActivationAndWipe(context: Context) {
         clearLocalActivation(context)
@@ -224,8 +293,8 @@ object WorkerActivationApi {
         }
     }
 
-    private fun storeActivation(context: Context, code: String, token: String, expiresAt: Long) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+    private fun storeActivation(context: Context, uid: String?, code: String, token: String, expiresAt: Long) {
+        activationPrefs(context, uid).edit()
             .putBoolean(KEY_ACTIVATED, true)
             .putString(KEY_CODE, code)
             .putString(KEY_TOKEN, token)
@@ -274,7 +343,7 @@ object WorkerActivationApi {
                     if (token.isBlank()) {
                         return@withContext Pair(false, "استجابة التفعيل بلا رمز — أعد المحاولة.")
                     }
-                    storeActivation(context, trimmed, token, parseExpiresAt(json))
+                    storeActivation(context, user.uid, trimmed, token, parseExpiresAt(json))
                     // Best-effort FCM token upload: never fails activation.
                     try { uploadFcmToken(context) } catch (_: Exception) { }
                     Pair(true, "تم تفعيل الحساب والجهاز بنجاح!")
@@ -357,9 +426,10 @@ object WorkerActivationApi {
      * success (the old `optBoolean("ok", true)` default did exactly that).
      */
     private fun refreshInternal(context: Context): Pair<String?, Boolean> {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val oldToken = prefs.getString(KEY_TOKEN, null) ?: return Pair(null, false)
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return Pair(null, false)
+        adoptLegacyTokenIfOwned(context, uid)
+        val prefs = activationPrefs(context, uid)
+        val oldToken = prefs.getString(KEY_TOKEN, null) ?: return Pair(null, false)
         return try {
             val bodyJson = JSONObject().apply {
                 put("uid", uid)
@@ -383,7 +453,7 @@ object WorkerActivationApi {
                 val token = json.optString("token", "")
                 if (token.isBlank()) return Pair(null, false)
                 val code = prefs.getString(KEY_CODE, null) ?: ""
-                storeActivation(context, code, token, parseExpiresAt(json))
+                storeActivation(context, uid, code, token, parseExpiresAt(json))
                 Pair(token, false)
             }
         } catch (_: Exception) {
@@ -403,7 +473,9 @@ object WorkerActivationApi {
      * null that would leave downloaded content usable offline.
      */
     fun validTokenOrRefresh(context: Context): String? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val uid = currentUid() ?: return null
+        adoptLegacyTokenIfOwned(context, uid)
+        val prefs = activationPrefs(context, uid)
         val token = prefs.getString(KEY_TOKEN, null)
         if (token.isNullOrBlank()) return null
         val expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0L)

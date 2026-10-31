@@ -349,11 +349,13 @@ class MainActivity : ComponentActivity() {
                                                             // AuthStateListener above refreshes currentUser;
                                                             // sign-out no longer drops the user to a gate —
                                                             // the app stays browsable, signed out.
-                                                            // M2: activation is cleared AND restricted
-                                                            // downloads are wiped, so a second user on
-                                                            // this device inherits nothing.
+                                                            // Activation is NOT cleared here (Nov 2026
+                                                            // fix): it is stored per account, so signing
+                                                            // back in with the same account keeps it,
+                                                            // while a different account finds no token
+                                                            // and must activate itself. The old M2 wipe
+                                                            // made every sign-out lose the activation.
                                                             FirebaseAuth.getInstance().signOut()
-                                                            sy.medpro.watani.data.WorkerActivationApi.clearActivationAndWipe(context)
                                                             viewModel.refreshDownloadedSections()
                                                         } else if (title == "المريض الافتراضي") {
                                                             drawerScreen = null

@@ -225,9 +225,8 @@ fun ProfileScreen(onBack: () -> Unit) {
 @Composable
 fun ActivationScreen(onBack: () -> Unit, onActivationChanged: () -> Unit = {}) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("watani_activation", Context.MODE_PRIVATE) }
     var code by remember { mutableStateOf("") }
-    var statusMessage by remember { mutableStateOf(prefs.getString("activated_code", null)?.let { "الحساب مفعل بالكود: $it" } ?: "الحساب غير مفعل. يرجى إدخال كود تفعيل صحيح.") }
+    var statusMessage by remember { mutableStateOf(WorkerActivationApi.activatedCode(context)?.let { "الحساب مفعل بالكود: $it" } ?: "الحساب غير مفعل. يرجى إدخال كود تفعيل صحيح.") }
     var isActivated by remember { mutableStateOf(WorkerActivationApi.isActivated(context)) }
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
