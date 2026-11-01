@@ -47,7 +47,6 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.awaitPointerEventScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -569,45 +568,43 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                             // at 1x passes straight
                                             // through to the pager.
                                             var prev = mapOf<Long, Offset>()
-                                            awaitPointerEventScope {
-                                                while (true) {
-                                                    val event = awaitPointerEvent()
-                                                    val down = event.changes.filter { it.pressed }
-                                                    if (down.size >= 2) {
-                                                        val cur = down.associate { it.id.value to it.position }
-                                                        val ids = cur.keys.intersect(prev.keys).take(2)
-                                                        if (ids.size == 2) {
-                                                            val a = ids[0]; val b = ids[1]
-                                                            val oldDist = (prev[a]!! - prev[b]!!).getDistance()
-                                                            val newDist = (cur[a]!! - cur[b]!!).getDistance()
-                                                            val oldC = (prev[a]!! + prev[b]!!) / 2f
-                                                            val newC = (cur[a]!! + cur[b]!!) / 2f
-                                                            if (oldDist > 0f && newDist > 0f) {
-                                                                val scale = newDist / oldDist
-                                                                if (scale != 1f || newC != oldC) {
-                                                                    zoom = (zoom * scale).coerceIn(1f, 4f)
-                                                                    pan = if (zoom <= 1.01f) Offset.Zero else clampPan(pan + (newC - oldC), zoom)
-                                                                    down.forEach { it.consume() }
-                                                                }
+                                            while (true) {
+                                                val event = awaitPointerEvent()
+                                                val down = event.changes.filter { it.pressed }
+                                                if (down.size >= 2) {
+                                                    val cur = down.associate { it.id.value to it.position }
+                                                    val ids = cur.keys.intersect(prev.keys).take(2)
+                                                    if (ids.size == 2) {
+                                                        val a = ids[0]; val b = ids[1]
+                                                        val oldDist = (prev[a]!! - prev[b]!!).getDistance()
+                                                        val newDist = (cur[a]!! - cur[b]!!).getDistance()
+                                                        val oldC = (prev[a]!! + prev[b]!!) / 2f
+                                                        val newC = (cur[a]!! + cur[b]!!) / 2f
+                                                        if (oldDist > 0f && newDist > 0f) {
+                                                            val scale = newDist / oldDist
+                                                            if (scale != 1f || newC != oldC) {
+                                                                zoom = (zoom * scale).coerceIn(1f, 4f)
+                                                                pan = if (zoom <= 1.01f) Offset.Zero else clampPan(pan + (newC - oldC), zoom)
+                                                                down.forEach { it.consume() }
                                                             }
                                                         }
-                                                        prev = cur
-                                                    } else if (down.size == 1 && zoom > 1.01f) {
-                                                        val c = down[0]
-                                                        val p = prev[c.id.value]
-                                                        if (p != null && c.position != p) {
-                                                            pan = clampPan(pan + (c.position - p), zoom)
-                                                            c.consume()
-                                                        }
-                                                        prev = mapOf(c.id.value to c.position)
-                                                    } else {
-                                                        // Single finger at 1x:
-                                                        // consume nothing —
-                                                        // the pager swipes.
-                                                        prev = down.associate { it.id.value to it.position }
                                                     }
-                                                    if (down.isEmpty()) prev = emptyMap()
+                                                    prev = cur
+                                                } else if (down.size == 1 && zoom > 1.01f) {
+                                                    val c = down[0]
+                                                    val p = prev[c.id.value]
+                                                    if (p != null && c.position != p) {
+                                                        pan = clampPan(pan + (c.position - p), zoom)
+                                                        c.consume()
+                                                    }
+                                                    prev = mapOf(c.id.value to c.position)
+                                                } else {
+                                                    // Single finger at 1x:
+                                                    // consume nothing —
+                                                    // the pager swipes.
+                                                    prev = down.associate { it.id.value to it.position }
                                                 }
+                                                if (down.isEmpty()) prev = emptyMap()
                                             }
                                         }
                                     } else Modifier

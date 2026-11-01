@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
@@ -216,7 +215,7 @@ class MainActivity : ComponentActivity() {
                     // Closed; the student opens it only on demand
                     // (menu button / edge swipe).
                     val drawerState = remember {
-                        DrawerState(DrawerValue.Closed, LocalDensity.current)
+                        DrawerState(DrawerValue.Closed)
                     }
 
                     var casesList by remember { mutableStateOf<List<ClinicalCaseDto>>(emptyList()) }
