@@ -568,6 +568,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                             // at 1x passes straight
                                             // through to the pager.
                                             var prev = mapOf<Long, Offset>()
+                                            awaitPointerEventScope {
                                             while (true) {
                                                 val event = awaitPointerEvent()
                                                 val down = event.changes.filter { it.pressed }
@@ -605,6 +606,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                     prev = down.associate { it.id.value to it.position }
                                                 }
                                                 if (down.isEmpty()) prev = emptyMap()
+                                            }
                                             }
                                         }
                                     } else Modifier
