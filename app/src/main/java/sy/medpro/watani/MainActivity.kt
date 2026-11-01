@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
@@ -206,7 +207,17 @@ class MainActivity : ComponentActivity() {
                     val uiState by viewModel.uiState.collectAsState()
                     val downloadedSections by viewModel.downloadedSections.collectAsState()
                     val coroutineScope = rememberCoroutineScope()
-                    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                    // Drawer state WITHOUT saveable restore (Nov 2026
+                    // stuck-drawer fix): rememberDrawerState restores an
+                    // open drawer after process death / recreation, so a
+                    // drawer left open once reappeared on every cold
+                    // start right after the splash and looked stuck.
+                    // A plain remembered DrawerState always starts
+                    // Closed; the student opens it only on demand
+                    // (menu button / edge swipe).
+                    val drawerState = remember {
+                        DrawerState(DrawerValue.Closed, LocalDensity.current)
+                    }
 
                     var casesList by remember { mutableStateOf<List<ClinicalCaseDto>>(emptyList()) }
                     var activeSubjectEnvelope by remember { mutableStateOf<SubjectEnvelope?>(null) }
@@ -390,7 +401,11 @@ class MainActivity : ComponentActivity() {
                             var showExitConfirm by remember { mutableStateOf(false) }
                             androidx.activity.compose.BackHandler {
                                 when {
-                                    drawerState.isOpen -> coroutineScope.launch { drawerState.close() }
+                                    // targetValue covers a drawer mid-animation
+                                    // (currentValue still Closed while the
+                                    // open animation runs): Back must close
+                                    // it, never fall through to the exit prompt.
+                                    drawerState.isOpen || drawerState.targetValue == DrawerValue.Open -> coroutineScope.launch { drawerState.close() }
                                     drawerScreen != null -> drawerScreen = null
                                     uiState.screenState != ScreenState.Home -> viewModel.goBack()
                                     uiState.currentTab != AppTab.HOME -> viewModel.setTab(AppTab.HOME)
@@ -493,7 +508,7 @@ class MainActivity : ComponentActivity() {
                                             Triple(AppTab.CASES, "المريض", Icons.Default.LocalHospital),
                                             Triple(AppTab.LIBRARY, "المكتبة", Icons.Default.Book),
                                             Triple(AppTab.LEADERBOARD, "الصدارة", Icons.Default.EmojiEvents),
-                                            Triple(AppTab.TOOLS, "أدوات", Icons.Default.Build)
+                                            Triple(AppTab.TOOLS, "أدوات", Icons.Default.MedicalServices)
                                         )
                                         tabs.forEach { (tab, label, icon) ->
                                             val selected = uiState.currentTab == tab

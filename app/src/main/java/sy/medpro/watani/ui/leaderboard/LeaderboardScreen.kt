@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import org.json.JSONObject
+import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.WorkerActivationApi
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
@@ -40,6 +41,16 @@ fun LeaderboardScreen() {
 
     var notActivated by remember { mutableStateOf(false) }
     var needsSignIn by remember { mutableStateOf(false) }
+
+    // Your-points header (Nov 2026 leaderboard fix): the server list
+    // alone left students wondering whether their own points move at
+    // all — the header shows the device's own total (same formula the
+    // sync pushes: correct answers x 25) so points visibly move right
+    // after a quiz, even before the next server sync lands.
+    val vaultStats by OfflineStudyVault.statsFlow.collectAsState()
+    LaunchedEffect(Unit) {
+        OfflineStudyVault.ensureInitialized(context)
+    }
 
     LaunchedEffect(reloadTrigger) {
         isLoading = true
@@ -132,6 +143,30 @@ fun LeaderboardScreen() {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("تنافس مع زملائك الأطباء من مختلف الجامعات السورية", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
                         Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    if (!needsSignIn) {
+                        item {
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.1f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("نقاطك (على جهازك)", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaroonPrimary)
+                                    Text(
+                                        "${vaultStats.totalCorrect * 25} نقطة",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = MaroonPrimary
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     if (users.isEmpty()) {

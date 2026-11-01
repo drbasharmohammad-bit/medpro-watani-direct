@@ -7,6 +7,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -930,7 +932,14 @@ class WataniRepository(private val context: Context) {
         return File(context.cacheDir, "decrypt_temp_$safe")
     }
 
+    // Serializes opens: two concurrent opens of the same book used to
+    // decrypt into the same cache temp path and interleave, producing a
+    // corrupt plaintext that the reader then rejected as "not in PDF
+    // format".
+    private val openMutex = Mutex()
+
     suspend fun openLibraryItem(item: LibraryItem): Result<File> = withContext(Dispatchers.IO) {
+        openMutex.withLock {
         if (!isLibraryItemDownloaded(item)) {
             return@withContext Result.failure(Exception("العنصر غير محمّل"))
         }
@@ -955,7 +964,24 @@ class WataniRepository(private val context: Context) {
             return@withContext Result.failure(Exception("تعذر فتح الملف المحمّل — أعد تحميله"))
         }
 
+        // Open-time integrity gate (Nov 2026, doctor's order): a stored
+        // copy is trusted by size alone, so a damaged-but-right-sized
+        // copy used to reach the reader as "file not in PDF format or
+        // corrupted" again and again. A decrypted copy that fails the
+        // size or the PDF-header check is purged together with its
+        // stored copy, so the next tap cleanly re-downloads instead of
+        // reopening the same corruption.
+        val expectedSize = item.size ?: 0L
+        val badDecrypted = (expectedSize > 0 && tempFile.length() != expectedSize) ||
+            (isPdfItem(item) && !hasPdfHeader(tempFile))
+        if (badDecrypted) {
+            tempFile.delete()
+            encFile.delete()
+            return@withContext Result.failure(Exception("النسخة المحفوظة تالفة — حُذفت، أعد تحميل الكتاب"))
+        }
+
         Result.success(tempFile)
+        }
     }
 
     fun closeLibraryItem(item: LibraryItem) {

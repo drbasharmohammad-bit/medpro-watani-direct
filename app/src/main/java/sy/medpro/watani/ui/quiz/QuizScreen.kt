@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -88,6 +89,28 @@ fun QuizScreen(
         while (true) {
             delay(1000)
             activeQuestionTimerSeconds++
+        }
+    }
+
+    // Points sync on quiz exit (Nov 2026 leaderboard fix): the old code
+    // synced only when every question was answered, so a partial quiz
+    // never moved the leaderboard until the next cold start or full
+    // quiz. Leaving a quiz with answers now pushes the current totals
+    // too (same idempotent absolute set, same swallowed errors).
+    val latestAnswers by rememberUpdatedState(selectedAnswers)
+    DisposableEffect(Unit) {
+        onDispose {
+            if (latestAnswers.isNotEmpty()) {
+                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                if (user != null) {
+                    val appContext = context.applicationContext
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            WataniFirestoreSync.ensureAndSyncUser(appContext, user)
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
         }
     }
 

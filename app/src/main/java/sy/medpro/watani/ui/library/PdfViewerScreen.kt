@@ -1,6 +1,7 @@
 package sy.medpro.watani.ui.library
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
@@ -15,7 +16,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -47,9 +47,11 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.awaitPointerEventScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
@@ -153,10 +155,20 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
         setSystemBarsVisible(true)
         showBars = true
     }
+    // Landscape reading (Nov 2026, doctor's order): in landscape the
+    // maroon top bar eats a big share of the short height, while
+    // fullscreen lays the page out correctly — so landscape reading
+    // behaves like fullscreen for chrome: the reader bars start hidden
+    // and the Scaffold bars hide too. A tap still brings bars back.
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    LaunchedEffect(isLandscape) {
+        if (isLandscape) showBars = false
+    }
     // True fullscreen needs the main Scaffold bars hidden too, so the
     // reader reports its state up (MainActivity hides top/bottom bars).
-    LaunchedEffect(isFullscreen) {
-        onFullscreenChange?.invoke(isFullscreen)
+    // Landscape counts as chrome-hidden for the same reason.
+    LaunchedEffect(isFullscreen, isLandscape) {
+        onFullscreenChange?.invoke(isFullscreen || isLandscape)
     }
     val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
 
@@ -424,6 +436,23 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (bitmap != null) {
                         val isCurrent = page == currentPage
+                        // Pan is clamped so the page cannot be dragged
+                        // off-screen: max pan is half the overflow on
+                        // each axis.
+                        fun clampPan(p: Offset, z: Float): Offset {
+                            val fit = minOf(
+                                boxSize.width.toFloat() / bitmap.width,
+                                boxSize.height.toFloat() / bitmap.height
+                            )
+                            val dispW = bitmap.width * fit * z
+                            val dispH = bitmap.height * fit * z
+                            val maxX = max(0f, (dispW - boxSize.width) / 2f)
+                            val maxY = max(0f, (dispH - boxSize.height) / 2f)
+                            return Offset(
+                                p.x.coerceIn(-maxX, maxX),
+                                p.y.coerceIn(-maxY, maxY)
+                            )
+                        }
                         Box(
                             Modifier
                                 .fillMaxSize()
@@ -525,31 +554,59 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 .then(
                                     if (isCurrent && !highlightMode) {
                                         Modifier.pointerInput(Unit) {
-                                            detectTransformGestures { _, panChange, zoomChange, _ ->
-                                                // Pinch zoom (two fingers, like any phone
-                                                // app) + single-finger pan while zoomed.
-                                                // Pan is clamped so the page cannot be
-                                                // dragged off-screen: max pan is half
-                                                // the overflow on each axis.
-                                                fun clampPan(p: Offset, z: Float): Offset {
-                                                    val fit = minOf(
-                                                        boxSize.width.toFloat() / bitmap.width,
-                                                        boxSize.height.toFloat() / bitmap.height
-                                                    )
-                                                    val dispW = bitmap.width * fit * z
-                                                    val dispH = bitmap.height * fit * z
-                                                    val maxX = max(0f, (dispW - boxSize.width) / 2f)
-                                                    val maxY = max(0f, (dispH - boxSize.height) / 2f)
-                                                    return Offset(
-                                                        p.x.coerceIn(-maxX, maxX),
-                                                        p.y.coerceIn(-maxY, maxY)
-                                                    )
-                                                }
-                                                if (zoomChange != 1f) {
-                                                    zoom = (zoom * zoomChange).coerceIn(1f, 4f)
-                                                    pan = if (zoom <= 1.01f) Offset.Zero else clampPan(pan, zoom)
-                                                } else if (zoom > 1.01f) {
-                                                    pan = clampPan(pan + panChange, zoom)
+                                            // Pinch/pan that never steals
+                                            // single-finger swipes at 1x
+                                            // (Nov 2026 fix): the old
+                                            // detectTransformGestures
+                                            // consumed every drag, so the
+                                            // pager never received page
+                                            // swipes and students were
+                                            // forced onto the arrow
+                                            // buttons. Here only
+                                            // multi-touch (pinch) and
+                                            // drags while zoomed are
+                                            // consumed; a single finger
+                                            // at 1x passes straight
+                                            // through to the pager.
+                                            var prev = mapOf<Long, Offset>()
+                                            awaitPointerEventScope {
+                                                while (true) {
+                                                    val event = awaitPointerEvent()
+                                                    val down = event.changes.filter { it.pressed }
+                                                    if (down.size >= 2) {
+                                                        val cur = down.associate { it.id.value to it.position }
+                                                        val ids = cur.keys.intersect(prev.keys).take(2)
+                                                        if (ids.size == 2) {
+                                                            val a = ids[0]; val b = ids[1]
+                                                            val oldDist = (prev[a]!! - prev[b]!!).getDistance()
+                                                            val newDist = (cur[a]!! - cur[b]!!).getDistance()
+                                                            val oldC = (prev[a]!! + prev[b]!!) / 2f
+                                                            val newC = (cur[a]!! + cur[b]!!) / 2f
+                                                            if (oldDist > 0f && newDist > 0f) {
+                                                                val scale = newDist / oldDist
+                                                                if (scale != 1f || newC != oldC) {
+                                                                    zoom = (zoom * scale).coerceIn(1f, 4f)
+                                                                    pan = if (zoom <= 1.01f) Offset.Zero else clampPan(pan + (newC - oldC), zoom)
+                                                                    down.forEach { it.consume() }
+                                                                }
+                                                            }
+                                                        }
+                                                        prev = cur
+                                                    } else if (down.size == 1 && zoom > 1.01f) {
+                                                        val c = down[0]
+                                                        val p = prev[c.id.value]
+                                                        if (p != null && c.position != p) {
+                                                            pan = clampPan(pan + (c.position - p), zoom)
+                                                            c.consume()
+                                                        }
+                                                        prev = mapOf(c.id.value to c.position)
+                                                    } else {
+                                                        // Single finger at 1x:
+                                                        // consume nothing —
+                                                        // the pager swipes.
+                                                        prev = down.associate { it.id.value to it.position }
+                                                    }
+                                                    if (down.isEmpty()) prev = emptyMap()
                                                 }
                                             }
                                         }
