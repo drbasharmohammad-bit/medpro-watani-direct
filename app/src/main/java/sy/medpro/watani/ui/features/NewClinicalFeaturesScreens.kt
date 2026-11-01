@@ -410,12 +410,51 @@ fun LabValuesLabScreen(onBack: () -> Unit) {
 }
 
 // 6. Clinical Calculators Expanded (الحاسبات السريرية الموسعة)
+// Calculator categories (Nov 2026 — doctor's order): the 56 extra calculators
+// used to render as one long vertical list. They are now grouped by clinical
+// system; the student picks a category chip and sees only that category's
+// calculators. Content and logic of every calculator are untouched — this is
+// navigation/grouping only. A spec id not listed here falls back to the last
+// category so no calculator can ever disappear from the screen.
+private val CALC_CATEGORIES = listOf(
+    "كلوية وشوارد",
+    "حموض وغازات",
+    "كبدية وهضمية",
+    "قلبية ووعائية",
+    "تنفسية",
+    "إنتان وعناية مركزة",
+    "عصبية",
+    "عامة ومتنوعة"
+)
+
+private fun calcCategoryOf(specId: String): String = when (specId) {
+    "egfr_ckd_epi_2021", "fena", "feurea", "corrected_calcium", "ca_phos_product",
+    "free_water_deficit", "sodium_correction_limits", "adrogue_madias",
+    "corrected_sodium_hyperglycemia" -> "كلوية وشوارد"
+    "anion_gap", "anion_gap_albumin_corrected", "serum_osmolality", "osmolar_gap",
+    "winters_formula", "delta_ratio" -> "حموض وغازات"
+    "meld", "meld_na", "child_pugh", "fib4", "apri", "ranson_pancreatitis",
+    "bisap_pancreatitis", "glasgow_blatchford", "rockall_bleeding",
+    "alvarado_appendicitis", "air_appendicitis" -> "كبدية وهضمية"
+    "qtc_bazett", "qtc_fridericia", "map", "hasbled", "padua_vte",
+    "timi_ua_nstemi", "shock_index", "reverse_shock_index" -> "قلبية ووعائية"
+    "pao2_fio2_ratio", "alveolar_gas_pao2", "aa_gradient", "oxygenation_index",
+    "spesi_simplified", "perc_rule" -> "تنفسية"
+    "qsofa", "sirs_criteria", "sofa_score", "mews_score", "news2_score" -> "إنتان وعناية مركزة"
+    "nihss" -> "عصبية"
+    else -> "عامة ومتنوعة"
+}
+
 @Composable
 fun ClinicalCalculatorsExpandedScreen(onBack: () -> Unit) {
     BackHandler { onBack() }
     var selectedCalc by remember { mutableIntStateOf(0) }
     val calcTitles = listOf("معيار Wells للـ DVT", "معيار Wells للـ PE", "مقياس غلاسكو للغيبوبة (GCS)", "مقياس CHA2DS2-VASc")
     val allNewCalcSpecs = remember { calcSpecsSet1 + calcSpecsSet2 }
+    var selectedCalcCategory by remember { mutableStateOf(CALC_CATEGORIES.first()) }
+    val visibleCalcSpecs = remember(allNewCalcSpecs, selectedCalcCategory) {
+        allNewCalcSpecs.filter { calcCategoryOf(it.id) == selectedCalcCategory }
+    }
 
     DrawerScreenScaffold(title = "الحاسبات والمعايير السريرية الموسعة", onBack = onBack) { padding ->
         LazyColumn(
@@ -453,7 +492,32 @@ fun ClinicalCalculatorsExpandedScreen(onBack: () -> Unit) {
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
-            items(allNewCalcSpecs) { spec ->
+            item {
+                // Category bar: horizontally scrollable chips with clear names
+                // and counts; tapping one shows only that category's calculators.
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CALC_CATEGORIES.forEach { category ->
+                        val count = allNewCalcSpecs.count { calcCategoryOf(it.id) == category }
+                        FilterChip(
+                            selected = selectedCalcCategory == category,
+                            onClick = { selectedCalcCategory = category },
+                            label = { Text("$category ($count)", fontWeight = FontWeight.Bold) },
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaroonPrimary, selectedLabelColor = Color.White)
+                        )
+                    }
+                }
+            }
+            item {
+                Text(
+                    "حاسبات $selectedCalcCategory (${visibleCalcSpecs.size})",
+                    fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            items(visibleCalcSpecs) { spec ->
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
