@@ -751,7 +751,20 @@ class MainActivity : ComponentActivity() {
                                                             }
                                                         }
                                                         AppTab.CASES -> {
-                                                            if (casesList.isEmpty()) {
+                                                            // Hash-aware gate (overseer condition on the
+                                                            // manifest-hash fix): a cases.json whose stored
+                                                            // hash differs from the current manifest must
+                                                            // fall back to the download card below instead
+                                                            // of opening stale cases forever. With no
+                                                            // manifest entry, keep the presence verdict.
+                                                            val casesGateEntry = uiState.files["cases.json"]
+                                                            val casesGateEntity = downloadedSections.firstOrNull { it.sectionPath == "cases.json" }
+                                                            val casesUpToDate = if (casesGateEntry != null) {
+                                                                sy.medpro.watani.data.isSectionUpToDate(casesGateEntity, casesGateEntry)
+                                                            } else {
+                                                                casesList.isNotEmpty()
+                                                            }
+                                                            if (casesList.isEmpty() || !casesUpToDate) {
                                                                 val casesEntry = uiState.files["cases.json"]
                                                                 Box(
                                                                     modifier = Modifier
