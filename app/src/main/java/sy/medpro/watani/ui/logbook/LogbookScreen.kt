@@ -434,6 +434,10 @@ private fun LogbookEditor(context: Context, uid: String, entry: LogbookEntry, on
     var expanded by remember(entry.id) { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var tagInput by remember(entry.id) { mutableStateOf("") }
+    // قذارة حقيقية: هل حرّر المستخدم فعلًا بجلسة المحرّر هذه؟ التفريغ
+    // الأخير مشروط بها — إغلاق بلا تحرير يجب أن يُبقي أي نسخة أحدث
+    // استبدلها جلبٌ أثناء العرض (مراجعة مستقلة N2).
+    var dirty by remember(entry.id) { mutableStateOf(false) }
 
     fun update(transform: (LogbookEntry) -> LogbookEntry) {
         val next = transform(draft).copy(
@@ -441,13 +445,14 @@ private fun LogbookEditor(context: Context, uid: String, entry: LogbookEntry, on
             syncBlocked = false
         )
         draft = next
+        dirty = true
         LogbookRepository.saveEntry(context, uid, next)
     }
 
     fun close() {
-        // تفريغ أخير: يضمن أن محتوى المسودة الظاهر هو المخزَّن حتى لو
-        // استبدل جلبٌ نسخةَ المستودع أثناء التحرير.
-        LogbookRepository.flushDraft(context, uid, draft)
+        // تفريغ أخير عند وجود تحرير فعلي فقط: يضمن أن محتوى المسودة
+        // المحرَّر هو المخزَّن حتى لو استبدل جلبٌ نسخةَ المستودع أثناءه.
+        if (dirty) LogbookRepository.flushDraft(context, uid, draft)
         // إدخال أُنشئ من قالب ثم تُرك فارغًا تمامًا ولم يُزامَن قط: يُرمى
         // محليًا بلا قبر (لا وجود له بأي مكان آخر أصلًا).
         if (!draft.hasContent() && draft.syncedUpdatedAt == 0L) {

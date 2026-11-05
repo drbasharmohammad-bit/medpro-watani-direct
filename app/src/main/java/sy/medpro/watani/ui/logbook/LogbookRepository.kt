@@ -110,7 +110,7 @@ object LogbookRepository {
 
     private fun refreshPendingInfo() {
         val pending = entries.count { it.isPendingSync() && !it.syncBlocked }
-        val blocked = entries.count { it.syncBlocked && it.isPendingSync() }
+        val blocked = entries.count { it.syncBlocked && it.isPendingSync() && !it.deleted }
         val current = _syncInfo.value
         _syncInfo.value = current.copy(
             pending = pending,
@@ -153,7 +153,9 @@ object LogbookRepository {
         switchAccount(context, uid)
         val idx = entries.indexOfFirst { it.id == id }
         if (idx < 0) return
-        entries[idx] = entries[idx].copy(deleted = true, updatedAt = System.currentTimeMillis())
+        // تصفير syncBlocked مع القبر: الحذف يجب أن ينتشر دائمًا، ولو كان
+        // الإدخال محظور الرفع لحجمه (قبرٌ محظور كان سيعلق للأبد — مراجعة).
+        entries[idx] = entries[idx].copy(deleted = true, updatedAt = System.currentTimeMillis(), syncBlocked = false)
         persist(context)
         publish()
     }
@@ -188,6 +190,7 @@ object LogbookRepository {
         val idx = entries.indexOfFirst { it.id == draft.id }
         if (idx < 0) return
         val current = entries[idx]
+        if (current.deleted) return // قبر قائم لا يُحيى بتفريغ مسودة أبدًا
         if (current.toDataJson().toString() == draft.toDataJson().toString() && current.deleted == draft.deleted) return
         entries[idx] = draft.copy(
             updatedAt = maxOf(System.currentTimeMillis(), current.updatedAt + 1),
@@ -211,7 +214,10 @@ object LogbookRepository {
             _syncInfo.value = _syncInfo.value.copy(state = LogbookSyncState.AUTH_ERROR)
             return
         }
-        if (!syncMutex.tryLock()) return
+        // انتظار لا تخطٍّ: دورة سابقة ما زالت جارية تُنتظر حتى تنتهي/تجهض
+        // (فحص المالك يجهض القديمة بسرعة)، وإلا قد تُترك مزامنة الحساب
+        // الجديد بلا أي محاولة حتى محفّز لاحق (مراجعة مستقلة).
+        syncMutex.lock()
         try {
             switchAccount(context, user.uid)
             // مالك هذه الدورة: أي تبديل حساب أثناء الانتظار على الشبكة يوقف
@@ -220,10 +226,14 @@ object LogbookRepository {
             _syncInfo.value = _syncInfo.value.copy(state = LogbookSyncState.SYNCING)
 
             // ---------- الدفع ----------
-            val pendingSnapshot = synchronized(this) { entries.filter { it.isPendingSync() && !it.syncBlocked }.sortedBy { it.updatedAt } }
+            // الأقبار مستثناة من حظر الحجم: حذف إدخال محظور يجب أن ينتشر دائمًا (N3).
+            val pendingSnapshot = synchronized(this) { entries.filter { it.isPendingSync() && (!it.syncBlocked || it.deleted) }.sortedBy { it.updatedAt } }
             var authFailed = false
             for (entry in pendingSnapshot) {
-                if (synchronized(this) { ownerUid } != syncUid) return
+                if (synchronized(this) { ownerUid } != syncUid) {
+                    _syncInfo.value = _syncInfo.value.copy(state = LogbookSyncState.IDLE)
+                    return
+                }
                 // حارس حجم محلي قبل الشبكة: فوق حد الخادم (20KB بايتات UTF-8)
                 // يُحظر الرفع ويُعلَّم الإدخال بدل بقائه معلّقًا للأبد بصمت.
                 if (!entry.deleted) {
@@ -264,7 +274,8 @@ object LogbookRepository {
                 if (!ok) continue
                 val applied = try { JSONObject(res.body ?: "").optBoolean("applied", true) } catch (_: Exception) { true }
                 synchronized(this) {
-                    val current = findById(entry.id)
+                    // إقرار دفع بعد await: بلا مالك الدورة لا يُكتب شيء بمخزن غيره.
+                    val current = if (ownerUid == syncUid) findById(entry.id) else null
                     if (current != null && current.updatedAt == entry.updatedAt) {
                         if (applied && entry.deleted) {
                             entries.removeAll { it.id == entry.id } // الحذف تأكد: يُزال القبر
@@ -290,7 +301,10 @@ object LogbookRepository {
                 var loops = 0
                 while (loops < 10) {
                     loops++
-                    if (synchronized(this) { ownerUid } != syncUid) return
+                    if (synchronized(this) { ownerUid } != syncUid) {
+                        _syncInfo.value = _syncInfo.value.copy(state = LogbookSyncState.IDLE)
+                        return
+                    }
                     val since = synchronized(this) { lastPullMs }
                     val res = WorkerActivationApi.getFromWorker(user, "/v1/logbook?since=$since&limit=200")
                     if (res.code == 401 || res.code == -1) { authFailed = true; break }
@@ -298,8 +312,12 @@ object LogbookRepository {
                     val root = try { JSONObject(res.body ?: "") } catch (_: Exception) { break }
                     if (!root.optBoolean("ok", false)) break
                     val arr = root.optJSONArray("entries") ?: break
+                    var mergeAborted = false
                     synchronized(this) {
-                        for (i in 0 until arr.length()) {
+                        // إعادة فحص المالك داخل كتلة الدمج نفسها: تبديل حساب
+                        // أثناء انتظار GET لا يدمج شيئًا بمخزن غير صاحبه (N1).
+                        if (ownerUid != syncUid) { mergeAborted = true }
+                        else for (i in 0 until arr.length()) {
                             val item = arr.getJSONObject(i)
                             val id = item.optString("id", "")
                             if (id.isBlank()) continue
@@ -337,8 +355,14 @@ object LogbookRepository {
                                 // المحلي أحدث أو مساوٍ: يبقى، ودفعه (إن كان معلّقًا) يحسمه.
                             }
                         }
-                        persist(context)
-                        publish()
+                        if (!mergeAborted) {
+                            persist(context)
+                            publish()
+                        }
+                    }
+                    if (mergeAborted) {
+                        _syncInfo.value = _syncInfo.value.copy(state = LogbookSyncState.IDLE)
+                        return
                     }
                     if (arr.length() < 200) break
                 }
