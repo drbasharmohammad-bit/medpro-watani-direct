@@ -120,7 +120,17 @@ data class ClinicalCaseDto(
     @Json(name = "correctDiagnosis") val correctDiagnosis: Any?,
     @Json(name = "explanation") val explanation: String?,
     @Json(name = "learningPoints") val learningPoints: List<String>?,
-    @Json(name = "xpReward") val xpReward: Int?
+    @Json(name = "xpReward") val xpReward: Int?,
+    // Virtual-patient upgrade (schema v2) — additive and optional only.
+    // Absence of every field below means the legacy player behaviour.
+    // Converted cases carry legacyPresentation instead of presentation;
+    // published files keep presentation and gain the new fields, so the
+    // player reads presentation first and falls back to legacyPresentation.
+    @Json(name = "schemaV2") val schemaV2: Boolean?,
+    @Json(name = "openingVignette") val openingVignette: String?,
+    @Json(name = "historyBank") val historyBank: List<HistoryQuestionDto>?,
+    @Json(name = "criticalFacts") val criticalFacts: List<CriticalFactDto>?,
+    @Json(name = "legacyPresentation") val legacyPresentation: String?
 )
 
 @JsonClass(generateAdapter = true)
@@ -129,7 +139,10 @@ data class CaseItemDto(
     @Json(name = "isKey") val isKey: Boolean?,
     @Json(name = "text") val text: String?,
     @Json(name = "answer") val answer: String?,
-    @Json(name = "finding") val finding: String?
+    @Json(name = "finding") val finding: String?,
+    // Optional v2 tier: key / supportive / distractor. When absent it is
+    // derived from isKey (true -> key, otherwise -> supportive).
+    @Json(name = "tier") val tier: String?
 )
 
 @JsonClass(generateAdapter = true)
@@ -137,7 +150,34 @@ data class CaseTestDto(
     @Json(name = "id") val id: String?,
     @Json(name = "isKey") val isKey: Boolean?,
     @Json(name = "text") val text: String?,
-    @Json(name = "result") val result: String?
+    @Json(name = "result") val result: String?,
+    // Optional v2 tier: key / supportive / distractor (see CaseItemDto).
+    @Json(name = "tier") val tier: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class HistoryQuestionDto(
+    @Json(name = "id") val id: String?,
+    @Json(name = "domain") val domain: String?,
+    @Json(name = "tier") val tier: String?,
+    @Json(name = "isRedFlag") val isRedFlag: Boolean?,
+    @Json(name = "text") val text: String?,
+    @Json(name = "answer") val answer: String?,
+    @Json(name = "revealsFact") val revealsFact: String?,
+    @Json(name = "factRef") val factRef: String?,
+    @Json(name = "answerBasis") val answerBasis: String?,
+    @Json(name = "rationale") val rationale: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class CriticalFactDto(
+    @Json(name = "factId") val factId: String?,
+    @Json(name = "label") val label: String?,
+    @Json(name = "revealedBy") val revealedBy: List<String>?,
+    @Json(name = "whyCritical") val whyCritical: String?,
+    @Json(name = "revealLogic") val revealLogic: String?,
+    @Json(name = "definitive") val definitive: Boolean?,
+    @Json(name = "definitiveGroup") val definitiveGroup: String?
 )
 
 fun normalizeCorrectIndex(correct: Any?, options: List<String>?): Int {
