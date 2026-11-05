@@ -1,6 +1,7 @@
 package sy.medpro.watani.ui.logbook
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -151,9 +151,13 @@ private fun LogbookMain(context: Context, user: FirebaseUser) {
     var specialtyFilter by remember { mutableStateOf<String?>(null) }
     var showTemplates by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<String?>(null) }
+    var readyUid by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(user.uid) {
         LogbookRepository.switchAccount(context, user.uid)
+        // بوابة جاهزية: لا تُعرض القائمة قبل تبديل المخزن فعليًا — بلا هذا
+        // قد يلمح إطارٌ أول إدخالات الحساب السابق (مراجعة مستقلة).
+        readyUid = user.uid
         LogbookRepository.syncNow(context)
     }
 
@@ -175,22 +179,28 @@ private fun LogbookMain(context: Context, user: FirebaseUser) {
     // فرع المحرّر بعد كل نداءات remember أعلاه عمدًا: عودة مبكرة قبلها كانت
     // ستغيّر ترتيب الخطافات بين إعادة تركيب وأخرى (خطر فساد حالة Compose).
     val editing = editingId?.let { id -> entries.firstOrNull { it.id == id } }
-    if (editingId != null) {
-        if (editing == null) {
-            // حُذف أو استُبدل من مزامنة: عودة هادئة للقائمة.
-            LaunchedEffect(editingId) { editingId = null }
-        } else {
-            LogbookEditor(
-                context = context,
-                uid = user.uid,
-                entry = editing,
-                onClose = {
-                    editingId = null
-                    scope.launch { LogbookRepository.syncNow(context) }
-                }
-            )
-            return
+    // خطّاف غير مشروط (نُقل خارج الفرع بمراجعة مستقلة): إدخال مفتوح حُذف أو
+    // استُبدل من مزامنة/تبديل حساب — عودة هادئة للقائمة.
+    LaunchedEffect(editingId, editing) {
+        if (editingId != null && editing == null) editingId = null
+    }
+    if (readyUid != user.uid) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("جارٍ تحميل سجلّك…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        return
+    }
+    if (editing != null) {
+        LogbookEditor(
+            context = context,
+            uid = user.uid,
+            entry = editing,
+            onClose = {
+                editingId = null
+                scope.launch { LogbookRepository.syncNow(context) }
+            }
+        )
+        return
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
@@ -284,6 +294,17 @@ private fun LogbookMain(context: Context, user: FirebaseUser) {
 
 @Composable
 private fun SyncStatusBadge(info: LogbookSyncInfo) {
+    if (info.blocked > 0) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.size(4.dp))
+            Text(
+                "${info.blocked} فوق حدّ الرفع — قلّص نصّها",
+                fontSize = 11.sp, color = MaterialTheme.colorScheme.error
+            )
+        }
+        return
+    }
     val (icon: ImageVector, text: String) = when (info.state) {
         LogbookSyncState.SYNCING -> Icons.Default.Sync to "جارٍ المزامنة…"
         LogbookSyncState.SYNCED -> Icons.Default.CheckCircle to "متزامن مع حسابك"
@@ -403,35 +424,46 @@ private fun TemplatePickerDialog(onDismiss: () -> Unit, onPick: (String) -> Unit
 
 /**
  * محرّر الكتابة السريعة: كل تغيير يُحفظ محليًا فورًا عبر المستودع
- * (لا زر حفظ)، وupdatedAt يُرفع مرة بالثانية كحد أقصى حتى لا تدور
- * طوابع المزامنة مع كل حرف.
+ * (لا زر حفظ)، وupdatedAt يرتفع رتيبًا مع كل تغيير (الأكبر بين الآن
+ * والطابع السابق +1) — خنقٌ زمني سابق كان يبتلع تحريرَ إعادةِ فتحٍ فورية
+ * بصمت فأزالته المراجعة المستقلة: كل تحرير يجب أن يصير «معلّقًا» حتمًا.
  */
 @Composable
 private fun LogbookEditor(context: Context, uid: String, entry: LogbookEntry, onClose: () -> Unit) {
     var draft by remember(entry.id) { mutableStateOf(entry) }
-    var lastBump by remember(entry.id) { mutableStateOf(entry.updatedAt) }
     var expanded by remember(entry.id) { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var tagInput by remember(entry.id) { mutableStateOf("") }
 
     fun update(transform: (LogbookEntry) -> LogbookEntry) {
-        val now = System.currentTimeMillis()
-        var next = transform(draft)
-        if (now - lastBump >= 1000L) {
-            next = next.copy(updatedAt = now)
-            lastBump = now
-        }
+        val next = transform(draft).copy(
+            updatedAt = maxOf(System.currentTimeMillis(), draft.updatedAt + 1),
+            syncBlocked = false
+        )
         draft = next
         LogbookRepository.saveEntry(context, uid, next)
     }
 
     fun close() {
+        // تفريغ أخير: يضمن أن محتوى المسودة الظاهر هو المخزَّن حتى لو
+        // استبدل جلبٌ نسخةَ المستودع أثناء التحرير.
+        LogbookRepository.flushDraft(context, uid, draft)
         // إدخال أُنشئ من قالب ثم تُرك فارغًا تمامًا ولم يُزامَن قط: يُرمى
         // محليًا بلا قبر (لا وجود له بأي مكان آخر أصلًا).
         if (!draft.hasContent() && draft.syncedUpdatedAt == 0L) {
             LogbookRepository.discardLocal(context, uid, draft.id)
         }
         onClose()
+    }
+
+    // زر الرجوع النظامي يمر بـclose() نفسها (رمي المسودة الفارغة والتفريغ
+    // الأخير) بدل تجاوزها لإغلاق الشاشة كلها.
+    BackHandler { close() }
+
+    // تنبيه حجم حي: حدّ المزامنة السحابية 20KB بايتات — فوقه يبقى الإدخال
+    // محفوظًا محليًا فقط، فيُقال للمستخدم هنا لا يُترك معلّقًا بصمت.
+    val draftOversized = remember(draft) {
+        draft.toDataJson().toString().toByteArray(Charsets.UTF_8).size > 20480
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
@@ -457,6 +489,13 @@ private fun LogbookEditor(context: Context, uid: String, entry: LogbookEntry, on
             Text(
                 "وثّق بصورة مجهّلة تعليمية — دون أسماء مرضى أو أرقام ملفات أو أي ما يدلّ عليهم.",
                 fontSize = 12.sp, modifier = Modifier.padding(12.dp)
+            )
+        }
+        if (draftOversized) {
+            Text(
+                "هذا الإدخال تجاوز حدّ المزامنة السحابية (20KB) — محفوظ بجهازك، ولن يُرفع لحسابك حتى تقلّص نصّه.",
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
         Spacer(Modifier.height(10.dp))

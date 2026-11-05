@@ -31,7 +31,9 @@ data class LogbookEntry(
     val lessons: String = "",
     val tags: List<String> = emptyList(),
     val deleted: Boolean = false,
-    val syncedUpdatedAt: Long = 0L
+    val syncedUpdatedAt: Long = 0L,
+    /** حظر مزامنة محلي (إدخال فوق حد 20KB سحابيًا): يبقى محفوظًا محليًا ويُستثنى من الدفع حتى يُحرَّر فيتقلّص — يُصفَّر عند أي تحرير. محلي فقط، لا يدخل data. */
+    val syncBlocked: Boolean = false
 ) {
     /** هل يحمل الإدخال أي محتوى يستحق الحفظ/العرض؟ (قاعدة الحفظ الوحيدة) */
     fun hasContent(): Boolean =
@@ -55,12 +57,13 @@ data class LogbookEntry(
         put("tags", JSONArray(tags))
     }
 
-    /** التمثيل المحلي الكامل داخل entries_json — يشمل حالتي المزامنة المحليتين. */
+    /** التمثيل المحلي الكامل داخل entries_json — يشمل حالات المزامنة المحلية. */
     fun toLocalJson(): JSONObject = toDataJson().apply {
         put("id", id)
         put("updatedAt", updatedAt)
         put("deleted", deleted)
         put("syncedUpdatedAt", syncedUpdatedAt)
+        put("syncBlocked", syncBlocked)
     }
 
     companion object {
@@ -69,7 +72,8 @@ data class LogbookEntry(
             data: JSONObject,
             updatedAt: Long,
             deleted: Boolean = false,
-            syncedUpdatedAt: Long = 0L
+            syncedUpdatedAt: Long = 0L,
+            syncBlocked: Boolean = false
         ): LogbookEntry {
             val tagsArr = data.optJSONArray("tags")
             return LogbookEntry(
@@ -92,7 +96,8 @@ data class LogbookEntry(
                     }
                 },
                 deleted = deleted,
-                syncedUpdatedAt = syncedUpdatedAt
+                syncedUpdatedAt = syncedUpdatedAt,
+                syncBlocked = syncBlocked
             )
         }
 
@@ -101,7 +106,8 @@ data class LogbookEntry(
             data = obj,
             updatedAt = obj.optLong("updatedAt", obj.optLong("createdAt", 0L)),
             deleted = obj.optBoolean("deleted", false),
-            syncedUpdatedAt = obj.optLong("syncedUpdatedAt", 0L)
+            syncedUpdatedAt = obj.optLong("syncedUpdatedAt", 0L),
+            syncBlocked = obj.optBoolean("syncBlocked", false)
         )
     }
 }

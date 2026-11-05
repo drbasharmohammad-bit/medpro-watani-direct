@@ -15,7 +15,9 @@ enum class LogbookSyncState { IDLE, SYNCING, SYNCED, PENDING, AUTH_ERROR }
 data class LogbookSyncInfo(
     val state: LogbookSyncState = LogbookSyncState.IDLE,
     val pending: Int = 0,
-    val lastSyncAt: Long = 0L
+    val lastSyncAt: Long = 0L,
+    /** إدخالات محظورة الرفع لتجاوزها حد الحجم السحابي — محفوظة محليًا وتحتاج تقليصًا. */
+    val blocked: Int = 0
 )
 
 /**
@@ -76,7 +78,11 @@ object LogbookRepository {
                     if (e.id.isNotBlank()) entries.add(e)
                 }
             } catch (_: Exception) {
-                // ملف تالف: نبدأ فارغين محليًا؛ النسخة السحابية تعيد البناء عند الجلب.
+                // ملف تالف: نبدأ فارغين محليًا ونُصفّر علامة الجلب — بلا تصفيرها
+                // لا تعود النسخة السحابية أبدًا لأن الجلب تفاضلي منذ العلامة
+                // القديمة (إصلاح مراجعة مستقلة). التصفير يجعل أول جلب إعادة
+                // بناء كاملة من السحابة (الدمج بالمعرّف idempotent).
+                lastPullMs = 0L
             }
         }
         loaded = true
@@ -103,10 +109,12 @@ object LogbookRepository {
     }
 
     private fun refreshPendingInfo() {
-        val pending = entries.count { it.isPendingSync() }
+        val pending = entries.count { it.isPendingSync() && !it.syncBlocked }
+        val blocked = entries.count { it.syncBlocked && it.isPendingSync() }
         val current = _syncInfo.value
         _syncInfo.value = current.copy(
             pending = pending,
+            blocked = blocked,
             state = when {
                 current.state == LogbookSyncState.SYNCING || current.state == LogbookSyncState.AUTH_ERROR -> current.state
                 pending == 0 && current.lastSyncAt > 0L -> LogbookSyncState.SYNCED
@@ -160,7 +168,32 @@ object LogbookRepository {
         switchAccount(context, uid)
         val target = entries.firstOrNull { it.id == id } ?: return
         if (target.syncedUpdatedAt != 0L) return
+        // حارس محتوى بنفس المستودع (لا اعتماد على فحص المستدعي): إدخال يحمل
+        // أي محتوى لا يُرمى أبدًا بهذا المسار — حذفه قرار صريح بقبر.
+        if (target.hasContent()) return
         entries.removeAll { it.id == id }
+        persist(context)
+        publish()
+    }
+
+    /**
+     * تفريغ أخير عند إغلاق المحرّر: مسودة المحرّر لقطة قد تسبق نسخة
+     * المستودع (إن استبدلها جلب أثناء التحرير). إن اختلف محتواها عن
+     * المخزَّن تُحفظ بطابع أحدث من المخزَّن حتمًا حتى لا يضيع تحرير
+     * الإغلاق بصمت ولا يتراجع طابعٌ فوق نسخة أحدث بلا محتوى جديد.
+     */
+    @Synchronized
+    fun flushDraft(context: Context, uid: String, draft: LogbookEntry) {
+        switchAccount(context, uid)
+        val idx = entries.indexOfFirst { it.id == draft.id }
+        if (idx < 0) return
+        val current = entries[idx]
+        if (current.toDataJson().toString() == draft.toDataJson().toString() && current.deleted == draft.deleted) return
+        entries[idx] = draft.copy(
+            updatedAt = maxOf(System.currentTimeMillis(), current.updatedAt + 1),
+            syncedUpdatedAt = current.syncedUpdatedAt,
+            syncBlocked = false
+        )
         persist(context)
         publish()
     }
@@ -181,12 +214,32 @@ object LogbookRepository {
         if (!syncMutex.tryLock()) return
         try {
             switchAccount(context, user.uid)
+            // مالك هذه الدورة: أي تبديل حساب أثناء الانتظار على الشبكة يوقف
+            // الدورة قبل أن تدمج/تحفظ بمخزن غير صاحبها (إصلاح سباق مراجعة مستقلة).
+            val syncUid = user.uid
             _syncInfo.value = _syncInfo.value.copy(state = LogbookSyncState.SYNCING)
 
             // ---------- الدفع ----------
-            val pendingSnapshot = synchronized(this) { entries.filter { it.isPendingSync() }.sortedBy { it.updatedAt } }
+            val pendingSnapshot = synchronized(this) { entries.filter { it.isPendingSync() && !it.syncBlocked }.sortedBy { it.updatedAt } }
             var authFailed = false
             for (entry in pendingSnapshot) {
+                if (synchronized(this) { ownerUid } != syncUid) return
+                // حارس حجم محلي قبل الشبكة: فوق حد الخادم (20KB بايتات UTF-8)
+                // يُحظر الرفع ويُعلَّم الإدخال بدل بقائه معلّقًا للأبد بصمت.
+                if (!entry.deleted) {
+                    val bytes = entry.toDataJson().toString().toByteArray(Charsets.UTF_8).size
+                    if (bytes > 20480) {
+                        synchronized(this) {
+                            val idx = entries.indexOfFirst { it.id == entry.id }
+                            if (idx >= 0 && entries[idx].updatedAt == entry.updatedAt) {
+                                entries[idx] = entries[idx].copy(syncBlocked = true)
+                                persist(context)
+                                publish()
+                            }
+                        }
+                        continue
+                    }
+                }
                 val body = JSONObject().apply {
                     put("id", entry.id)
                     put("updatedAt", entry.updatedAt)
@@ -194,6 +247,18 @@ object LogbookRepository {
                 }
                 val res = WorkerActivationApi.postToWorker(user, "/v1/logbook", body)
                 if (res.code == 401 || res.code == -1) { authFailed = true; break }
+                if (res.code == 413) {
+                    // الخادم رفض الحجم رغم الحارس المحلي (سباق تحرير): حظر موثّق.
+                    synchronized(this) {
+                        val idx = entries.indexOfFirst { it.id == entry.id }
+                        if (idx >= 0 && entries[idx].updatedAt == entry.updatedAt) {
+                            entries[idx] = entries[idx].copy(syncBlocked = true)
+                            persist(context)
+                            publish()
+                        }
+                    }
+                    continue
+                }
                 if (res.code != 200) continue // شبكة/خادم: يبقى معلّقًا لدورة قادمة
                 val ok = try { JSONObject(res.body ?: "").optBoolean("ok", false) } catch (_: Exception) { false }
                 if (!ok) continue
@@ -215,10 +280,17 @@ object LogbookRepository {
             }
 
             // ---------- الجلب التفاضلي ----------
-            if (!authFailed) {
+            // حدّ مقبول وموثّق (مراجعة مستقلة): الجلب بـupdated_at > since
+            // صارمًا؛ إدخالات تتشارك نفس الميلي-ثانية القصوى بما يتجاوز صفحة
+            // 200 نظريًا قد تتخطّى — عمليًا طوابع العميل ميلي-ثانية حقيقية
+            // والدمج بالمعرّف idempotent، فتُركت الفجوة موثقة لا مُصلَحة
+            // بمؤشر مركّب. وسقف العلامة بـ«الآن» يمنع طابعًا مستقبليًا منحرفًا
+            // من تجميد الجلب كله.
+            if (!authFailed && synchronized(this) { ownerUid } == syncUid) {
                 var loops = 0
                 while (loops < 10) {
                     loops++
+                    if (synchronized(this) { ownerUid } != syncUid) return
                     val since = synchronized(this) { lastPullMs }
                     val res = WorkerActivationApi.getFromWorker(user, "/v1/logbook?since=$since&limit=200")
                     if (res.code == 401 || res.code == -1) { authFailed = true; break }
@@ -232,7 +304,9 @@ object LogbookRepository {
                             val id = item.optString("id", "")
                             if (id.isBlank()) continue
                             val remoteUpdated = item.optLong("updatedAt", 0L)
-                            if (remoteUpdated > lastPullMs) lastPullMs = remoteUpdated
+                            if (remoteUpdated > lastPullMs) {
+                                lastPullMs = minOf(remoteUpdated, System.currentTimeMillis())
+                            }
                             val remoteDeleted = item.optBoolean("deleted", false)
                             val local = findById(id)
                             if (remoteDeleted) {
