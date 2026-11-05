@@ -530,15 +530,17 @@ fun evaluateCalcSpec(specId: String, inputs: Map<String, Double>): CalcOutcome {
             val band = if (rv >= 1.0) "ضمن المقبول تقريباً" else "غير طبيعي"
             CalcOutcome.Value("مؤشر الصدمة المعكوس = ${fmt(rv, 2)} — $band")
         }
-        // Point-based clinical scores (the 19 descriptive specs: child_pugh,
-        // qsofa, sirs_criteria, sofa_score, nihss, spesi_simplified,
-        // perc_rule, hasbled, padua_vte, timi_ua_nstemi,
-        // ranson_pancreatitis, bisap_pancreatitis, glasgow_blatchford,
-        // rockall_bleeding, alvarado_appendicitis, air_appendicitis,
-        // centor_modified, mews_score, news2_score) and any unknown id:
-        // inputs are findings / sub-scores, not arithmetic inputs. The UI
-        // never calls this layer for them; if called by mistake, reject
-        // explicitly instead of returning a silent blank.
+        // The 19 point-based clinical scores (child_pugh, qsofa,
+        // sirs_criteria, sofa_score, nihss, spesi_simplified, perc_rule,
+        // hasbled, padua_vte, timi_ua_nstemi, ranson_pancreatitis,
+        // bisap_pancreatitis, glasgow_blatchford, rockall_bleeding,
+        // alvarado_appendicitis, air_appendicitis, centor_modified,
+        // mews_score, news2_score) are no longer descriptive-only: they are
+        // computed by the dedicated score engine in scoreCompute.kt, and the
+        // UI routes them to evaluateScoreSpec with per-item option
+        // selections, never to this numeric layer. Reaching evaluateCalcSpec
+        // with one of them (or with any unknown id) is therefore an error,
+        // rejected explicitly below instead of returning a silent blank.
         else -> CalcOutcome.Rejected("هذه الحاسبة وصفية بلا حساب")
     }
 }

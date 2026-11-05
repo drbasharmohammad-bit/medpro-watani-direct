@@ -39,6 +39,10 @@ import sy.medpro.watani.ui.clinical.CalcInputSpec
 import sy.medpro.watani.ui.clinical.CalcOutcome
 import sy.medpro.watani.ui.clinical.CalcSpec
 import sy.medpro.watani.ui.clinical.evaluateCalcSpec
+import sy.medpro.watani.ui.clinical.ScoreItem
+import sy.medpro.watani.ui.clinical.clinicalScoreDefinitions
+import sy.medpro.watani.ui.clinical.evaluateScoreSpec
+import sy.medpro.watani.ui.clinical.scoreSpecIds
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -534,14 +538,22 @@ fun ClinicalCalculatorsExpandedScreen(onBack: () -> Unit) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(spec.formula, fontSize = 13.sp, lineHeight = 20.sp)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("المدخلات:", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 12.sp)
-                        spec.inputs.forEach { input ->
-                            Text(
-                                "• ${input.labelAr} (${input.unit})" +
-                                    (if (input.min != null && input.max != null) " — المجال: ${input.min} إلى ${input.max}" else "") +
-                                    (if (input.default != null) " — الافتراضي: ${input.default}" else ""),
-                                fontSize = 13.sp, lineHeight = 20.sp
-                            )
+                        if (spec.id in scoreSpecIds) {
+                            // The 19 interactive scores render their items as
+                            // choice chips inside SpecComputeBlock below; the
+                            // numeric inputs list (with zero-ish defaults)
+                            // would falsely imply an assessment already made.
+                            Text("قيّم البنود التالية — تُحسب الدرجة فور اكتمالها:", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 12.sp)
+                        } else {
+                            Text("المدخلات:", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 12.sp)
+                            spec.inputs.forEach { input ->
+                                Text(
+                                    "• ${input.labelAr} (${input.unit})" +
+                                        (if (input.min != null && input.max != null) " — المجال: ${input.min} إلى ${input.max}" else "") +
+                                        (if (input.default != null) " — الافتراضي: ${input.default}" else ""),
+                                    fontSize = 13.sp, lineHeight = 20.sp
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         SpecComputeBlock(spec)
@@ -1046,8 +1058,185 @@ private fun calcInputDisplayLabel(input: CalcInputSpec): String =
 // same rendering the spec header above uses for min/max.
 private fun formatCalcBound(value: Double): String = value.toString()
 
+// Dispatcher: the 19 point-based clinical scores go to the interactive
+// score engine (scoreCompute.kt), the closed-form arithmetic specs keep
+// the numeric block below, and anything else renders nothing here.
 @Composable
 private fun SpecComputeBlock(spec: CalcSpec) {
+    when {
+        spec.id in scoreSpecIds -> ScoreSpecBlock(spec)
+        spec.id in computableSpecIds -> NumericSpecBlock(spec)
+        else -> Unit
+    }
+}
+
+// Counting units for a score definition: every plain item is one unit,
+// while all items sharing an exclusiveGroup together form a single unit
+// (answering any one of them answers the group).
+private fun scoreRequiredUnits(items: List<ScoreItem>): Int {
+    val groupCount = items.mapNotNull { it.exclusiveGroup }.distinct().size
+    val plainCount = items.count { it.exclusiveGroup == null }
+    return plainCount + groupCount
+}
+
+private fun scoreAnsweredUnits(items: List<ScoreItem>, answeredKeys: Set<String>): Int {
+    val plainAnswered = items.count { it.exclusiveGroup == null && it.key in answeredKeys }
+    val groupsAnswered = items.mapNotNull { it.exclusiveGroup }.distinct()
+        .count { group -> items.any { it.exclusiveGroup == group && it.key in answeredKeys } }
+    return plainAnswered + groupsAnswered
+}
+
+@Composable
+private fun ScoreItemChips(
+    item: ScoreItem,
+    allItems: List<ScoreItem>,
+    values: SnapshotStateMap<String, String>
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(item.labelAr, fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 12.sp)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item.options.forEachIndexed { optionIndex, option ->
+                val suffix = when {
+                    option.points > 0 -> " (+${option.points})"
+                    option.points < 0 -> " (${option.points})"
+                    else -> ""
+                }
+                FilterChip(
+                    selected = values[item.key] == optionIndex.toString(),
+                    onClick = {
+                        if (values[item.key] == optionIndex.toString()) {
+                            // Tapping the chosen chip again clears the item,
+                            // back to the honest "not assessed yet" state.
+                            values.remove(item.key)
+                        } else {
+                            // Exclusive groups keep a single answer: picking
+                            // an item clears every other item of its group.
+                            val group = item.exclusiveGroup
+                            if (group != null) {
+                                allItems.forEach { other ->
+                                    if (other.key != item.key && other.exclusiveGroup == group) {
+                                        values.remove(other.key)
+                                    }
+                                }
+                            }
+                            values[item.key] = optionIndex.toString()
+                        }
+                    },
+                    label = { Text(option.labelAr + suffix, fontWeight = FontWeight.Bold) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaroonPrimary, selectedLabelColor = Color.White)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScoreSpecBlock(spec: CalcSpec) {
+    val def = clinicalScoreDefinitions[spec.id] ?: return
+    // Values are selected option indices as text ("2"); a missing key means
+    // the item has not been assessed yet. The map starts completely empty —
+    // no defaults — so an untouched score never presents a fake result.
+    val values = rememberSaveable(inputs = arrayOf(spec.id), key = spec.id, saver = calcInputValuesSaver) {
+        mutableStateMapOf<String, String>()
+    }
+
+    // Only selections that are valid indices of a known item count; a
+    // corrupt restored value (non-numeric, unknown key, or out of range)
+    // is dropped here exactly as the engine would reject it, so the
+    // answered counter below never overstates completeness.
+    val selections = values.entries.mapNotNull { (key, raw) ->
+        val idx = raw.toIntOrNull() ?: return@mapNotNull null
+        val item = def.items.firstOrNull { it.key == key } ?: return@mapNotNull null
+        if (idx in item.options.indices) key to idx else null
+    }.toMap()
+    val outcome = evaluateScoreSpec(spec.id, selections)
+    val required = scoreRequiredUnits(def.items)
+    // Only valid numeric selections count as answered; a corrupt restored
+    // value is ignored here exactly as it is ignored in selections above.
+    val answered = scoreAnsweredUnits(def.items, selections.keys)
+    val remaining = (required - answered).coerceAtLeast(0)
+    val stages = def.stages.orEmpty()
+    val stageLabels = def.stageLabels.orEmpty()
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("قيّم البنود — اختر واحدًا لكل بند:", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 12.sp)
+        if (stages.isEmpty()) {
+            def.items.forEach { item ->
+                ScoreItemChips(item = item, allItems = def.items, values = values)
+            }
+        } else {
+            stages.forEach { stage ->
+                val stageItems = def.items.filter { it.stage == stage }
+                if (stageItems.isNotEmpty()) {
+                    Text(stageLabels[stage] ?: stage, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
+                    stageItems.forEach { item ->
+                        ScoreItemChips(item = item, allItems = def.items, values = values)
+                    }
+                    if (scoreAnsweredUnits(stageItems, selections.keys) >= scoreRequiredUnits(stageItems)) {
+                        val stageTotal = stageItems.sumOf { stageItem ->
+                            selections[stageItem.key]?.let { idx -> stageItem.options.getOrNull(idx)?.points ?: 0 } ?: 0
+                        }
+                        Text(
+                            "مجموع ${stageLabels[stage] ?: stage} حتى الآن: $stageTotal",
+                            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaroonPrimary
+                        )
+                    }
+                }
+            }
+            // Items without a stage (or with an unlisted stage) still render,
+            // after the staged groups, so no item can silently disappear.
+            val stagedKeys = stages.toSet()
+            def.items.filter { it.stage == null || it.stage !in stagedKeys }.forEach { item ->
+                ScoreItemChips(item = item, allItems = def.items, values = values)
+            }
+        }
+
+        // Live result: exactly one of the three surfaces is always visible —
+        // nothing ever disappears silently. A Value (including the engine's
+        // partial-stage Value for staged scores) goes on the result surface;
+        // a Rejected whose cause is incompleteness — distinguished by the
+        // answered-units comparison below, per the engine's completeness
+        // rule (every plain item plus exactly one per exclusive group) —
+        // goes on a neutral surface, never the red error surface; any other
+        // Rejected goes on the error surface. The engine already appends
+        // extraNote and any UN documentation to its Value text, so the UI
+        // does not render them separately.
+        if (outcome is CalcOutcome.Value) {
+            Surface(color = MaroonPrimary.copy(alpha = 0.08f), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Text("النتيجة: ${outcome.text}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(12.dp))
+            }
+        } else if (outcome is CalcOutcome.Rejected && answered < required) {
+            Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        "لم يكتمل التقييم بعد — أكمل كل البنود لعرض الدرجة (بقي $remaining من $required)",
+                        fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    if (outcome.reason.contains("مرحلة لاحقة")) {
+                        // The engine's stage-order rejection is specific and
+                        // actionable; surface it instead of only the generic
+                        // incompleteness text above.
+                        Text(outcome.reason, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    }
+                    def.partialHint?.takeIf { it.isNotBlank() }?.let { hint ->
+                        Text(hint, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    }
+                }
+            }
+        } else if (outcome is CalcOutcome.Rejected) {
+            Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Text("لا يمكن الحساب: ${outcome.reason}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun NumericSpecBlock(spec: CalcSpec) {
     if (spec.id !in computableSpecIds) return
     val values = rememberSaveable(inputs = arrayOf(spec.id), key = spec.id, saver = calcInputValuesSaver) {
         mutableStateMapOf<String, String>().apply {
