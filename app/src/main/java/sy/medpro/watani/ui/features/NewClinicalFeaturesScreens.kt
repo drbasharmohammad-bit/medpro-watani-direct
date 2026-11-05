@@ -35,8 +35,13 @@ import sy.medpro.watani.R
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.clinical.calcSpecsSet1
 import sy.medpro.watani.ui.clinical.calcSpecsSet2
+import sy.medpro.watani.ui.clinical.CalcInputSpec
+import sy.medpro.watani.ui.clinical.CalcOutcome
 import sy.medpro.watani.ui.clinical.CalcSpec
-import sy.medpro.watani.ui.clinical.computeCalcSpec
+import sy.medpro.watani.ui.clinical.evaluateCalcSpec
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import sy.medpro.watani.ui.theme.*
@@ -517,7 +522,7 @@ fun ClinicalCalculatorsExpandedScreen(onBack: () -> Unit) {
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            items(visibleCalcSpecs) { spec ->
+            items(visibleCalcSpecs, key = { it.id }) { spec ->
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1016,34 +1021,143 @@ private val computableSpecIds = setOf(
     "shock_index", "reverse_shock_index"
 )
 
+// Saver for the per-spec input values: flattens the map to (key, value)
+// pairs so rememberSaveable can persist it across category switches,
+// scrolling (LazyColumn disposal) and configuration changes.
+private val calcInputValuesSaver = listSaver<SnapshotStateMap<String, String>, String>(
+    save = { map -> map.entries.flatMap { (key, value) -> listOf(key, value) } },
+    restore = { flat ->
+        mutableStateMapOf<String, String>().apply {
+            var index = 0
+            while (index + 1 < flat.size) {
+                put(flat[index], flat[index + 1])
+                index += 2
+            }
+        }
+    }
+)
+
+// Display label for an input: the sex input is keyed "female" and is always
+// shown as «الجنس», whatever label the spec itself carries.
+private fun calcInputDisplayLabel(input: CalcInputSpec): String =
+    if (input.key == "female") "الجنس" else input.labelAr
+
+// Bounds are printed via Double.toString: no thousands separators and the
+// same rendering the spec header above uses for min/max.
+private fun formatCalcBound(value: Double): String = value.toString()
+
 @Composable
 private fun SpecComputeBlock(spec: CalcSpec) {
     if (spec.id !in computableSpecIds) return
-    val values = remember(spec.id) {
+    val values = rememberSaveable(inputs = arrayOf(spec.id), key = spec.id, saver = calcInputValuesSaver) {
         mutableStateMapOf<String, String>().apply {
-            spec.inputs.forEach { put(it.key, it.default?.toString() ?: "") }
+            spec.inputs.forEach { input ->
+                // Binary inputs start on their "0.0" option when the spec
+                // gives no default, so the choice row and validation agree.
+                val initial = input.default?.toString()
+                    ?: if (input.key == "female" || input.key == "dialysis") "0.0" else ""
+                put(input.key, initial)
+            }
         }
     }
-    val parsed = spec.inputs.mapNotNull { input ->
-        values[input.key]?.toDoubleOrNull()?.let { input.key to it }
-    }.toMap()
-    val result = if (parsed.size == spec.inputs.size) computeCalcSpec(spec.id, parsed) else null
+
+    // A restored map may miss keys (saved under a different spec shape):
+    // fill any missing input with its spec default so no field or choice
+    // row starts blank after a restore.
+    LaunchedEffect(spec.id) {
+        spec.inputs.forEach { input ->
+            if (values[input.key] == null) {
+                values[input.key] = input.default?.toString()
+                    ?: if (input.key == "female" || input.key == "dialysis") "0.0" else ""
+            }
+        }
+    }
+
+    // Strict validation — the first failing input in spec order wins and the
+    // compute layer is not called at all: blank, non-numeric and non-finite
+    // values are rejected (a pasted "NaN"/"Infinity" parses as a Double, so
+    // isFinite() is checked explicitly), and so is any value outside the
+    // spec's min/max (a null bound means no bound on that side). No failure
+    // is silent anymore: every one renders the error surface below.
+    var inputError: String? = null
+    val parsed = mutableMapOf<String, Double>()
+    for (input in spec.inputs) {
+        val label = calcInputDisplayLabel(input)
+        val raw = values[input.key].orEmpty()
+        if (raw.isBlank()) {
+            inputError = "حقل «$label» فارغ — أدخل قيمة رقمية"
+            break
+        }
+        val number = raw.toDoubleOrNull()
+        if (number == null || !number.isFinite()) {
+            inputError = "قيمة «$label» غير صالحة — أدخل رقمًا صحيحًا"
+            break
+        }
+        if ((input.min != null && number < input.min) || (input.max != null && number > input.max)) {
+            val range = when {
+                input.min != null && input.max != null ->
+                    "(${formatCalcBound(input.min)} – ${formatCalcBound(input.max)})"
+                input.min != null -> "(الحد الأدنى ${formatCalcBound(input.min)})"
+                else -> "(الحد الأقصى ${formatCalcBound(input.max!!)})"
+            }
+            inputError = "قيمة «$label» خارج المجال المسموح $range"
+            break
+        }
+        parsed[input.key] = number
+    }
+
+    val outcome = if (inputError == null) evaluateCalcSpec(spec.id, parsed) else null
+    val errorText = when {
+        inputError != null -> inputError
+        outcome is CalcOutcome.Rejected -> "لا يمكن الحساب: ${outcome.reason}"
+        else -> null
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("جرّب بنفسك — أدخل القيم:", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 12.sp)
         spec.inputs.forEach { input ->
-            OutlinedTextField(
-                value = values[input.key] ?: "",
-                onValueChange = { values[input.key] = it },
-                label = { Text("${input.labelAr} (${input.unit})") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true
-            )
+            if (input.key == "female" || input.key == "dialysis") {
+                // Binary inputs render as a choice row, not a numeric field;
+                // the value still lives in the same map as "0.0"/"1.0", so
+                // parsing and the 0–1 range check above apply unchanged.
+                val options: List<Pair<String, String>> = if (input.key == "female") {
+                    listOf("ذكر" to "0.0", "أنثى" to "1.0")
+                } else {
+                    listOf("لا" to "0.0", "نعم" to "1.0")
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(calcInputDisplayLabel(input), fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 12.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        options.forEach { (optionLabel, optionValue) ->
+                            FilterChip(
+                                selected = values[input.key] == optionValue,
+                                onClick = { values[input.key] = optionValue },
+                                label = { Text(optionLabel, fontWeight = FontWeight.Bold) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaroonPrimary, selectedLabelColor = Color.White)
+                            )
+                        }
+                    }
+                }
+            } else {
+                OutlinedTextField(
+                    value = values[input.key] ?: "",
+                    onValueChange = { values[input.key] = it },
+                    label = { Text("${input.labelAr} (${input.unit})") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+            }
         }
-        if (result != null) {
+        if (outcome is CalcOutcome.Value) {
             Surface(color = MaroonPrimary.copy(alpha = 0.08f), shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("النتيجة: $result", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(12.dp))
+                Text("النتيجة: ${outcome.text}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(12.dp))
+            }
+        }
+        if (errorText != null) {
+            Surface(color = MaterialTheme.colorScheme.errorContainer, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Text(errorText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(12.dp))
             }
         }
     }
