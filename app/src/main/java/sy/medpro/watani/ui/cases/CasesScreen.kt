@@ -138,10 +138,72 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
     var selectedDiagnosis by remember { mutableStateOf<String?>(null) }
     var showExplanation by remember { mutableStateOf(false) }
 
+    // ---- Virtual-patient upgrade (schema v2) state ----
+    // A case is upgraded only when it declares schemaV2 and carries a
+    // history bank; every other case follows the legacy flow untouched.
+    val isV2 = caseItem.schemaV2 == true && !caseItem.historyBank.isNullOrEmpty()
+    var askedQuestions by remember { mutableStateOf(setOf<String>()) }
+    var earlyDiagnosis by remember { mutableStateOf(false) }
+    var pendingDiagnosis by remember { mutableStateOf<String?>(null) }
+
+    val correctDiagnosisText = caseItem.correctDiagnosis?.toString() ?: ""
+    val diagnosisCorrectNow = selectedDiagnosis != null &&
+        selectedDiagnosis!!.trim().equals(correctDiagnosisText.trim(), ignoreCase = true)
+    val revealedExamIds = revealedExams.mapNotNull { caseItem.examinations.orEmpty().getOrNull(it)?.id }.toSet()
+    val revealedTestIds = revealedTests.mapNotNull { caseItem.tests.orEmpty().getOrNull(it)?.id }.toSet()
+    val v2Score = if (isV2 && selectedDiagnosis != null) {
+        computeCaseScore(caseItem, askedQuestions, revealedExamIds, revealedTestIds, diagnosisCorrectNow)
+    } else null
+
+    // Soft diagnosis gate (v2 only): the diagnosis button is always
+    // available, but choosing before asking at least one question in 3
+    // different history domains asks for confirmation and flags the run
+    // as an early diagnosis in the report. It never blocks.
+    val chooseDiagnosis: (String) -> Unit = { option ->
+        val askedDomains = caseItem.historyBank.orEmpty()
+            .filter { it.id != null && askedQuestions.contains(it.id) }
+            .mapNotNull { it.domain }
+            .toSet()
+        if (isV2 && !earlyDiagnosis && askedDomains.size < 3) {
+            pendingDiagnosis = option
+        } else {
+            selectedDiagnosis = option
+            showExplanation = true
+        }
+    }
+
     LaunchedEffect(showExplanation) {
         if (showExplanation) {
-            OfflineStudyVault.recordCaseCompletion(context, caseItem.xpReward ?: 25)
+            // Upgraded cases earn the score-based share of the reward;
+            // legacy cases keep the full-reward grant exactly as before.
+            val xpToGrant = if (isV2) {
+                v2Score?.xpEarned ?: (caseItem.xpReward ?: 25)
+            } else {
+                caseItem.xpReward ?: 25
+            }
+            OfflineStudyVault.recordCaseCompletion(context, xpToGrant)
         }
+    }
+
+    if (pendingDiagnosis != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDiagnosis = null },
+            title = { Text("تشخيص مبكر") },
+            text = {
+                Text("لم تسأل بعدُ سؤالًا واحدًا على الأقل في 3 مجالات مختلفة من القصة. التشخيص الآن ممكن، لكنه سيُسجَّل في تقريرك كتشخيص مبكر، وما لم تسأل عنه سيبقى غائبًا عن درجتك.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    earlyDiagnosis = true
+                    selectedDiagnosis = pendingDiagnosis
+                    showExplanation = true
+                    pendingDiagnosis = null
+                }) { Text("التشخيص الآن") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDiagnosis = null }) { Text("متابعة أخذ القصة") }
+            }
+        )
     }
 
     DrawerScreenScaffold(
@@ -192,14 +254,18 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "القصة السريرية والعرض البدئي (Presentation):",
+                            text = if (isV2) "المقدّمة السريرية (Opening):" else "القصة السريرية والعرض البدئي (Presentation):",
                             fontWeight = FontWeight.Bold,
                             color = GoldAccent,
                             fontSize = 13.sp
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = caseItem.presentation ?: "لا توجد قصة متاحة",
+                            text = if (isV2) {
+                                caseItem.openingVignette ?: caseItem.presentation ?: caseItem.legacyPresentation ?: "لا توجد قصة متاحة"
+                            } else {
+                                caseItem.presentation ?: "لا توجد قصة متاحة"
+                            },
                             color = Color.White,
                             fontSize = 15.sp,
                             lineHeight = 23.sp
@@ -208,8 +274,77 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                 }
             }
 
-            // History (القصة المرضية والسوابق)
-            if (!caseItem.history.isNullOrEmpty()) {
+            // History bank (v2): the student interviews the patient.
+            // Questions are grouped by the six history domains; question
+            // titles are visible, answers stay hidden until the question
+            // is asked (recorded in askedQuestions). The tier and the
+            // red-flag flag are never shown to the student.
+            if (isV2) {
+                val bank = caseItem.historyBank.orEmpty()
+                val domainOrder = listOf("hpi", "associated", "red_flags", "past_medical", "meds_allergy", "social")
+                val domainTitles = mapOf(
+                    "hpi" to "الشكاية الحالية وتطوّرها",
+                    "associated" to "أعراض مرافقة ومراجعة أجهزة",
+                    "red_flags" to "أعلام حمراء",
+                    "past_medical" to "سوابق مرضية وجراحية",
+                    "meds_allergy" to "أدوية وحساسية",
+                    "social" to "اجتماعي وعادات"
+                )
+                val grouped = bank.groupBy { it.domain ?: "" }
+                val orderedDomains = domainOrder.filter { grouped.containsKey(it) } +
+                    grouped.keys.filter { it !in domainOrder }
+
+                item {
+                    Text("القصة المرضية — اسأل المريض بنفسك (History):", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                }
+                orderedDomains.forEach { domain ->
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(domainTitles[domain] ?: domain, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = GoldAccentDark)
+                    }
+                    items(grouped[domain].orEmpty(), key = { it.id ?: it.text ?: "" }) { question ->
+                        val qid = question.id ?: ""
+                        val isAsked = qid.isNotEmpty() && askedQuestions.contains(qid)
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = qid.isNotEmpty()) { askedQuestions = askedQuestions + qid },
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text(
+                                    text = question.text ?: "سؤال",
+                                    fontSize = 14.sp,
+                                    color = MaroonPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (isAsked) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Surface(
+                                        color = MaroonPrimary.copy(alpha = 0.08f),
+                                        shape = MaterialTheme.shapes.small,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "جواب المريض: ${question.answer ?: "لا توجد معلومات إضافية"}",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.padding(10.dp)
+                                        )
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("اضغط لطرح السؤال على المريض...", fontSize = 11.sp, color = GoldAccentDark)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // History (القصة المرضية والسوابق) — legacy cases only
+            if (!isV2 && !caseItem.history.isNullOrEmpty()) {
                 item {
                     Text("القصة السريرية والسوابق الموجهة (History):", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
                 }
@@ -376,8 +511,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                             .padding(vertical = 4.dp)
                             .clip(MaterialTheme.shapes.small)
                             .clickable(enabled = !showExplanation) {
-                                selectedDiagnosis = option
-                                showExplanation = true
+                                chooseDiagnosis(option)
                             }
                     ) {
                         Row(
@@ -427,8 +561,116 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                     val revealedKeyAll = revealedHistoryKey + revealedExamsKey + revealedTestsKey
                     val overallPct = if (totalKeyAll > 0) (revealedKeyAll * 100) / totalKeyAll else 100
 
+                    // Id to display text for every possible revealer of a
+                    // critical fact (history question, examination, test).
+                    val revealerTexts = HashMap<String, String>()
+                    caseItem.historyBank.orEmpty().forEach { q -> q.id?.let { revealerTexts[it] = q.text ?: it } }
+                    caseItem.examinations.orEmpty().forEach { e -> e.id?.let { revealerTexts[it] = e.text ?: it } }
+                    caseItem.tests.orEmpty().forEach { t -> t.id?.let { revealerTexts[it] = t.text ?: it } }
+
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // Performance Report Summary Card
+                        if (isV2 && v2Score != null) {
+                            val score = v2Score
+                            val fmtScore: (Double) -> String = { v -> if (v % 1.0 == 0.0) v.toInt().toString() else v.toString() }
+
+                            // Composite Score Report Card (v2)
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaroonDeep),
+                                shape = MaterialTheme.shapes.large
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("تقرير أداء الحالة السريرية", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        Surface(
+                                            color = GoldAccent,
+                                            shape = MaterialTheme.shapes.small
+                                        ) {
+                                            Text(
+                                                text = "+${score.xpEarned} XP",
+                                                color = MaroonDeep,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text("الدرجة المركّبة: ${fmtScore(score.total)} / 100", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    if (score.historyMerged) {
+                                        Text("• القصة — تغطية الجوهري (لا أسئلة أعلام حمراء موثّقة في هذه الحالة): ${fmtScore(score.historyEssentialPoints)} / 40 (${score.essentialAsked}/${score.essentialTotal})", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                    } else {
+                                        Text("• القصة — تغطية الجوهري: ${fmtScore(score.historyEssentialPoints)} / 25 (${score.essentialAsked}/${score.essentialTotal})", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                        Text("• القصة — الأعلام الحمراء: ${fmtScore(score.historyRedFlagPoints)} / 15 (${score.redFlagAsked}/${score.redFlagTotal})", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                    }
+                                    if (score.distractorsAsked > 0) {
+                                        Text("• كفاءة القصة: سألت ${score.distractorsAsked} سؤالًا مشتّتًا (المجاني منها: ${score.freeDistractors}) — الخصم من مكوّن القصة: ${fmtScore(score.distractorPenalty)} نقطة", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                    }
+                                    Text("• مكوّن القصة الإجمالي: ${fmtScore(score.historyTotal)} / 40", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                    Text("• الفحص والاستقصاءات — تغطية العناصر الأساسية: ${fmtScore(score.examCoveragePoints)} / 15 (${score.examKeyRevealed}/${score.examKeyTotal})", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                    Text(
+                                        "• الفحص والاستقصاءات — الكفاءة: ${fmtScore(score.examEfficiencyPoints)} / 5" +
+                                            if (score.examEfficiencyPenalty > 0) " (طُلب ${score.examDistractorsRequested} عنصرًا مشتّتًا — الخصم: ${fmtScore(score.examEfficiencyPenalty)})" else "",
+                                        color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp
+                                    )
+                                    Text("• التشخيص: ${fmtScore(score.diagnosisPoints)} / 40 (${if (score.diagnosisCorrect) "صحيح" else "غير صحيح"})", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                    if (earlyDiagnosis) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("⚠ تشخيص مبكر: شخّصت قبل سؤال سؤال واحد على الأقل في 3 مجالات مختلفة من القصة.", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                    if (score.missedFacts.isEmpty()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("كشفتَ كل الوقائع الحاسمة في هذه الحالة. أحسنت.", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+
+                            // Safety alert: red-flag questions exist but none was asked
+                            if (score.redFlagTotal > 0 && score.redFlagAsked == 0) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = ErrorRed),
+                                    shape = MaterialTheme.shapes.large
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text("⚠ تنبيه سلامة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            "لم تسأل أيًّا من أسئلة الأعلام الحمراء في هذه الحالة (${score.redFlagTotal} سؤالًا متاحًا). استبعاد التشاخيص المهدِّدة للحياة بسؤال المريض جزء أساسي من التقييم الآمن.",
+                                            color = Color.White, fontSize = 13.sp, lineHeight = 20.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Missed critical facts — the core lesson of the report
+                            if (score.missedFacts.isNotEmpty()) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    shape = MaterialTheme.shapes.medium,
+                                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.6f))
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text("وقائع حاسمة لم تُكشف (${score.missedFacts.size}):", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
+                                        score.missedFacts.forEach { fact ->
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text("• ${fact.label ?: "واقعة حاسمة"}", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            if (!fact.whyCritical.isNullOrEmpty()) {
+                                                Text("لماذا هي حاسمة: ${fact.whyCritical}", fontSize = 12.sp)
+                                            }
+                                            if (fact.revealerIds.isNotEmpty()) {
+                                                val revealerNames = fact.revealerIds.joinToString("، ") { revealerTexts[it] ?: it }
+                                                Text("كان يكشفها: $revealerNames", fontSize = 12.sp, color = GoldAccentDark, fontWeight = FontWeight.SemiBold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                        // Performance Report Summary Card (legacy)
                         Card(
                             colors = CardDefaults.cardColors(containerColor = MaroonDeep),
                             shape = MaterialTheme.shapes.large
@@ -463,6 +705,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 Text("• الكفاءة الإجمالية لكشف النقاط المفتاحية: $overallPct%", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
                         }
+                        }
 
                         // Full Explanation Card
                         if (!caseItem.explanation.isNullOrEmpty()) {
@@ -491,6 +734,27 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     Spacer(modifier = Modifier.height(6.dp))
                                     caseItem.learningPoints.forEach { lp ->
                                         Text("• $lp", fontSize = 13.sp, modifier = Modifier.padding(vertical = 2.dp))
+                                    }
+                                }
+                            }
+                        }
+
+                        // Full original story (v2 only): after finishing, the
+                        // student compares what they uncovered against the
+                        // complete record. Converted cases carry the text in
+                        // legacyPresentation when presentation is absent.
+                        if (isV2) {
+                            val fullStory = caseItem.presentation ?: caseItem.legacyPresentation
+                            if (!fullStory.isNullOrEmpty()) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    shape = MaterialTheme.shapes.medium,
+                                    border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.4f))
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text("القصة الكاملة كما في السجل:", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(fullStory, fontSize = 14.sp, lineHeight = 21.sp)
                                     }
                                 }
                             }
