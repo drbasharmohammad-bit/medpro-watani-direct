@@ -1,6 +1,8 @@
 package sy.medpro.watani.data
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.provider.Settings
 import android.util.Log
 import com.google.firebase.auth.FirebaseUser
@@ -19,6 +21,7 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Typed signal that the gateway rejected this device's activation
@@ -418,6 +421,63 @@ object WorkerActivationApi {
 
     // (No blocking-refresh wrapper: validTokenOrRefresh below calls
     // refreshInternal directly so it can see the revocation flag.)
+
+    /**
+     * Offline-activation fix (Nov 2026, doctor's order): the revocation
+     * check runs ONLY when the device is online. An activated account
+     * must keep working offline — so this function performs NO network
+     * call at all without connectivity, and a failed/unreachable check
+     * never cancels the activation nor hides any section (UNAVAILABLE
+     * semantics, same as tryRefresh).
+     *
+     * When online it probes the Worker with the existing refresh path
+     * (POST /v1/activate/refresh, which re-authorizes via verifyAccess:
+     * device bound, not banned, code bound, code not expired). Only a
+     * PROVEN server rejection (401/403) revokes: the local activation
+     * is cleared, restricted downloads are wiped (M4, doctor's decision)
+     * and the activation prompt event fires. A successful probe renews
+     * the token (the refresh path's normal effect) — the code's own
+     * duration, the 2-device limit and the gateway are untouched.
+     *
+     * Throttled to one attempt per 10 minutes (process lifetime) and
+     * guarded against concurrent runs, so a flapping network or a
+     * repeated entry cannot spam the Worker with refresh calls.
+     */
+    private val lastRevocationCheckMs = java.util.concurrent.atomic.AtomicLong(0L)
+    private val revocationCheckInFlight = AtomicBoolean(false)
+
+    fun isOnline(context: Context): Boolean {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return false
+            val network = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(network) ?: return false
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun checkRevocationIfOnline(context: Context): RefreshOutcome {
+        if (!isActivated(context)) return RefreshOutcome.UNAVAILABLE
+        if (!isOnline(context)) return RefreshOutcome.UNAVAILABLE
+        val now = System.currentTimeMillis()
+        if (now - lastRevocationCheckMs.get() < 10 * 60 * 1000L) return RefreshOutcome.UNAVAILABLE
+        if (!revocationCheckInFlight.compareAndSet(false, true)) return RefreshOutcome.UNAVAILABLE
+        return try {
+            lastRevocationCheckMs.set(now)
+            when (val outcome = tryRefresh(context)) {
+                RefreshOutcome.REVOKED -> {
+                    // Proven by the server (401/403): clear + wipe + prompt.
+                    notifyActivationLost(context)
+                    outcome
+                }
+                else -> outcome
+            }
+        } finally {
+            revocationCheckInFlight.set(false)
+        }
+    }
 
     /**
      * Returns (fresh token or null, serverRejected401_403).

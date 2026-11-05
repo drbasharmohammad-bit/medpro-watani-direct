@@ -90,15 +90,55 @@ class WataniRepository(private val context: Context) {
         return ActivationRevokedException("انتهى التفعيل على هذا الجهاز — أعد إدخال كود التفعيل.")
     }
 
+    /**
+     * Offline-activation fix (Nov 2026, doctor's order): the manifest is
+     * a FREE path (fetched directly from Pages, never through the
+     * gateway), so a copy is cached on disk. An activated account must
+     * keep seeing its sections offline — without a cache, every cold
+     * start offline failed the fetch and HomeScreen showed only a
+     * "connection error" wall even though the sections were downloaded.
+     * On any fetch failure the cached manifest is served instead; only
+     * when there is no cache at all does the failure reach the UI (and
+     * MainViewModel then falls back to the downloaded-sections registry).
+     * The cache never grants access by itself: restricted tabs and quiz
+     * entry still re-check the local activation, and restricted fetches
+     * still go through the gateway.
+     */
+    private fun manifestCacheFile(): File = File(context.filesDir, "manifest_cache.json")
+
+    private fun saveManifestCache(manifest: ManifestResponse) {
+        try {
+            manifestCacheFile().writeText(
+                moshi.adapter(ManifestResponse::class.java).toJson(manifest), Charsets.UTF_8
+            )
+        } catch (_: Exception) {
+            // Best-effort: a failed cache write must never fail the fetch.
+        }
+    }
+
+    private fun loadManifestCache(): ManifestResponse? {
+        return try {
+            val file = manifestCacheFile()
+            if (!file.exists()) return null
+            moshi.adapter(ManifestResponse::class.java).fromJson(file.readText(Charsets.UTF_8))
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     suspend fun fetchManifest(): Result<ManifestResponse> = withContext(Dispatchers.IO) {
         try {
             val response = api.getManifest()
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+                val manifest = response.body()!!
+                saveManifestCache(manifest)
+                Result.success(manifest)
             } else {
+                loadManifestCache()?.let { return@withContext Result.success(it) }
                 Result.failure(Exception("تعذر جلب الفهرس — تحقق من الاتصال وحاول مجددًا."))
             }
         } catch (e: Exception) {
+            loadManifestCache()?.let { return@withContext Result.success(it) }
             Result.failure(Exception("تعذر الاتصال بخادم الفهرس — تحقق من الشبكة وحاول مجددًا.", e))
         }
     }

@@ -91,10 +91,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 },
                 onFailure = { error ->
+                    // Offline-activation fix (Nov 2026, doctor's order):
+                    // when the manifest cannot be fetched at all (no
+                    // network and no cache) but sections are already
+                    // downloaded, show them from the local registry so an
+                    // activated account works offline instead of hitting
+                    // the "connection error" wall. The error is still
+                    // reported (banner), and a previously loaded manifest
+                    // is never replaced by the registry.
+                    val fallbackFiles = if (_uiState.value.files.isEmpty()) {
+                        downloadedSections.value.associate { entity ->
+                            entity.sectionPath to ManifestFileEntry(
+                                hash = entity.hash,
+                                size = null,
+                                count = entity.count,
+                                version = entity.version
+                            )
+                        }
+                    } else {
+                        _uiState.value.files
+                    }
                     _uiState.update {
                         it.copy(
                             isLoadingManifest = false,
-                            manifestError = error.localizedMessage ?: "تعذر جلب الفهرس"
+                            manifestError = error.localizedMessage ?: "تعذر جلب الفهرس",
+                            files = fallbackFiles
                         )
                     }
                 }

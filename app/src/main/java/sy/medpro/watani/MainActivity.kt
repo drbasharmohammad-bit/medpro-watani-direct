@@ -1,11 +1,15 @@
 package sy.medpro.watani
 
+import android.content.Context
 import android.content.res.Configuration
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -65,9 +69,44 @@ import sy.medpro.watani.ui.viewmodel.ScreenState
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
 
+    // Offline-activation fix: connectivity callback (registered in
+    // onCreate, unregistered in onDestroy).
+    private var revocationNetworkCallback: ConnectivityManager.NetworkCallback? = null
+
+    override fun onDestroy() {
+        revocationNetworkCallback?.let { callback ->
+            try {
+                (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
+                    .unregisterNetworkCallback(callback)
+            } catch (_: Exception) { }
+        }
+        super.onDestroy()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Offline-activation fix (Nov 2026, doctor's order): when
+        // connectivity returns while the app is open, verify the
+        // activation with the Worker — a cancelled activation is
+        // stopped then (clear + wipe + prompt via the revocation
+        // event). Offline nothing happens: the check itself is
+        // connectivity-gated and throttled inside
+        // WorkerActivationApi, and a failed check never cancels
+        // anything. Unregistered in onDestroy.
+        revocationNetworkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                lifecycleScope.launch {
+                    try {
+                        if (sy.medpro.watani.data.WorkerActivationApi.isActivated(this@MainActivity)) {
+                            sy.medpro.watani.data.WorkerActivationApi.checkRevocationIfOnline(this@MainActivity)
+                        }
+                    } catch (_: Exception) { }
+                }
+            }
+        }
+        (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
+            .registerDefaultNetworkCallback(revocationNetworkCallback!!)
         // TEAM-3 device-protection (single wiring line): FLAG_SECURE on this
         // window (same call as before, via SecurityChecks) + app-close sweep
         // of plaintext temp files. No auth-gate logic touched.
@@ -182,6 +221,15 @@ class MainActivity : ComponentActivity() {
                             // Best-effort FCM token upload on sign-in
                             // (deduped inside; never blocks the UI).
                             try { sy.medpro.watani.data.WorkerActivationApi.uploadFcmToken(contextForSync) } catch (_: Exception) { }
+                            // Offline-activation fix (Nov 2026, doctor's
+                            // order): once per sign-in / cold start, when
+                            // the account is activated AND the device is
+                            // online, verify with the Worker whether the
+                            // activation was cancelled. Offline the check
+                            // is skipped entirely inside
+                            // checkRevocationIfOnline — the local
+                            // activation keeps working.
+                            try { sy.medpro.watani.data.WorkerActivationApi.checkRevocationIfOnline(contextForSync) } catch (_: Exception) { }
                         }
                     }
                     // POST_NOTIFICATIONS (Android 13+): ask once after
