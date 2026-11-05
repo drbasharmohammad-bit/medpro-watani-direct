@@ -39,7 +39,7 @@ data class ManifestFileEntry(
  * - Both hashes present -> up to date only when equal. The comparison
  *   is a trimmed, case-insensitive TEXT comparison of the stored and
  *   manifest values exactly as they are: the hash algorithm differs
- *   per section family (blake2b-8 for questions/*, sha256[:16] for
+ *   per section family (blake2b-8 for the questions family, sha256[:16] for
  *   Damascus files) and content hashes are never recomputed here.
  */
 fun isSectionUpToDate(downloaded: DownloadedSectionEntity?, entry: ManifestFileEntry): Boolean {
