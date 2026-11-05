@@ -48,6 +48,7 @@ import sy.medpro.watani.ui.clinical.BedsideClinicalTab
 import sy.medpro.watani.ui.drawer.*
 import sy.medpro.watani.ui.home.*
 import sy.medpro.watani.ui.leaderboard.LeaderboardScreen
+import sy.medpro.watani.ui.logbook.LogbookScreen
 import sy.medpro.watani.ui.library.LibraryScreen
 import sy.medpro.watani.ui.offline.EponymsAtlasScreen
 import sy.medpro.watani.ui.offline.SmartStudyPlannerScreen
@@ -365,6 +366,7 @@ class MainActivity : ComponentActivity() {
                                                 "البحث الشامل",
                                                 "المفضلة",
                                                 "ملاحظاتي",
+                                                "سجلّ حالاتي",
                                                 "إعدادات وسجل الإشعارات",
                                                 "الخصوصية والشروط",
                                                 "التواصل",
@@ -388,6 +390,7 @@ class MainActivity : ComponentActivity() {
                                                     "البحث الشامل" -> Icons.Default.Search
                                                     "المفضلة" -> Icons.Default.Favorite
                                                     "ملاحظاتي" -> Icons.Default.NoteAlt
+                                                    "سجلّ حالاتي" -> Icons.Default.Assignment
                                                     "إعدادات وسجل الإشعارات" -> Icons.Default.Settings
                                                     "الخصوصية والشروط" -> Icons.Default.Security
                                                     "التواصل" -> Icons.Default.SupportAgent
@@ -630,6 +633,7 @@ class MainActivity : ComponentActivity() {
                                                 "البحث الشامل" -> GlobalSearchScreen(onBack = { drawerScreen = null })
                                                 "المفضلة" -> FavoritesScreen(onBack = { drawerScreen = null })
                                                 "ملاحظاتي" -> MyNotesScreen(onBack = { drawerScreen = null })
+                                                "سجلّ حالاتي" -> LogbookScreen(onBack = { drawerScreen = null })
                                                 "إعدادات وسجل الإشعارات" -> SettingsScreen(onBack = { drawerScreen = null })
                                                 "الخصوصية والشروط" -> PrivacyScreen(onBack = { drawerScreen = null })
                                                 "التواصل" -> ContactScreen(onBack = { drawerScreen = null })

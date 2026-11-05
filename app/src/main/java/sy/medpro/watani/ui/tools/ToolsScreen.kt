@@ -58,6 +58,7 @@ private val TOOLS = listOf(
     ToolEntry("البطاقات والمراجعة الذكية", "بطاقات Anki ومراجعة الأخطاء", Icons.Default.Style, "البطاقات والمراجعة الذكية"),
     ToolEntry("دليل الدراسة", "خطة دراسة منظمة للوطني", Icons.Default.Book, "دليل الدراسة"),
     ToolEntry("سجل أخطائي والاختبارات", "أسئلتك الخاطئة واختباراتك السابقة", Icons.Default.History, "سجل أخطائي والاختبارات"),
+    ToolEntry("سجلّ حالاتي", "وثّق حالات مناوبتك — محفوظة بجهازك ومزامَنة مع حسابك", Icons.Default.Assignment, "سجلّ حالاتي"),
     ToolEntry("مؤقت التركيز", "جلسات تركيز بأسلوب بومودورو", Icons.Default.Timer, "مؤقت التركيز"),
     ToolEntry("البحث الشامل", "ابحث بكل محتوى التطبيق", Icons.Default.Search, "البحث الشامل")
 )
