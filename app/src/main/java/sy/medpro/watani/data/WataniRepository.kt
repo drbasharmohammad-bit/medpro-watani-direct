@@ -104,7 +104,15 @@ class WataniRepository(private val context: Context) {
      * entry still re-check the local activation, and restricted fetches
      * still go through the gateway.
      */
-    private fun manifestCacheFile(): File = File(context.filesDir, "manifest_cache.json")
+    private fun manifestCacheFile(): File = File(context.filesDir, MANIFEST_CACHE_FILENAME)
+
+    companion object {
+        /** Disk file of the manifest cache (see manifestCacheFile()).
+         * Deleted by [RestrictedInventory.wipeRestrictedDownloads] on a
+         * proven revocation: a stale copy would keep listing restricted
+         * sections after the activation ended. */
+        const val MANIFEST_CACHE_FILENAME = "manifest_cache.json"
+    }
 
     private fun saveManifestCache(manifest: ManifestResponse) {
         try {

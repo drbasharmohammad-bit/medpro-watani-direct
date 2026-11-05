@@ -25,6 +25,8 @@ import java.io.File
  *  - explanation_layers (explanation shard cache: M3 "no cache display"
  *    for revoked activation).
  *  - All registered decrypt temps (TempDecryptedFiles sweep).
+ *  - The manifest disk cache (manifest_cache.json): it lists restricted
+ *    sections, so a stale copy must not survive a revocation.
  *
  * WHAT IS NOT WIPED: free-section files, the activation prefs' device
  * UUID fallback (it identifies the device, not content), and any
@@ -97,6 +99,17 @@ object RestrictedInventory {
         try {
             TempDecryptedFiles.deleteAll(context)
         } catch (_: Exception) {
+        }
+        // 6. Manifest disk cache (Nov 2026 offline-activation fix):
+        // it lists restricted sections, so a stale copy must not
+        // survive a proven revocation.
+        try {
+            val cache = File(context.filesDir, WataniRepository.MANIFEST_CACHE_FILENAME)
+            if (cache.exists() && !cache.delete()) {
+                Log.w("RestrictedInventory", "could not delete manifest cache")
+            }
+        } catch (e: Exception) {
+            Log.w("RestrictedInventory", "delete failed for manifest cache", e)
         }
     }
 
