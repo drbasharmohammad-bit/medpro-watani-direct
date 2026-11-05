@@ -31,10 +31,16 @@ private fun fmt(v: Double, digits: Int): String =
     String.format(java.util.Locale.US, "%.${digits}f", v)
 
 // Rounds to the given number of decimal digits (same precision fmt shows)
-// and normalizes -0.0 to 0.0.
+// and normalizes -0.0 to 0.0. Uses HALF_UP (away from zero at .5) so the
+// result always matches what String.format in fmt() prints — Kotlin's
+// roundToInt ties toward +infinity instead, which disagreed with fmt on
+// exact negative halves (e.g. -12.5 displayed -13 but rounded to -12).
+// floor/abs also avoids roundToInt's Int saturation on huge values.
 private fun roundTo(v: Double, digits: Int): Double {
     val factor = 10.0.pow(digits)
-    val r = (v * factor).roundToInt() / factor
+    val scaled = v * factor
+    val magnitude = kotlin.math.floor(kotlin.math.abs(scaled) + 0.5)
+    val r = (if (scaled < 0) -magnitude else magnitude) / factor
     return if (r == 0.0) 0.0 else r
 }
 
@@ -424,8 +430,11 @@ fun evaluateCalcSpec(specId: String, inputs: Map<String, Double>): CalcOutcome {
             val tg = inputs["tg"] ?: return missingInputs()
             if (tg >= 400.0) return CalcOutcome.Rejected("الغليسيريدات ≥ 400 mg/dL: معادلة فرايدوالد غير صالحة — قس LDL مباشرة")
             val v = tc - hdl - tg / 5.0
-            if (v <= 0.0) return CalcOutcome.Rejected("النتيجة المحسوبة ≤ 0: الصيغة غير صالحة لهذه القيم — قس LDL مباشرة")
             val rv = roundTo(v, 0)
+            // Guard on the rounded (displayed) value: a raw result in (0, 0.5)
+            // would otherwise display as "0 mg/dL — مثالي", the exact picture
+            // this guard exists to prevent.
+            if (rv <= 0.0) return CalcOutcome.Rejected("النتيجة المحسوبة ≤ 0: الصيغة غير صالحة لهذه القيم — قس LDL مباشرة")
             val band = when {
                 rv < 100.0 -> "مثالي"
                 rv < 130.0 -> "قريب من المثالي"
