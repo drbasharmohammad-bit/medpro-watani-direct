@@ -871,7 +871,19 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 }
                                                 is ScreenState.TopicSelection -> {
-                                                    val isDownloaded = downloadedSections.any { it.sectionPath == screen.path }
+                                                    // Hash-aware verdict when a manifest entry is
+                                                    // available (see isSectionUpToDate in
+                                                    // WataniContentModels.kt): a stale-hash section
+                                                    // falls back to the download prompt below instead
+                                                    // of opening outdated content. Without an entry,
+                                                    // keep the previous presence-only verdict.
+                                                    val topicEntry = uiState.files[screen.path]
+                                                    val topicEntity = downloadedSections.firstOrNull { it.sectionPath == screen.path }
+                                                    val isDownloaded = if (topicEntry != null) {
+                                                        sy.medpro.watani.data.isSectionUpToDate(topicEntity, topicEntry)
+                                                    } else {
+                                                        topicEntity != null
+                                                    }
                                                     TopicSelectionScreen(
                                                         subjectName = screen.subjectName,
                                                         subjectEnvelope = activeSubjectEnvelope,

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.DownloadedSectionEntity
 import sy.medpro.watani.data.ManifestFileEntry
+import sy.medpro.watani.data.isSectionUpToDate
 import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.ui.cases.CasesScreen
 import sy.medpro.watani.ui.theme.GoldAccent
@@ -165,8 +166,15 @@ fun HomeScreen(
                         when (selectedBankSection) {
                             BankSection.CASES -> {
                                 val casesEntry = files["cases.json"]
-                                val casesDownloaded = downloadedMap["cases.json"] != null &&
-                                    (downloadedMap["cases.json"]?.count ?: 0) >= (casesEntry?.count ?: 1)
+                                val casesEntity = downloadedMap["cases.json"]
+                                // Hash-aware verdict (see isSectionUpToDate). With no
+                                // manifest entry to compare against, keep the previous
+                                // count-only verdict (count >= 1).
+                                val casesDownloaded = if (casesEntry != null) {
+                                    isSectionUpToDate(casesEntity, casesEntry)
+                                } else {
+                                    casesEntity != null && casesEntity.count >= 1
+                                }
                                 if (casesList.isNotEmpty() && casesDownloaded) {
                                     CasesScreen(cases = casesList, onCaseClick = onCaseClick)
                                 } else {
@@ -224,7 +232,7 @@ fun HomeScreen(
 
                                     items(tabFiles.entries.toList()) { (path, entry) ->
                                         val downloadedEntity = downloadedMap[path]
-                                        val isDownloaded = downloadedEntity != null && downloadedEntity.count >= (entry.count ?: 0)
+                                        val isDownloaded = isSectionUpToDate(downloadedEntity, entry)
                                         val isDownloading = downloadingPaths.contains(path)
                                         val subjectDisplayName = path.substringAfterLast("/").substringBeforeLast(".json")
 
@@ -528,7 +536,7 @@ fun UniversitySubjectsScreen(
             }
             items(univFiles.entries.toList()) { (path, entry) ->
                 val downloadedEntity = downloadedMap[path]
-                val isDownloaded = downloadedEntity != null && downloadedEntity.count >= (entry.count ?: 0)
+                val isDownloaded = isSectionUpToDate(downloadedEntity, entry)
                 val isDownloading = downloadingPaths.contains(path)
                 val subjectName = path.substringAfterLast("/").substringBeforeLast(".json")
 

@@ -17,6 +17,41 @@ data class ManifestFileEntry(
     @Json(name = "version") val version: String?
 )
 
+/**
+ * Manifest-hash fix (Nov 2026): decides whether a downloaded section is
+ * up to date against the CURRENT manifest [entry].
+ *
+ * The old rule compared counts only, so a server-side correction that
+ * keeps the same question count (e.g. fixing a wrong answer key) never
+ * reached existing users — the section always looked "downloaded" and
+ * no re-download was ever offered.
+ *
+ * Rules:
+ * - No downloaded entity -> not downloaded.
+ * - Stored count below the manifest count -> not up to date (old rule).
+ * - Manifest entry has no hash (null/blank) -> count-only verdict, so
+ *   hash-less sections keep working exactly as before.
+ * - Manifest has a hash but the stored hash is blank (a download made
+ *   before hashes were recorded) -> needs ONE update so the hash gets
+ *   recorded; after that re-download the stored hash equals the
+ *   manifest hash (the repository stores entry.hash verbatim on every
+ *   successful download), so no repeated-update loop can occur.
+ * - Both hashes present -> up to date only when equal. The comparison
+ *   is a trimmed, case-insensitive TEXT comparison of the stored and
+ *   manifest values exactly as they are: the hash algorithm differs
+ *   per section family (blake2b-8 for questions/*, sha256[:16] for
+ *   Damascus files) and content hashes are never recomputed here.
+ */
+fun isSectionUpToDate(downloaded: DownloadedSectionEntity?, entry: ManifestFileEntry): Boolean {
+    if (downloaded == null) return false
+    if (downloaded.count < (entry.count ?: 0)) return false
+    val manifestHash = entry.hash?.trim().orEmpty()
+    if (manifestHash.isEmpty()) return true
+    val storedHash = downloaded.hash.trim()
+    if (storedHash.isEmpty()) return false
+    return storedHash.equals(manifestHash, ignoreCase = true)
+}
+
 @JsonClass(generateAdapter = true)
 data class SubjectEnvelope(
     @Json(name = "version") val version: Any?,
