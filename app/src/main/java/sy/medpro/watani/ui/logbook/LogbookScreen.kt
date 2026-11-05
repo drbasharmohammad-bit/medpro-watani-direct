@@ -157,6 +157,23 @@ private fun LogbookMain(context: Context, user: FirebaseUser) {
         LogbookRepository.syncNow(context)
     }
 
+    val filtered = remember(entries, query, specialtyFilter) {
+        entries.filter { e ->
+            (specialtyFilter == null || e.specialty == specialtyFilter) &&
+                (query.isBlank() || listOf(
+                    e.chiefComplaint, e.diagnosis, e.keyFindings, e.investigations,
+                    e.management, e.lessons, e.ward, e.specialty
+                ).any { it.contains(query, ignoreCase = true) } || e.tags.any { it.contains(query, ignoreCase = true) })
+        }
+    }
+    val weekCount = remember(entries) {
+        val weekAgo = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
+        entries.count { it.seenDate >= weekAgo }
+    }
+    val presentSpecialties = remember(entries) { entries.map { it.specialty }.filter { it.isNotBlank() }.distinct() }
+
+    // فرع المحرّر بعد كل نداءات remember أعلاه عمدًا: عودة مبكرة قبلها كانت
+    // ستغيّر ترتيب الخطافات بين إعادة تركيب وأخرى (خطر فساد حالة Compose).
     val editing = editingId?.let { id -> entries.firstOrNull { it.id == id } }
     if (editingId != null) {
         if (editing == null) {
@@ -175,21 +192,6 @@ private fun LogbookMain(context: Context, user: FirebaseUser) {
             return
         }
     }
-
-    val filtered = remember(entries, query, specialtyFilter) {
-        entries.filter { e ->
-            (specialtyFilter == null || e.specialty == specialtyFilter) &&
-                (query.isBlank() || listOf(
-                    e.chiefComplaint, e.diagnosis, e.keyFindings, e.investigations,
-                    e.management, e.lessons, e.ward, e.specialty
-                ).any { it.contains(query, ignoreCase = true) } || e.tags.any { it.contains(query, ignoreCase = true) })
-        }
-    }
-    val weekCount = remember(entries) {
-        val weekAgo = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
-        entries.count { it.seenDate >= weekAgo }
-    }
-    val presentSpecialties = remember(entries) { entries.map { it.specialty }.filter { it.isNotBlank() }.distinct() }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         // ترويسة العدّادات + حالة المزامنة
@@ -362,7 +364,7 @@ private fun LogbookEntryCard(entry: LogbookEntry, onClick: () -> Unit) {
             if (entry.tags.isNotEmpty()) {
                 Text(
                     entry.tags.joinToString("  ") { "#$it" },
-                    fontSize = 11.sp, color = GoldAccent, modifier = Modifier.padding(top = 4.dp)
+                    fontSize = 11.sp, color = MaroonPrimary, modifier = Modifier.padding(top = 4.dp)
                 )
             }
         }
