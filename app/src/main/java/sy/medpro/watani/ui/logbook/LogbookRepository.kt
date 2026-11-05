@@ -155,7 +155,12 @@ object LogbookRepository {
         if (idx < 0) return
         // تصفير syncBlocked مع القبر: الحذف يجب أن ينتشر دائمًا، ولو كان
         // الإدخال محظور الرفع لحجمه (قبرٌ محظور كان سيعلق للأبد — مراجعة).
-        entries[idx] = entries[idx].copy(deleted = true, updatedAt = System.currentTimeMillis(), syncBlocked = false)
+        // والطابع رتيب كالبقية حتى لا يولد قبرٌ غير معلّق بنفس الميلي-ثانية.
+        entries[idx] = entries[idx].copy(
+            deleted = true,
+            updatedAt = maxOf(System.currentTimeMillis(), entries[idx].updatedAt + 1),
+            syncBlocked = false
+        )
         persist(context)
         publish()
     }
@@ -209,16 +214,20 @@ object LogbookRepository {
      * لا ترمي أبدًا؛ نتيجتها تُقرأ من [syncInfo].
      */
     suspend fun syncNow(context: Context) {
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user == null) {
-            _syncInfo.value = _syncInfo.value.copy(state = LogbookSyncState.AUTH_ERROR)
-            return
-        }
         // انتظار لا تخطٍّ: دورة سابقة ما زالت جارية تُنتظر حتى تنتهي/تجهض
         // (فحص المالك يجهض القديمة بسرعة)، وإلا قد تُترك مزامنة الحساب
         // الجديد بلا أي محاولة حتى محفّز لاحق (مراجعة مستقلة).
         syncMutex.lock()
         try {
+            // التقاط المستخدم بعد حوز القفل لا قبله: دورة أُطلقت لحساب ثم
+            // عُلّقت بانتظار دورة أقدم يجب أن تعمل لحساب لحظة بدئها الفعلي
+            // لا لحساب لحظة إطلاقها — وإلا أعادت تفعيل مخزن السابق على
+            // شاشة اللاحق (عرض عابر بلا خلط بيانات — أغلقته المراجعة).
+            val user = FirebaseAuth.getInstance().currentUser
+            if (user == null) {
+                _syncInfo.value = _syncInfo.value.copy(state = LogbookSyncState.AUTH_ERROR)
+                return
+            }
             switchAccount(context, user.uid)
             // مالك هذه الدورة: أي تبديل حساب أثناء الانتظار على الشبكة يوقف
             // الدورة قبل أن تدمج/تحفظ بمخزن غير صاحبها (إصلاح سباق مراجعة مستقلة).
@@ -370,7 +379,9 @@ object LogbookRepository {
 
             synchronized(this) { publish() }
             _syncInfo.value = _syncInfo.value.copy(
-                state = if (authFailed) LogbookSyncState.AUTH_ERROR else _syncInfo.value.state,
+                // نجاح الدورة يُخرج الحالة من SYNCING صراحة (كانت تبقى عالقة
+                // على «جارٍ المزامنة» لأن refreshPendingInfo يحفظها لاصقة).
+                state = if (authFailed) LogbookSyncState.AUTH_ERROR else LogbookSyncState.IDLE,
                 lastSyncAt = if (authFailed) _syncInfo.value.lastSyncAt else System.currentTimeMillis()
             )
             refreshPendingInfo()
