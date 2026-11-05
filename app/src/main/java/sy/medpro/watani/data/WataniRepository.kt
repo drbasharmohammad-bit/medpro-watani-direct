@@ -254,6 +254,22 @@ class WataniRepository(private val context: Context) {
                 }
             } else if (path == "guide.json") {
                 actualCount = 1
+            } else if (path == "ddx.json") {
+                val ddxEnv = moshi.adapter(DdxEnvelope::class.java).fromJson(jsonString)
+                val declaredCount = ddxEnv?.count ?: 0
+                actualCount = ddxEnv?.cases?.size ?: 0
+                if (ddxEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
+                    file.delete()
+                    return@withContext Result.failure(Exception("خطأ في تطابق عدد حالات التشخيص التفريقي الداخلي (المتوقع $declaredCount والفعلي $actualCount)"))
+                }
+            } else if (path == "reverse.json") {
+                val revEnv = moshi.adapter(ReverseEnvelope::class.java).fromJson(jsonString)
+                val declaredCount = revEnv?.count ?: 0
+                actualCount = revEnv?.rounds?.size ?: 0
+                if (revEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
+                    file.delete()
+                    return@withContext Result.failure(Exception("خطأ في تطابق عدد جولات اقلبها الداخلي (المتوقع $declaredCount والفعلي $actualCount)"))
+                }
             } else {
                 val subjEnv = moshi.adapter(SubjectEnvelope::class.java).fromJson(jsonString)
                 val declaredCount = subjEnv?.count ?: 0
@@ -337,6 +353,28 @@ class WataniRepository(private val context: Context) {
             if (!file.exists()) return@withContext null
             val jsonString = file.readText(Charsets.UTF_8)
             moshi.adapter(AuscultationEnvelope::class.java).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun getDdxEnvelope(): DdxEnvelope? = withContext(Dispatchers.IO) {
+        try {
+            val file = getSectionFile("ddx.json")
+            if (!file.exists()) return@withContext null
+            val jsonString = file.readText(Charsets.UTF_8)
+            moshi.adapter(DdxEnvelope::class.java).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun getReverseEnvelope(): ReverseEnvelope? = withContext(Dispatchers.IO) {
+        try {
+            val file = getSectionFile("reverse.json")
+            if (!file.exists()) return@withContext null
+            val jsonString = file.readText(Charsets.UTF_8)
+            moshi.adapter(ReverseEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
         }

@@ -54,6 +54,8 @@ private val TOOLS = listOf(
     ToolEntry("حاسبات العناية والسوائل", "الرافعات الوعائية ومعادلة باركلاند للحروق", Icons.Default.LocalHospital, "حاسبات العناية والسوائل"),
     ToolEntry("الصادات والكلية والأطفال", "تعديل الجرعات حسب CrCl وجرعات الأطفال بالوزن", Icons.Default.MedicalServices, "الصادات والكلية والأطفال"),
     ToolEntry("محطات OSCE", "محطات فحص سريري تفاعلية", Icons.Default.MedicalServices, "محطات OSCE"),
+    ToolEntry("مدرّب التشخيص التفريقي", "رتّب التشخيصات التفريقية واكشف مراحل الحالة تدريجيًا", Icons.Default.Assessment, "مدرّب التشخيص التفريقي"),
+    ToolEntry("اقلبها", "ابنِ الصورة السريرية للتشخيص، ميّز العنصر الدخيل، وأكمل العبارة الناقصة", Icons.Default.EmojiEvents, "اقلبها"),
     ToolEntry("غرفة الطوارئ", "مناوبة إسعافية تفاعلية بحالات متغيرة", Icons.Default.LocalHospital, "غرفة الطوارئ"),
     ToolEntry("البطاقات والمراجعة الذكية", "بطاقات Anki ومراجعة الأخطاء", Icons.Default.Style, "البطاقات والمراجعة الذكية"),
     ToolEntry("دليل الدراسة", "خطة دراسة منظمة للوطني", Icons.Default.Book, "دليل الدراسة"),

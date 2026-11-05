@@ -49,6 +49,8 @@ import sy.medpro.watani.ui.drawer.*
 import sy.medpro.watani.ui.home.*
 import sy.medpro.watani.ui.leaderboard.LeaderboardScreen
 import sy.medpro.watani.ui.logbook.LogbookScreen
+import sy.medpro.watani.ui.ddx.DdxTrainerScreen
+import sy.medpro.watani.ui.reverse.ReverseTrainerScreen
 import sy.medpro.watani.ui.library.LibraryScreen
 import sy.medpro.watani.ui.offline.EponymsAtlasScreen
 import sy.medpro.watani.ui.offline.SmartStudyPlannerScreen
@@ -666,6 +668,8 @@ class MainActivity : ComponentActivity() {
                                                     onBack = { drawerScreen = null }
                                                 )
                                                 "محطات OSCE" -> OsceStationsScreen(onBack = { drawerScreen = null })
+                                                "مدرّب التشخيص التفريقي" -> DdxTrainerScreen(onBack = { drawerScreen = null })
+                                                "اقلبها" -> ReverseTrainerScreen(onBack = { drawerScreen = null })
                                                 "غرفة الطوارئ" -> EmergencyRoomScreen(onBack = { drawerScreen = null })
                                                 else -> ProfileScreen(onBack = { drawerScreen = null })
                                             }
