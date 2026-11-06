@@ -43,7 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.QuestionDto
-import sy.medpro.watani.data.WataniFirestoreSync
+import sy.medpro.watani.data.WataniGatewaySync
 import sy.medpro.watani.data.getCorrectIndices
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.explanation.ExplanationSection
@@ -81,7 +81,7 @@ fun QuizScreen(
             if (user != null) {
                 scope.launch(Dispatchers.IO) {
                     try {
-                        WataniFirestoreSync.ensureAndSyncUser(context, user)
+                        WataniGatewaySync.ensureAndSyncUser(context, user)
                     } catch (_: Exception) {}
                 }
             }
@@ -106,7 +106,7 @@ fun QuizScreen(
                     val appContext = context.applicationContext
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
-                            WataniFirestoreSync.ensureAndSyncUser(appContext, user)
+                            WataniGatewaySync.ensureAndSyncUser(appContext, user)
                         } catch (_: Exception) {}
                     }
                 }

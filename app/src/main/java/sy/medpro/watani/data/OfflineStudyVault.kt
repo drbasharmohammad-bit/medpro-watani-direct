@@ -322,11 +322,28 @@ object OfflineStudyVault {
         persist(context, updated)
     }
 
-    /** Admin panel date (Firestore app_config/exam.examDate, "yyyy-MM-dd").
-     * Fire-and-forget, once per process: one doc read per app start.
-     * Offline or a missing doc is silently ignored; the student's own
-     * date always wins over the panel date. */
+    /** Admin panel date ("yyyy-MM-dd"), migration phase 3: now read
+     * from the gateway (GET /v1/config/exam-date, public) instead of
+     * Firestore app_config/exam. Same semantics as before: a fallback
+     * source only — the student's own date always wins (effectiveDays);
+     * fire-and-forget and structurally cheap, re-run whenever the
+     * vault (re)initializes, including on every account switch
+     * (switchAccount resets initialization). Offline or a missing
+     * date is silently ignored. */
     private fun fetchAdminExamDate(context: Context) {
+        try {
+            WorkerActivationApi.fetchExamDateAsync { raw ->
+                if (raw != null) applyAdminExamDate(context, raw)
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    /** INACTIVE RESERVE (migration phase 3): the old Firestore read of
+     * app_config/exam.examDate. Kept in the tree uncalled — the live
+     * path is [fetchAdminExamDate] via the gateway above. Do not call
+     * this without a new explicit decision. */
+    private fun fetchAdminExamDateFromFirestoreLegacy(context: Context) {
         try {
             com.google.firebase.firestore.FirebaseFirestore.getInstance()
                 .collection("app_config").document("exam").get()
