@@ -686,6 +686,46 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
     }
 }
 
+/** أوزان المراحل المعيارية للمخطط (باطنة/جراحة/أطفال/نسائية/صغريات/مراجعة). */
+private val STUDY_PHASE_WEIGHTS = listOf(30, 25, 15, 15, 5, 10)
+
+/**
+ * توزيع أيام الدراسة على المراحل الست بأسلوب «أكبر باقٍ» (Largest Remainder)
+ * بحساب صحيح كامل (لا فاصلة عائمة):
+ * الحصة الدقيقة لكل مرحلة هي ‎totalDays × weight / 100‎؛ نأخذ الجزء الصحيح
+ * ثم نوزّع الأيام المتبقية واحدًا واحدًا على أكبر البواقي (عند التعادل:
+ * الوزن الأكبر أولًا، ثم ترتيب المرحلة).
+ *
+ * ضمانات موثّقة (مُتحقق منها آليًا لكل ‎d ∈ [1..120]‎):
+ * - مجموع الأيام الموزعة = ‎totalDays‎ بالضبط دائمًا (الإصلاح: الصيغة القديمة
+ *   بحدود ‎coerceAtLeast‎ كانت تجعل المجموع يتجاوز الأيام المتاحة عند
+ *   الأعداد الصغيرة).
+ * - عند ‎d ≥ 6‎: كل مرحلة ≥ يوم واحد، باستثناء الصغريات (الوزن 5) التي قد
+ *   تكون صفرًا عند الأيام القليلة جدًا فقط (‎d ∈ {6,7,8,10,11,12}‎)،
+ *   ومرحلة المراجعة ≥ يوم واحد دائمًا.
+ * - عند ‎d < 6‎ يستحيل إعطاء كل مرحلة يومًا (المجموع = d)، فيُملأ بالترتيب
+ *   التنازلي للبواقي كما تفرض الطريقة.
+ */
+fun allocateStudyPhaseDays(totalDays: Int): List<Int> {
+    val d = totalDays.coerceAtLeast(1)
+    val floors = STUDY_PHASE_WEIGHTS.map { (d * it) / 100 }
+    val remainders = STUDY_PHASE_WEIGHTS.map { (d * it) % 100 }
+    var leftover = d - floors.sum()
+    val order = STUDY_PHASE_WEIGHTS.indices.sortedWith(
+        compareByDescending<Int> { remainders[it] }
+            .thenByDescending { STUDY_PHASE_WEIGHTS[it] }
+            .thenBy { it }
+    )
+    val result = floors.toMutableList()
+    var k = 0
+    while (leftover > 0) {
+        result[order[k % order.size]] += 1
+        leftover -= 1
+        k += 1
+    }
+    return result
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SmartStudyPlannerScreen(onBack: () -> Unit) {
@@ -697,14 +737,14 @@ fun SmartStudyPlannerScreen(onBack: () -> Unit) {
     val stats by OfflineStudyVault.statsFlow.collectAsState()
 
     val allocations = remember(stats.examDaysRemaining, stats.dailyStudyHours) {
-        val d = stats.examDaysRemaining
         val h = stats.dailyStudyHours
-        val internalDays = (d * 0.30f).toInt().coerceAtLeast(2)
-        val surgeryDays = (d * 0.25f).toInt().coerceAtLeast(2)
-        val pedsDays = (d * 0.15f).toInt().coerceAtLeast(1)
-        val obgynDays = (d * 0.15f).toInt().coerceAtLeast(1)
-        val minorDays = (d * 0.05f).toInt().coerceAtLeast(1)
-        val revDays = (d - (internalDays + surgeryDays + pedsDays + obgynDays + minorDays)).coerceAtLeast(1)
+        val phaseDays = allocateStudyPhaseDays(stats.examDaysRemaining)
+        val internalDays = phaseDays[0]
+        val surgeryDays = phaseDays[1]
+        val pedsDays = phaseDays[2]
+        val obgynDays = phaseDays[3]
+        val minorDays = phaseDays[4]
+        val revDays = phaseDays[5]
 
         listOf(
             StudyPhaseAllocation(
@@ -753,7 +793,7 @@ fun SmartStudyPlannerScreen(onBack: () -> Unit) {
                 examWeightPercent = 10,
                 allocatedDays = revDays,
                 totalHours = revDays * h,
-                keyTopicsChecklist = "مراجعة النقاط الذهبية، سجل الأخطاء المحفوظة أوفلاين، وإجراء محاكاة امتحان كاملة يومياً."
+                keyTopicsChecklist = "مراجعة موسوعة المتلازمات والخطوط العلاجية الأولى، سجل الأخطاء المحفوظة أوفلاين، وإجراء محاكاة امتحان كاملة يومياً."
             )
         )
     }

@@ -1,12 +1,7 @@
 package sy.medpro.watani.ui.home
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -36,7 +31,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
 import sy.medpro.watani.data.OfflineStudyVault
-import sy.medpro.watani.ui.reference.AccreditedMedicalData
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.theme.*
 
@@ -48,7 +42,6 @@ fun HomeDashboardScreen(
     onNavigateLeaderboard: () -> Unit,
     onOpenAlgorithms: () -> Unit = {},
     onOpenFirstLineDrugs: () -> Unit = {},
-    onOpenGoldenPearls: () -> Unit = {},
     onOpenEponyms: () -> Unit = {},
     onOpenEcgAtlas: () -> Unit = {},
     onOpenStudyPlanner: () -> Unit = {},
@@ -58,7 +51,6 @@ fun HomeDashboardScreen(
 ) {
     val context = LocalContext.current
     var showLabModal by remember { mutableStateOf(false) }
-    var revealTodayPearl by remember { mutableStateOf(false) }
     var animateIn by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -85,8 +77,6 @@ fun HomeDashboardScreen(
     if (showLabModal) {
         QuickMedicalReferenceModal(onDismiss = { showLabModal = false })
     }
-
-    val featuredPearl = AccreditedMedicalData.goldenPearls.first()
 
     LazyColumn(
         modifier = Modifier
@@ -370,109 +360,17 @@ fun HomeDashboardScreen(
                     )
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    CompactMedicalToolCard(
-                        title = "النقاط الذهبية للوطني",
-                        subtitle = "الثلاثيات والعلامات الواسمة عالية الورود",
-                        icon = Icons.Default.AutoAwesome,
-                        badgeColor = GoldAccentDark,
-                        onClick = onOpenGoldenPearls,
-                        modifier = Modifier.weight(1f)
-                    )
-                    CompactMedicalToolCard(
-                        title = "القيم المخبرية الطبيعية",
-                        subtitle = "مرجع التحاليل والغازات والشوارد الفوري",
-                        icon = Icons.Default.Science,
-                        badgeColor = MaroonPrimary,
-                        onClick = { showLabModal = true },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                CompactMedicalToolCard(
+                    title = "القيم المخبرية الطبيعية",
+                    subtitle = "مرجع التحاليل والغازات والشوارد الفوري",
+                    icon = Icons.Default.Science,
+                    badgeColor = MaroonPrimary,
+                    onClick = { showLabModal = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
-        item {
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.55f)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { revealTodayPearl = !revealTodayPearl }
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Star, contentDescription = null, tint = GoldAccentDark, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "النقطة الذهبية اليومية عالية الورود",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                color = MaroonPrimary
-                            )
-                        }
-                        Text(
-                            text = if (revealTodayPearl) "إخفاء الجواب ▲" else "اضغط لكشف التدبير ▼",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = GoldAccentDark
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = featuredPearl.title,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = featuredPearl.classicPresentation,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                    )
-
-                    AnimatedVisibility(
-                        visible = revealTodayPearl,
-                        enter = expandVertically(animationSpec = tween(250)) + fadeIn(),
-                        exit = shrinkVertically(animationSpec = tween(200)) + fadeOut()
-                    ) {
-                        Column(modifier = Modifier.padding(top = 10.dp)) {
-                            Surface(
-                                color = SuccessGreen.copy(alpha = 0.1f),
-                                shape = MaterialTheme.shapes.small,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text(
-                                        text = "التشخيص والتدبير المعتمد:",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp,
-                                        color = SuccessGreen
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = featuredPearl.diagnosisOrAction,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         item {
             Text(

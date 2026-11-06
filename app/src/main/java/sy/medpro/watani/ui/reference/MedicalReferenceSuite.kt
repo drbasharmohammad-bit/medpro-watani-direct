@@ -24,14 +24,6 @@ import androidx.compose.ui.unit.sp
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.theme.*
 
-data class PearlItem(
-    val title: String,
-    val specialty: String = "الباطنة والجراحة",
-    val classicPresentation: String,
-    val diagnosisOrAction: String,
-    val sourceRef: String = "Harrison's 21st Ed • Oxford Handbook"
-)
-
 data class ClinicalAlgorithmModel(
     val id: String,
     val title: String,
@@ -61,44 +53,6 @@ data class NormalLabReference(
 )
 
 object AccreditedMedicalData {
-    val goldenPearls: List<PearlItem> = listOf(
-        PearlItem(
-            title = "ثلاثية بيك (Beck's Triad) في السطام التاموري الحاد",
-            specialty = "القلبية والإسعاف",
-            classicPresentation = "هبوط ضغط شرياني + احتقان أوردة الوداجي (JVD) + خفوت أصوات القلب مع النبض العجائبي (انخفاض الانقباضي > 10 mmHg بالشهيق).",
-            diagnosisOrAction = "التشخيص المؤكد بالإيكو القلبي السريري (انخماص الأذينة والبطين الأيمن بالانبساط) والتدبير الإسعافي هو بزل التامور الفوري (Pericardiocentesis).",
-            sourceRef = "ATLS 10th Ed • Braunwald's Heart Disease"
-        ),
-        PearlItem(
-            title = "خماسية رينولدز (Reynolds' Pentad) في التهاب الطرق الصفراوية الصاعد",
-            specialty = "الجراحة والهضمية",
-            classicPresentation = "ثلاثية شاركو (حمى وعرواءات + يرقان + ألم مراق أيمن) مضافاً إليها صدمة إنتانية وتغيم وعي.",
-            diagnosisOrAction = "إنعاش بالسوائل الوريدية + صادات واسعة الطيف (Piperacillin-Tazobactam) + تصريف صفراوي إسعافي عبر ERCP.",
-            sourceRef = "Sabiston Textbook of Surgery • Harrison's"
-        ),
-        PearlItem(
-            title = "ثلاثية ويبل (Whipple's Triad) في الورم الجزيري المفرز للأنسولين (Insulinoma)",
-            specialty = "الغدد الصم",
-            classicPresentation = "أعراض نقص سكر الدم الودية والعصبية + غلوكوز المصل الموثق < 50 mg/dL + زوال الأعراض فوراً بعد إعطاء الغلوكوز.",
-            diagnosisOrAction = "اختبار الصيام المراقب لمدة 72 ساعة مع معايرة الأنسولين والـ C-Peptide (كلاهما مرتفع في الورم الداخلي، بينما C-Peptide منخفض في الحقن الخارجي).",
-            sourceRef = "Harrison's Principles of Internal Medicine"
-        ),
-        PearlItem(
-            title = "التبول الدموي غير المؤلم عند مسن مدخن",
-            specialty = "البولية والجراحة",
-            classicPresentation = "بيلة دموية عيانية غير مؤلمة لدى مريض فوق 50 عاماً مع قصة تدخين أو تعرض للأصبغة العطرية.",
-            diagnosisOrAction = "سرطان مثانة بولي (Urothelial Carcinoma) حتى يثبت العكس؛ الاستقصاء الذهبي هو تنظير المثانة مع الخزعة (Cystoscopy + Biopsy).",
-            sourceRef = "Campbell-Walsh Urology • Oxford Handbook"
-        ),
-        PearlItem(
-            title = "انفكاك المشيمة الباكر مقابل المشيمة المنزاحة في الثلث الثالث",
-            specialty = "التوليد والنسائية",
-            classicPresentation = "نزف تناسلي مؤلم داكن مع رحم متخشب (Woody uterus) وتألم جنيني = انفكاك مشيمة؛ نزف أحمر قانٍ غير مؤلم = مشيمة منزاحة.",
-            diagnosisOrAction = "الفحص الإصبعي المهبلي مضاد استطباب مطلق قبل نفي المشيمة المنزاحة بالإيكو عبر المهبل!",
-            sourceRef = "Williams Obstetrics 26th Ed"
-        )
-    )
-
     val algorithms: List<ClinicalAlgorithmModel> = listOf(
         ClinicalAlgorithmModel(
             id = "acute_chest_pain",
@@ -1499,65 +1453,6 @@ fun FirstLineDrugsScreen(onBack: () -> Unit) {
                         Text("• تحذير ومضاد استطباب: ${drug.pregnancyOrContraindication}", fontSize = 12.sp, color = ErrorRed, fontWeight = FontWeight.SemiBold)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("المرجع: ${drug.sourceRef}", fontSize = 11.sp, color = GoldAccentDark)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun GoldenPearlsScreen(onBack: () -> Unit) {
-    BackHandler { onBack() }
-    DrawerScreenScaffold(
-        title = "النقاط الذهبية والثلاثيات السريرية المعتمدة",
-        onBack = onBack
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
-        ) {
-            items(AccreditedMedicalData.goldenPearls) { pearl ->
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.45f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(pearl.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary, modifier = Modifier.weight(1f))
-                            Surface(color = GoldAccent.copy(alpha = 0.2f), shape = RoundedCornerShape(6.dp)) {
-                                Text(pearl.specialty, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaroonDeep, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text("التظاهر الكلاسيكي: ${pearl.classicPresentation}", fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Surface(
-                            color = SuccessGreen.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "الحسم والتدبير: ${pearl.diagnosisOrAction}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = SuccessGreen,
-                                modifier = Modifier.padding(10.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("المصدر: ${pearl.sourceRef}", fontSize = 11.sp, color = GoldAccentDark)
                     }
                 }
             }
