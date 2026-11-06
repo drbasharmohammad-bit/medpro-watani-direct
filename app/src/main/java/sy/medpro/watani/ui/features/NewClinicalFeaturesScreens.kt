@@ -1086,6 +1086,7 @@ private fun scoreAnsweredUnits(items: List<ScoreItem>, answeredKeys: Set<String>
     return plainAnswered + groupsAnswered
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ScoreItemChips(
     item: ScoreItem,
