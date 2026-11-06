@@ -643,7 +643,6 @@ class MainActivity : ComponentActivity() {
                                                 "روابط التواصل" -> ContactScreen(onBack = { drawerScreen = null })
                                                 "خوارزميات التدبير" -> ClinicalAlgorithmsScreen(onBack = { drawerScreen = null })
                                                 "الخطوط العلاجية الأولى" -> FirstLineDrugsScreen(onBack = { drawerScreen = null })
-                                                "النقاط الذهبية" -> GoldenPearlsScreen(onBack = { drawerScreen = null })
                                                 "موسوعة المتلازمات" -> EponymsAtlasScreen(onBack = { drawerScreen = null })
                                                 "مخطط جدول الدراسة" -> SmartStudyPlannerScreen(onBack = { drawerScreen = null })
                                                 // مجموعات 28 أكتوبر: الأسماء القديمة أسماء مستعارة تفتح
@@ -652,18 +651,25 @@ class MainActivity : ComponentActivity() {
                                                 "مدرب تخطيط القلب" -> HeartAuscultationScreen(initialTab = 0, onBack = { drawerScreen = null })
                                                 "أطلس تخطيط القلب" -> HeartAuscultationScreen(initialTab = 1, onBack = { drawerScreen = null })
                                                 "مدرب الإصغاء" -> HeartAuscultationScreen(initialTab = 2, onBack = { drawerScreen = null })
-                                                "المختبرات والحاسبات" -> LabsCalculatorsScreen(onBack = { drawerScreen = null })
-                                                "مختبر غازات الدم" -> LabsCalculatorsScreen(initialTab = 0, onBack = { drawerScreen = null })
-                                                "مختبر القيم المخبرية" -> LabsCalculatorsScreen(initialTab = 1, onBack = { drawerScreen = null })
-                                                "الحاسبات السريرية الموسعة" -> LabsCalculatorsScreen(initialTab = 2, onBack = { drawerScreen = null })
-                                                "الحاسبات السريرية" -> LabsCalculatorsScreen(initialTab = 3, onBack = { drawerScreen = null })
-                                                "حاسبات العناية والسوائل" -> LabsCalculatorsScreen(
-                                                    initialTab = 4,
+                                                // إعادة تنظيم لوحة الأدوات (نوفمبر 2026): مجموعتان
+                                                // منفصلتان — «المختبرات وغازات الدم» (غازات + قيم
+                                                // مرجعية) و«الحاسبات الطبية» الموحّدة (موسّعة +
+                                                // سريرية + عناية وجرعات). الأسماء القديمة أسماء
+                                                // مستعارة تفتح المجموعة على التبويب المقابل.
+                                                "المختبرات وغازات الدم" -> LabsAndAbgScreen(onBack = { drawerScreen = null })
+                                                "المختبرات والحاسبات" -> LabsAndAbgScreen(onBack = { drawerScreen = null })
+                                                "مختبر غازات الدم" -> LabsAndAbgScreen(initialTab = 0, onBack = { drawerScreen = null })
+                                                "مختبر القيم المخبرية" -> LabsAndAbgScreen(initialTab = 1, onBack = { drawerScreen = null })
+                                                "الحاسبات الطبية" -> MedicalCalculatorsScreen(onBack = { drawerScreen = null })
+                                                "الحاسبات السريرية الموسعة" -> MedicalCalculatorsScreen(initialTab = 0, onBack = { drawerScreen = null })
+                                                "الحاسبات السريرية" -> MedicalCalculatorsScreen(initialTab = 1, onBack = { drawerScreen = null })
+                                                "حاسبات العناية والسوائل" -> MedicalCalculatorsScreen(
+                                                    initialTab = 2,
                                                     initialBedsideTab = BedsideClinicalTab.ICU_INFUSIONS,
                                                     onBack = { drawerScreen = null }
                                                 )
-                                                "الصادات والكلية والأطفال" -> LabsCalculatorsScreen(
-                                                    initialTab = 4,
+                                                "الصادات والكلية والأطفال" -> MedicalCalculatorsScreen(
+                                                    initialTab = 2,
                                                     initialBedsideTab = BedsideClinicalTab.RENAL_ANTIBIOTICS,
                                                     onBack = { drawerScreen = null }
                                                 )
@@ -692,7 +698,6 @@ class MainActivity : ComponentActivity() {
                                                                 onNavigateLeaderboard = { viewModel.setTab(AppTab.LEADERBOARD) },
                                                                 onOpenAlgorithms = { drawerScreen = "خوارزميات التدبير" },
                                                                 onOpenFirstLineDrugs = { drawerScreen = "الخطوط العلاجية الأولى" },
-                                                                onOpenGoldenPearls = { drawerScreen = "النقاط الذهبية" },
                                                                 onOpenEponyms = { drawerScreen = "موسوعة المتلازمات" },
                                                                 onOpenEcgAtlas = { drawerScreen = "أطلس تخطيط القلب" },
                                                                 onOpenStudyPlanner = { drawerScreen = "مخطط جدول الدراسة" },

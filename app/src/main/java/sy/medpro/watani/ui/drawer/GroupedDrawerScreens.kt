@@ -83,17 +83,49 @@ fun HeartAuscultationScreen(onBack: () -> Unit, initialTab: Int = 0) {
     }
 }
 
+/**
+ * المختبرات وغازات الدم (إعادة تنظيم لوحة الأدوات، نوفمبر 2026):
+ * القيم المرجعية ومفسّر غازات الدم فقط — أجزاء الحاسبات التي كانت هنا
+ * انتقلت إلى شاشة «الحاسبات الطبية» الموحّدة، فلا تكرار بين اللوحتين.
+ */
 @Composable
-fun LabsCalculatorsScreen(
+fun LabsAndAbgScreen(
+    onBack: () -> Unit,
+    initialTab: Int = 0
+) {
+    var selected by remember { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
+    GroupedTabs(
+        titles = listOf(
+            "مختبر غازات الدم",
+            "مختبر القيم المخبرية"
+        ),
+        selected = selected,
+        onSelect = { selected = it }
+    ) {
+        when (selected) {
+            0 -> AbgLabScreen(onBack = onBack)
+            else -> LabValuesLabScreen(onBack = onBack)
+        }
+    }
+}
+
+/**
+ * الحاسبات الطبية الموحّدة (إعادة تنظيم لوحة الأدوات، نوفمبر 2026):
+ * مدخل واحد بدل أربعة مداخل متفرقة — الحاسبات السريرية الموسعة (الـ60
+ * بشريط تصنيفاتها) + الحاسبات السريرية + تبويب «العناية والجرعات» الذي
+ * يضم تسريب العناية والسوائل والحروق والصادات والكلية وجرعات الأطفال.
+ * الأسماء القديمة تبقى أسماء مستعارة في MainActivity تفتح هذه الشاشة
+ * على التبويب المقابل.
+ */
+@Composable
+fun MedicalCalculatorsScreen(
     onBack: () -> Unit,
     initialTab: Int = 0,
     initialBedsideTab: BedsideClinicalTab = BedsideClinicalTab.ICU_INFUSIONS
 ) {
-    var selected by remember { mutableIntStateOf(initialTab.coerceIn(0, 4)) }
+    var selected by remember { mutableIntStateOf(initialTab.coerceIn(0, 2)) }
     GroupedTabs(
         titles = listOf(
-            "مختبر غازات الدم",
-            "مختبر القيم المخبرية",
             "الحاسبات السريرية الموسعة",
             "الحاسبات السريرية",
             "العناية والجرعات"
@@ -102,10 +134,8 @@ fun LabsCalculatorsScreen(
         onSelect = { selected = it }
     ) {
         when (selected) {
-            0 -> AbgLabScreen(onBack = onBack)
-            1 -> LabValuesLabScreen(onBack = onBack)
-            2 -> ClinicalCalculatorsExpandedScreen(onBack = onBack)
-            3 -> OfflineClinicalCalculatorsScreen(onBack = onBack)
+            0 -> ClinicalCalculatorsExpandedScreen(onBack = onBack)
+            1 -> OfflineClinicalCalculatorsScreen(onBack = onBack)
             else -> BedsideDosingAndIcuSuiteScreen(
                 initialTab = initialBedsideTab,
                 onBack = onBack
