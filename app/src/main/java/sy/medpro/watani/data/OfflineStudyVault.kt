@@ -339,22 +339,6 @@ object OfflineStudyVault {
         }
     }
 
-    /** INACTIVE RESERVE (migration phase 3): the old Firestore read of
-     * app_config/exam.examDate. Kept in the tree uncalled — the live
-     * path is [fetchAdminExamDate] via the gateway above. Do not call
-     * this without a new explicit decision. */
-    private fun fetchAdminExamDateFromFirestoreLegacy(context: Context) {
-        try {
-            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                .collection("app_config").document("exam").get()
-                .addOnSuccessListener { doc ->
-                    val raw = doc?.getString("examDate") ?: return@addOnSuccessListener
-                    applyAdminExamDate(context, raw)
-                }
-        } catch (_: Exception) {
-        }
-    }
-
     fun applyAdminExamDate(context: Context, dateString: String?) {
         if (dateString.isNullOrBlank()) return
         val millis = try {

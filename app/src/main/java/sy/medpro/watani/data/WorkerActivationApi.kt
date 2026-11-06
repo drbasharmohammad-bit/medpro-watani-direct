@@ -49,11 +49,12 @@ enum class RefreshOutcome {
  * Team 1 — Worker activation client (entry-activation branch).
  *
  * REPLACES Firestore code validation for activation
- * ([WataniFirestoreSync.validateAndBindActivation] was removed).
+ * (the old Firestore validator was removed).
  * User/progress sync was migrated to the gateway in phase 3
  * ([WataniGatewaySync.ensureAndSyncUser] over /v1/user/me, using this
  * object's getFromWorker / putToWorker / postToWorker transport);
- * [WataniFirestoreSync] stays in the tree uncalled as a reserve.
+ * the Firestore sync object (WataniFirestoreSync) was deleted from
+ * the tree in the shutdown round — the gateway is the only path.
  *
  * Single switch point for restricted content: every fetch of a restricted
  * path MUST go through [contentRequest] / [contentRequestForUrl] below.

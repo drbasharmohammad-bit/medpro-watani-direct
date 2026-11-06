@@ -9,8 +9,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * Migration phase 3 — user doc + progress sync on the Worker gateway
- * (GET/PUT /v1/user/me), replacing the Firestore path of
- * [WataniFirestoreSync.ensureAndSyncUser] call-for-call.
+ * (GET/PUT /v1/user/me), replacing the retired Firestore sync
+ * (WataniFirestoreSync — removed in the shutdown round) call-for-call.
  *
  * Semantics are copied LITERALLY from the Firestore implementation
  * (see INVENTORY.md §2.1):
@@ -42,8 +42,8 @@ import kotlinx.coroutines.withContext
  * quiz completion, quiz exit). A failed pull ABORTS the sync before
  * any push, so a fresh zeroed vault can never overwrite server
  * totals. There is NO automatic fallback write to Firestore: the
- * Firestore object stays in the tree, uncalled, as an inactive
- * reserve by this round's explicit decision.
+ * Firestore sync object was deleted from the tree in the shutdown
+ * round — this gateway path is the only user/progress sync.
  */
 object WataniGatewaySync {
 
