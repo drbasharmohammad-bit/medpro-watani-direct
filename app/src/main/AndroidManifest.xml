@@ -28,7 +28,7 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Question share deep links: https://watani-content.pages.dev/q/<bank>/<qid> -->
+            <!-- Question share deep links: https://watani-content.pages.dev/q/<sectionKey>/<qidOrIndex> -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
 
@@ -40,7 +40,7 @@
                     android:host="watani-content.pages.dev"
                     android:pathPrefix="/q/" />
             </intent-filter>
-            <!-- Question share deep links (custom scheme): watani://q/<bank>/<qid> -->
+            <!-- Question share deep links (custom scheme): watani://q/<sectionKey>/<qidOrIndex> -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 

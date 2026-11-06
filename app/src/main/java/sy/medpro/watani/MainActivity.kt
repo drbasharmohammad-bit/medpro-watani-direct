@@ -971,6 +971,7 @@ class MainActivity : ComponentActivity() {
                                                         sourcePath = screen.sourcePath,
                                                         subjectName = screen.subjectName,
                                                         guestMode = screen.guestMode,
+                                                        shareKeys = screen.shareKeys,
                                                         onRequestActivation = { showActivationPrompt = true }
                                                     )
                                                 }

@@ -62,6 +62,7 @@ fun QuizScreen(
     sourcePath: String? = null,
     subjectName: String? = null,
     guestMode: Boolean = false,
+    shareKeys: List<String?> = emptyList(),
     onRequestActivation: () -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
@@ -291,7 +292,8 @@ fun QuizScreen(
                                 else getCorrectIndices(question, options)
                             val ruledOutSet = ruledOutMap[index] ?: emptySet()
                             val timeTaken = questionTimes[index]
-                            val shareBank = sy.medpro.watani.data.ShareLinks.bankForPath(sourcePath)
+                            val shareSectionKey = sy.medpro.watani.data.ShareLinks.sectionKeyOf(sourcePath)
+                            val shareKey = shareKeys.getOrNull(index)
                             val cardSubjectLabel = sy.medpro.watani.data.ShareLinks.subjectLabel(
                                 subjectName, sourcePath, title
                             )
@@ -306,7 +308,8 @@ fun QuizScreen(
                                 ruledOutIndices = ruledOutSet,
                                 highlightKeywords = highlightKeywords,
                                 timeSpentSeconds = timeTaken,
-                                shareBank = shareBank,
+                                shareSectionKey = shareSectionKey,
+                                shareKey = shareKey,
                                 subjectLabel = cardSubjectLabel,
                                 guestMode = guestMode,
                                 onRequestActivation = onRequestActivation,
@@ -367,7 +370,8 @@ fun QuestionCard(
     ruledOutIndices: Set<Int> = emptySet(),
     highlightKeywords: Boolean = true,
     timeSpentSeconds: Int? = null,
-    shareBank: String? = null,
+    shareSectionKey: String? = null,
+    shareKey: String? = null,
     subjectLabel: String = "",
     guestMode: Boolean = false,
     onRequestActivation: () -> Unit = {},
@@ -697,7 +701,7 @@ fun QuestionCard(
                 TextButton(
                     onClick = {
                         showShareSheet = false
-                        shareQuestionAsText(context, question, shareBank)
+                        shareQuestionAsText(context, question, shareSectionKey, shareKey)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -709,7 +713,7 @@ fun QuestionCard(
                     onClick = {
                         showShareSheet = false
                         shareScope.launch(Dispatchers.IO) {
-                            shareQuestionAsImage(context, question, shareBank, subjectLabel)
+                            shareQuestionAsImage(context, question, shareSectionKey, shareKey, subjectLabel)
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -725,8 +729,13 @@ fun QuestionCard(
 }
 
 /** Text share: ACTION_SEND text/plain through the system chooser. */
-private fun shareQuestionAsText(context: android.content.Context, question: QuestionDto, bank: String?) {
-    val text = sy.medpro.watani.data.ShareLinks.buildShareText(question, bank)
+private fun shareQuestionAsText(
+    context: android.content.Context,
+    question: QuestionDto,
+    sectionKey: String?,
+    shareKey: String?
+) {
+    val text = sy.medpro.watani.data.ShareLinks.buildShareText(question, sectionKey, shareKey)
     val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(android.content.Intent.EXTRA_TEXT, text)
@@ -743,7 +752,8 @@ private fun shareQuestionAsText(context: android.content.Context, question: Ques
 private fun shareQuestionAsImage(
     context: android.content.Context,
     question: QuestionDto,
-    bank: String?,
+    sectionKey: String?,
+    shareKey: String?,
     subjectLabel: String
 ) {
     try {
@@ -752,7 +762,7 @@ private fun shareQuestionAsImage(
         val uri = androidx.core.content.FileProvider.getUriForFile(
             context, "${context.packageName}.fileprovider", file
         )
-        val text = sy.medpro.watani.data.ShareLinks.buildShareText(question, bank)
+        val text = sy.medpro.watani.data.ShareLinks.buildShareText(question, sectionKey, shareKey)
         val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(android.content.Intent.EXTRA_STREAM, uri)
@@ -767,7 +777,7 @@ private fun shareQuestionAsImage(
         )
     } catch (_: Exception) {
         // Rendering/IO failure must never crash the quiz: fall back to text.
-        shareQuestionAsText(context, question, bank)
+        shareQuestionAsText(context, question, sectionKey, shareKey)
     }
 }
 
