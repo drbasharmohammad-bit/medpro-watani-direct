@@ -16,6 +16,14 @@ val CairoFontFamily = FontFamily(
     Font(R.font.cairo, FontWeight.Bold)
 )
 
+/** Thmanyah Sans (question share card + headings): OTF files copied from
+ * the brand font set. If a device cannot load the OTF, renderers fall
+ * back to CairoFontFamily (see ShareCardRenderer). */
+val ThmanyahFontFamily = FontFamily(
+    Font(R.font.thmanyahsans_regular, FontWeight.Normal),
+    Font(R.font.thmanyahsans_bold, FontWeight.Bold)
+)
+
 val TajawalFontFamily = FontFamily(
     Font(R.font.tajawal, FontWeight.Normal),
     Font(R.font.tajawal, FontWeight.Medium),

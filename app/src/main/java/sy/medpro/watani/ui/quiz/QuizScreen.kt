@@ -58,7 +58,9 @@ import kotlin.math.abs
 fun QuizScreen(
     title: String,
     questions: List<QuestionDto>,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    sourcePath: String? = null,
+    subjectName: String? = null
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
@@ -284,6 +286,9 @@ fun QuizScreen(
                             val correctIndices = getCorrectIndices(question, options)
                             val ruledOutSet = ruledOutMap[index] ?: emptySet()
                             val timeTaken = questionTimes[index]
+                            val cardSubjectLabel = sy.medpro.watani.data.ShareLinks.subjectLabel(
+                                subjectName, sourcePath, title
+                            )
 
                             QuestionCard(
                                 questionNumber = index + 1,
@@ -295,6 +300,7 @@ fun QuizScreen(
                                 ruledOutIndices = ruledOutSet,
                                 highlightKeywords = highlightKeywords,
                                 timeSpentSeconds = timeTaken,
+                                subjectLabel = cardSubjectLabel,
                                 onToggleRuleOut = { optIdx ->
                                     if (!isAnswered) {
                                         val currentSet = ruledOutMap[index] ?: emptySet()
@@ -337,6 +343,7 @@ fun QuizScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuestionCard(
     questionNumber: Int,
@@ -348,10 +355,12 @@ fun QuestionCard(
     ruledOutIndices: Set<Int> = emptySet(),
     highlightKeywords: Boolean = true,
     timeSpentSeconds: Int? = null,
+    subjectLabel: String = "",
     onToggleRuleOut: (Int) -> Unit = {},
     onOptionSelected: (Int) -> Unit
 ) {
     val context = LocalContext.current
+    val shareScope = rememberCoroutineScope()
     // Account binding: favorites live per account, never in one shared store.
     val favUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
     val favPrefsName = if (favUid.isNullOrBlank()) "watani_favorites" else "watani_favorites_$favUid"
@@ -394,6 +403,22 @@ fun QuestionCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = {
+                            shareScope.launch(Dispatchers.IO) {
+                                shareQuestionAsImage(context, question, subjectLabel)
+                            }
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "مشاركة السؤال",
+                            tint = MaroonPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
                     IconButton(
                         onClick = {
                             val next = if (isFav) favList - qId else favList + qId
@@ -602,6 +627,40 @@ fun QuestionCard(
                 }
             }
         }
+    }
+
+}
+
+/** Image-only share: renders the spec card, saves it to cacheDir and
+ * shares it via FileProvider. The ONLY accompanying text is the
+ * channel URL (ShareLinks.FALLBACK_URL) — the question text itself
+ * never leaves the app as text. On any rendering/IO failure nothing
+ * is shared at all: there is deliberately no text fallback. */
+private fun shareQuestionAsImage(
+    context: android.content.Context,
+    question: QuestionDto,
+    subjectLabel: String
+) {
+    try {
+        val bitmap = sy.medpro.watani.ui.share.ShareCardRenderer.render(context, question, subjectLabel)
+        val file = sy.medpro.watani.ui.share.ShareCardRenderer.saveToCache(context, bitmap)
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", file
+        )
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            putExtra(android.content.Intent.EXTRA_TEXT, sy.medpro.watani.data.ShareLinks.FALLBACK_URL)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(
+            android.content.Intent.createChooser(intent, "مشاركة السؤال").apply {
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        )
+    } catch (_: Exception) {
+        // Image generation failed: share nothing (no text fallback).
     }
 }
 

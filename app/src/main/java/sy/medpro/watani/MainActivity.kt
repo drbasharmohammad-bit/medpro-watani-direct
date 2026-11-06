@@ -947,7 +947,9 @@ class MainActivity : ComponentActivity() {
                                                     QuizScreen(
                                                         title = screen.title,
                                                         questions = screen.questions,
-                                                        onBack = { viewModel.goBack() }
+                                                        onBack = { viewModel.goBack() },
+                                                        sourcePath = screen.sourcePath,
+                                                        subjectName = screen.subjectName
                                                     )
                                                 }
                                                 is ScreenState.CasePlayer -> {

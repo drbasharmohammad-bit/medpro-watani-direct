@@ -30,7 +30,15 @@ sealed class ScreenState {
     object Home : ScreenState()
     data class TopicSelection(val path: String, val subjectName: String) : ScreenState()
     data class UniversitySubjects(val universityKey: String, val universityName: String) : ScreenState()
-    data class Quiz(val title: String, val questions: List<QuestionDto>) : ScreenState()
+    data class Quiz(
+        val title: String,
+        val questions: List<QuestionDto>,
+        /** Section path the quiz was opened from (share-card
+         * subject-label fallback). */
+        val sourcePath: String? = null,
+        /** Envelope subject_name when known (share-card subject label). */
+        val subjectName: String? = null
+    ) : ScreenState()
     data class CasePlayer(val caseItem: ClinicalCaseDto) : ScreenState()
 }
 
@@ -307,7 +315,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val envelope = repository.getSubjectEnvelope(path)
             val topic = envelope?.topics?.find { it.name == topicName }
             val questions = topic?.questions ?: emptyList()
-            navigateTo(ScreenState.Quiz(topicName, questions))
+            navigateTo(
+                ScreenState.Quiz(
+                    topicName,
+                    questions,
+                    sourcePath = path,
+                    subjectName = envelope?.subjectName
+                )
+            )
         }
     }
 
