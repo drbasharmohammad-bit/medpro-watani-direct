@@ -1003,9 +1003,9 @@ fun SmartStudyPlannerScreen(onBack: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OfflineClinicalCalculatorsScreen(onBack: () -> Unit) {
+fun OfflineClinicalCalculatorsScreen(onBack: () -> Unit, initialTab: Int = 0) {
     BackHandler(onBack = onBack)
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableStateOf(initialTab.coerceIn(0, 1)) }
 
     // CURB-65 states
     var cConfusion by remember { mutableStateOf(false) }

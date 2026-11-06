@@ -43,6 +43,13 @@ import sy.medpro.watani.ui.clinical.ScoreItem
 import sy.medpro.watani.ui.clinical.clinicalScoreDefinitions
 import sy.medpro.watani.ui.clinical.evaluateScoreSpec
 import sy.medpro.watani.ui.clinical.scoreSpecIds
+import sy.medpro.watani.ui.clinical.BedsideClinicalTab
+import sy.medpro.watani.ui.clinical.BedsideDosingAndIcuSuiteScreen
+import sy.medpro.watani.ui.clinical.CALC_CATEGORY_TITLES
+import sy.medpro.watani.ui.clinical.calcCatalogCategoryOf
+import sy.medpro.watani.ui.clinical.calcCatalogCountOf
+import sy.medpro.watani.ui.clinical.calcCatalogEntries
+import sy.medpro.watani.ui.offline.OfflineClinicalCalculatorsScreen
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -418,102 +425,128 @@ fun LabValuesLabScreen(onBack: () -> Unit) {
     }
 }
 
-// 6. Clinical Calculators Expanded (الحاسبات السريرية الموسعة)
-// Calculator categories (Nov 2026 — doctor's order): the 56 extra calculators
-// used to render as one long vertical list. They are now grouped by clinical
-// system; the student picks a category chip and sees only that category's
-// calculators. Content and logic of every calculator are untouched — this is
-// navigation/grouping only. A spec id not listed here falls back to the last
-// category so no calculator can ever disappear from the screen.
-private val CALC_CATEGORIES = listOf(
-    "كلوية وشوارد",
-    "حموض وغازات",
-    "كبدية وهضمية",
-    "قلبية ووعائية",
-    "تنفسية",
-    "إنتان وعناية مركزة",
-    "عصبية",
-    "عامة ومتنوعة"
-)
+// 6. Clinical Calculators — directory by specialty (دليل الحاسبات حسب الاختصاص)
+// Reorganization (Nov 2026 — doctor's order): the calculators used to render
+// as one chaotic screen — the 4 hardcoded calculators on top, then huge
+// cards carrying formula + inputs + interpretation + example + source for
+// every spec in the list. Now there is ONE directory screen: specialty
+// chips with counts, and clean rows showing ONLY the calculator name plus
+// one short description line (from calcCatalog.kt — the single
+// classification source for all 66 tools). Tapping a row opens that
+// calculator's own detail screen, which renders its full existing content
+// unchanged: for specs the title, formula, inputs, the existing
+// SpecComputeBlock, interpretation, worked example and source; for the 4
+// hardcoded calculators their existing components as-is; CURB-65 / ABG open
+// OfflineClinicalCalculatorsScreen on their tab; the 4 bedside panes open
+// BedsideDosingAndIcuSuiteScreen on their tab. No medical content, formula
+// or compute logic was changed — navigation and grouping only.
+private val CALC_CATEGORIES: List<String> get() = CALC_CATEGORY_TITLES
 
-private fun calcCategoryOf(specId: String): String = when (specId) {
-    "egfr_ckd_epi_2021", "fena", "feurea", "corrected_calcium", "ca_phos_product",
-    "free_water_deficit", "sodium_correction_limits", "adrogue_madias",
-    "corrected_sodium_hyperglycemia" -> "كلوية وشوارد"
-    "anion_gap", "anion_gap_albumin_corrected", "serum_osmolality", "osmolar_gap",
-    "winters_formula", "delta_ratio" -> "حموض وغازات"
-    "meld", "meld_na", "child_pugh", "fib4", "apri", "ranson_pancreatitis",
-    "bisap_pancreatitis", "glasgow_blatchford", "rockall_bleeding",
-    "alvarado_appendicitis", "air_appendicitis" -> "كبدية وهضمية"
-    "qtc_bazett", "qtc_fridericia", "map", "hasbled", "padua_vte",
-    "timi_ua_nstemi", "shock_index", "reverse_shock_index" -> "قلبية ووعائية"
-    "pao2_fio2_ratio", "alveolar_gas_pao2", "aa_gradient", "oxygenation_index",
-    "spesi_simplified", "perc_rule" -> "تنفسية"
-    "qsofa", "sirs_criteria", "sofa_score", "mews_score", "news2_score" -> "إنتان وعناية مركزة"
-    "nihss" -> "عصبية"
-    else -> "عامة ومتنوعة"
-}
+private fun calcCategoryOf(specId: String): String = calcCatalogCategoryOf(specId)
 
 @Composable
-fun ClinicalCalculatorsExpandedScreen(onBack: () -> Unit) {
-    BackHandler { onBack() }
-    var selectedCalc by remember { mutableIntStateOf(0) }
-    val calcTitles = listOf("معيار Wells للـ DVT", "معيار Wells للـ PE", "مقياس غلاسكو للغيبوبة (GCS)", "مقياس CHA2DS2-VASc")
-    val allNewCalcSpecs = remember { calcSpecsSet1 + calcSpecsSet2 }
-    var selectedCalcCategory by remember { mutableStateOf(CALC_CATEGORIES.first()) }
-    val visibleCalcSpecs = remember(allNewCalcSpecs, selectedCalcCategory) {
-        allNewCalcSpecs.filter { calcCategoryOf(it.id) == selectedCalcCategory }
+fun ClinicalCalculatorsExpandedScreen(
+    onBack: () -> Unit,
+    initialCategory: String = CALC_CATEGORY_TITLES.first()
+) {
+    val allCalcSpecs = remember { calcSpecsSet1 + calcSpecsSet2 }
+    val specsById = remember(allCalcSpecs) { allCalcSpecs.associateBy { it.id } }
+    var selectedCalcCategory by remember {
+        mutableStateOf(
+            if (initialCategory in CALC_CATEGORY_TITLES) initialCategory else CALC_CATEGORY_TITLES.first()
+        )
     }
+    var selectedToolKey by remember { mutableStateOf<String?>(null) }
+    val backToDirectory: () -> Unit = { selectedToolKey = null }
 
-    DrawerScreenScaffold(title = "الحاسبات والمعايير السريرية الموسعة", onBack = onBack) { padding ->
+    when (val key = selectedToolKey) {
+        null -> CalculatorsDirectoryScreen(
+            onBack = onBack,
+            selectedCategory = selectedCalcCategory,
+            onSelectCategory = { selectedCalcCategory = it },
+            specsById = specsById,
+            onOpenTool = { selectedToolKey = it }
+        )
+        "curb65" -> OfflineClinicalCalculatorsScreen(onBack = backToDirectory, initialTab = 0)
+        "abg_interpreter" -> OfflineClinicalCalculatorsScreen(onBack = backToDirectory, initialTab = 1)
+        "bedside_icu" -> BedsideDosingAndIcuSuiteScreen(
+            initialTab = BedsideClinicalTab.ICU_INFUSIONS,
+            onBack = backToDirectory
+        )
+        "bedside_fluids" -> BedsideDosingAndIcuSuiteScreen(
+            initialTab = BedsideClinicalTab.FLUIDS_AND_BURNS,
+            onBack = backToDirectory
+        )
+        "bedside_renal_abx" -> BedsideDosingAndIcuSuiteScreen(
+            initialTab = BedsideClinicalTab.RENAL_ANTIBIOTICS,
+            onBack = backToDirectory
+        )
+        "bedside_peds" -> BedsideDosingAndIcuSuiteScreen(
+            initialTab = BedsideClinicalTab.PEDIATRIC_DOSING,
+            onBack = backToDirectory
+        )
+        "wells_dvt", "wells_pe", "gcs", "cha2ds2vasc" -> HardcodedCalcDetailScreen(
+            toolKey = key,
+            onBack = backToDirectory
+        )
+        else -> {
+            val spec = specsById[key]
+            if (spec != null) {
+                CalcSpecDetailScreen(spec = spec, onBack = backToDirectory)
+            } else {
+                CalculatorsDirectoryScreen(
+                    onBack = onBack,
+                    selectedCategory = selectedCalcCategory,
+                    onSelectCategory = { selectedCalcCategory = it },
+                    specsById = specsById,
+                    onOpenTool = { selectedToolKey = it }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * شاشة الدليل: شرائح الاختصاصات العشرة مع عدّاد كل فئة، وصفوف نظيفة
+ * بالاسم + سطر وصف قصير فقط — بلا صيغ ولا معايير ولا أرقام في القائمة.
+ */
+@Composable
+private fun CalculatorsDirectoryScreen(
+    onBack: () -> Unit,
+    selectedCategory: String,
+    onSelectCategory: (String) -> Unit,
+    specsById: Map<String, CalcSpec>,
+    onOpenTool: (String) -> Unit
+) {
+    BackHandler { onBack() }
+    val visibleEntries = remember(selectedCategory) {
+        calcCatalogEntries.filter { it.categoryTitleAr == selectedCategory }
+    }
+    DrawerScreenScaffold(title = "الحاسبات الطبية", onBack = onBack) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    calcTitles.forEachIndexed { idx, title ->
-                        FilterChip(
-                            selected = selectedCalc == idx,
-                            onClick = { selectedCalc = idx },
-                            label = { Text(title, fontWeight = FontWeight.Bold) },
-                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaroonPrimary, selectedLabelColor = Color.White)
-                        )
-                    }
-                }
-            }
-
-            when (selectedCalc) {
-                0 -> item { WellsDvtCalculator() }
-                1 -> item { WellsPeCalculator() }
-                2 -> item { GcsCalculator() }
-                3 -> item { ChaCalculator() }
-            }
-
-            item {
                 Text(
-                    "حاسبات إضافية (${allNewCalcSpecs.size}) — بالصيغة والمدخلات والتفسير والمصدر",
-                    fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaroonPrimary,
-                    modifier = Modifier.padding(top = 8.dp)
+                    "كل الحاسبات مرتبة حسب الاختصاص الطبي — اختر اختصاصًا ثم اضغط أي حاسبة لفتحها كاملة بصيغتها ومدخلاتها وتفسيرها.",
+                    fontSize = 13.sp, lineHeight = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                 )
             }
             item {
-                // Category bar: horizontally scrollable chips with clear names
-                // and counts; tapping one shows only that category's calculators.
+                // Specialty bar: horizontally scrollable chips with the
+                // catalog count of each of the 10 specialties.
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     CALC_CATEGORIES.forEach { category ->
-                        val count = allNewCalcSpecs.count { calcCategoryOf(it.id) == category }
                         FilterChip(
-                            selected = selectedCalcCategory == category,
-                            onClick = { selectedCalcCategory = category },
-                            label = { Text("$category ($count)", fontWeight = FontWeight.Bold) },
+                            selected = selectedCategory == category,
+                            onClick = { onSelectCategory(category) },
+                            label = { Text("$category (${calcCatalogCountOf(category)})", fontWeight = FontWeight.Bold) },
                             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaroonPrimary, selectedLabelColor = Color.White)
                         )
                     }
@@ -521,12 +554,45 @@ fun ClinicalCalculatorsExpandedScreen(onBack: () -> Unit) {
             }
             item {
                 Text(
-                    "حاسبات $selectedCalcCategory (${visibleCalcSpecs.size})",
+                    "حاسبات $selectedCategory (${visibleEntries.size})",
                     fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary,
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            items(visibleCalcSpecs, key = { it.id }) { spec ->
+            items(visibleEntries, key = { it.key }) { entry ->
+                val title = entry.titleAr ?: specsById[entry.key]?.titleAr ?: entry.key
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { onOpenTool(entry.key) }
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(entry.shortDescriptionAr, fontSize = 13.sp, lineHeight = 20.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * شاشة تفصيل مواصفة واحدة: المحتوى الكامل القائم كما هو حرفيًا —
+ * العنوان والصيغة والمدخلات وكتلة الحساب القائمة والتفسير والمثال
+ * المحسوب والمصدر، من حقول الـ CalcSpec نفسها دون أي إعادة كتابة.
+ */
+@Composable
+private fun CalcSpecDetailScreen(spec: CalcSpec, onBack: () -> Unit) {
+    BackHandler { onBack() }
+    DrawerScreenScaffold(title = "الحاسبات الطبية", onBack = onBack) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            item {
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -567,6 +633,29 @@ fun ClinicalCalculatorsExpandedScreen(onBack: () -> Unit) {
                         Text("المصدر: ${spec.source}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * شاشة تفصيل إحدى الحاسبات الأربع المبرمجة مباشرة: مكوّنها القائم
+ * كما هو دون أي تغيير في محتواه الداخلي.
+ */
+@Composable
+private fun HardcodedCalcDetailScreen(toolKey: String, onBack: () -> Unit) {
+    BackHandler { onBack() }
+    DrawerScreenScaffold(title = "الحاسبات الطبية", onBack = onBack) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 24.dp)
+        ) {
+            when (toolKey) {
+                "wells_dvt" -> item { WellsDvtCalculator() }
+                "wells_pe" -> item { WellsPeCalculator() }
+                "gcs" -> item { GcsCalculator() }
+                else -> item { ChaCalculator() }
             }
         }
     }

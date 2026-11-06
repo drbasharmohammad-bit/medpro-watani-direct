@@ -23,7 +23,6 @@ import sy.medpro.watani.ui.features.AbgLabScreen
 import sy.medpro.watani.ui.features.ClinicalCalculatorsExpandedScreen
 import sy.medpro.watani.ui.features.EcgTrainerScreen
 import sy.medpro.watani.ui.features.LabValuesLabScreen
-import sy.medpro.watani.ui.offline.OfflineClinicalCalculatorsScreen
 import sy.medpro.watani.ui.offline.OfflineEcgAtlasScreen
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
@@ -110,12 +109,14 @@ fun LabsAndAbgScreen(
 }
 
 /**
- * الحاسبات الطبية الموحّدة (إعادة تنظيم لوحة الأدوات، نوفمبر 2026):
- * مدخل واحد بدل أربعة مداخل متفرقة — الحاسبات السريرية الموسعة (الـ60
- * بشريط تصنيفاتها) + الحاسبات السريرية + تبويب «العناية والجرعات» الذي
- * يضم تسريب العناية والسوائل والحروق والصادات والكلية وجرعات الأطفال.
- * الأسماء القديمة تبقى أسماء مستعارة في MainActivity تفتح هذه الشاشة
- * على التبويب المقابل.
+ * الحاسبات الطبية الموحّدة (إعادة التنظيم حسب الاختصاص، نوفمبر 2026):
+ * شاشة دليل واحدة بلا تبويبات — كل الحاسبات الـ66 مرتبة في 10 فئات
+ * حسب الاختصاص الطبي (calcCatalog.kt)، وكل حاسبة تظهر مرة واحدة
+ * باسمها ووصف قصير، وتفاصيلها الكاملة داخل شاشتها عند النقر عليها.
+ * التوقيع باقٍ للتوافق الخلفي مع روابط MainActivity المستعارة:
+ * التبويب 0 يفتح الدليل على أول فئة، والتبويب 1 يفتح الدليل على فئة
+ * «صدرية وتنفسية» (فئة CURB-65 ومفسّر غازات الدم)، والتبويب 2 يفتح
+ * مباشرة شاشة الألواح السريرية على لوح initialBedsideTab كما كان.
  */
 @Composable
 fun MedicalCalculatorsScreen(
@@ -123,24 +124,16 @@ fun MedicalCalculatorsScreen(
     initialTab: Int = 0,
     initialBedsideTab: BedsideClinicalTab = BedsideClinicalTab.ICU_INFUSIONS
 ) {
-    var selected by remember { mutableIntStateOf(initialTab.coerceIn(0, 2)) }
-    GroupedTabs(
-        titles = listOf(
-            "الحاسبات السريرية الموسعة",
-            "الحاسبات السريرية",
-            "العناية والجرعات"
-        ),
-        selected = selected,
-        onSelect = { selected = it }
-    ) {
-        when (selected) {
-            0 -> ClinicalCalculatorsExpandedScreen(onBack = onBack)
-            1 -> OfflineClinicalCalculatorsScreen(onBack = onBack)
-            else -> BedsideDosingAndIcuSuiteScreen(
-                initialTab = initialBedsideTab,
-                onBack = onBack
-            )
-        }
+    when (initialTab.coerceIn(0, 2)) {
+        2 -> BedsideDosingAndIcuSuiteScreen(
+            initialTab = initialBedsideTab,
+            onBack = onBack
+        )
+        1 -> ClinicalCalculatorsExpandedScreen(
+            onBack = onBack,
+            initialCategory = "صدرية وتنفسية"
+        )
+        else -> ClinicalCalculatorsExpandedScreen(onBack = onBack)
     }
 }
 
