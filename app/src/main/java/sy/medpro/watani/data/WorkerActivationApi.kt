@@ -50,8 +50,10 @@ enum class RefreshOutcome {
  *
  * REPLACES Firestore code validation for activation
  * ([WataniFirestoreSync.validateAndBindActivation] was removed).
- * Firestore user/progress sync ([WataniFirestoreSync.ensureAndSyncUser])
- * is untouched.
+ * User/progress sync was migrated to the gateway in phase 3
+ * ([WataniGatewaySync.ensureAndSyncUser] over /v1/user/me, using this
+ * object's getFromWorker / putToWorker / postToWorker transport);
+ * [WataniFirestoreSync] stays in the tree uncalled as a reserve.
  *
  * Single switch point for restricted content: every fetch of a restricted
  * path MUST go through [contentRequest] / [contentRequestForUrl] below.
@@ -719,6 +721,62 @@ object WorkerActivationApi {
             }
         } catch (_: Exception) {
             WorkerIdResult(-2, null)
+        }
+    }
+
+    suspend fun putToWorker(user: FirebaseUser, path: String, json: JSONObject): WorkerIdResult = withContext(Dispatchers.IO) {
+        val token = googleIdToken(user) ?: return@withContext WorkerIdResult(-1, null)
+        try {
+            val request = Request.Builder()
+                .url("$WORKER_BASE$path")
+                .header("Authorization", "Bearer $token")
+                .put(json.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            client.newCall(request).execute().use { response ->
+                WorkerIdResult(response.code, response.body?.string())
+            }
+        } catch (_: Exception) {
+            WorkerIdResult(-2, null)
+        }
+    }
+
+    /**
+     * Public exam date (migration phase 3): GET /v1/config/exam-date
+     * needs no token (the Firestore doc it replaces was read with no
+     * activation context either). Fire-and-forget via enqueue, exactly
+     * like the old Firestore listener: the callback receives the
+     * "yyyy-MM-dd" string, or null on any failure/absence — offline or
+     * a missing date is silently ignored by the caller.
+     */
+    fun fetchExamDateAsync(onResult: (String?) -> Unit) {
+        try {
+            val request = Request.Builder()
+                .url("$WORKER_BASE/v1/config/exam-date")
+                .get()
+                .build()
+            client.newCall(request).enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                    onResult(null)
+                }
+
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    val date = try {
+                        response.use { resp ->
+                            if (!resp.isSuccessful) null
+                            else {
+                                val bodyText = resp.body?.string() ?: ""
+                                val raw = JSONObject(bodyText).optString("examDate", "")
+                                raw.takeIf { it.isNotBlank() }
+                            }
+                        }
+                    } catch (_: Exception) {
+                        null
+                    }
+                    onResult(date)
+                }
+            })
+        } catch (_: Exception) {
+            onResult(null)
         }
     }
 

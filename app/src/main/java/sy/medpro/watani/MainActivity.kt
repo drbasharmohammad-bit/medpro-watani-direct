@@ -220,7 +220,7 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(currentUser) {
                         val user = currentUser
                         if (user != null) {
-                            sy.medpro.watani.data.WataniFirestoreSync.ensureAndSyncUser(contextForSync, user)
+                            sy.medpro.watani.data.WataniGatewaySync.ensureAndSyncUser(contextForSync, user)
                             // Best-effort FCM token upload on sign-in
                             // (deduped inside; never blocks the UI).
                             try { sy.medpro.watani.data.WorkerActivationApi.uploadFcmToken(contextForSync) } catch (_: Exception) { }
