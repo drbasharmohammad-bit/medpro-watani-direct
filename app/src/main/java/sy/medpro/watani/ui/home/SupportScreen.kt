@@ -1,5 +1,6 @@
 package sy.medpro.watani.ui.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -20,6 +21,7 @@ import sy.medpro.watani.data.SupportFavorites
 import sy.medpro.watani.data.SupportMessages
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.theme.MaroonPrimary
+import sy.medpro.watani.ui.theme.RoseOutline
 import sy.medpro.watani.ui.theme.ThmanyahFontFamily
 
 private const val FILTER_ALL = "الكل"
@@ -84,6 +86,7 @@ fun SupportScreen(onBack: () -> Unit) {
                     Card(
                         shape = MaterialTheme.shapes.large,
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, RoseOutline),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {

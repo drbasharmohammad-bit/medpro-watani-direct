@@ -21,6 +21,7 @@ import sy.medpro.watani.data.QuestionDto
 import sy.medpro.watani.data.WataniRepository
 import sy.medpro.watani.data.WorkerActivationApi
 import sy.medpro.watani.data.getCorrectIndices
+import sy.medpro.watani.ui.theme.RoseOutline
 import java.time.LocalDate
 
 private const val DAILY_PREFS = "watani_daily_question"
@@ -101,8 +102,8 @@ fun DailyQuestionCard(onOpenActivation: () -> Unit) {
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, DailyQuestionAccent.copy(alpha = 0.35f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = BorderStroke(1.dp, RoseOutline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

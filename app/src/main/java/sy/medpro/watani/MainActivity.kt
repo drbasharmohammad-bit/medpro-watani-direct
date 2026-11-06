@@ -691,17 +691,6 @@ class MainActivity : ComponentActivity() {
                                                         AppTab.HOME -> {
                                                             HomeDashboardScreen(
                                                                 manifestVersion = uiState.manifestVersion,
-                                                                onNavigateBank = { requestTab(AppTab.BANK) },
-                                                                onNavigateCases = { viewModel.setTab(AppTab.CASES) },
-                                                                onNavigateLeaderboard = { viewModel.setTab(AppTab.LEADERBOARD) },
-                                                                onOpenAlgorithms = { drawerScreen = "خوارزميات التدبير" },
-                                                                onOpenFirstLineDrugs = { drawerScreen = "الخطوط العلاجية الأولى" },
-                                                                onOpenEponyms = { drawerScreen = "موسوعة المتلازمات" },
-                                                                onOpenEcgAtlas = { drawerScreen = "أطلس تخطيط القلب" },
-                                                                onOpenStudyPlanner = { drawerScreen = "مخطط جدول الدراسة" },
-                                                                onOpenCalculators = { drawerScreen = "الحاسبات السريرية الموسعة" },
-                                                                onOpenIcuAndDosing = { drawerScreen = "حاسبات العناية والسوائل" },
-                                                                onOpenRenalAndPedsDosing = { drawerScreen = "الصادات والكلية والأطفال" },
                                                                 hasResume = sy.medpro.watani.data.ResumeStore.hasResume(context),
                                                                 onResumeLastSection = { viewModel.resumeLastSection() },
                                                                 onOpenSupport = { drawerScreen = "الدعم النفسي" },

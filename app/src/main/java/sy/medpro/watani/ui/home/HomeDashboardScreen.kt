@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,23 +33,11 @@ import sy.medpro.watani.data.FocusTimerEngine
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.SupportFavorites
 import sy.medpro.watani.data.SupportMessages
-import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.theme.*
 
 @Composable
 fun HomeDashboardScreen(
     manifestVersion: String?,
-    onNavigateBank: () -> Unit,
-    onNavigateCases: () -> Unit,
-    onNavigateLeaderboard: () -> Unit,
-    onOpenAlgorithms: () -> Unit = {},
-    onOpenFirstLineDrugs: () -> Unit = {},
-    onOpenEponyms: () -> Unit = {},
-    onOpenEcgAtlas: () -> Unit = {},
-    onOpenStudyPlanner: () -> Unit = {},
-    onOpenCalculators: () -> Unit = {},
-    onOpenIcuAndDosing: () -> Unit = {},
-    onOpenRenalAndPedsDosing: () -> Unit = {},
     hasResume: Boolean = false,
     onResumeLastSection: () -> Unit = {},
     onOpenSupport: () -> Unit = {},
@@ -59,7 +46,6 @@ fun HomeDashboardScreen(
     onOpenActivation: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    var showLabModal by remember { mutableStateOf(false) }
     var animateIn by remember { mutableStateOf(false) }
     // بطاقة الدعم: تقديم فهرس الرسالة اليومية بذاكرة الجلسة (يُصفَّر مع
     // إعادة إنشاء الشاشة، والأساس دائمًا فهرس اليوم الحقيقي).
@@ -89,10 +75,6 @@ fun HomeDashboardScreen(
         label = "countdownRing"
     )
 
-    if (showLabModal) {
-        QuickMedicalReferenceModal(onDismiss = { showLabModal = false })
-    }
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -117,9 +99,9 @@ fun HomeDashboardScreen(
             val supportIsFavorite = supportFavorites.contains(supportMessage.id)
             Card(
                 shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = GoldAccent.copy(alpha = 0.12f)),
-                border = BorderStroke(1.5.dp, GoldAccent),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, RoseOutline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth().clickable { onOpenSupport() }
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -276,8 +258,8 @@ fun HomeDashboardScreen(
             Card(
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, yourDayAccent.copy(alpha = 0.35f)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                border = BorderStroke(1.dp, RoseOutline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -325,8 +307,8 @@ fun HomeDashboardScreen(
             Card(
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, focusAccent.copy(alpha = 0.35f)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                border = BorderStroke(1.dp, RoseOutline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth().clickable { onOpenFocusTimer() }
             ) {
                 Row(
@@ -376,8 +358,8 @@ fun HomeDashboardScreen(
                 Card(
                     shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, reviewAccent.copy(alpha = 0.35f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                    border = BorderStroke(1.dp, RoseOutline),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -407,227 +389,12 @@ fun HomeDashboardScreen(
             }
         }
 
-        // Standalone Bedside Clinical & Physical Exam Suite (Isolated from Question Bank)
-        item {
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.5.dp, GoldAccent.copy(alpha = 0.65f)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.Default.LocalHospital, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(22.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text(
-                                    text = "جناح الممارسة السريرية والمناوبات بالمشفى",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = MaroonPrimary
-                                )
-                                Text(
-                                    text = "أدوات سريرية مهارية مستقلة عن بنك الأسئلة • Bates' & Sanford",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
-                        Surface(
-                            color = GoldAccent.copy(alpha = 0.22f),
-                            shape = MaterialTheme.shapes.small
-                        ) {
-                            Text(
-                                text = "مبتكر • أوفلاين",
-                                color = MaroonDeep,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        CompactMedicalToolCard(
-                            title = "تسريب العناية والسوائل",
-                            subtitle = "الرافعات الوعائية mcg/kg/min ومعادلة باركلاند للحروق",
-                            icon = Icons.Default.WaterDrop,
-                            badgeColor = Color(0xFF1565C0),
-                            onClick = onOpenIcuAndDosing,
-                            modifier = Modifier.weight(1f)
-                        )
-                        CompactMedicalToolCard(
-                            title = "الصادات والكلية والأطفال",
-                            subtitle = "تعديل الجرعات حسب CrCl وجرعات الأطفال بالوزن",
-                            icon = Icons.Default.Vaccines,
-                            badgeColor = Color(0xFF1565C0),
-                            onClick = onOpenRenalAndPedsDosing,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "الأدوات الطبية المرجعية المعتمدة دولياً",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    color = MaroonPrimary
-                )
-                Surface(
-                    color = MaroonPrimary.copy(alpha = 0.1f),
-                    shape = MaterialTheme.shapes.extraSmall
-                ) {
-                    Text(
-                        text = "أوفلاين 100% • بدون ذكاء اصطناعي",
-                        color = MaroonPrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                AccreditedToolBannerCard(
-                    title = "خوارزميات التدبير السريري وجداول التشخيص التفريقي",
-                    subtitle = "خطوات التدبير الإسعافي والسريري المتسلسلة مع جداول المقارنة الحاسمة",
-                    badge = "Harrison's • ESC • ATLS",
-                    icon = Icons.Default.AccountTree,
-                    accentColor = Color(0xFF2E7D32),
-                    onClick = onOpenAlgorithms
-                )
-
-                AccreditedToolBannerCard(
-                    title = "دليل الخطوط العلاجية الأولى والأدوية الأساسية (DOC)",
-                    subtitle = "خط العلاج الأول لكل مرض، البديل في الحمل والحساسية، ومضادات الاستطباب",
-                    badge = "First-Line DOC",
-                    icon = Icons.Default.Medication,
-                    accentColor = Color(0xFF7B1FA2),
-                    onClick = onOpenFirstLineDrugs
-                )
-
-                AccreditedToolBannerCard(
-                    title = "دليل قراءة تخطيط القلب التفاعلي (ECG Atlas)",
-                    subtitle = "راسم موجات تخطيط القلب التفاعلي للحالات الحرجة وتوضع الاحتشاءات أوفلاين",
-                    badge = "ECG Waveforms • 100% Offline",
-                    icon = Icons.Default.MonitorHeart,
-                    accentColor = Color(0xFFAD1457),
-                    onClick = onOpenEcgAtlas
-                )
-
-                AccreditedToolBannerCard(
-                    title = "موسوعة المتلازمات والعلامات السريرية المسماة (Eponyms)",
-                    subtitle = "أطلس العلامات الجراحية والباطنية والثلاثيات المسماة عالية الورود بالوطني",
-                    badge = "Named Signs & Triads",
-                    icon = Icons.Default.MenuBook,
-                    accentColor = Color(0xFF5D4037),
-                    onClick = onOpenEponyms
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    CompactMedicalToolCard(
-                        title = "مخطط جدول الدراسة",
-                        subtitle = "توزيع الأيام المتبقية حسب ثقل المواد",
-                        icon = Icons.Default.EventNote,
-                        badgeColor = Color(0xFF455A64),
-                        onClick = onOpenStudyPlanner,
-                        modifier = Modifier.weight(1f)
-                    )
-                    CompactMedicalToolCard(
-                        title = "الحاسبات السريرية",
-                        subtitle = "CURB-65 ومفسر غازات الدم ABG",
-                        icon = Icons.Default.Calculate,
-                        badgeColor = Color(0xFF1565C0),
-                        onClick = onOpenCalculators,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                CompactMedicalToolCard(
-                    title = "القيم المخبرية الطبيعية",
-                    subtitle = "مرجع التحاليل والغازات والشوارد الفوري",
-                    icon = Icons.Default.Science,
-                    badgeColor = Color(0xFF00838F),
-                    onClick = { showLabModal = true },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
-
-        item {
-            Text(
-                text = "الوصول السريع للأقسام التدريبية",
-                fontWeight = FontWeight.Bold,
-                fontSize = 17.sp,
-                color = MaroonPrimary
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                QuickActionCard(
-                    title = "بنك الأسئلة الشامل",
-                    subtitle = "الوطني • الجامعات • UWorld",
-                    icon = Icons.Default.Book,
-                    onClick = onNavigateBank,
-                    modifier = Modifier.weight(1f)
-                )
-                QuickActionCard(
-                    title = "المريض الافتراضي",
-                    subtitle = "محاكاة حالات سريرية",
-                    icon = Icons.Default.LocalHospital,
-                    onClick = onNavigateCases,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                QuickActionCard(
-                    title = "لوحة الصدارة",
-                    subtitle = "ترتيب طلاب الوطني",
-                    icon = Icons.Default.EmojiEvents,
-                    onClick = onNavigateLeaderboard,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
         item {
             Card(
                 shape = MaterialTheme.shapes.medium,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                border = BorderStroke(1.dp, RoseOutline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -648,148 +415,6 @@ fun HomeDashboardScreen(
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AccreditedToolBannerCard(
-    title: String,
-    subtitle: String,
-    badge: String,
-    icon: ImageVector,
-    accentColor: Color,
-    onClick: () -> Unit
-) {
-    Card(
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.22f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = accentColor.copy(alpha = 0.12f),
-                modifier = Modifier.size(50.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(26.dp))
-                }
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = title,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = subtitle,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Surface(
-                    color = accentColor.copy(alpha = 0.1f),
-                    shape = MaterialTheme.shapes.extraSmall
-                ) {
-                    Text(
-                        text = badge,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = accentColor,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactMedicalToolCard(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    badgeColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.25f)),
-        modifier = modifier.clickable { onClick() }
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Surface(
-                shape = CircleShape,
-                color = badgeColor.copy(alpha = 0.14f),
-                modifier = Modifier.size(40.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = badgeColor, modifier = Modifier.size(22.dp))
-                }
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-        }
-    }
-}
-
-@Composable
-fun QuickActionCard(
-    title: String,
-    subtitle: String = "",
-    icon: ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = featuredCardBackground()),
-        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = modifier.clickable { onClick() }
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaroonPrimary.copy(alpha = 0.1f),
-                modifier = Modifier.size(44.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(24.dp))
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-            if (subtitle.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(subtitle, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
             }
         }
     }
@@ -857,8 +482,8 @@ private fun ExamCountdownCard() {
     Card(
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.5.dp, GoldAccent.copy(alpha = 0.65f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        border = BorderStroke(1.dp, RoseOutline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
