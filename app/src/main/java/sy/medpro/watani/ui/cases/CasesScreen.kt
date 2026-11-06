@@ -153,8 +153,9 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
     var showExplanation by remember { mutableStateOf(false) }
 
     // ---- Virtual-patient upgrade (schema v2) state ----
-    // A case is upgraded only when it declares schemaV2 and carries a
-    // history bank; every other case follows the legacy flow untouched.
+    // A case is upgraded only when isUpgradedCase() holds: schemaV2
+    // declared, a non-empty history bank, and an opening vignette;
+    // every other case follows the legacy flow untouched.
     val isV2 = caseItem.isUpgradedCase()
     var askedQuestions by remember { mutableStateOf(setOf<String>()) }
     var earlyDiagnosis by remember { mutableStateOf(false) }
