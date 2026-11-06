@@ -25,13 +25,27 @@ import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.theme.*
 
+// A case plays the upgraded (v2) flow only when it carries the full
+// v2 payload: the schema flag, a non-empty history bank, AND an
+// opening vignette. Requiring the vignette keeps a malformed future
+// record from silently opening with the full presentation text; such
+// a record degrades to the legacy player instead.
+private fun ClinicalCaseDto.isUpgradedCase(): Boolean =
+    schemaV2 == true && !historyBank.isNullOrEmpty() && !openingVignette.isNullOrBlank()
+
+// Text shown for a case in lists and search: upgraded cases preview
+// their opening vignette only — never the full presentation, which
+// would hand the student the whole story before playing.
+private fun ClinicalCaseDto.listPreviewText(): String =
+    if (isUpgradedCase()) openingVignette ?: "" else presentation ?: ""
+
 @Composable
 fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> Unit) {
     var searchQuery by remember { mutableStateOf("") }
     val filteredCases = cases.filter {
         it.title?.contains(searchQuery, ignoreCase = true) == true ||
         it.specialty?.contains(searchQuery, ignoreCase = true) == true ||
-        it.presentation?.contains(searchQuery, ignoreCase = true) == true
+        it.listPreviewText().contains(searchQuery, ignoreCase = true)
     }
 
     DrawerScreenScaffold(title = "المريض الافتراضي والحالات السريرية (${cases.size} حالة)", onBack = {}) { padding ->
@@ -107,7 +121,7 @@ fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> 
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = caseItem.presentation ?: "",
+                                text = caseItem.listPreviewText(),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                 maxLines = 2
@@ -141,7 +155,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
     // ---- Virtual-patient upgrade (schema v2) state ----
     // A case is upgraded only when it declares schemaV2 and carries a
     // history bank; every other case follows the legacy flow untouched.
-    val isV2 = caseItem.schemaV2 == true && !caseItem.historyBank.isNullOrEmpty()
+    val isV2 = caseItem.isUpgradedCase()
     var askedQuestions by remember { mutableStateOf(setOf<String>()) }
     var earlyDiagnosis by remember { mutableStateOf(false) }
     var pendingDiagnosis by remember { mutableStateOf<String?>(null) }
@@ -309,7 +323,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable(enabled = qid.isNotEmpty()) { askedQuestions = askedQuestions + qid },
+                                .clickable(enabled = qid.isNotEmpty() && !(isV2 && showExplanation)) { askedQuestions = askedQuestions + qid },
                             shape = MaterialTheme.shapes.small
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
@@ -401,7 +415,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { revealedExams = revealedExams + idx },
+                            .clickable(enabled = !(isV2 && showExplanation)) { revealedExams = revealedExams + idx },
                         shape = MaterialTheme.shapes.small
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
@@ -448,7 +462,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { revealedTests = revealedTests + idx },
+                            .clickable(enabled = !(isV2 && showExplanation)) { revealedTests = revealedTests + idx },
                         shape = MaterialTheme.shapes.small
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
@@ -629,7 +643,12 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 }
                             }
 
-                            // Safety alert: red-flag questions exist but none was asked
+                            // Safety alert: red-flag questions exist but none was asked.
+                            // Documented interpretation: design section 5 ties this
+                            // alert to cases whose options include a life-threatening
+                            // diagnosis, but the data carries no such field; the
+                            // adopted trigger is the broader factual one (red flags
+                            // present and none asked), as specified for this build.
                             if (score.redFlagTotal > 0 && score.redFlagAsked == 0) {
                                 Card(
                                     colors = CardDefaults.cardColors(containerColor = ErrorRed),

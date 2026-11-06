@@ -7,6 +7,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -311,7 +312,9 @@ private fun ReverseRoundList(
                 Text("لا جولات مطابقة للمرشّحات الحالية.", fontSize = 14.sp)
             }
         }
-        items(filtered, key = { it.id ?: "" }) { round ->
+        // Key includes the index so a future bank with a duplicated or
+        // missing round id can never crash the list with a repeated key.
+        itemsIndexed(filtered, key = { index, round -> "${round.id ?: "round"}-$index" }) { _, round ->
             val best = round.id?.let { bestScores[it] }
             Card(
                 shape = RoundedCornerShape(12.dp),

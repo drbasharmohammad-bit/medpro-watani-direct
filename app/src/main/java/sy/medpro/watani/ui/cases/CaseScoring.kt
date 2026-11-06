@@ -1,7 +1,7 @@
 package sy.medpro.watani.ui.cases
 
 import sy.medpro.watani.data.ClinicalCaseDto
-import kotlin.math.roundToInt
+import kotlin.math.round
 
 /**
  * A critical fact the student never uncovered, with everything the report
@@ -86,10 +86,14 @@ private fun coverageRatio(done: Int, total: Int): Double =
  *   otherwise (the base rule of two free distractors; a bank with a single
  *   distractor therefore exempts that one). Deduction is
  *   min(4, max(0, askedDistractors - free)).
- * - Examinations and tests (20): 15 times the share of isKey elements
- *   revealed across both sections combined (the legacy coverage rule),
- *   plus an efficiency 5 that loses 1 point per requested distractor-tier
- *   element after the first, capped at -5.
+ * - Examinations and tests (20): 15 times the share of key elements
+ *   revealed across both sections combined, where "key" is the
+ *   element's effective tier (its documented tier when present,
+ *   otherwise derived from isKey) — the approved conversion's tier
+ *   corrections are scoring decisions, so the tier, not the raw
+ *   legacy isKey flag, rules coverage. Plus an efficiency 5 that
+ *   loses 1 point per requested distractor-tier element after the
+ *   first, capped at -5.
  * - Diagnosis (40): correct always earns the full 40. The "blind correct"
  *   reduction is suspended by the v2 appendix and is NOT applied here.
  * - Critical facts: a fact counts as revealed when its revealLogic is
@@ -101,8 +105,10 @@ private fun coverageRatio(done: Int, total: Int): Double =
  * - XP: the score maps to a share of the case xpReward (default 25 when
  *   absent, matching the legacy grant): 85 and above earns 100 percent,
  *   70 to 84 earns 75 percent, 50 to 69 earns 50 percent, below 50 earns
- *   25 percent, rounded with roundToInt (half rounds to even, so 25
- *   percent of 50 is 12.5 and becomes 12).
+ *   25 percent, rounded half-to-even (kotlin.math.round, i.e.
+ *   Math.rint): 25 percent of 50 is 12.5 and becomes 12. Do NOT use
+ *   roundToInt here: its ties go toward positive infinity, so 12.5
+ *   would become 13 and the documented simulation would fail.
  */
 fun computeCaseScore(
     c: ClinicalCaseDto,
@@ -141,10 +147,11 @@ fun computeCaseScore(
     // ---- Examinations and tests (20) ----
     val exams = c.examinations.orEmpty()
     val tests = c.tests.orEmpty()
-    val examKeyTotal = exams.count { it.isKey == true } + tests.count { it.isKey == true }
+    val examKeyTotal = exams.count { effectiveExamTier(it.tier, it.isKey) == "key" } +
+        tests.count { effectiveExamTier(it.tier, it.isKey) == "key" }
     val examKeyRevealed =
-        exams.count { it.isKey == true && it.id != null && revealedExams.contains(it.id) } +
-            tests.count { it.isKey == true && it.id != null && revealedTests.contains(it.id) }
+        exams.count { effectiveExamTier(it.tier, it.isKey) == "key" && it.id != null && revealedExams.contains(it.id) } +
+            tests.count { effectiveExamTier(it.tier, it.isKey) == "key" && it.id != null && revealedTests.contains(it.id) }
     val examCoveragePoints = 15.0 * coverageRatio(examKeyRevealed, examKeyTotal)
     val examDistractorsRequested =
         exams.count { effectiveExamTier(it.tier, it.isKey) == "distractor" && it.id != null && revealedExams.contains(it.id) } +
@@ -185,7 +192,7 @@ fun computeCaseScore(
         total >= 50.0 -> 0.5
         else -> 0.25
     }
-    val xpEarned = (xpBase * xpFraction).roundToInt()
+    val xpEarned = round(xpBase * xpFraction).toInt()
 
     return CaseScore(
         historyEssentialPoints = essentialPoints,

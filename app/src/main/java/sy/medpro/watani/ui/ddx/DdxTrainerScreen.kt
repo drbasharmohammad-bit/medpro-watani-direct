@@ -83,10 +83,18 @@ private fun saveDdxFirstAttempt(context: Context, record: DdxAttemptRecord) {
         val prefs = context.getSharedPreferences(DDx_PREFS_NAME, Context.MODE_PRIVATE)
         val existing = readDdxAttemptRecords(context)
         if (existing.containsKey(record.caseId)) return // first attempt only
-        val root = try {
-            JSONObject(prefs.getString(DDx_PREFS_KEY_RECORDS, null) ?: "{}")
-        } catch (_: Exception) {
+        val rawRecords = prefs.getString(DDx_PREFS_KEY_RECORDS, null)
+        val root = if (rawRecords == null) {
             JSONObject()
+        } else {
+            try {
+                JSONObject(rawRecords)
+            } catch (_: Exception) {
+                // Corrupt stored JSON: abort this save instead of
+                // rebuilding from an empty root and wiping every other
+                // case's first-attempt record.
+                return
+            }
         }
         val obj = JSONObject()
             .put("rankingLabels", JSONArray(record.rankingLabels))
@@ -471,8 +479,9 @@ private fun DdxDiagnosisPicker(
                 }
             }
         }
-        if (allowFreeText && query.isNotBlank() && suggestions.none {
-                it.diagnosisAr == query.trim() || it.diagnosisEn.equals(query.trim(), ignoreCase = true)
+        if (allowFreeText && query.isNotBlank() && dictionary.none {
+                it.diagnosisAr.trim() == query.trim() ||
+                    ddxMatchKey(it.diagnosisEn) == ddxMatchKey(query)
             }
         ) {
             TextButton(onClick = {
@@ -656,48 +665,6 @@ private fun DdxCasePlay(
                 }
             }
 
-            if (score != null) {
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("نتيجة التنقيط", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
-                        if (practiceRun) {
-                            Text("محاولة تدريبية — لم تُستبدل نتيجة المحاولة الأولى.", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "موضع التشخيص الأرجح (أ1): ${score.a1Points}/30",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            if (score.topStudentPosition != null) {
-                                "وضعتَ التشخيص الأرجح «${score.topDiagnosisAr ?: score.topDiagnosisEn ?: ""}» في الموضع ${score.topStudentPosition} من قائمتك."
-                            } else {
-                                "التشخيص الأرجح «${score.topDiagnosisAr ?: score.topDiagnosisEn ?: ""}» كان غائبًا عن قائمتك."
-                            },
-                            fontSize = 13.sp
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            "لا تُعرض درجة إجمالية في هذه النسخة: بقية مكوّنات التنقيط غير موثّقة بعد في وثيقة التصميم، فتُعرض النتائج التالية واقعيًا بلا أوزان.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                        if (score.extraStudentCount > 0) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                "عناصر إضافية في قائمتك خارج الترتيب المرجعي: ${score.extraStudentCount} (بلا نقاط وبلا عقوبة).",
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-            }
-
             Text("الترتيب المرجعي الكامل", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaroonPrimary)
             case.differentialReference.orEmpty()
                 .sortedBy { it.rank ?: Int.MAX_VALUE }
@@ -821,6 +788,51 @@ private fun DdxCasePlay(
                 }
             }
 
+            // Scoring comes last in the reveal sequence (design section
+            // 2, step 4): final diagnosis, reference ranking, danger
+            // set, red flags, teaching summary, then the score.
+            if (score != null) {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("نتيجة التنقيط", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                        if (practiceRun) {
+                            Text("محاولة تدريبية — لم تُستبدل نتيجة المحاولة الأولى.", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "موضع التشخيص الأرجح (أ1): ${score.a1Points}/30",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            if (score.topStudentPosition != null) {
+                                "وضعتَ التشخيص الأرجح «${score.topDiagnosisAr ?: score.topDiagnosisEn ?: ""}» في الموضع ${score.topStudentPosition} من قائمتك."
+                            } else {
+                                "التشخيص الأرجح «${score.topDiagnosisAr ?: score.topDiagnosisEn ?: ""}» كان غائبًا عن قائمتك."
+                            },
+                            fontSize = 13.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "لا تُعرض درجة إجمالية في هذه النسخة: بقية مكوّنات التنقيط غير موثّقة بعد في وثيقة التصميم، فتُعرض بقية النتائج واقعيًا بلا أوزان.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        if (score.extraStudentCount > 0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "عناصر إضافية في قائمتك خارج الترتيب المرجعي: ${score.extraStudentCount} (بلا نقاط وبلا عقوبة).",
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
+
             Button(
                 shape = MaterialTheme.shapes.medium,
                 onClick = {
@@ -911,6 +923,13 @@ private fun DdxCasePlay(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
+                    if (phase == 0 && revealedCount == 0) {
+                        Text(
+                            "أضف 2–4 تشخيصات تخطر لك من الشكاية وحدها قبل رؤية أي معطيات — هذه المسودة للتدريب الذهني ولا تُنقَّط.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
                     Spacer(modifier = Modifier.height(10.dp))
                     if (working.isEmpty()) {
                         Text(
@@ -955,7 +974,7 @@ private fun DdxCasePlay(
                 }
             }
 
-            if (phase == 0 && allRevealed) {
+            if (phase == 0 && stages.isNotEmpty() && allRevealed) {
                 Button(
                     shape = MaterialTheme.shapes.medium,
                     onClick = { phase = 1 },
@@ -1029,7 +1048,10 @@ private fun DdxCasePlay(
                 Button(
                     shape = MaterialTheme.shapes.medium,
                     onClick = {
-                        val rankingEn = working.mapNotNull { it.keyEn }
+                        // The ranking mirrors the student's list slot for
+                        // slot: a null entry is a free-text item, which
+                        // still occupies its position for A1 (design 4.2).
+                        val rankingEn: List<String?> = working.map { it.keyEn }
                         val mnmEn = (mnmSelected.mapNotNull { it.keyEn } +
                             dangerExtras.mapNotNull { it.keyEn }).toSet()
                         val result = scoreDdxCommit(case, rankingEn, mnmEn)
@@ -1040,7 +1062,7 @@ private fun DdxCasePlay(
                                 DdxAttemptRecord(
                                     caseId = caseId,
                                     rankingLabels = working.map { it.labelAr },
-                                    rankingEn = rankingEn,
+                                    rankingEn = rankingEn.map { it ?: "" },
                                     mnmLabels = (mnmSelected.map { it.labelAr } +
                                         dangerExtras.map { it.labelAr }).distinct(),
                                     mnmEn = mnmEn.toList(),

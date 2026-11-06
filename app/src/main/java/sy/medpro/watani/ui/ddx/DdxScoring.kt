@@ -102,13 +102,18 @@ fun ddxReferenceMustNotMiss(case: DdxCaseDto): List<DdxReferenceDto> {
  * Extra entries carry 0 points and 0 penalty, as documented in the
  * scoring principles (design section 4.1).
  *
- * Free-text student entries have no diagnosis_en key, so they never
- * appear in [studentRankingEn] or [studentMnmEn] and can never match
- * a reference diagnosis; the caller keeps them for display only.
+ * [studentRankingEn] mirrors the student's probability list exactly
+ * as displayed, one slot per entry: a null slot is a free-text entry.
+ * Free text can never match a reference diagnosis, but it still
+ * occupies its position in the list — A1 uses the position of the
+ * most likely diagnosis in the student's list as it stands (design
+ * section 4.2), so free-text entries are never compressed out before
+ * positions are counted. They count as extra entries (0 points, 0
+ * penalty, section 4.1).
  */
 fun scoreDdxCommit(
     case: DdxCaseDto,
-    studentRankingEn: List<String>,
+    studentRankingEn: List<String?>,
     studentMnmEn: Set<String>
 ): DdxScoreBreakdown {
     val studentKeys = studentRankingEn.map { ddxMatchKey(it) }
@@ -155,7 +160,9 @@ fun scoreDdxCommit(
 
     val referenceKeys = references.map { ddxMatchKey(it.diagnosisEn) }
         .filter { it.isNotEmpty() }.toSet()
-    val extraStudentCount = studentKeys.count { it.isNotEmpty() && it !in referenceKeys }
+    // Extra = every student slot that matches no reference diagnosis,
+    // including free-text slots (empty key after normalisation).
+    val extraStudentCount = studentKeys.count { it.isEmpty() || it !in referenceKeys }
 
     return DdxScoreBreakdown(
         a1Points = a1Points,
