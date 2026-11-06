@@ -35,7 +35,7 @@ import java.io.FileOutputStream
  *   a maroon circular badge carrying the Arabic label,
  * - NO hint of the correct answer anywhere,
  * - gold gradient footer band (~150px): "الجواب والشرح الكامل بالتطبيق"
- *   in bold maroon + "@medprowatain" smaller.
+ *   in bold maroon + "t.me/medprowatain" smaller.
  *
  * Long questions: font sizes step down (question 44->36->30, options
  * 40->34->30) until everything fits; if it still overflows at the
@@ -232,7 +232,7 @@ object ShareCardRenderer {
         footerTitle.draw(canvas)
         canvas.restore()
         val footerHandle = layout(
-            "@medprowatain",
+            "t.me/medprowatain",
             textPaint(regular, 33f, MAROON_DARK),
             contentWidth,
             lineSpacing = 1.0f

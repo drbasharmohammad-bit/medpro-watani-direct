@@ -60,10 +60,7 @@ fun QuizScreen(
     questions: List<QuestionDto>,
     onBack: () -> Unit,
     sourcePath: String? = null,
-    subjectName: String? = null,
-    guestMode: Boolean = false,
-    shareKeys: List<String?> = emptyList(),
-    onRequestActivation: () -> Unit = {}
+    subjectName: String? = null
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
@@ -286,14 +283,9 @@ fun QuizScreen(
                             val options = question.options ?: emptyList()
                             val selectedOption = selectedAnswers[index]
                             val isAnswered = selectedOption != null
-                            // Guest mode: correct indices are NEVER exposed
-                            // to the card (no reveal, no scoring signal).
-                            val correctIndices = if (guestMode) emptyList()
-                                else getCorrectIndices(question, options)
+                            val correctIndices = getCorrectIndices(question, options)
                             val ruledOutSet = ruledOutMap[index] ?: emptySet()
                             val timeTaken = questionTimes[index]
-                            val shareSectionKey = sy.medpro.watani.data.ShareLinks.sectionKeyOf(sourcePath)
-                            val shareKey = shareKeys.getOrNull(index)
                             val cardSubjectLabel = sy.medpro.watani.data.ShareLinks.subjectLabel(
                                 subjectName, sourcePath, title
                             )
@@ -308,11 +300,7 @@ fun QuizScreen(
                                 ruledOutIndices = ruledOutSet,
                                 highlightKeywords = highlightKeywords,
                                 timeSpentSeconds = timeTaken,
-                                shareSectionKey = shareSectionKey,
-                                shareKey = shareKey,
                                 subjectLabel = cardSubjectLabel,
-                                guestMode = guestMode,
-                                onRequestActivation = onRequestActivation,
                                 onToggleRuleOut = { optIdx ->
                                     if (!isAnswered) {
                                         val currentSet = ruledOutMap[index] ?: emptySet()
@@ -332,21 +320,18 @@ fun QuizScreen(
                                         if (isCor) {
                                             score++
                                         }
-                                        // Guest mode: attempts are NEVER recorded.
-                                        if (!guestMode) {
-                                            val correctText = options.getOrNull(correctIndices.firstOrNull() ?: 0) ?: ""
-                                            val selectedText = options.getOrNull(optionIndex) ?: ""
-                                            OfflineStudyVault.recordQuestionAttempt(
-                                                context = context,
-                                                subjectTitle = title,
-                                                questionId = question.id ?: "${title}_${index + 1}",
-                                                questionText = question.text ?: "",
-                                                selectedOptionText = selectedText,
-                                                correctOptionText = correctText,
-                                                explanation = question.explanation ?: "",
-                                                isCorrect = isCor
-                                            )
-                                        }
+                                        val correctText = options.getOrNull(correctIndices.firstOrNull() ?: 0) ?: ""
+                                        val selectedText = options.getOrNull(optionIndex) ?: ""
+                                        OfflineStudyVault.recordQuestionAttempt(
+                                            context = context,
+                                            subjectTitle = title,
+                                            questionId = question.id ?: "${title}_${index + 1}",
+                                            questionText = question.text ?: "",
+                                            selectedOptionText = selectedText,
+                                            correctOptionText = correctText,
+                                            explanation = question.explanation ?: "",
+                                            isCorrect = isCor
+                                        )
                                     }
                                 }
                             )
@@ -370,17 +355,12 @@ fun QuestionCard(
     ruledOutIndices: Set<Int> = emptySet(),
     highlightKeywords: Boolean = true,
     timeSpentSeconds: Int? = null,
-    shareSectionKey: String? = null,
-    shareKey: String? = null,
     subjectLabel: String = "",
-    guestMode: Boolean = false,
-    onRequestActivation: () -> Unit = {},
     onToggleRuleOut: (Int) -> Unit = {},
     onOptionSelected: (Int) -> Unit
 ) {
     val context = LocalContext.current
     val shareScope = rememberCoroutineScope()
-    var showShareSheet by remember { mutableStateOf(false) }
     // Account binding: favorites live per account, never in one shared store.
     val favUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
     val favPrefsName = if (favUid.isNullOrBlank()) "watani_favorites" else "watani_favorites_$favUid"
@@ -388,9 +368,7 @@ fun QuestionCard(
     var favList by remember(favUid) { mutableStateOf(favPrefs.getStringSet("fav_list", emptySet()) ?: emptySet()) }
     val qId = question.id ?: question.text ?: "سؤال $questionNumber"
     val qLookupKey = normalizeExplanationKey(question.id)
-    // Guest mode: the explanation layer is NEVER loaded (null key ->
-    // Absent without any fetch), so no explanation can leak to a guest.
-    val explanationState = rememberExplanationState(if (guestMode) null else qLookupKey)
+    val explanationState = rememberExplanationState(qLookupKey)
     val isFav = favList.contains(qId)
 
     Card(
@@ -426,7 +404,11 @@ fun QuestionCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = { showShareSheet = true },
+                        onClick = {
+                            shareScope.launch(Dispatchers.IO) {
+                                shareQuestionAsImage(context, question, subjectLabel)
+                            }
+                        },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
@@ -509,19 +491,16 @@ fun QuestionCard(
                 val isRuledOut = ruledOutIndices.contains(optIndex) && !isAnswered
 
 
-                // Guest mode: correctIndices is empty, so without the
-                // !guestMode guards the selected option would be painted
-                // red ("wrong") after answering — an answer leak.
                 val borderColor = when {
-                    !guestMode && isAnswered && isCorrectOpt -> SuccessGreen
-                    !guestMode && isAnswered && isSelected && !isCorrectOpt -> ErrorRed
+                    isAnswered && isCorrectOpt -> SuccessGreen
+                    isAnswered && isSelected && !isCorrectOpt -> ErrorRed
                     isSelected -> MaroonPrimary
                     else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
                 }
 
                 val backgroundColor = when {
-                    !guestMode && isAnswered && isCorrectOpt -> SuccessGreen.copy(alpha = 0.10f)
-                    !guestMode && isAnswered && isSelected && !isCorrectOpt -> ErrorRed.copy(alpha = 0.10f)
+                    isAnswered && isCorrectOpt -> SuccessGreen.copy(alpha = 0.10f)
+                    isAnswered && isSelected && !isCorrectOpt -> ErrorRed.copy(alpha = 0.10f)
                     else -> MaterialTheme.colorScheme.surface
                 }
 
@@ -566,9 +545,7 @@ fun QuestionCard(
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
-                            } else if (!guestMode) {
-                                // Guest mode shows NEITHER icon: a check or
-                                // an error mark would reveal the answer.
+                            } else {
                                 if (isCorrectOpt) {
                                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen)
                                 } else if (isSelected) {
@@ -585,41 +562,6 @@ fun QuestionCard(
                 enter = expandVertically(animationSpec = tween(280)) + fadeIn(),
                 exit = shrinkVertically(animationSpec = tween(200)) + fadeOut()
             ) {
-                if (guestMode) {
-                    // Guest mode: NO correct-answer reveal and NO
-                    // explanation — an activation invitation instead.
-                    Column {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Surface(
-                            color = GoldContainer.copy(alpha = 0.55f),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.6f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(Icons.Default.VpnKey, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(22.dp))
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "لمعرفة الجواب الصحيح والشرح الكامل فعّل التطبيق",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = MaroonPrimary
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Button(
-                                    onClick = onRequestActivation,
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Text("تفعيل التطبيق", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
-                            }
-                        }
-                    }
-                } else {
                 Column {
                     Spacer(modifier = Modifier.height(12.dp))
                     Surface(
@@ -683,77 +625,20 @@ fun QuestionCard(
                         ExplanationUiState.Absent, ExplanationUiState.Idle -> Unit
                     }
                 }
-                }
             }
         }
     }
 
-    if (showShareSheet) {
-        ModalBottomSheet(onDismissRequest = { showShareSheet = false }) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-                Text(
-                    text = "مشاركة السؤال",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = MaroonPrimary
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                TextButton(
-                    onClick = {
-                        showShareSheet = false
-                        shareQuestionAsText(context, question, shareSectionKey, shareKey)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.TextSnippet, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("مشاركة كنص", fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
-                }
-                TextButton(
-                    onClick = {
-                        showShareSheet = false
-                        shareScope.launch(Dispatchers.IO) {
-                            shareQuestionAsImage(context, question, shareSectionKey, shareKey, subjectLabel)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Image, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("مشاركة كصورة", fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-    }
 }
 
-/** Text share: ACTION_SEND text/plain through the system chooser. */
-private fun shareQuestionAsText(
-    context: android.content.Context,
-    question: QuestionDto,
-    sectionKey: String?,
-    shareKey: String?
-) {
-    val text = sy.medpro.watani.data.ShareLinks.buildShareText(question, sectionKey, shareKey)
-    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(android.content.Intent.EXTRA_TEXT, text)
-    }
-    context.startActivity(
-        android.content.Intent.createChooser(intent, "مشاركة السؤال").apply {
-            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-    )
-}
-
-/** Image share: renders the spec card, saves it to cacheDir and shares
- * it via FileProvider with the same text+link attached. */
+/** Image-only share: renders the spec card, saves it to cacheDir and
+ * shares it via FileProvider. The ONLY accompanying text is the
+ * channel URL (ShareLinks.FALLBACK_URL) — the question text itself
+ * never leaves the app as text. On any rendering/IO failure nothing
+ * is shared at all: there is deliberately no text fallback. */
 private fun shareQuestionAsImage(
     context: android.content.Context,
     question: QuestionDto,
-    sectionKey: String?,
-    shareKey: String?,
     subjectLabel: String
 ) {
     try {
@@ -762,11 +647,10 @@ private fun shareQuestionAsImage(
         val uri = androidx.core.content.FileProvider.getUriForFile(
             context, "${context.packageName}.fileprovider", file
         )
-        val text = sy.medpro.watani.data.ShareLinks.buildShareText(question, sectionKey, shareKey)
         val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(android.content.Intent.EXTRA_STREAM, uri)
-            putExtra(android.content.Intent.EXTRA_TEXT, text)
+            putExtra(android.content.Intent.EXTRA_TEXT, sy.medpro.watani.data.ShareLinks.FALLBACK_URL)
             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(
@@ -776,8 +660,7 @@ private fun shareQuestionAsImage(
             }
         )
     } catch (_: Exception) {
-        // Rendering/IO failure must never crash the quiz: fall back to text.
-        shareQuestionAsText(context, question, sectionKey, shareKey)
+        // Image generation failed: share nothing (no text fallback).
     }
 }
 

@@ -33,20 +33,11 @@ sealed class ScreenState {
     data class Quiz(
         val title: String,
         val questions: List<QuestionDto>,
-        /** Section path the quiz was opened from (share context: its
-         * sectionKey is this path minus ".json"; also the share-card
-         * subject-label fallback). Null = no deep link for its cards. */
+        /** Section path the quiz was opened from (share-card
+         * subject-label fallback). */
         val sourcePath: String? = null,
         /** Envelope subject_name when known (share-card subject label). */
-        val subjectName: String? = null,
-        /** Guest deep-link mode: no correct-answer reveal, no explanation
-         * layer, no attempt recording — an activation CTA instead. */
-        val guestMode: Boolean = false,
-        /** Per-question share keys aligned with [questions]: each is
-         * the question's textual id or its decimal index in the
-         * section's canonical flattened list; null = no context for
-         * that card (its share falls back to the generic link). */
-        val shareKeys: List<String?> = emptyList()
+        val subjectName: String? = null
     ) : ScreenState()
     data class CasePlayer(val caseItem: ClinicalCaseDto) : ScreenState()
 }
@@ -73,9 +64,6 @@ data class UiState(
     val backStack: List<ScreenState> = emptyList(),
     /** Device-gate block message (M8), shown as a dialog by MainActivity. */
     val gateMessage: String? = null,
-    /** Deep-link failure message ("تعذّر فتح السؤال"), shown as a toast
-     * by MainActivity while staying on Home. */
-    val shareError: String? = null,
     val screenState: ScreenState = ScreenState.Home
 )
 
@@ -327,18 +315,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val envelope = repository.getSubjectEnvelope(path)
             val topic = envelope?.topics?.find { it.name == topicName }
             val questions = topic?.questions ?: emptyList()
-            // Share keys come from the envelope's canonical flattening
-            // (sessions first, then topics, dedup by id), matched per
-            // quiz question by reference, then id, then text+options.
-            val shareKeys = envelope?.let { ShareLinks.shareKeysFor(questions, it) }
-                ?: questions.map { null }
             navigateTo(
                 ScreenState.Quiz(
                     topicName,
                     questions,
                     sourcePath = path,
-                    subjectName = envelope?.subjectName,
-                    shareKeys = shareKeys
+                    subjectName = envelope?.subjectName
                 )
             )
         }
@@ -358,152 +340,5 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun getCasesEnvelope(): CasesEnvelope? {
         return repository.getCasesEnvelope()
-    }
-
-    fun clearShareError() {
-        _uiState.update { it.copy(shareError = null) }
-    }
-
-    private val shareResolver = ShareLinkResolver()
-
-    /**
-     * Entry point for both deep-link shapes:
-     * https://watani-content.pages.dev/q/<sectionKey>/<qidOrIndex> and
-     * watani://q/<sectionKey>/<qidOrIndex>. Anything else is ignored.
-     * Uri.pathSegments are already percent-decoded: the LAST segment
-     * after "q" is the qidOrIndex and all segments before it, joined
-     * by "/", are the sectionKey.
-     */
-    fun handleDeepLink(uri: android.net.Uri?) {
-        if (uri == null) return
-        val segments = uri.pathSegments.orEmpty().filter { it.isNotBlank() }
-        val sectionKey: String
-        val qidOrIndex: String
-        when {
-            uri.scheme == "https" && uri.host == "watani-content.pages.dev" -> {
-                if (segments.size < 3 || segments[0] != "q") return
-                sectionKey = segments.subList(1, segments.size - 1).joinToString("/")
-                qidOrIndex = segments.last()
-            }
-            uri.scheme == "watani" && uri.host == "q" -> {
-                if (segments.size < 2) return
-                sectionKey = segments.subList(0, segments.size - 1).joinToString("/")
-                qidOrIndex = segments.last()
-            }
-            else -> return
-        }
-        if (sectionKey.isBlank() || qidOrIndex.isBlank()) return
-        handleShareLink(sectionKey, qidOrIndex)
-    }
-
-    /**
-     * Opens one shared question by (sectionKey, qidOrIndex):
-     * - Activated: the section path is sectionKey + ".json" — load it
-     *   with the existing section mechanism (downloading it first when
-     *   missing), flatten the envelope canonically and resolve the
-     *   question, then open a single-question quiz (full explanation
-     *   behaviour as usual for activated users).
-     * - Guest: fetch the sanitized share-data/<sectionKey>.json shard
-     *   (structurally free of correct/explanation), resolve by the
-     *   same rule, and open the quiz in guest mode.
-     * Any failure (offline, unknown id/index) shows
-     * "تعذّر فتح السؤال" and stays on Home.
-     */
-    fun handleShareLink(sectionKey: String, qidOrIndex: String) {
-        viewModelScope.launch {
-            try {
-                val context = getApplication<Application>().applicationContext
-                if (WorkerActivationApi.isActivated(context)) {
-                    openSharedQuestionActivated(sectionKey, qidOrIndex)
-                } else {
-                    val guest = shareResolver.fetchGuestQuestion(sectionKey, qidOrIndex)
-                        ?: return@launch shareLinkFailed()
-                    val (question, subjectName) = guest
-                    navigateTo(
-                        ScreenState.Quiz(
-                            title = subjectName ?: sectionKey.substringAfterLast('/'),
-                            questions = listOf(question),
-                            sourcePath = "$sectionKey.json",
-                            subjectName = subjectName,
-                            guestMode = true,
-                            shareKeys = listOf(qidOrIndex)
-                        )
-                    )
-                }
-            } catch (_: Exception) {
-                shareLinkFailed()
-            }
-        }
-    }
-
-    private fun shareLinkFailed() {
-        _uiState.update { it.copy(shareError = "تعذّر فتح السؤال") }
-    }
-
-    private suspend fun openSharedQuestionActivated(sectionKey: String, qidOrIndex: String) {
-        val sectionPath = "$sectionKey.json"
-        var envelope = repository.getSubjectEnvelope(sectionPath)
-        if (envelope == null) {
-            // Not downloaded yet: fetch the manifest if needed, then use
-            // the existing downloadSection mechanism and watch for the
-            // section file to land.
-            var entry = _uiState.value.files[sectionPath]
-            if (entry == null) {
-                val manifest = repository.fetchManifest().getOrNull()
-                if (manifest != null) {
-                    _uiState.update {
-                        it.copy(manifestVersion = manifest.version, files = manifest.files ?: emptyMap())
-                    }
-                    entry = manifest.files?.get(sectionPath)
-                }
-            }
-            if (entry == null) {
-                shareLinkFailed()
-                return
-            }
-            downloadSection(sectionPath, entry)
-            var waitedMs = 0L
-            while (envelope == null && waitedMs < 120_000L) {
-                kotlinx.coroutines.delay(500)
-                waitedMs += 500
-                envelope = repository.getSubjectEnvelope(sectionPath)
-                if (envelope == null && sectionPath !in _uiState.value.downloadingPaths && waitedMs > 2_000L) {
-                    break // download finished (or failed) without a file
-                }
-            }
-        }
-        val env = envelope
-        if (env == null) {
-            shareLinkFailed()
-            return
-        }
-        // Canonical flattening + resolution: numeric-tolerant id match
-        // first, otherwise a numeric qidOrIndex is a flattened index.
-        val question = ShareLinks.resolveInFlat(ShareLinks.flattenEnvelope(env), qidOrIndex)
-        if (question == null) {
-            shareLinkFailed()
-            return
-        }
-        // Display title only: the topic/session that holds this exact
-        // question object, else the envelope subject / file base name.
-        var containerName: String? = null
-        for (topic in env.topics.orEmpty()) {
-            if (topic.questions.orEmpty().any { it === question }) { containerName = topic.name; break }
-        }
-        if (containerName == null) {
-            for (session in env.sessions.orEmpty()) {
-                if (session.questions.orEmpty().any { it === question }) { containerName = session.name; break }
-            }
-        }
-        navigateTo(
-            ScreenState.Quiz(
-                title = containerName ?: env.subjectName ?: sectionPath.substringAfterLast('/').substringBeforeLast('.'),
-                questions = listOf(question),
-                sourcePath = sectionPath,
-                subjectName = env.subjectName,
-                guestMode = false,
-                shareKeys = listOf(qidOrIndex)
-            )
-        )
     }
 }
