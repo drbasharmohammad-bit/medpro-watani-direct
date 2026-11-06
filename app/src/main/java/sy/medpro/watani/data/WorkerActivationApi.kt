@@ -781,6 +781,53 @@ object WorkerActivationApi {
         }
     }
 
+    /**
+     * Public contact links (home-package contract): GET
+     * /v1/config/contact-links needs no token, exactly like the exam
+     * date. Fire-and-forget via enqueue: the callback receives a map
+     * with the four contract keys (supportBot / wataniChannel /
+     * medproChannel / instagram — full URLs or empty strings), or null
+     * on any failure / non-ok response, so callers keep their last
+     * good cached values offline.
+     */
+    fun fetchContactLinksAsync(onResult: (Map<String, String>?) -> Unit) {
+        try {
+            val request = Request.Builder()
+                .url("$WORKER_BASE/v1/config/contact-links")
+                .get()
+                .build()
+            client.newCall(request).enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                    onResult(null)
+                }
+
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    val links = try {
+                        response.use { resp ->
+                            if (!resp.isSuccessful) null
+                            else {
+                                val bodyText = resp.body?.string() ?: ""
+                                val json = JSONObject(bodyText)
+                                if (!json.optBoolean("ok", false)) null
+                                else mapOf(
+                                    "supportBot" to json.optString("supportBot", ""),
+                                    "wataniChannel" to json.optString("wataniChannel", ""),
+                                    "medproChannel" to json.optString("medproChannel", ""),
+                                    "instagram" to json.optString("instagram", "")
+                                )
+                            }
+                        }
+                    } catch (_: Exception) {
+                        null
+                    }
+                    onResult(links)
+                }
+            })
+        } catch (_: Exception) {
+            onResult(null)
+        }
+    }
+
     suspend fun postToWorker(user: FirebaseUser, path: String, json: JSONObject): WorkerIdResult = withContext(Dispatchers.IO) {
         val token = googleIdToken(user) ?: return@withContext WorkerIdResult(-1, null)
         try {

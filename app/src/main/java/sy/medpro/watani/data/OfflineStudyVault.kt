@@ -40,7 +40,11 @@ data class OfflineStudyStats(
     val wrongFlashcardIds: Set<Int> = emptySet(),
     val savedMistakes: List<SavedMistakeItem> = emptyList(),
     val specialtyAnswered: Map<String, Int> = emptyMap(),
-    val specialtyCorrect: Map<String, Int> = emptyMap()
+    val specialtyCorrect: Map<String, Int> = emptyMap(),
+    /** أسئلة حُلّت اليوم (بطاقة «يومك» بالرئيسية): عدّاد يومي يُصفَّر
+     * عند تغيّر [answeredTodayDate] (yyyy-MM-dd). */
+    val answeredToday: Int = 0,
+    val answeredTodayDate: String = ""
 )
 
 object OfflineStudyVault {
@@ -74,6 +78,8 @@ object OfflineStudyVault {
     private const val KEY_WRONG_FLASHCARDS = "wrong_flashcards"
     private const val KEY_SAVED_MISTAKES_JSON = "saved_mistakes_json"
     private const val KEY_SPECIALTY_STATS_JSON = "specialty_stats_json"
+    private const val KEY_ANSWERED_TODAY = "answered_today"
+    private const val KEY_ANSWERED_TODAY_DATE = "answered_today_date"
 
     private val _statsFlow = MutableStateFlow(defaultInitialStats())
     val statsFlow: StateFlow<OfflineStudyStats> = _statsFlow.asStateFlow()
@@ -115,11 +121,24 @@ object OfflineStudyVault {
         return stats.manualExamDays
     }
 
+    private fun todayString(): String = java.time.LocalDate.now().toString()
+
+    /** خطوة العدّاد اليومي: يوم جديد يبدأ من 1، ونفس اليوم يزيد 1. */
+    private fun bumpedAnsweredToday(current: OfflineStudyStats): Pair<Int, String> {
+        val today = todayString()
+        return if (current.answeredTodayDate == today) {
+            (current.answeredToday + 1) to today
+        } else {
+            1 to today
+        }
+    }
+
     fun ensureInitialized(context: Context) {
         if (isInitialized) return
         val prefs = prefsFor(context)
         if (!prefs.contains(KEY_TOTAL_ANSWERED)) {
             isInitialized = true
+            _statsFlow.value = _statsFlow.value.copy(answeredToday = 0, answeredTodayDate = todayString())
             persist(context, _statsFlow.value)
             fetchAdminExamDate(context)
             return
@@ -156,9 +175,18 @@ object OfflineStudyVault {
             d.specialtyAnswered to d.specialtyCorrect
         }
 
+        // العدّاد اليومي: تاريخ مخزّن مختلف عن اليوم يعني يومًا جديدًا — يُصفَّر.
+        val storedTodayDate = prefs.getString(KEY_ANSWERED_TODAY_DATE, "") ?: ""
+        val storedAnsweredToday = prefs.getInt(KEY_ANSWERED_TODAY, 0)
+        val today = todayString()
+        val (loadedAnsweredToday, loadedAnsweredTodayDate) =
+            if (storedTodayDate == today) storedAnsweredToday to storedTodayDate else 0 to today
+
         val baseStats = OfflineStudyStats(
             totalAnswered = totalAns,
             totalCorrect = totalCor,
+            answeredToday = loadedAnsweredToday,
+            answeredTodayDate = loadedAnsweredTodayDate,
             examDaysRemaining = examDays,
             manualExamDays = examDays,
             examDateMillis = examDate,
@@ -250,12 +278,15 @@ object OfflineStudyVault {
             current.savedMistakes
         }
 
+        val (nextAnsweredToday, nextAnsweredTodayDate) = bumpedAnsweredToday(current)
         val updated = current.copy(
             totalAnswered = current.totalAnswered + 1,
             totalCorrect = current.totalCorrect + (if (isCorrect) 1 else 0),
             savedMistakes = nextMistakes,
             specialtyAnswered = nextAnsMap,
-            specialtyCorrect = nextCorMap
+            specialtyCorrect = nextCorMap,
+            answeredToday = nextAnsweredToday,
+            answeredTodayDate = nextAnsweredTodayDate
         )
         _statsFlow.value = updated
         persist(context, updated)
@@ -264,9 +295,12 @@ object OfflineStudyVault {
     fun recordCaseCompletion(context: Context, xpReward: Int) {
         ensureInitialized(context)
         val current = _statsFlow.value
+        val (nextAnsweredToday, nextAnsweredTodayDate) = bumpedAnsweredToday(current)
         val updated = current.copy(
             totalAnswered = current.totalAnswered + 1,
-            totalCorrect = current.totalCorrect + 1
+            totalCorrect = current.totalCorrect + 1,
+            answeredToday = nextAnsweredToday,
+            answeredTodayDate = nextAnsweredTodayDate
         )
         _statsFlow.value = updated
         persist(context, updated)
@@ -477,6 +511,8 @@ object OfflineStudyVault {
             .putStringSet(KEY_WRONG_FLASHCARDS, stats.wrongFlashcardIds.map { it.toString() }.toSet())
             .putString(KEY_SAVED_MISTAKES_JSON, mistakesArr.toString())
             .putString(KEY_SPECIALTY_STATS_JSON, specObj.toString())
+            .putInt(KEY_ANSWERED_TODAY, stats.answeredToday)
+            .putString(KEY_ANSWERED_TODAY_DATE, stats.answeredTodayDate)
             .apply()
     }
 

@@ -267,6 +267,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openSubject(path: String, subjectName: String, tab: AppTab) {
+        // «أكمل من وين وقّفت»: كل فتح قسم يُسجَّل لاستئنافه من الرئيسية.
+        ResumeStore.record(
+            getApplication<Application>().applicationContext,
+            path = path, title = subjectName, tab = tab.name, isTopicQuiz = false
+        )
         viewModelScope.launch {
             navigateTo(ScreenState.TopicSelection(path, subjectName))
         }
@@ -291,6 +296,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val activationPromptRequests: SharedFlow<Unit> = _activationPromptRequests.asSharedFlow()
 
     fun openTopicQuiz(path: String, topicName: String) {
+        // «أكمل من وين وقّفت»: فتح كويز موضوع يُسجَّل أيضًا (يُعاد فتحه
+        // عبر نفس الدالة فتمرّ إعادة الفتح ببوابات التفعيل والجهاز).
+        ResumeStore.record(
+            getApplication<Application>().applicationContext,
+            path = path, title = topicName, tab = _uiState.value.currentTab.name, isTopicQuiz = true
+        )
         viewModelScope.launch {
             // M8: re-check the device gate at quiz entry (a debugger
             // attached mid-session is caught here, not only at tab entry).
@@ -324,6 +335,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
         }
+    }
+
+    /**
+     * يعيد فتح آخر قسم/كويز سجّله [ResumeStore] بنفس دوال الفتح الأصلية
+     * (فبوابات التفعيل والجهاز بكويز الموضوع تُعاد كما هي). يعيد false
+     * عند غياب أي سجلّ.
+     */
+    fun resumeLastSection(): Boolean {
+        val entry = ResumeStore.load(getApplication<Application>().applicationContext) ?: return false
+        if (entry.isTopicQuiz) {
+            openTopicQuiz(entry.path, entry.title)
+        } else {
+            val tab = try {
+                AppTab.valueOf(entry.tab)
+            } catch (_: Exception) {
+                AppTab.HOME
+            }
+            openSubject(entry.path, entry.title, tab)
+        }
+        return true
     }
 
     fun openUniversity(universityKey: String, universityName: String) {
