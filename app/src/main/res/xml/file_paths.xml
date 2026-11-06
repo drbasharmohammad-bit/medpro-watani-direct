@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Question share-card images (cacheDir/share_images) shared via FileProvider. -->
+    <cache-path name="share_images" path="share_images/" />
+</paths>

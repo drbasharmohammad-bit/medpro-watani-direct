@@ -30,7 +30,18 @@ sealed class ScreenState {
     object Home : ScreenState()
     data class TopicSelection(val path: String, val subjectName: String) : ScreenState()
     data class UniversitySubjects(val universityKey: String, val universityName: String) : ScreenState()
-    data class Quiz(val title: String, val questions: List<QuestionDto>) : ScreenState()
+    data class Quiz(
+        val title: String,
+        val questions: List<QuestionDto>,
+        /** Section path the quiz was opened from (share context: bank
+         * derivation + subject label). Null = no deep link for its cards. */
+        val sourcePath: String? = null,
+        /** Envelope subject_name when known (share-card subject label). */
+        val subjectName: String? = null,
+        /** Guest deep-link mode: no correct-answer reveal, no explanation
+         * layer, no attempt recording — an activation CTA instead. */
+        val guestMode: Boolean = false
+    ) : ScreenState()
     data class CasePlayer(val caseItem: ClinicalCaseDto) : ScreenState()
 }
 
@@ -56,6 +67,9 @@ data class UiState(
     val backStack: List<ScreenState> = emptyList(),
     /** Device-gate block message (M8), shown as a dialog by MainActivity. */
     val gateMessage: String? = null,
+    /** Deep-link failure message ("تعذّر فتح السؤال"), shown as a toast
+     * by MainActivity while staying on Home. */
+    val shareError: String? = null,
     val screenState: ScreenState = ScreenState.Home
 )
 
@@ -307,7 +321,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val envelope = repository.getSubjectEnvelope(path)
             val topic = envelope?.topics?.find { it.name == topicName }
             val questions = topic?.questions ?: emptyList()
-            navigateTo(ScreenState.Quiz(topicName, questions))
+            navigateTo(
+                ScreenState.Quiz(
+                    topicName,
+                    questions,
+                    sourcePath = path,
+                    subjectName = envelope?.subjectName
+                )
+            )
         }
     }
 
@@ -325,5 +346,152 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun getCasesEnvelope(): CasesEnvelope? {
         return repository.getCasesEnvelope()
+    }
+
+    fun clearShareError() {
+        _uiState.update { it.copy(shareError = null) }
+    }
+
+    private val shareResolver = ShareLinkResolver()
+
+    /**
+     * Entry point for both deep-link shapes:
+     * https://watani-content.pages.dev/q/<bank>/<qid> and
+     * watani://q/<bank>/<qid>. Anything else is ignored.
+     */
+    fun handleDeepLink(uri: android.net.Uri?) {
+        if (uri == null) return
+        val segments = uri.pathSegments.orEmpty().filter { it.isNotBlank() }
+        val bank: String?
+        val qid: String?
+        when {
+            uri.scheme == "https" && uri.host == "watani-content.pages.dev" -> {
+                if (segments.size < 3 || segments[0] != "q") return
+                bank = segments[1]; qid = segments[2]
+            }
+            uri.scheme == "watani" && uri.host == "q" -> {
+                if (segments.size < 2) return
+                bank = segments[0]; qid = segments[1]
+            }
+            else -> return
+        }
+        handleShareLink(bank, qid)
+    }
+
+    /**
+     * Opens one shared question by (bank, qid):
+     * - Activated: resolve the section via share-index/<bank>.json,
+     *   download it with the existing section mechanism when missing,
+     *   then open a single-question quiz (full explanation behaviour as
+     *   usual for activated users).
+     * - Guest: fetch the sanitized share-data shard (structurally free
+     *   of correct/explanation) and open the quiz in guest mode.
+     * Any failure (offline, unknown id, bad index) shows
+     * "تعذّر فتح السؤال" and stays on Home.
+     */
+    fun handleShareLink(bank: String, qid: String) {
+        viewModelScope.launch {
+            try {
+                val index = shareResolver.fetchIndex(bank)
+                    ?: return@launch shareLinkFailed()
+                val shardIndex = index.map[qid] ?: return@launch shareLinkFailed()
+                val sectionPath = index.shards.getOrNull(shardIndex)
+                    ?: return@launch shareLinkFailed()
+                val context = getApplication<Application>().applicationContext
+                if (WorkerActivationApi.isActivated(context)) {
+                    openSharedQuestionActivated(sectionPath, qid)
+                } else {
+                    val guest = shareResolver.fetchGuestQuestion(sectionPath, qid)
+                        ?: return@launch shareLinkFailed()
+                    val (question, subjectName) = guest
+                    navigateTo(
+                        ScreenState.Quiz(
+                            title = subjectName ?: bank,
+                            questions = listOf(question),
+                            sourcePath = sectionPath,
+                            subjectName = subjectName,
+                            guestMode = true
+                        )
+                    )
+                }
+            } catch (_: Exception) {
+                shareLinkFailed()
+            }
+        }
+    }
+
+    private fun shareLinkFailed() {
+        _uiState.update { it.copy(shareError = "تعذّر فتح السؤال") }
+    }
+
+    private suspend fun openSharedQuestionActivated(sectionPath: String, qid: String) {
+        var envelope = repository.getSubjectEnvelope(sectionPath)
+        if (envelope == null) {
+            // Not downloaded yet: fetch the manifest if needed, then use
+            // the existing downloadSection mechanism and watch for the
+            // section file to land.
+            var entry = _uiState.value.files[sectionPath]
+            if (entry == null) {
+                val manifest = repository.fetchManifest().getOrNull()
+                if (manifest != null) {
+                    _uiState.update {
+                        it.copy(manifestVersion = manifest.version, files = manifest.files ?: emptyMap())
+                    }
+                    entry = manifest.files?.get(sectionPath)
+                }
+            }
+            if (entry == null) {
+                shareLinkFailed()
+                return
+            }
+            downloadSection(sectionPath, entry)
+            var waitedMs = 0L
+            while (envelope == null && waitedMs < 120_000L) {
+                kotlinx.coroutines.delay(500)
+                waitedMs += 500
+                envelope = repository.getSubjectEnvelope(sectionPath)
+                if (envelope == null && sectionPath !in _uiState.value.downloadingPaths && waitedMs > 2_000L) {
+                    break // download finished (or failed) without a file
+                }
+            }
+        }
+        val env = envelope
+        if (env == null) {
+            shareLinkFailed()
+            return
+        }
+        var found: QuestionDto? = null
+        var containerName: String? = null
+        for (topic in env.topics.orEmpty()) {
+            val q = topic.questions.orEmpty().firstOrNull { questionMatches(it, qid) }
+            if (q != null) { found = q; containerName = topic.name; break }
+        }
+        if (found == null) {
+            for (session in env.sessions.orEmpty()) {
+                val q = session.questions.orEmpty().firstOrNull { questionMatches(it, qid) }
+                if (q != null) { found = q; containerName = session.name; break }
+            }
+        }
+        val question = found
+        if (question == null) {
+            shareLinkFailed()
+            return
+        }
+        navigateTo(
+            ScreenState.Quiz(
+                title = containerName ?: env.subjectName ?: sectionPath.substringAfterLast('/').substringBeforeLast('.'),
+                questions = listOf(question),
+                sourcePath = sectionPath,
+                subjectName = env.subjectName,
+                guestMode = false
+            )
+        )
+    }
+
+    private fun questionMatches(question: QuestionDto, qid: String): Boolean {
+        val id = question.id?.trim() ?: return false
+        if (id == qid) return true
+        val normalized = sy.medpro.watani.ui.explanation.normalizeExplanationKey(question.id)
+        return normalized != null && normalized == qid
     }
 }

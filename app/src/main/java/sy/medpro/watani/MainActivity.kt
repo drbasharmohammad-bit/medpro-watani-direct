@@ -86,8 +86,17 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // Deep link while the app is running (singleTop): route it too.
+        viewModel.handleDeepLink(intent.data)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Question share deep link that launched the app (cold start).
+        viewModel.handleDeepLink(intent?.data)
         enableEdgeToEdge()
         // Offline-activation fix (Nov 2026, doctor's order): when
         // connectivity returns while the app is open, verify the
@@ -181,6 +190,17 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) {
                     viewModel.activationPromptRequests.collect {
                         showActivationPrompt = true
+                    }
+                }
+
+                // Deep-link failure: toast "تعذّر فتح السؤال", stay on Home.
+                val shareErrorMessage = viewModel.uiState.collectAsState().value.shareError
+                LaunchedEffect(shareErrorMessage) {
+                    if (shareErrorMessage != null) {
+                        android.widget.Toast.makeText(
+                            this@MainActivity, shareErrorMessage, android.widget.Toast.LENGTH_LONG
+                        ).show()
+                        viewModel.clearShareError()
                     }
                 }
 
@@ -947,7 +967,11 @@ class MainActivity : ComponentActivity() {
                                                     QuizScreen(
                                                         title = screen.title,
                                                         questions = screen.questions,
-                                                        onBack = { viewModel.goBack() }
+                                                        onBack = { viewModel.goBack() },
+                                                        sourcePath = screen.sourcePath,
+                                                        subjectName = screen.subjectName,
+                                                        guestMode = screen.guestMode,
+                                                        onRequestActivation = { showActivationPrompt = true }
                                                     )
                                                 }
                                                 is ScreenState.CasePlayer -> {
