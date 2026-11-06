@@ -60,7 +60,7 @@ import sy.medpro.watani.ui.reference.*
 import sy.medpro.watani.ui.osce.OsceStationsScreen
 import sy.medpro.watani.ui.features.*
 import sy.medpro.watani.ui.theme.GoldAccent
-import sy.medpro.watani.ui.theme.GoldContainer
+import sy.medpro.watani.ui.theme.FeaturedContainer
 import androidx.compose.material3.ExperimentalMaterial3Api
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.WataniTheme
@@ -565,7 +565,7 @@ class MainActivity : ComponentActivity() {
                                             NavigationBarItem(
                                                 selected = selected,
                                                 colors = NavigationBarItemDefaults.colors(
-                                                    indicatorColor = GoldContainer
+                                                    indicatorColor = FeaturedContainer
                                                 ),
                                                 // Bottom-bar fix: tapping a tab while a
                                                 // drawer screen is open used to change

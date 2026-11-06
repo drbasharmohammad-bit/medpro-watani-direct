@@ -676,7 +676,8 @@ private fun buildHighlightedClinicalStem(text: String): AnnotatedString {
         clinicalPatterns.findAll(text).forEach { match ->
             addStyle(
                 style = SpanStyle(
-                    background = Color(0xFFFFF3CD),
+                    // Keyword highlight: rose-ivory FeaturedContainer (was pale yellow) — no-yellow rule.
+                    background = FeaturedContainer,
                     color = Color(0xFF52131C),
                     fontWeight = FontWeight.Bold
                 ),

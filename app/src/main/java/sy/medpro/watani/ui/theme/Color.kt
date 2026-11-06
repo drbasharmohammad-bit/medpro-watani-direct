@@ -4,11 +4,12 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-/** Featured/call-to-action card background: light gold in light mode,
- *  dark bronze-gold in dark mode, so onSurface text stays readable in both. */
+/** Featured/call-to-action card background: clean rose-ivory in light mode
+ *  (no yellow tint, per the no-yellow brand rule), dark maroon in dark mode,
+ *  so onSurface text stays readable in both. */
 @Composable
 fun featuredCardBackground(): Color =
-    if (isSystemInDarkTheme()) DarkGoldContainer else GoldContainer
+    if (isSystemInDarkTheme()) DarkFeaturedContainer else FeaturedContainer
 
 // Brand Primary Maroon Family
 val MaroonPrimary = Color(0xFF7A1F2B)
@@ -18,14 +19,18 @@ val MaroonLight = Color(0xFFA34855)
 val MaroonContainer = Color(0xFFFADADD)
 val OnMaroonContainer = Color(0xFF3E0A12)
 
-// Brand Gold / Brass Medical Accent
-val GoldAccent = Color(0xFFD4AF37)
-val GoldAccentDark = Color(0xFFA67C1E)
-val GoldContainer = Color(0xFFFFF0C2)
-val OnGoldContainer = Color(0xFF3D2E00)
-// Dark-mode counterpart of GoldContainer: a dark bronze-gold so featured
-// cards keep gold identity with readable light text in dark mode.
-val DarkGoldContainer = Color(0xFF4A3510)
+// Muted copper/brass accent (no bright yellow anywhere in the app, per the
+// no-yellow brand rule). The historical "Gold" names are kept because ~20
+// files reference them; the values are now a subdued, less saturated copper.
+val GoldAccent = Color(0xFFB08D57)
+val GoldAccentDark = Color(0xFF8F6B3D)
+// Featured container family (renamed from the old pale-yellow container
+// family): clean rose-ivory with no yellow tint in light mode.
+val FeaturedContainer = Color(0xFFF7E8EA)
+val OnFeaturedContainer = Color(0xFF3E0A12)
+// Dark-mode counterpart of FeaturedContainer: a dark maroon so featured
+// cards keep the maroon identity with readable light text in dark mode.
+val DarkFeaturedContainer = Color(0xFF402228)
 
 // Light Theme Surfaces & Backgrounds
 val RoseBackground = Color(0xFFFBF3F4)
