@@ -201,20 +201,31 @@ fun ddxReferenceMustNotMiss(case: DdxCaseDto): List<DdxReferenceDto> {
  * positions are never compressed before counting. Matching is by the
  * diagnosis_en identity key (trimmed, case-insensitive), each
  * reference diagnosis matching at its first occurrence only.
+ *
+ * [studentMnmEn] mirrors the student's danger commitment entry for
+ * entry: a null slot is a free-text flag. The set size |D| follows
+ * the design (section 14.2): flagging the same reference diagnosis
+ * twice collapses to one entry, while every entry that matches no
+ * reference diagnosis — free text included — counts in full.
  */
 fun scoreDdxCommit(
     case: DdxCaseDto,
     studentRankingEn: List<String?>,
-    studentMnmEn: Set<String>
+    studentMnmEn: List<String?>
 ): DdxScoreBreakdown {
     val studentKeys = studentRankingEn.map { ddxMatchKey(it) }
-    val dKeys = studentMnmEn.map { ddxMatchKey(it) }.filter { it.isNotEmpty() }.toSet()
-    val dSize = dKeys.size
+    val dEntries = studentMnmEn.map { ddxMatchKey(it) }
+    val dKeys = dEntries.filter { it.isNotEmpty() }.toSet()
 
     val references = case.differentialReference.orEmpty()
         .filter { !it.diagnosisEn.isNullOrBlank() }
         .sortedBy { it.rank ?: Int.MAX_VALUE }
     val n = references.size
+
+    val referenceKeys = references.map { ddxMatchKey(it.diagnosisEn) }
+        .filter { it.isNotEmpty() }.toSet()
+    val dSize = referenceKeys.count { it in dKeys } +
+        dEntries.count { it.isEmpty() || it !in referenceKeys }
 
     fun positionOf(diagnosisEn: String?): Int? {
         val key = ddxMatchKey(diagnosisEn)

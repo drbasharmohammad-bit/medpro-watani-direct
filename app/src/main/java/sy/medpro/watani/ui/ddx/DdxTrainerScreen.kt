@@ -1112,8 +1112,12 @@ private fun DdxCasePlay(
                         // slot: a null entry is a free-text item, which
                         // still occupies its position for A1 (design 4.2).
                         val rankingEn: List<String?> = working.map { it.keyEn }
-                        val mnmEn = (mnmSelected.mapNotNull { it.keyEn } +
-                            dangerExtras.mapNotNull { it.keyEn }).toSet()
+                        // The danger commitment mirrors the student's
+                        // flags entry for entry: a null entry is a
+                        // free-text flag, which still counts toward
+                        // |D| in scoring (design section 14.2).
+                        val mnmEn: List<String?> = mnmSelected.map { it.keyEn } +
+                            dangerExtras.map { it.keyEn }
                         val result = scoreDdxCommit(case, rankingEn, mnmEn)
                         val wasPractice = hasFirstAttempt
                         if (!wasPractice) {
@@ -1125,7 +1129,7 @@ private fun DdxCasePlay(
                                     rankingEn = rankingEn.map { it ?: "" },
                                     mnmLabels = (mnmSelected.map { it.labelAr } +
                                         dangerExtras.map { it.labelAr }).distinct(),
-                                    mnmEn = mnmEn.toList(),
+                                    mnmEn = mnmEn.map { it ?: "" },
                                     a1Points = result.a1Points,
                                     total = result.total,
                                     timestamp = System.currentTimeMillis()
