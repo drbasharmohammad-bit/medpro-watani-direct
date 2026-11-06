@@ -31,8 +31,9 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
 // First-attempt progress record (SharedPreferences).
 // Only the FIRST attempt of each case is stored; replays are practice and
 // never replace it (design doc, closing step). Stored per case id:
-// the student's probability ranking, the danger set, the A1 points of
-// that first attempt, and a timestamp.
+// the student's probability ranking, the danger set, the A1 points and
+// the total score of that first attempt, and a timestamp. Records saved
+// before the full scoring existed have no total and stay readable.
 // ---------------------------------------------------------------------------
 
 private const val DDx_PREFS_NAME = "watani_ddx_progress"
@@ -45,6 +46,7 @@ data class DdxAttemptRecord(
     val mnmLabels: List<String>,
     val mnmEn: List<String>,
     val a1Points: Int,
+    val total: Int? = null,
     val timestamp: Long
 )
 
@@ -69,6 +71,13 @@ private fun readDdxAttemptRecords(context: Context): Map<String, DdxAttemptRecor
                 mnmLabels = stringList("mnmLabels"),
                 mnmEn = stringList("mnmEn"),
                 a1Points = obj.optInt("a1", 0),
+                // Records saved before the full scoring existed carry
+                // no total; they stay readable and show A1 only.
+                total = if (obj.has("total") && !obj.isNull("total")) {
+                    obj.optInt("total")
+                } else {
+                    null
+                },
                 timestamp = obj.optLong("ts", 0L)
             )
         }
@@ -103,6 +112,7 @@ private fun saveDdxFirstAttempt(context: Context, record: DdxAttemptRecord) {
             .put("mnmEn", JSONArray(record.mnmEn))
             .put("a1", record.a1Points)
             .put("ts", record.timestamp)
+        record.total?.let { obj.put("total", it) }
         root.put(record.caseId, obj)
         prefs.edit().putString(DDx_PREFS_KEY_RECORDS, root.toString()).apply()
     } catch (_: Exception) {
@@ -394,7 +404,11 @@ fun DdxTrainerScreen(onBack: () -> Unit) {
                                                     )
                                                     Spacer(modifier = Modifier.width(6.dp))
                                                     Text(
-                                                        "المحاولة الأولى محفوظة (أ1: ${record.a1Points}/30) — إعادة اللعب تدريب",
+                                                        if (record.total != null) {
+                                                            "المحاولة الأولى محفوظة (الدرجة: ${record.total}/100) — إعادة اللعب تدريب"
+                                                        } else {
+                                                            "المحاولة الأولى محفوظة (أ1: ${record.a1Points}/30) — إعادة اللعب تدريب"
+                                                        },
                                                         fontSize = 12.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = MaroonPrimary
@@ -804,6 +818,27 @@ private fun DdxCasePlay(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
+                            "الدرجة الكلية: ${score.total}/100",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = MaroonPrimary
+                        )
+                        Text(
+                            score.bandText,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (score.hasMissWarning) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                DDX_MISS_WARNING,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
                             "موضع التشخيص الأرجح (أ1): ${score.a1Points}/30",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
@@ -818,14 +853,39 @@ private fun DdxCasePlay(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            "لا تُعرض درجة إجمالية في هذه النسخة: بقية مكوّنات التنقيط غير موثّقة بعد في وثيقة التصميم، فتُعرض بقية النتائج واقعيًا بلا أوزان.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            "قرب باقي الترتيب (أ2): ${ddxFormatPoints(score.a2Points)}/20",
+                            fontSize = 14.sp
                         )
+                        Text(
+                            "بُعد الخطر «لا يُفوَّت» (ب): ${ddxFormatPoints(score.riskPoints)}/30",
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "الاتساع (ج): ${ddxFormatPoints(score.breadthPoints)}/20" +
+                                if (score.disciplineFactor < 1.0) {
+                                    " (خُفّض بعامل انضباط لتجاوز حدّ الإفراط)"
+                                } else {
+                                    ""
+                                },
+                            fontSize = 14.sp
+                        )
+                        if (score.penaltyPoints > 0) {
+                            Text(
+                                "عقوبة إغفال خطر قاتل بالكامل: −${score.penaltyPoints}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                         if (score.extraStudentCount > 0) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                "عناصر إضافية في قائمتك خارج الترتيب المرجعي: ${score.extraStudentCount} (بلا نقاط وبلا عقوبة).",
+                                "عناصر إضافية في قائمتك خارج الترتيب المرجعي: ${score.extraStudentCount}" +
+                                    if (score.extraStudentCount <= 3) {
+                                        " (ضمن حدّ الإفراط: بلا نقاط وبلا عقوبة)."
+                                    } else {
+                                        " (تجاوزت حدّ الإفراط (3) فخُفّض مكوّن الاتساع بعامل الانضباط)."
+                                    },
                                 fontSize = 12.sp
                             )
                         }
@@ -1067,6 +1127,7 @@ private fun DdxCasePlay(
                                         dangerExtras.map { it.labelAr }).distinct(),
                                     mnmEn = mnmEn.toList(),
                                     a1Points = result.a1Points,
+                                    total = result.total,
                                     timestamp = System.currentTimeMillis()
                                 )
                             )
