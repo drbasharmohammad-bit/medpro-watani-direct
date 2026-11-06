@@ -370,7 +370,6 @@ class MainActivity : ComponentActivity() {
                                                 "ملاحظاتي",
                                                 "سجلّ حالاتي",
                                                 "إعدادات وسجل الإشعارات",
-                                                "الخصوصية والشروط",
                                                 "التواصل",
                                                 "محطات OSCE",
                                                 "القلب والإصغاء",
@@ -394,7 +393,6 @@ class MainActivity : ComponentActivity() {
                                                     "ملاحظاتي" -> Icons.Default.NoteAlt
                                                     "سجلّ حالاتي" -> Icons.Default.Assignment
                                                     "إعدادات وسجل الإشعارات" -> Icons.Default.Settings
-                                                    "الخصوصية والشروط" -> Icons.Default.Security
                                                     "التواصل" -> Icons.Default.SupportAgent
                                                     "محطات OSCE" -> Icons.Default.MedicalServices
                                                     "القلب والإصغاء" -> Icons.Default.MonitorHeart
@@ -637,7 +635,7 @@ class MainActivity : ComponentActivity() {
                                                 "ملاحظاتي" -> MyNotesScreen(onBack = { drawerScreen = null })
                                                 "سجلّ حالاتي" -> LogbookScreen(onBack = { drawerScreen = null })
                                                 "إعدادات وسجل الإشعارات" -> SettingsScreen(onBack = { drawerScreen = null })
-                                                "الخصوصية والشروط" -> PrivacyScreen(onBack = { drawerScreen = null })
+                                                "الدعم النفسي" -> SupportScreen(onBack = { drawerScreen = null })
                                                 "التواصل" -> ContactScreen(onBack = { drawerScreen = null })
                                                 "التواصل مع الإدارة" -> ContactScreen(onBack = { drawerScreen = null })
                                                 "روابط التواصل" -> ContactScreen(onBack = { drawerScreen = null })
@@ -703,7 +701,13 @@ class MainActivity : ComponentActivity() {
                                                                 onOpenStudyPlanner = { drawerScreen = "مخطط جدول الدراسة" },
                                                                 onOpenCalculators = { drawerScreen = "الحاسبات السريرية الموسعة" },
                                                                 onOpenIcuAndDosing = { drawerScreen = "حاسبات العناية والسوائل" },
-                                                                onOpenRenalAndPedsDosing = { drawerScreen = "الصادات والكلية والأطفال" }
+                                                                onOpenRenalAndPedsDosing = { drawerScreen = "الصادات والكلية والأطفال" },
+                                                                hasResume = sy.medpro.watani.data.ResumeStore.hasResume(context),
+                                                                onResumeLastSection = { viewModel.resumeLastSection() },
+                                                                onOpenSupport = { drawerScreen = "الدعم النفسي" },
+                                                                onOpenFocusTimer = { drawerScreen = "مؤقت التركيز" },
+                                                                onOpenReviewDue = { openRestrictedDrawer("البطاقات والمراجعة الذكية") },
+                                                                onOpenActivation = { showActivationPrompt = true }
                                                             )
                                                         }
                                                         AppTab.BANK, AppTab.UNIVERSITIES, AppTab.UWORLD -> {

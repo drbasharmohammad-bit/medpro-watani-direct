@@ -30,7 +30,10 @@ import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import sy.medpro.watani.data.FocusTimerEngine
 import sy.medpro.watani.data.OfflineStudyVault
+import sy.medpro.watani.data.SupportFavorites
+import sy.medpro.watani.data.SupportMessages
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.theme.*
 
@@ -47,14 +50,26 @@ fun HomeDashboardScreen(
     onOpenStudyPlanner: () -> Unit = {},
     onOpenCalculators: () -> Unit = {},
     onOpenIcuAndDosing: () -> Unit = {},
-    onOpenRenalAndPedsDosing: () -> Unit = {}
+    onOpenRenalAndPedsDosing: () -> Unit = {},
+    hasResume: Boolean = false,
+    onResumeLastSection: () -> Unit = {},
+    onOpenSupport: () -> Unit = {},
+    onOpenFocusTimer: () -> Unit = {},
+    onOpenReviewDue: () -> Unit = {},
+    onOpenActivation: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var showLabModal by remember { mutableStateOf(false) }
     var animateIn by remember { mutableStateOf(false) }
+    // بطاقة الدعم: تقديم فهرس الرسالة اليومية بذاكرة الجلسة (يُصفَّر مع
+    // إعادة إنشاء الشاشة، والأساس دائمًا فهرس اليوم الحقيقي).
+    var supportOffset by remember { mutableStateOf(0) }
+    val supportFavorites by SupportFavorites.favorites.collectAsState()
 
     LaunchedEffect(Unit) {
         OfflineStudyVault.ensureInitialized(context)
+        FocusTimerEngine.init(context)
+        SupportFavorites.init(context)
         animateIn = true
     }
 
@@ -91,6 +106,63 @@ fun HomeDashboardScreen(
         // locally (days / hours / minutes / seconds) with no network.
         item {
             ExamCountdownCard()
+        }
+
+        // بطاقة الدعم النفسي — أول عنصر بعد عدّاد الامتحان: رسالة اليوم
+        // من بنك الدعم v2 بتدوير epochDay، مع تقديم يدوي وقلب مفضلة.
+        item {
+            val supportMessage = SupportMessages.all[
+                (SupportMessages.dailyIndex() + supportOffset) % SupportMessages.all.size
+            ]
+            val supportIsFavorite = supportFavorites.contains(supportMessage.id)
+            Card(
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = GoldAccent.copy(alpha = 0.12f)),
+                border = BorderStroke(1.5.dp, GoldAccent),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onOpenSupport() }
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = MaroonPrimary.copy(alpha = 0.1f),
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            Text(
+                                text = SupportMessages.categoryTitle(supportMessage.categoryId),
+                                color = MaroonPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                        Row {
+                            IconButton(onClick = { supportOffset++ }) {
+                                Icon(Icons.Default.Refresh, contentDescription = "رسالة أخرى", tint = MaroonPrimary)
+                            }
+                            IconButton(onClick = { SupportFavorites.toggle(context, supportMessage.id) }) {
+                                Icon(
+                                    imageVector = if (supportIsFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = if (supportIsFavorite) "إزالة من المفضلة" else "إضافة إلى المفضلة",
+                                    tint = if (supportIsFavorite) Color(0xFFB71C1C) else MaroonPrimary
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = supportMessage.text,
+                        fontFamily = ThmanyahFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        lineHeight = 30.sp
+                    )
+                }
+            }
         }
 
         item {
@@ -198,6 +270,143 @@ fun HomeDashboardScreen(
             }
         }
 
+        // بطاقة «يومك الدراسي»: أيام متبقية + أسئلة اليوم + استئناف.
+        item {
+            val yourDayAccent = Color(0xFF1565C0)
+            Card(
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, yourDayAccent.copy(alpha = 0.35f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Today, contentDescription = null, tint = yourDayAccent, modifier = Modifier.size(22.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("يومك الدراسي", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = yourDayAccent)
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = if (hasExamDate) "الأيام المتبقية للامتحان: $days يومًا" else "لم تُحدَّد تاريخ الامتحان بعد",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "أسئلة حللتها اليوم: ${stats.answeredToday}",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+                    if (hasResume) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = onResumeLastSection,
+                            colors = ButtonDefaults.buttonColors(containerColor = yourDayAccent),
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.fillMaxWidth().height(46.dp)
+                        ) {
+                            Text("أكمل من وين وقّفت", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // بطاقة البومودورو: العدّاد الحي من محرك المؤقت المشترك نفسه.
+        item {
+            val focusAccent = Color(0xFF4527A0)
+            val focusState by FocusTimerEngine.state.collectAsState()
+            val focusTimeText = if (!focusState.isRunning && focusState.timeLeftSec == FocusTimerEngine.FULL_SESSION_SEC) {
+                "25:00 — جاهز"
+            } else {
+                String.format("%02d:%02d", focusState.timeLeftSec / 60, focusState.timeLeftSec % 60)
+            }
+            Card(
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, focusAccent.copy(alpha = 0.35f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onOpenFocusTimer() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = focusAccent.copy(alpha = 0.12f),
+                        modifier = Modifier.size(50.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Timer, contentDescription = null, tint = focusAccent, modifier = Modifier.size(26.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("مؤقت التركيز", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(focusTimeText, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = focusAccent)
+                        Text(
+                            "جلسات اليوم: ${focusState.sessionsToday}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        )
+                    }
+                    Button(
+                        onClick = { FocusTimerEngine.toggle(context) },
+                        colors = ButtonDefaults.buttonColors(containerColor = focusAccent),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text(if (focusState.isRunning) "إيقاف مؤقت" else "بدء التركيز", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        // بطاقة «سؤال اليوم» (لا تُرسم إطلاقًا بلا أقسام محمّلة).
+        item {
+            DailyQuestionCard(onOpenActivation = onOpenActivation)
+        }
+
+        // بطاقة المراجعة المستحقة — شرطية: لا تُرسم عند صفر العناصر.
+        if (stats.savedMistakes.size + stats.wrongFlashcardIds.size > 0) {
+            item {
+                val reviewAccent = Color(0xFFB71C1C)
+                val reviewCount = stats.savedMistakes.size + stats.wrongFlashcardIds.size
+                Card(
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, reviewAccent.copy(alpha = 0.35f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.FactCheck, contentDescription = null, tint = reviewAccent, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("مراجعة مستحقة", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = reviewAccent)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "لديك $reviewCount عنصرًا بانتظار المراجعة: ${stats.savedMistakes.size} من الأخطاء المحفوظة و${stats.wrongFlashcardIds.size} من البطاقات الخاطئة.",
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = onOpenReviewDue,
+                            colors = ButtonDefaults.buttonColors(containerColor = reviewAccent),
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.fillMaxWidth().height(46.dp)
+                        ) {
+                            Text("ابدأ المراجعة", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+        }
+
         // Standalone Bedside Clinical & Physical Exam Suite (Isolated from Question Bank)
         item {
             Card(
@@ -256,7 +465,7 @@ fun HomeDashboardScreen(
                             title = "تسريب العناية والسوائل",
                             subtitle = "الرافعات الوعائية mcg/kg/min ومعادلة باركلاند للحروق",
                             icon = Icons.Default.WaterDrop,
-                            badgeColor = ErrorRed,
+                            badgeColor = Color(0xFF1565C0),
                             onClick = onOpenIcuAndDosing,
                             modifier = Modifier.weight(1f)
                         )
@@ -264,7 +473,7 @@ fun HomeDashboardScreen(
                             title = "الصادات والكلية والأطفال",
                             subtitle = "تعديل الجرعات حسب CrCl وجرعات الأطفال بالوزن",
                             icon = Icons.Default.Vaccines,
-                            badgeColor = SuccessGreen,
+                            badgeColor = Color(0xFF1565C0),
                             onClick = onOpenRenalAndPedsDosing,
                             modifier = Modifier.weight(1f)
                         )
@@ -307,7 +516,7 @@ fun HomeDashboardScreen(
                     subtitle = "خطوات التدبير الإسعافي والسريري المتسلسلة مع جداول المقارنة الحاسمة",
                     badge = "Harrison's • ESC • ATLS",
                     icon = Icons.Default.AccountTree,
-                    accentColor = MaroonPrimary,
+                    accentColor = Color(0xFF2E7D32),
                     onClick = onOpenAlgorithms
                 )
 
@@ -316,7 +525,7 @@ fun HomeDashboardScreen(
                     subtitle = "خط العلاج الأول لكل مرض، البديل في الحمل والحساسية، ومضادات الاستطباب",
                     badge = "First-Line DOC",
                     icon = Icons.Default.Medication,
-                    accentColor = SuccessGreen,
+                    accentColor = Color(0xFF7B1FA2),
                     onClick = onOpenFirstLineDrugs
                 )
 
@@ -325,7 +534,7 @@ fun HomeDashboardScreen(
                     subtitle = "راسم موجات تخطيط القلب التفاعلي للحالات الحرجة وتوضع الاحتشاءات أوفلاين",
                     badge = "ECG Waveforms • 100% Offline",
                     icon = Icons.Default.MonitorHeart,
-                    accentColor = ErrorRed,
+                    accentColor = Color(0xFFAD1457),
                     onClick = onOpenEcgAtlas
                 )
 
@@ -334,7 +543,7 @@ fun HomeDashboardScreen(
                     subtitle = "أطلس العلامات الجراحية والباطنية والثلاثيات المسماة عالية الورود بالوطني",
                     badge = "Named Signs & Triads",
                     icon = Icons.Default.MenuBook,
-                    accentColor = MaroonDeep,
+                    accentColor = Color(0xFF5D4037),
                     onClick = onOpenEponyms
                 )
 
@@ -346,7 +555,7 @@ fun HomeDashboardScreen(
                         title = "مخطط جدول الدراسة",
                         subtitle = "توزيع الأيام المتبقية حسب ثقل المواد",
                         icon = Icons.Default.EventNote,
-                        badgeColor = MaroonPrimary,
+                        badgeColor = Color(0xFF455A64),
                         onClick = onOpenStudyPlanner,
                         modifier = Modifier.weight(1f)
                     )
@@ -354,7 +563,7 @@ fun HomeDashboardScreen(
                         title = "الحاسبات السريرية",
                         subtitle = "CURB-65 ومفسر غازات الدم ABG",
                         icon = Icons.Default.Calculate,
-                        badgeColor = SuccessGreen,
+                        badgeColor = Color(0xFF1565C0),
                         onClick = onOpenCalculators,
                         modifier = Modifier.weight(1f)
                     )
@@ -364,7 +573,7 @@ fun HomeDashboardScreen(
                     title = "القيم المخبرية الطبيعية",
                     subtitle = "مرجع التحاليل والغازات والشوارد الفوري",
                     icon = Icons.Default.Science,
-                    badgeColor = MaroonPrimary,
+                    badgeColor = Color(0xFF00838F),
                     onClick = { showLabModal = true },
                     modifier = Modifier.fillMaxWidth()
                 )
