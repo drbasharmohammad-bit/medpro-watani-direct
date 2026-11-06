@@ -863,21 +863,15 @@ fun WeakPointsScreen(onBack: () -> Unit) {
     }
 }
 
-// 12. Focus Timer
+// 12. Focus Timer — الحالة كلها بمحرك FocusTimerEngine المشترك الوحيد؛
+// هذه الشاشة قارئ/متحكم فقط، بلا أي حالة عدّ محلية.
 @Composable
 fun FocusTimerScreen(onBack: () -> Unit) {
-    var timeLeft by remember { mutableStateOf(25 * 60) }
-    var isRunning by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isRunning, timeLeft) {
-        if (isRunning && timeLeft > 0) {
-            kotlinx.coroutines.delay(1000L)
-            timeLeft -= 1
-        } else if (timeLeft == 0) {
-            isRunning = false
-            timeLeft = 25 * 60
-        }
-    }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) { FocusTimerEngine.init(context) }
+    val timerState by FocusTimerEngine.state.collectAsState()
+    val timeLeft = timerState.timeLeftSec
+    val isRunning = timerState.isRunning
 
     DrawerScreenScaffold(title = "مؤقت التركيز (Pomodoro)", onBack = onBack) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -886,12 +880,14 @@ fun FocusTimerScreen(onBack: () -> Unit) {
             val m = timeLeft / 60
             val s = timeLeft % 60
             Text(text = String.format("%02d:%02d", m, s), fontSize = 64.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("جلسات التركيز اليوم: ${timerState.sessionsToday}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
             Spacer(modifier = Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Button(shape = MaterialTheme.shapes.medium, onClick = { isRunning = !isRunning }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
+                Button(shape = MaterialTheme.shapes.medium, onClick = { FocusTimerEngine.toggle(context) }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
                     Text(if (isRunning) "إيقاف مؤقت" else "بدء التركيز")
                 }
-                OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = { isRunning = false; timeLeft = 25 * 60 }) {
+                OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = { FocusTimerEngine.reset() }) {
                     Text("إعادة ضبط")
                 }
             }
@@ -1171,17 +1167,18 @@ fun SettingsScreen(onBack: () -> Unit) {
     }
 }
 
-// 18. Privacy (loaded from guide.json)
+// 19. Contact Admin — روابط التواصل من بوابة /v1/config/contact-links
+// (ContactLinksStore: تُرسم فورًا من الكاش/الافتراضيات وتتحدث بالخلفية)،
+// وبطاقة الدليل (رسالة الدعم + البريد) أسفلها كما هي إن توفرت.
 @Composable
-fun PrivacyScreen(onBack: () -> Unit) {
+fun ContactScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val contactLinks by ContactLinksStore.links.collectAsState()
     var guideEnvelope by remember { mutableStateOf<GuideEnvelope?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
 
     fun loadGuide() {
         scope.launch {
-            isLoading = true
             val repo = WataniRepository(context)
             var env = repo.getGuideEnvelope()
             if (env == null) {
@@ -1196,154 +1193,83 @@ fun PrivacyScreen(onBack: () -> Unit) {
                 }
             }
             guideEnvelope = env
-            isLoading = false
         }
     }
 
-    LaunchedEffect(Unit) { loadGuide() }
+    LaunchedEffect(Unit) {
+        ContactLinksStore.refresh(context)
+        loadGuide()
+    }
 
-    DrawerScreenScaffold(title = "الخصوصية وشروط الاستخدام", onBack = onBack) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when {
-                isLoading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = MaroonPrimary)
-                    }
-                }
-                guideEnvelope?.privacy.isNullOrEmpty() -> {
-                    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Security, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(64.dp))
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("لم يتم تحميل تفاصيل الخصوصية بعد.", fontWeight = FontWeight.Bold, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(shape = MaterialTheme.shapes.medium, onClick = { loadGuide() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
-                            Text("تحميل التفاصيل")
+    fun openLink(url: String) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: Exception) {
+        }
+    }
+
+    DrawerScreenScaffold(title = "التواصل مع الإدارة والدعم الفني", onBack = onBack) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("قنوات التواصل الرسمية", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 16.sp)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        if (contactLinks.supportBot.isNotBlank()) {
+                            Button(shape = MaterialTheme.shapes.medium, onClick = { openLink(contactLinks.supportBot) }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary), modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.SupportAgent, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("بوت الدعم الفني")
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
-                    }
-                }
-                else -> {
-                    LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(guideEnvelope!!.privacy!!) { priv ->
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Text(priv.title ?: "", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 16.sp)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(priv.text ?: "", fontSize = 14.sp, lineHeight = 20.sp)
-                                }
+                        if (contactLinks.wataniChannel.isNotBlank()) {
+                            OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = { openLink(contactLinks.wataniChannel) }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Send, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("قناة وطني الرسمية")
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        if (contactLinks.medproChannel.isNotBlank()) {
+                            OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = { openLink(contactLinks.medproChannel) }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Send, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("منصة Med Pro SY")
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        if (contactLinks.instagram.isNotBlank()) {
+                            OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = { openLink(contactLinks.instagram) }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("إنستغرام")
                             }
                         }
                     }
                 }
             }
-        }
-    }
-}
-
-private fun buildTelegramUrl(raw: String?): String {
-    if (raw.isNullOrBlank()) return "https://t.me"
-    val trimmed = raw.trim()
-    if (trimmed.startsWith("http", ignoreCase = true)) {
-        return trimmed
-    }
-    val clean = trimmed.removePrefix("@")
-    return "https://t.me/$clean"
-}
-
-// 19. Contact Admin (loaded dynamically from guide.json info)
-@Composable
-fun ContactScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var guideEnvelope by remember { mutableStateOf<GuideEnvelope?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-
-    fun loadGuide() {
-        scope.launch {
-            isLoading = true
-            val repo = WataniRepository(context)
-            var env = repo.getGuideEnvelope()
-            if (env == null) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val files = manifestRes.getOrNull()?.files
-                    val guideEntry = files?.get("guide.json")
-                    if (guideEntry != null) {
-                        repo.downloadSection("guide.json", guideEntry)
-                        env = repo.getGuideEnvelope()
-                    }
-                }
-            }
-            guideEnvelope = env
-            isLoading = false
-        }
-    }
-
-    LaunchedEffect(Unit) { loadGuide() }
-
-    DrawerScreenScaffold(title = "التواصل مع الإدارة والدعم الفني", onBack = onBack) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when {
-                isLoading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = MaroonPrimary)
-                    }
-                }
-                guideEnvelope?.info == null -> {
-                    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.SupportAgent, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(64.dp))
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("لم يتم تحميل معلومات التواصل بعد.", fontWeight = FontWeight.Bold, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(shape = MaterialTheme.shapes.medium, onClick = { loadGuide() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
-                            Text("تحميل التفاصيل")
-                        }
-                    }
-                }
-                else -> {
-                    val info = guideEnvelope!!.info!!
-                    LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        item {
-                            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Text("قنوات الدعم الرسمي", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 16.sp)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(info.supportMessage ?: "تواصل معنا عبر القنوات الرسمية أدناه:", fontSize = 13.sp)
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    if (!info.telegramChannel.isNullOrBlank()) {
-                                        Button(shape = MaterialTheme.shapes.medium, onClick = {
-                                            val url = buildTelegramUrl(info.telegramChannel)
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                            context.startActivity(intent)
-                                        }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary), modifier = Modifier.fillMaxWidth()) {
-                                            Icon(Icons.Default.Send, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("قناة التليجرام الرسمية")
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                    }
-                                    if (!info.telegramBot.isNullOrBlank()) {
-                                        OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = {
-                                            val url = buildTelegramUrl(info.telegramBot)
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                            context.startActivity(intent)
-                                        }, modifier = Modifier.fillMaxWidth()) {
-                                            Icon(Icons.Default.SupportAgent, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("بوت الدعم الفني")
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                    }
-                                    if (!info.adminEmail.isNullOrBlank()) {
-                                        OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = {
-                                            val uriStr = "mailto:${info.adminEmail}"
-                                            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse(uriStr))
-                                            context.startActivity(intent)
-                                        }, modifier = Modifier.fillMaxWidth()) {
-                                            Icon(Icons.Default.Email, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("راسلنا عبر البريد الإلكتروني")
-                                        }
-                                    }
+            val info = guideEnvelope?.info
+            if (info != null) {
+                item {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("قنوات الدعم الرسمي", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 16.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(info.supportMessage ?: "تواصل معنا عبر القنوات الرسمية أدناه:", fontSize = 13.sp)
+                            if (!info.adminEmail.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = {
+                                    val uriStr = "mailto:${info.adminEmail}"
+                                    val intent = Intent(Intent.ACTION_SENDTO, Uri.parse(uriStr))
+                                    context.startActivity(intent)
+                                }, modifier = Modifier.fillMaxWidth()) {
+                                    Icon(Icons.Default.Email, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("راسلنا عبر البريد الإلكتروني")
                                 }
                             }
                         }
