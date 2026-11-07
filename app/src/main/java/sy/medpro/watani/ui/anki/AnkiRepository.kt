@@ -56,14 +56,35 @@ class AnkiRepository(private val context: Context) {
         text?.let { parse(it) } ?: AnkiSet(version = null, subjects = emptyList())
     }
 
-    private fun fetchRemote(): String? = try {
-        val url = "${WataniApi.BASE_URL}anki/anki.json"
-        client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
-            if (!resp.isSuccessful) return null
-            resp.body?.string()?.takeIf { it.isNotBlank() }
+    // تحصين (7 نوفمبر 23:47، بأمر الدكتور): إعادة محاولة الجلب حتى 3 مرات عند
+    // الفشل قبل الرجوع للكاش — فشل شبكي عابر واحد لا يترك القسم بلا تحديث،
+    // ولا يترك جهازًا جديدًا بلا بطاقات بينما الملف حيّ على الخادم.
+    private fun fetchRemote(): String? {
+        repeat(MAX_FETCH_ATTEMPTS) { attempt ->
+            val result = try {
+                val url = "${WataniApi.BASE_URL}anki/anki.json"
+                client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                    if (!resp.isSuccessful) null
+                    else resp.body?.string()?.takeIf { it.isNotBlank() }
+                }
+            } catch (_: Exception) {
+                null
+            }
+            if (result != null) return result
+            if (attempt < MAX_FETCH_ATTEMPTS - 1) {
+                try {
+                    Thread.sleep(RETRY_DELAY_MS * (attempt + 1))
+                } catch (_: InterruptedException) {
+                    // تجاهل: المحاولة التالية (أو الرجوع للكاش) هي السلوك الصحيح
+                }
+            }
         }
-    } catch (_: Exception) {
-        null
+        return null
+    }
+
+    private companion object {
+        const val MAX_FETCH_ATTEMPTS = 3
+        const val RETRY_DELAY_MS = 1500L
     }
 
     private fun versionOf(text: String): String? =
