@@ -9,17 +9,20 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,6 +34,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
@@ -261,40 +267,16 @@ class MainActivity : ComponentActivity() {
                     val uiState by viewModel.uiState.collectAsState()
                     val downloadedSections by viewModel.downloadedSections.collectAsState()
                     val coroutineScope = rememberCoroutineScope()
-                    // Drawer state WITHOUT saveable restore (Nov 2026
-                    // stuck-drawer fix): rememberDrawerState restores an
-                    // open drawer after process death / recreation, so a
-                    // drawer left open once reappeared on every cold
-                    // start right after the splash and looked stuck.
-                    // A plain remembered DrawerState always starts
-                    // Closed; the student opens it only on demand
-                    // (menu button / edge swipe).
-                    val drawerState = remember {
-                        DrawerState(DrawerValue.Closed)
-                    }
-
-                    // Startup hardening (Nov 2026, doctor's screenshot of
-                    // the drawer open over Home right at launch): two
-                    // explicit guards on top of the Closed initial value.
-                    // 1) First composition of the main content (right
-                    //    after the splash): snap — not animate — to
-                    //    Closed, so no first-frame anchor/layout anomaly
-                    //    of the RTL drawer can leave it visually open.
-                    // 2) Every ON_RESUME: plain `remember` survives
-                    //    while the activity lives, so a drawer left open
-                    //    when the app was backgrounded would still be
-                    //    open when the task is brought back — the
-                    //    eec915a fix covers recreation/process death,
-                    //    not this resume path. Snap it shut here.
-                    // Neither guard re-runs while the app stays in the
-                    // foreground, so the menu button and the edge swipe
-                    // (required in landscape) keep opening it normally.
-                    LaunchedEffect(Unit) {
-                        drawerState.snapTo(DrawerValue.Closed)
-                    }
-                    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-                        coroutineScope.launch { drawerState.snapTo(DrawerValue.Closed) }
-                    }
+                    // درج بنيوي (إصلاح جذري — معيار الدكتور: «هو من الأول
+                    // لازم ما يظهر»): لا حالة هندسية ولا مراسي إزاحة في
+                    // مسار الإقلاع إطلاقًا. علم Boolean يُولد false من
+                    // remember عادي (لا حفظ ولا استعادة بأي طبقة)، وورقة
+                    // الدرج لا تُركَّب في شجرة التركيب أصلًا ما دام مغلقًا
+                    // — فغيابه عند الإقلاع البارد والاستئناف وبعد الدخول
+                    // غياب بنيوي من الإطار الأول، لا نتيجة إغلاق لاحق.
+                    // الفتح بفعل مستخدم فقط: زر القائمة، أو سحب حافة
+                    // البداية (شريط 24dp بذيل هذا الصندوق الجذري).
+                    var drawerOpen by remember { mutableStateOf(false) }
 
                     var casesList by remember { mutableStateOf<List<ClinicalCaseDto>>(emptyList()) }
                     var activeSubjectEnvelope by remember { mutableStateOf<SubjectEnvelope?>(null) }
@@ -339,10 +321,50 @@ class MainActivity : ComponentActivity() {
                     }
 
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        ModalNavigationDrawer(
-                            drawerState = drawerState,
-                            drawerContent = {
-                                ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            // ستارة الدرج: مركَّبة فقط حين الفتح، وضغطها يغلق.
+                            AnimatedVisibility(
+                                visible = drawerOpen,
+                                modifier = Modifier.zIndex(9f),
+                                enter = fadeIn(),
+                                exit = fadeOut()
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.32f))
+                                        .clickable { drawerOpen = false }
+                                )
+                            }
+                            // ورقة الدرج: لا تُركَّب أصلًا ما دامت مغلقة؛
+                            // تنزلق من حافة البداية عند فتحها بفعل مستخدم،
+                            // وسحبها نحو حافتها يغلقها.
+                            AnimatedVisibility(
+                                visible = drawerOpen,
+                                modifier = Modifier
+                                    .zIndex(10f)
+                                    .align(Alignment.CenterStart),
+                                enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
+                                exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(300.dp)
+                                        .fillMaxHeight()
+                                        .shadow(12.dp)
+                                        .background(MaterialTheme.colorScheme.surface)
+                                        .pointerInput(Unit) {
+                                            var sheetDrag = 0f
+                                            detectHorizontalDragGestures(
+                                                onDragStart = { sheetDrag = 0f },
+                                                onDragEnd = {
+                                                    if (sheetDrag > 96.dp.toPx()) drawerOpen = false
+                                                },
+                                                onDragCancel = { sheetDrag = 0f },
+                                                onHorizontalDrag = { _, dragAmount -> sheetDrag += dragAmount }
+                                            )
+                                        }
+                                ) {
                                     Column(
                                         modifier = Modifier
                                             .fillMaxSize()
@@ -447,7 +469,7 @@ class MainActivity : ComponentActivity() {
                                                     label = { Text(title, fontWeight = FontWeight.Medium, fontSize = 13.sp) },
                                                     selected = false,
                                                     onClick = {
-                                                        coroutineScope.launch { drawerState.close() }
+                                                        drawerOpen = false
                                                         if (title == "تسجيل الخروج") {
                                                             // AuthStateListener above refreshes currentUser;
                                                             // sign-out no longer drops the user to a gate —
@@ -479,7 +501,6 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
-                        ) {
                             // Back navigation + exit confirmation: the app
                             // used to have NO back handling at all, so the
                             // system back button finished the activity from
@@ -491,11 +512,9 @@ class MainActivity : ComponentActivity() {
                             var showExitConfirm by remember { mutableStateOf(false) }
                             androidx.activity.compose.BackHandler {
                                 when {
-                                    // targetValue covers a drawer mid-animation
-                                    // (currentValue still Closed while the
-                                    // open animation runs): Back must close
-                                    // it, never fall through to the exit prompt.
-                                    drawerState.isOpen || drawerState.targetValue == DrawerValue.Open -> coroutineScope.launch { drawerState.close() }
+                                    // درج مفتوح: الرجوع يغلقه أولًا، ولا
+                                    // يسقط أبدًا إلى مطالبة الخروج.
+                                    drawerOpen -> drawerOpen = false
                                     drawerScreen != null -> drawerScreen = null
                                     uiState.screenState != ScreenState.Home -> viewModel.goBack()
                                     uiState.currentTab != AppTab.HOME -> viewModel.setTab(AppTab.HOME)
@@ -533,7 +552,7 @@ class MainActivity : ComponentActivity() {
                             // where vertical space is precious — the top bar
                             // eats it. In landscape only the bottom bar
                             // stays; the drawer still opens by edge swipe
-                            // (ModalNavigationDrawer gestures stay enabled).
+                            // (the drawer opens via the root edge-swipe strip).
                             val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
                             val topBarTitle = when (uiState.currentTab) {
                                 AppTab.BANK -> "بنك الأسئلة"
@@ -563,7 +582,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         navigationIcon = {
-                                            IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
+                                            IconButton(onClick = { drawerOpen = true }) {
                                                 Icon(
                                                     Icons.Default.Menu,
                                                     contentDescription = "القائمة",
@@ -1076,6 +1095,30 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
+                            // شريط حافة البداية (24dp): سحب نحو الداخل
+                            // يفتح الدرج — إيماءة الحافة المطلوبة في الوضع
+                            // الأفقي حيث لا شريط علوي ولا زر قائمة. لا
+                            // يُركَّب والدرج مفتوح (الستارة/الورقة أولى باللمس).
+                            if (!drawerOpen) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .fillMaxHeight()
+                                        .width(24.dp)
+                                        .zIndex(5f)
+                                        .pointerInput(Unit) {
+                                            var edgeDrag = 0f
+                                            detectHorizontalDragGestures(
+                                                onDragStart = { edgeDrag = 0f },
+                                                onDragEnd = {
+                                                    if (edgeDrag < -56.dp.toPx()) drawerOpen = true
+                                                },
+                                                onDragCancel = { edgeDrag = 0f },
+                                                onHorizontalDrag = { _, dragAmount -> edgeDrag += dragAmount }
+                                            )
+                                        }
+                                )
+                            }
                     }
                 }
             }
