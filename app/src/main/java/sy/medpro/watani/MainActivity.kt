@@ -9,6 +9,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -267,6 +269,29 @@ class MainActivity : ComponentActivity() {
                     // (menu button / edge swipe).
                     val drawerState = remember {
                         DrawerState(DrawerValue.Closed)
+                    }
+
+                    // Startup hardening (Nov 2026, doctor's screenshot of
+                    // the drawer open over Home right at launch): two
+                    // explicit guards on top of the Closed initial value.
+                    // 1) First composition of the main content (right
+                    //    after the splash): snap — not animate — to
+                    //    Closed, so no first-frame anchor/layout anomaly
+                    //    of the RTL drawer can leave it visually open.
+                    // 2) Every ON_RESUME: plain `remember` survives
+                    //    while the activity lives, so a drawer left open
+                    //    when the app was backgrounded would still be
+                    //    open when the task is brought back — the
+                    //    eec915a fix covers recreation/process death,
+                    //    not this resume path. Snap it shut here.
+                    // Neither guard re-runs while the app stays in the
+                    // foreground, so the menu button and the edge swipe
+                    // (required in landscape) keep opening it normally.
+                    LaunchedEffect(Unit) {
+                        drawerState.snapTo(DrawerValue.Closed)
+                    }
+                    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+                        coroutineScope.launch { drawerState.snapTo(DrawerValue.Closed) }
                     }
 
                     var casesList by remember { mutableStateOf<List<ClinicalCaseDto>>(emptyList()) }
