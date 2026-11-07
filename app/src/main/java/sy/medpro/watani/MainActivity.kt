@@ -354,11 +354,11 @@ class MainActivity : ComponentActivity() {
                                         ) {
                                             // تجميع 28 أكتوبر 2026 (بأمر الدكتور): كل فكرة واحدة تحت
                                             // تبويب واحد — القلب والإصغاء، المختبرات والحاسبات،
-                                            // البطاقات والمراجعة، والتواصل — بلا حذف أي محتوى.
+                                            // المراجعة الذكية، والتواصل — بلا حذف أي محتوى.
                                             val drawerItems = listOf(
                                                 "الملف الشخصي",
                                                 "الاشتراك وتفعيل الحساب",
-                                                "البطاقات والمراجعة الذكية",
+                                                "المراجعة الذكية Anki",
                                                 "دليل الدراسة",
                                                 "سجل أخطائي والاختبارات",
                                                 "المريض الافتراضي",
@@ -381,7 +381,7 @@ class MainActivity : ComponentActivity() {
                                                 val icon = when (title) {
                                                     "الملف الشخصي" -> Icons.Default.Person
                                                     "الاشتراك وتفعيل الحساب" -> Icons.Default.VpnKey
-                                                    "البطاقات والمراجعة الذكية" -> Icons.Default.Style
+                                                    "المراجعة الذكية Anki" -> Icons.Default.Style
                                                     "دليل الدراسة" -> Icons.Default.Book
                                                     "سجل أخطائي والاختبارات" -> Icons.Default.History
                                                     "المريض الافتراضي" -> Icons.Default.LocalHospital
@@ -421,12 +421,10 @@ class MainActivity : ComponentActivity() {
                                                         } else if (title == "المريض الافتراضي") {
                                                             drawerScreen = null
                                                             viewModel.setTab(AppTab.CASES)
-                                                        } else if (title == "البطاقات والمراجعة الذكية" || title == "البطاقات" ||
-                                                            title == "المراجعة الذكية Anki") {
-                                                            // M8 + activation: these drawer screens
-                                                            // read downloaded question banks directly
-                                                            // (sections_cache), so they must pass the
-                                                            // same gates as the bank tabs instead of
+                                                        } else if (title == "المراجعة الذكية Anki") {
+                                                            // M8 + activation: the smart-review
+                                                            // drawer screen must pass the same
+                                                            // gates as the bank tabs instead of
                                                             // opening ungated from the drawer.
                                                             openRestrictedDrawer(title)
                                                         } else {
@@ -618,8 +616,6 @@ class MainActivity : ComponentActivity() {
                                                     onBack = { drawerScreen = null },
                                                     onActivationChanged = { viewModel.refreshDownloadedSections() }
                                                 )
-                                                "البطاقات والمراجعة الذكية" -> FlashcardsReviewScreen(onBack = { drawerScreen = null })
-                                                "البطاقات" -> FlashcardsReviewScreen(initialTab = 0, onBack = { drawerScreen = null })
                                                 "دليل الدراسة" -> StudyGuideScreen(onBack = { drawerScreen = null })
                                                 "سجل أخطائي والاختبارات" -> WrongAnswersScreen(
                                                     onBack = { drawerScreen = null },
@@ -695,7 +691,7 @@ class MainActivity : ComponentActivity() {
                                                                 onResumeLastSection = { viewModel.resumeLastSection() },
                                                                 onOpenSupport = { drawerScreen = "الدعم النفسي" },
                                                                 onOpenFocusTimer = { drawerScreen = "مؤقت التركيز" },
-                                                                onOpenReviewDue = { openRestrictedDrawer("البطاقات والمراجعة الذكية") },
+                                                                onOpenReviewDue = { openRestrictedDrawer("المراجعة الذكية Anki") },
                                                                 onOpenActivation = { showActivationPrompt = true }
                                                             )
                                                         }
@@ -882,7 +878,7 @@ class MainActivity : ComponentActivity() {
                                                         AppTab.TOOLS -> {
                                                             ToolsScreen(
                                                                 onToolClick = { title ->
-                                                                    if (title == "البطاقات والمراجعة الذكية") openRestrictedDrawer(title) else drawerScreen = title
+                                                                    if (title == "المراجعة الذكية Anki") openRestrictedDrawer(title) else drawerScreen = title
                                                                 }
                                                             )
                                                         }
