@@ -147,7 +147,19 @@ class ExplanationRepository(
                 if (keys.isEmpty()) return@withContext Result.success(Unit)
                 val indexResult = fetchLayerIndex()
                 if (indexResult.isFailure) {
-                    return@withContext Result.failure(indexResult.exceptionOrNull()!!)
+                    // Unified explanation rule (Nov 2026): an absent or
+                    // unreachable layer creates NO prefetch obligation —
+                    // a question the layer cannot even be consulted for
+                    // must never surface as "incomplete" after a section
+                    // download (the old layer was retired server-side,
+                    // and its 404 failed every unified section whose
+                    // explanations are in fact embedded in the file).
+                    // Genuine incompleteness is only a shard that the
+                    // loaded index maps a key to and that then fails to
+                    // load (handled below). Per-question lazy lookup is
+                    // unchanged and remains the source of truth at
+                    // reading time.
+                    return@withContext Result.success(Unit)
                 }
                 val index = indexResult.getOrNull() ?: return@withContext Result.success(Unit)
                 val qidIndex = index.qidIndex ?: return@withContext Result.success(Unit)

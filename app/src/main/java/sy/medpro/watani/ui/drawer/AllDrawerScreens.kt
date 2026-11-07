@@ -383,7 +383,12 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
             val (subj, q) = selectedQuestion!!
             val options = q.options ?: emptyList()
             val correctIdx = getCorrectIndices(q, options).firstOrNull() ?: 0
-            val dailyExplanationState = rememberExplanationState(normalizeExplanationKey(q.id))
+            // Unified explanation rule (Nov 2026): an embedded explanation
+            // (displayed below on submit) disables the layer lookup.
+            val dailyExplanationState = rememberExplanationState(
+                normalizeExplanationKey(q.id),
+                enabled = q.explanation.isNullOrBlank()
+            )
 
             Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {

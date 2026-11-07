@@ -41,8 +41,13 @@ fun explanationRepository(context: Context, layerBasePath: String = "explanation
  * action — explanations are never silently missing on a failed load again.
  */
 @Composable
-fun rememberExplanationState(questionKey: String?): ExplanationUiState {
-    if (questionKey.isNullOrBlank()) return ExplanationUiState.Absent
+fun rememberExplanationState(questionKey: String?, enabled: Boolean = true): ExplanationUiState {
+    // Unified explanation rule (Nov 2026): callers pass enabled = false
+    // when the question already carries a non-blank EMBEDDED explanation
+    // — such a question never consults the separate layer at all, so no
+    // spinner, no failure state and no retry button can appear for an
+    // explanation that is already on screen.
+    if (!enabled || questionKey.isNullOrBlank()) return ExplanationUiState.Absent
     val context = LocalContext.current
     val repository = remember(context) { explanationRepository(context) }
     var state by remember(questionKey) { mutableStateOf<ExplanationUiState>(ExplanationUiState.Loading) }

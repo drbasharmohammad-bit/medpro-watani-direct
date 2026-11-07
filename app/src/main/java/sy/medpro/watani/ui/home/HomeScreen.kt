@@ -1,5 +1,6 @@
 package sy.medpro.watani.ui.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -16,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -285,6 +287,19 @@ fun SectionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Direction-2 subject icons (Nov 2026): subjects with a
+                // custom drawing (SubjectIcons, keyed by the Arabic
+                // subject name = file stem) lead the card; sections
+                // without a mapping render exactly as before.
+                val subjectIconRes = sy.medpro.watani.ui.SubjectIcons.forName(displayName)
+                if (subjectIconRes != null) {
+                    Image(
+                        painter = painterResource(subjectIconRes),
+                        contentDescription = null,
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = displayName,
@@ -404,12 +419,19 @@ fun TopicSelectionScreen(
     downloaded: Boolean,
     onDownloadClick: () -> Unit,
     onTopicClick: (String) -> Unit,
+    onSessionClick: (String, String) -> Unit = { _, _ -> },
     onBack: () -> Unit
 ) {
+    // «حسب السنوات» (مواصفة الدكتور 21:51): المواد التي تحمل sessions[]
+    // بالشاردة المنزّلة تعرض مبدّلًا بين عرض المواضيع (الأصلي، لا يتغير)
+    // وعرض الجلسات. مادة بلا جلسات لا ترى المبدّل إطلاقًا — صفر انحدار.
+    val sessions = subjectEnvelope?.sessions ?: emptyList()
+    var byYears by remember(subjectName) { mutableStateOf(false) }
+    val showYears = byYears && sessions.isNotEmpty()
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("مواضيع: $subjectName", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+                title = { Text(if (showYears) "جلسات: $subjectName" else "مواضيع: $subjectName", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
@@ -446,16 +468,80 @@ fun TopicSelectionScreen(
                 }
             } else {
                 val topics = subjectEnvelope.topics ?: emptyList()
+                // ترتيب السنوات: ترتيب البيانات نفسه، ودلو «دورات قديمة»
+                // (بلا سنة) أخيرًا دائمًا — فرز مستقر يبقي بقية الجلسات
+                // بترتيب الشاردة كما هي.
+                val orderedSessions = sessions.sortedWith(
+                    compareBy { session ->
+                        if (session.year == null || session.name?.trim() == "دورات قديمة") 1 else 0
+                    }
+                )
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (sessions.isNotEmpty()) {
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = !showYears,
+                                    onClick = { byYears = false },
+                                    label = { Text("حسب المواضيع") }
+                                )
+                                FilterChip(
+                                    selected = showYears,
+                                    onClick = { byYears = true },
+                                    label = { Text("حسب السنوات") }
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
                     item {
                         Text(
-                            "اختر الموضوع للبدء بالأسئلة:",
+                            if (showYears) "اختر الجلسة للبدء بالأسئلة:" else "اختر الموضوع للبدء بالأسئلة:",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                     }
+                    if (showYears) {
+                        items(orderedSessions) { session ->
+                            val sessionName = session.name ?: "جلسة"
+                            val yearText = when (val y = session.year) {
+                                is Double -> if (y % 1.0 == 0.0) y.toInt().toString() else y.toString()
+                                null -> ""
+                                else -> y.toString()
+                            }
+                            Card(
+                                shape = MaterialTheme.shapes.small,
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSessionClick(session.id ?: sessionName, sessionName) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(sessionName, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                        if (yearText.isNotEmpty()) {
+                                            Text(
+                                                yearText,
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        "(${session.questions?.size ?: session.questionCount ?: 0} سؤال)",
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
                     items(topics) { topic ->
                         Card(
                             shape = MaterialTheme.shapes.small,
@@ -477,6 +563,7 @@ fun TopicSelectionScreen(
                                 )
                             }
                         }
+                    }
                     }
                 }
             }

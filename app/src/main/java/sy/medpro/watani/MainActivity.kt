@@ -19,6 +19,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -403,6 +405,11 @@ class MainActivity : ComponentActivity() {
                                                 "تسجيل الخروج"
                                             )
                                             items(drawerItems) { title ->
+                                                // Direction-2 drawer icons (Nov 2026):
+                                                // every drawer title has a custom
+                                                // drawing; the vector below remains
+                                                // only as a fallback for unmapped titles.
+                                                val drawerIconRes = sy.medpro.watani.ui.DrawerIcons.forTitle(title)
                                                 val icon = when (title) {
                                                     "الملف الشخصي" -> Icons.Default.Person
                                                     "الاشتراك وتفعيل الحساب" -> Icons.Default.VpnKey
@@ -426,7 +433,17 @@ class MainActivity : ComponentActivity() {
                                                     else -> Icons.Default.Logout
                                                 }
                                                 NavigationDrawerItem(
-                                                    icon = { Icon(icon, contentDescription = null, tint = MaroonPrimary) },
+                                                    icon = {
+                                                        if (drawerIconRes != null) {
+                                                            Image(
+                                                                painter = painterResource(drawerIconRes),
+                                                                contentDescription = null,
+                                                                modifier = Modifier.size(26.dp)
+                                                            )
+                                                        } else {
+                                                            Icon(icon, contentDescription = null, tint = MaroonPrimary)
+                                                        }
+                                                    },
                                                     label = { Text(title, fontWeight = FontWeight.Medium, fontSize = 13.sp) },
                                                     selected = false,
                                                     onClick = {
@@ -575,15 +592,19 @@ class MainActivity : ComponentActivity() {
                                         containerColor = Color.Transparent,
                                         tonalElevation = 0.dp
                                     ) {
+                                        // Direction-2 tab icons (Nov 2026): custom
+                                        // two-tone drawings per tab (TabIcons);
+                                        // selection stays signalled by the
+                                        // indicator pill + bold maroon label.
                                         val tabs = listOf(
-                                            Triple(AppTab.HOME, "الرئيسية", Icons.Default.Home),
-                                            Triple(AppTab.BANK, "بنك", Icons.Default.Book),
-                                            Triple(AppTab.CASES, "المريض", Icons.Default.LocalHospital),
-                                            Triple(AppTab.LIBRARY, "المكتبة", Icons.Default.Book),
-                                            Triple(AppTab.LEADERBOARD, "الصدارة", Icons.Default.EmojiEvents),
-                                            Triple(AppTab.TOOLS, "أدوات", Icons.Default.MedicalServices)
+                                            AppTab.HOME to "الرئيسية",
+                                            AppTab.BANK to "بنك",
+                                            AppTab.CASES to "المريض",
+                                            AppTab.LIBRARY to "المكتبة",
+                                            AppTab.LEADERBOARD to "الصدارة",
+                                            AppTab.TOOLS to "أدوات"
                                         )
-                                        tabs.forEach { (tab, label, icon) ->
+                                        tabs.forEach { (tab, label) ->
                                             val selected = uiState.currentTab == tab
                                             NavigationBarItem(
                                                 selected = selected,
@@ -600,10 +621,10 @@ class MainActivity : ComponentActivity() {
                                                 // does not lose their place.
                                                 onClick = { if (requestTab(tab)) drawerScreen = null },
                                                 icon = {
-                                                    Icon(
-                                                        icon,
+                                                    Image(
+                                                        painter = painterResource(sy.medpro.watani.ui.TabIcons.forTab(tab)),
                                                         contentDescription = label,
-                                                        tint = if (selected) MaroonPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                        modifier = Modifier.size(24.dp)
                                                     )
                                                 },
                                                 label = {
@@ -699,7 +720,28 @@ class MainActivity : ComponentActivity() {
                                                 else -> ProfileScreen(onBack = { drawerScreen = null })
                                             }
                                         } else {
-                                            when (val screen = uiState.screenState) {
+                                            // Light motion (Nov 2026, doctor's combined
+                                            // build): detail screens (Home → subject →
+                                            // quiz, university subjects, case player)
+                                            // cross-fade with the same gentle spec the
+                                            // drawer screens already use (fade 200ms +
+                                            // 1/8 vertical slide) — no new durations,
+                                            // no splash-video involvement, and tab
+                                            // switches keep their own existing fade.
+                                            AnimatedContent(
+                                                targetState = uiState.screenState,
+                                                transitionSpec = {
+                                                    (fadeIn(animationSpec = tween(200)) + slideInVertically(
+                                                        initialOffsetY = { it / 8 },
+                                                        animationSpec = tween(200)
+                                                    )) togetherWith (fadeOut(animationSpec = tween(180)) + slideOutVertically(
+                                                        targetOffsetY = { it / 8 },
+                                                        animationSpec = tween(180)
+                                                    ))
+                                                },
+                                                label = "screenTransition"
+                                            ) { screen ->
+                                                when (screen) {
                                                 is ScreenState.Home -> {
                                                     AnimatedContent(
                                                         targetState = uiState.currentTab,
@@ -936,6 +978,9 @@ class MainActivity : ComponentActivity() {
                                                         onTopicClick = { topicName ->
                                                             viewModel.openTopicQuiz(screen.path, topicName)
                                                         },
+                                                        onSessionClick = { sessionKey, sessionName ->
+                                                            viewModel.openSessionQuiz(screen.path, sessionKey, sessionName, screen.subjectName)
+                                                        },
                                                         onBack = { viewModel.goBack() }
                                                     )
                                                 }
@@ -971,6 +1016,7 @@ class MainActivity : ComponentActivity() {
                                                         caseItem = screen.caseItem,
                                                         onBack = { viewModel.goBack() }
                                                     )
+                                                }
                                                 }
                                             }
                                         }

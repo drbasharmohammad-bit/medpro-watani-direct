@@ -368,7 +368,15 @@ fun QuestionCard(
     var favList by remember(favUid) { mutableStateOf(favPrefs.getStringSet("fav_list", emptySet()) ?: emptySet()) }
     val qId = question.id ?: question.text ?: "سؤال $questionNumber"
     val qLookupKey = normalizeExplanationKey(question.id)
-    val explanationState = rememberExplanationState(qLookupKey)
+    // Unified explanation rule (Nov 2026): a question with a non-blank
+    // embedded explanation (shown below from the file itself) never
+    // consults the separate explanation layer — the lookup is disabled,
+    // so the retired layer can no longer produce a false "failed to
+    // load" state or a retry button under an explanation already shown.
+    val explanationState = rememberExplanationState(
+        qLookupKey,
+        enabled = question.explanation.isNullOrBlank()
+    )
     val isFav = favList.contains(qId)
 
     Card(

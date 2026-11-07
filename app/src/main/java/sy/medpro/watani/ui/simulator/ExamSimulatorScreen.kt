@@ -528,7 +528,13 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                     itemsIndexed(activeQuestions) { idx, q ->
                         val userAns = answers[idx]
                         val isCorrect = userAns == q.correctIndex
-                        val simExplanationState = rememberExplanationState(normalizeExplanationKey(q.natId))
+                        // Unified explanation rule (Nov 2026): the embedded
+                        // explanation is already rendered above — the layer
+                        // lookup runs only when it is blank.
+                        val simExplanationState = rememberExplanationState(
+                            normalizeExplanationKey(q.natId),
+                            enabled = q.explanation.isBlank()
+                        )
                         Card(
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),

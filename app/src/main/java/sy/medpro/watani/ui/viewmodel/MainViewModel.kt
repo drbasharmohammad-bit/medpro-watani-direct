@@ -199,8 +199,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "تم تحميل أسئلة القسم، لكن شروحاتها لم تكتمل — اضغط «إعادة محاولة الشروحات» لإكمالها."
         return try {
             val envelope = repository.getSubjectEnvelope(path) ?: return null
+            // Unified explanation rule (Nov 2026, doctor's order — a
+            // section download is complete in ONE step, never partial):
+            // a question whose EMBEDDED explanation is non-blank never
+            // enters the separate-layer prefetch and never counts as
+            // missing. Only questions with a blank embedded explanation
+            // (legacy sections that genuinely rely on the layer) may
+            // prefetch, keyed by id.
             val ids = (envelope.topics.orEmpty().flatMap { it.questions.orEmpty() } +
                 envelope.sessions.orEmpty().flatMap { it.questions.orEmpty() })
+                .filter { it.explanation.isNullOrBlank() }
                 .mapNotNull { it.id }
             if (ids.isEmpty()) return null
             // Shared process-lifetime repository (not a fresh instance):
@@ -329,6 +337,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             navigateTo(
                 ScreenState.Quiz(
                     topicName,
+                    questions,
+                    sourcePath = path,
+                    subjectName = envelope?.subjectName
+                )
+            )
+        }
+    }
+
+    /**
+     * «حسب السنوات»: فتح أسئلة جلسة بعينها من الشاردة نفسها — موازٍ
+     * تمامًا لـ[openTopicQuiz] بالبوابات ذاتها (الجهاز ثم التفعيل على
+     * المسارات المقيدة) وبنفس شاشة الكويز والشروحات والمشاركة.
+     * الاستئناف يُسجَّل على مستوى المادة (isTopicQuiz = false) حتى لا
+     * يشير سجلّ الاستئناف إلى جلسة بوصفها موضوعًا عند إعادة الفتح.
+     */
+    fun openSessionQuiz(path: String, sessionKey: String, sessionName: String, subjectName: String) {
+        ResumeStore.record(
+            getApplication<Application>().applicationContext,
+            path = path, title = subjectName, tab = _uiState.value.currentTab.name, isTopicQuiz = false
+        )
+        viewModelScope.launch {
+            if (WorkerActivationApi.isRestrictedPath(path)) {
+                val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(
+                    getApplication<Application>().applicationContext
+                )
+                if (!gate.allowed) {
+                    _uiState.update { it.copy(gateMessage = gate.userMessage) }
+                    return@launch
+                }
+                if (!WorkerActivationApi.isActivated(getApplication<Application>().applicationContext)) {
+                    _activationPromptRequests.tryEmit(Unit)
+                    return@launch
+                }
+            }
+            val envelope = repository.getSubjectEnvelope(path)
+            val session = envelope?.sessions?.firstOrNull { (it.id ?: it.name ?: "") == sessionKey }
+                ?: envelope?.sessions?.firstOrNull { it.name == sessionName }
+            val questions = session?.questions ?: emptyList()
+            navigateTo(
+                ScreenState.Quiz(
+                    sessionName,
                     questions,
                     sourcePath = path,
                     subjectName = envelope?.subjectName
