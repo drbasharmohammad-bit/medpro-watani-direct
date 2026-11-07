@@ -501,6 +501,31 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                            // شريط حافة البداية (24dp): سحب نحو الداخل
+                            // يفتح الدرج — إيماءة الحافة المطلوبة في الوضع
+                            // الأفقي حيث لا شريط علوي ولا زر قائمة. لا
+                            // يُركَّب والدرج مفتوح (الستارة/الورقة أولى باللمس).
+                            if (!drawerOpen) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .fillMaxHeight()
+                                        .width(24.dp)
+                                        .zIndex(5f)
+                                        .pointerInput(Unit) {
+                                            var edgeDrag = 0f
+                                            detectHorizontalDragGestures(
+                                                onDragStart = { edgeDrag = 0f },
+                                                onDragEnd = {
+                                                    if (edgeDrag < -56.dp.toPx()) drawerOpen = true
+                                                },
+                                                onDragCancel = { edgeDrag = 0f },
+                                                onHorizontalDrag = { _, dragAmount -> edgeDrag += dragAmount }
+                                            )
+                                        }
+                                )
+                            }
+
                             // Back navigation + exit confirmation: the app
                             // used to have NO back handling at all, so the
                             // system back button finished the activity from
@@ -1095,30 +1120,6 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
-                            // شريط حافة البداية (24dp): سحب نحو الداخل
-                            // يفتح الدرج — إيماءة الحافة المطلوبة في الوضع
-                            // الأفقي حيث لا شريط علوي ولا زر قائمة. لا
-                            // يُركَّب والدرج مفتوح (الستارة/الورقة أولى باللمس).
-                            if (!drawerOpen) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.CenterStart)
-                                        .fillMaxHeight()
-                                        .width(24.dp)
-                                        .zIndex(5f)
-                                        .pointerInput(Unit) {
-                                            var edgeDrag = 0f
-                                            detectHorizontalDragGestures(
-                                                onDragStart = { edgeDrag = 0f },
-                                                onDragEnd = {
-                                                    if (edgeDrag < -56.dp.toPx()) drawerOpen = true
-                                                },
-                                                onDragCancel = { edgeDrag = 0f },
-                                                onHorizontalDrag = { _, dragAmount -> edgeDrag += dragAmount }
-                                            )
-                                        }
-                                )
-                            }
                     }
                 }
             }
