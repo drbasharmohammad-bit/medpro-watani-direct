@@ -70,6 +70,14 @@ android {
       signingConfig = signingConfigs.getByName("debugConfig")
     }
   }
+  lint {
+    // Unified fixes package (Nov 2026): the 54 pre-existing lint
+    // ERRORS (48 NewApi java.time-on-minSdk-24, 5 media3 UnsafeOptIn,
+    // 1 WrongConstant — all in code that predates this build) are
+    // frozen in lint-baseline.xml. Any NEW lint error fails the CI
+    // lint step; warnings never fail it.
+    baseline = file("lint-baseline.xml")
+  }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11

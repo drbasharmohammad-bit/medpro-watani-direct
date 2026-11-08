@@ -1,0 +1,868 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 9.1.1">
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#now`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="    private fun todayString(): String = LocalDate.now().toString()"
+        errorLine2="                                                  ~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/FocusTimerEngine.kt"
+            line="47"
+            column="51"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#atZone`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                Instant.ofEpochMilli(localMidnight).atZone(ZoneId.systemDefault())"
+        errorLine2="                                                    ~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="405"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#ofEpochMilli`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                Instant.ofEpochMilli(localMidnight).atZone(ZoneId.systemDefault())"
+        errorLine2="                        ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="405"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZoneId#systemDefault`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                Instant.ofEpochMilli(localMidnight).atZone(ZoneId.systemDefault())"
+        errorLine2="                                                                  ~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="405"
+            column="67"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#toEpochMilli`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                    .toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()"
+        errorLine2="                                                                            ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="406"
+            column="77"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#atStartOfDay`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                    .toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()"
+        errorLine2="                                   ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="406"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZonedDateTime#toLocalDate`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                    .toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()"
+        errorLine2="                     ~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="406"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.chrono.ChronoZonedDateTime#toInstant`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                    .toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()"
+        errorLine2="                                                                ~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="406"
+            column="65"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Field requires API level 26, or core library desugaring (current min is 24): `java.time.ZoneOffset#UTC`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                    .toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()"
+        errorLine2="                                                ~~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="406"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#ofEpochMilli`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                        val localDate = Instant.ofEpochMilli(utcMidnight)"
+        errorLine2="                                                ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="414"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#atZone`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                            .atZone(ZoneOffset.UTC).toLocalDate()"
+        errorLine2="                             ~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="415"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZonedDateTime#toLocalDate`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                            .atZone(ZoneOffset.UTC).toLocalDate()"
+        errorLine2="                                                    ~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="415"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Field requires API level 26, or core library desugaring (current min is 24): `java.time.ZoneOffset#UTC`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                            .atZone(ZoneOffset.UTC).toLocalDate()"
+        errorLine2="                                    ~~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="415"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#atStartOfDay`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                        val localMidnight = localDate.atStartOfDay(ZoneId.systemDefault())"
+        errorLine2="                                                      ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="416"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZoneId#systemDefault`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                        val localMidnight = localDate.atStartOfDay(ZoneId.systemDefault())"
+        errorLine2="                                                                          ~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="416"
+            column="75"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#toEpochMilli`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                            .toInstant().toEpochMilli()"
+        errorLine2="                                         ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="417"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.chrono.ChronoZonedDateTime#toInstant`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                            .toInstant().toEpochMilli()"
+        errorLine2="                             ~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="417"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#atZone`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                    val dateText = Instant.ofEpochMilli(target).atZone(ZoneId.systemDefault())"
+        errorLine2="                                                                ~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="510"
+            column="65"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#ofEpochMilli`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                    val dateText = Instant.ofEpochMilli(target).atZone(ZoneId.systemDefault())"
+        errorLine2="                                           ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="510"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZoneId#systemDefault`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                    val dateText = Instant.ofEpochMilli(target).atZone(ZoneId.systemDefault())"
+        errorLine2="                                                                              ~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="510"
+            column="79"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZonedDateTime#toLocalDate`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                        .toLocalDate().toString()"
+        errorLine2="                         ~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/home/HomeDashboardScreen.kt"
+            line="511"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZoneId#systemDefault`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                                val zone = java.time.ZoneId.systemDefault()"
+        errorLine2="                                                            ~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/offline/OfflineMedicalEncyclopediaScreens.kt"
+            line="887"
+            column="61"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#atZone`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                                val d = java.time.Instant.ofEpochMilli(examDateMillis).atZone(zone).toLocalDate()"
+        errorLine2="                                                                                       ~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/offline/OfflineMedicalEncyclopediaScreens.kt"
+            line="888"
+            column="88"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#ofEpochMilli`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                                val d = java.time.Instant.ofEpochMilli(examDateMillis).atZone(zone).toLocalDate()"
+        errorLine2="                                                          ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/offline/OfflineMedicalEncyclopediaScreens.kt"
+            line="888"
+            column="59"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZonedDateTime#toLocalDate`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                                val d = java.time.Instant.ofEpochMilli(examDateMillis).atZone(zone).toLocalDate()"
+        errorLine2="                                                                                                    ~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/offline/OfflineMedicalEncyclopediaScreens.kt"
+            line="888"
+            column="101"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#getDayOfMonth`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                                &quot;%02d/%02d/%04d&quot;.format(d.dayOfMonth, d.monthValue, d.year)"
+        errorLine2="                                                          ~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/offline/OfflineMedicalEncyclopediaScreens.kt"
+            line="889"
+            column="59"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#getMonthValue`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                                &quot;%02d/%02d/%04d&quot;.format(d.dayOfMonth, d.monthValue, d.year)"
+        errorLine2="                                                                        ~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/offline/OfflineMedicalEncyclopediaScreens.kt"
+            line="889"
+            column="73"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#getYear`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                                &quot;%02d/%02d/%04d&quot;.format(d.dayOfMonth, d.monthValue, d.year)"
+        errorLine2="                                                                                      ~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/offline/OfflineMedicalEncyclopediaScreens.kt"
+            line="889"
+            column="87"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZoneId#systemDefault`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            val zone = java.time.ZoneId.systemDefault()"
+        errorLine2="                                        ~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="104"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#now`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            val today = java.time.LocalDate.now(zone)"
+        errorLine2="                                            ~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="105"
+            column="45"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#atZone`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            val target = java.time.Instant.ofEpochMilli(dateMillis).atZone(zone).toLocalDate()"
+        errorLine2="                                                                    ~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="106"
+            column="69"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#ofEpochMilli`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            val target = java.time.Instant.ofEpochMilli(dateMillis).atZone(zone).toLocalDate()"
+        errorLine2="                                           ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="106"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZonedDateTime#toLocalDate`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            val target = java.time.Instant.ofEpochMilli(dateMillis).atZone(zone).toLocalDate()"
+        errorLine2="                                                                                 ~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="106"
+            column="82"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.temporal.ChronoUnit#between`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            java.time.temporal.ChronoUnit.DAYS.between(today, target).toInt().coerceAtLeast(0)"
+        errorLine2="                                               ~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="107"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Field requires API level 26, or core library desugaring (current min is 24): `java.time.temporal.ChronoUnit#DAYS`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            java.time.temporal.ChronoUnit.DAYS.between(today, target).toInt().coerceAtLeast(0)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="107"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Implicit cast from `LocalDate` to `Temporal` requires API level 26, or core library desugaring (current min is 24)"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            java.time.temporal.ChronoUnit.DAYS.between(today, target).toInt().coerceAtLeast(0)"
+        errorLine2="                                                       ~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="107"
+            column="56"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Implicit cast from `LocalDate` to `Temporal` requires API level 26, or core library desugaring (current min is 24)"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            java.time.temporal.ChronoUnit.DAYS.between(today, target).toInt().coerceAtLeast(0)"
+        errorLine2="                                                              ~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="107"
+            column="63"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#now`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="    private fun todayString(): String = java.time.LocalDate.now().toString()"
+        errorLine2="                                                            ~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="124"
+            column="61"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.ZoneId#systemDefault`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            val zone = java.time.ZoneId.systemDefault()"
+        errorLine2="                                        ~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="379"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#toEpochMilli`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            java.time.LocalDate.parse(dateString.trim()).atStartOfDay(zone).toInstant().toEpochMilli()"
+        errorLine2="                                                                                        ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="380"
+            column="89"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#atStartOfDay`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            java.time.LocalDate.parse(dateString.trim()).atStartOfDay(zone).toInstant().toEpochMilli()"
+        errorLine2="                                                         ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="380"
+            column="58"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#parse`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            java.time.LocalDate.parse(dateString.trim()).atStartOfDay(zone).toInstant().toEpochMilli()"
+        errorLine2="                                ~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="380"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.chrono.ChronoZonedDateTime#toInstant`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="            java.time.LocalDate.parse(dateString.trim()).atStartOfDay(zone).toInstant().toEpochMilli()"
+        errorLine2="                                                                            ~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/OfflineStudyVault.kt"
+            line="380"
+            column="77"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#now`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="    fun dailyIndex(date: LocalDate = LocalDate.now()): Int ="
+        errorLine2="                                               ~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/SupportMessages.kt"
+            line="84"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#toEpochDay`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="        (date.toEpochDay() % all.size).toInt()"
+        errorLine2="              ~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/SupportMessages.kt"
+            line="85"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.LocalDate#now`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="    fun dailyMessage(date: LocalDate = LocalDate.now()): SupportMessage = all[dailyIndex(date)]"
+        errorLine2="                                                 ~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/SupportMessages.kt"
+            line="87"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#parse`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                        java.time.Instant.parse(s).toEpochMilli()"
+        errorLine2="                                          ~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/WorkerActivationApi.kt"
+            line="631"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        severity="Error"
+        message="Call requires API level 26, or core library desugaring (current min is 24): `java.time.Instant#toEpochMilli`"
+        category="Correctness"
+        priority="6"
+        summary="Calling new methods on older versions"
+        explanation="This check scans through all the Android API calls in the application and warns about any calls that are not available on **all** versions targeted by this application (according to its minimum SDK attribute in the manifest).&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level.&#xA;&#xA;If you are deliberately setting `android:` attributes in style definitions, make sure you place this in a `values-v`*NN* folder in order to avoid running into runtime conflicts on certain devices where manufacturers have added custom attributes whose ids conflict with the new ones on later platforms.&#xA;&#xA;Similarly, you can use tools:targetApi=&quot;11&quot; in an XML file to indicate that the element will only be inflated in an adequate context."
+        errorLine1="                        java.time.Instant.parse(s).toEpochMilli()"
+        errorLine2="                                                   ~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/data/WorkerActivationApi.kt"
+            line="631"
+            column="52"/>
+    </issue>
+
+    <issue
+        id="WrongConstant"
+        severity="Error"
+        message="Must be one of: LineBreaker.BREAK_STRATEGY_SIMPLE, LineBreaker.BREAK_STRATEGY_HIGH_QUALITY, LineBreaker.BREAK_STRATEGY_BALANCED"
+        category="Correctness"
+        priority="6"
+        summary="Incorrect constant"
+        explanation="Ensures that when parameter in a method only allows a specific set of constants, calls obey those rules."
+        errorLine1="            builder.setBreakStrategy(Layout.BREAK_STRATEGY_HIGH_QUALITY)"
+        errorLine2="                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/share/ShareCardRenderer.kt"
+            line="90"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        severity="Error"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        category="Correctness"
+        priority="4"
+        summary="Unsafe opt-in usage intended to be error-level severity"
+        explanation="This API has been flagged as opt-in with error-level severity.&#xA;&#xA;Any declaration annotated with this marker is considered part of an unstable or&#xA;otherwise non-standard API surface and its call sites should accept the opt-in&#xA;aspect of it by using the `@OptIn` annotation, using the marker annotation --&#xA;effectively causing further propagation of the opt-in aspect -- or configuring&#xA;the `UnsafeOptInUsageError` check&apos;s options for project-wide opt-in.&#xA;&#xA;To configure project-wide opt-in, specify the `opt-in` option value in `lint.xml`&#xA;as a comma-delimited list of opted-in annotations:&#xA;&#xA;```&#xA;&lt;lint>&#xA;    &lt;issue id=&quot;UnsafeOptInUsageError&quot;>&#xA;        &lt;option name=&quot;opt-in&quot; value=&quot;com.foo.ExperimentalBarAnnotation&quot; />&#xA;    &lt;/issue>&#xA;&lt;/lint>&#xA;```"
+        errorLine1="@OptIn(UnstableApi::class)"
+        errorLine2="       ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/welcome/SplashScreen.kt"
+            line="37"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        severity="Error"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        category="Correctness"
+        priority="4"
+        summary="Unsafe opt-in usage intended to be error-level severity"
+        explanation="This API has been flagged as opt-in with error-level severity.&#xA;&#xA;Any declaration annotated with this marker is considered part of an unstable or&#xA;otherwise non-standard API surface and its call sites should accept the opt-in&#xA;aspect of it by using the `@OptIn` annotation, using the marker annotation --&#xA;effectively causing further propagation of the opt-in aspect -- or configuring&#xA;the `UnsafeOptInUsageError` check&apos;s options for project-wide opt-in.&#xA;&#xA;To configure project-wide opt-in, specify the `opt-in` option value in `lint.xml`&#xA;as a comma-delimited list of opted-in annotations:&#xA;&#xA;```&#xA;&lt;lint>&#xA;    &lt;issue id=&quot;UnsafeOptInUsageError&quot;>&#xA;        &lt;option name=&quot;opt-in&quot; value=&quot;com.foo.ExperimentalBarAnnotation&quot; />&#xA;    &lt;/issue>&#xA;&lt;/lint>&#xA;```"
+        errorLine1="                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM"
+        errorLine2="                    ~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/welcome/SplashScreen.kt"
+            line="84"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        severity="Error"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        category="Correctness"
+        priority="4"
+        summary="Unsafe opt-in usage intended to be error-level severity"
+        explanation="This API has been flagged as opt-in with error-level severity.&#xA;&#xA;Any declaration annotated with this marker is considered part of an unstable or&#xA;otherwise non-standard API surface and its call sites should accept the opt-in&#xA;aspect of it by using the `@OptIn` annotation, using the marker annotation --&#xA;effectively causing further propagation of the opt-in aspect -- or configuring&#xA;the `UnsafeOptInUsageError` check&apos;s options for project-wide opt-in.&#xA;&#xA;To configure project-wide opt-in, specify the `opt-in` option value in `lint.xml`&#xA;as a comma-delimited list of opted-in annotations:&#xA;&#xA;```&#xA;&lt;lint>&#xA;    &lt;issue id=&quot;UnsafeOptInUsageError&quot;>&#xA;        &lt;option name=&quot;opt-in&quot; value=&quot;com.foo.ExperimentalBarAnnotation&quot; />&#xA;    &lt;/issue>&#xA;&lt;/lint>&#xA;```"
+        errorLine1="                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM"
+        errorLine2="                    ~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/welcome/SplashScreen.kt"
+            line="84"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        severity="Error"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        category="Correctness"
+        priority="4"
+        summary="Unsafe opt-in usage intended to be error-level severity"
+        explanation="This API has been flagged as opt-in with error-level severity.&#xA;&#xA;Any declaration annotated with this marker is considered part of an unstable or&#xA;otherwise non-standard API surface and its call sites should accept the opt-in&#xA;aspect of it by using the `@OptIn` annotation, using the marker annotation --&#xA;effectively causing further propagation of the opt-in aspect -- or configuring&#xA;the `UnsafeOptInUsageError` check&apos;s options for project-wide opt-in.&#xA;&#xA;To configure project-wide opt-in, specify the `opt-in` option value in `lint.xml`&#xA;as a comma-delimited list of opted-in annotations:&#xA;&#xA;```&#xA;&lt;lint>&#xA;    &lt;issue id=&quot;UnsafeOptInUsageError&quot;>&#xA;        &lt;option name=&quot;opt-in&quot; value=&quot;com.foo.ExperimentalBarAnnotation&quot; />&#xA;    &lt;/issue>&#xA;&lt;/lint>&#xA;```"
+        errorLine1="                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM"
+        errorLine2="                                                        ~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/welcome/SplashScreen.kt"
+            line="84"
+            column="57"/>
+    </issue>
+
+    <issue
+        id="UnsafeOptInUsageError"
+        severity="Error"
+        message="This declaration is opt-in and its usage should be marked with `@androidx.media3.common.util.UnstableApi` or `@OptIn(markerClass = androidx.media3.common.util.UnstableApi.class)`"
+        category="Correctness"
+        priority="4"
+        summary="Unsafe opt-in usage intended to be error-level severity"
+        explanation="This API has been flagged as opt-in with error-level severity.&#xA;&#xA;Any declaration annotated with this marker is considered part of an unstable or&#xA;otherwise non-standard API surface and its call sites should accept the opt-in&#xA;aspect of it by using the `@OptIn` annotation, using the marker annotation --&#xA;effectively causing further propagation of the opt-in aspect -- or configuring&#xA;the `UnsafeOptInUsageError` check&apos;s options for project-wide opt-in.&#xA;&#xA;To configure project-wide opt-in, specify the `opt-in` option value in `lint.xml`&#xA;as a comma-delimited list of opted-in annotations:&#xA;&#xA;```&#xA;&lt;lint>&#xA;    &lt;issue id=&quot;UnsafeOptInUsageError&quot;>&#xA;        &lt;option name=&quot;opt-in&quot; value=&quot;com.foo.ExperimentalBarAnnotation&quot; />&#xA;    &lt;/issue>&#xA;&lt;/lint>&#xA;```"
+        errorLine1="@OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)"
+        errorLine2="       ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="/home/runner/work/medpro-watani-direct/medpro-watani-direct/app/src/main/java/sy/medpro/watani/ui/library/VideoPlayerScreen.kt"
+            line="44"
+            column="8"/>
+    </issue>
+
+</issues>
