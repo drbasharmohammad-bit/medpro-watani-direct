@@ -107,7 +107,14 @@ jobs:
           WATANI_KEY_PASSWORD: ${{ secrets.WATANI_KEY_PASSWORD }}
           WATANI_KEYSTORE_TYPE: PKCS12
         run: |
-          gradle :app:testDebugUnitTest --tests "sy.medpro.watani.data.UnifiedFixesTest" --tests "sy.medpro.watani.data.BehavioralFixesTest" --tests "sy.medpro.watani.data.RestoreResponseTest" --console=plain --max-workers=2
+          # Retry loop: dependency downloads intermittently hit
+          # upstream 504s (GitHub Releases / Gradle CDN); Gradle caches
+          # progress between attempts, so a retry usually completes.
+          for attempt in 1 2 3; do
+            if gradle :app:testDebugUnitTest --tests "sy.medpro.watani.data.UnifiedFixesTest" --tests "sy.medpro.watani.data.BehavioralFixesTest" --tests "sy.medpro.watani.data.RestoreResponseTest" --console=plain --max-workers=2; then break; fi
+            if [ "$attempt" = "3" ]; then exit 1; fi
+            echo "Gradle attempt $attempt failed; retrying in 30s..."; sleep 30
+          done
 
       - name: Lint (new errors fail; legacy errors are baselined)
         env:
@@ -121,7 +128,11 @@ jobs:
           # (warnings do not fail it), which is exactly the required
           # bar: surface errors, never break the build on legacy
           # warnings. The HTML/text reports are uploaded below.
-          gradle :app:lintRelease --console=plain --max-workers=2
+          for attempt in 1 2 3; do
+            if gradle :app:lintRelease --console=plain --max-workers=2; then break; fi
+            if [ "$attempt" = "3" ]; then exit 1; fi
+            echo "Gradle attempt $attempt failed; retrying in 30s..."; sleep 30
+          done
 
       - name: Upload lint reports
         if: always()
@@ -142,7 +153,11 @@ jobs:
           WATANI_KEY_PASSWORD: ${{ secrets.WATANI_KEY_PASSWORD }}
           WATANI_KEYSTORE_TYPE: PKCS12
         run: |
-          gradle assembleRelease --console=plain --max-workers=2
+          for attempt in 1 2 3; do
+            if gradle assembleRelease --console=plain --max-workers=2; then break; fi
+            if [ "$attempt" = "3" ]; then exit 1; fi
+            echo "Gradle attempt $attempt failed; retrying in 30s..."; sleep 30
+          done
           cp app/build/outputs/apk/release/app-release.apk medpro.apk
 
       - name: Show stable SHA-1 (registered in Firebase once)
