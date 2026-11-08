@@ -73,7 +73,14 @@ jobs:
 
       - name: Download Gradle 9.3.1 (no gradlew in Studio export)
         run: |
-          curl -sL https://services.gradle.org/distributions/gradle-9.3.1-bin.zip -o /tmp/gradle-9.3.1-bin.zip
+          # Retry + integrity check: services.gradle.org intermittently
+          # serves a truncated zip (two consecutive runs failed unzip
+          # with "End-of-central-directory signature not found").
+          for attempt in 1 2 3; do
+            curl -fsSL --retry 3 https://services.gradle.org/distributions/gradle-9.3.1-bin.zip -o /tmp/gradle-9.3.1-bin.zip               && unzip -tq /tmp/gradle-9.3.1-bin.zip >/dev/null && break
+            echo "Gradle download attempt $attempt was corrupt/incomplete; retrying..."
+            sleep 10
+          done
           unzip -q /tmp/gradle-9.3.1-bin.zip -d /tmp
           echo "/tmp/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
