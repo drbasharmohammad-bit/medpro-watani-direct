@@ -76,11 +76,16 @@ jobs:
           # Retry + integrity check: services.gradle.org intermittently
           # serves a truncated zip (two consecutive runs failed unzip
           # with "End-of-central-directory signature not found").
-          for attempt in 1 2 3; do
-            curl -fsSL --retry 3 https://services.gradle.org/distributions/gradle-9.3.1-bin.zip -o /tmp/gradle-9.3.1-bin.zip               && unzip -tq /tmp/gradle-9.3.1-bin.zip >/dev/null && break
-            echo "Gradle download attempt $attempt was corrupt/incomplete; retrying..."
-            sleep 10
+          ok=""
+          for url in https://services.gradle.org/distributions/gradle-9.3.1-bin.zip https://downloads.gradle.org/distributions/gradle-9.3.1-bin.zip https://github.com/gradle/gradle-distributions/releases/download/v9.3.1/gradle-9.3.1-bin.zip; do
+            for attempt in 1 2; do
+              if curl -fsSL --retry 2 "$url" -o /tmp/gradle-9.3.1-bin.zip && unzip -tq /tmp/gradle-9.3.1-bin.zip >/dev/null; then ok=1; break; fi
+              echo "Gradle download from $url (attempt $attempt) failed/corrupt; retrying..."
+              sleep 8
+            done
+            if [ -n "$ok" ]; then break; fi
           done
+          if [ -z "$ok" ]; then echo "ERROR: could not download a valid Gradle 9.3.1 zip from any mirror." >&2; exit 1; fi
           unzip -q /tmp/gradle-9.3.1-bin.zip -d /tmp
           echo "/tmp/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
