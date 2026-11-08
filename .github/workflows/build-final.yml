@@ -107,7 +107,7 @@ jobs:
           WATANI_KEY_PASSWORD: ${{ secrets.WATANI_KEY_PASSWORD }}
           WATANI_KEYSTORE_TYPE: PKCS12
         run: |
-          gradle :app:testDebugUnitTest --tests "sy.medpro.watani.data.UnifiedFixesTest" --console=plain --max-workers=2
+          gradle :app:testDebugUnitTest --tests "sy.medpro.watani.data.UnifiedFixesTest" --tests "sy.medpro.watani.data.BehavioralFixesTest" --tests "sy.medpro.watani.data.RestoreResponseTest" --console=plain --max-workers=2
 
       - name: Lint (new errors fail; legacy errors are baselined)
         env:

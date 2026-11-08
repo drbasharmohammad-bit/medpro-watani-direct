@@ -158,33 +158,6 @@ class WataniRepository(private val context: Context) {
         return File(dir, "$sanitized.json")
     }
 
-    /**
-     * F-01: the manifest hash of the INSTALLED file, computed with the
-     * algorithm of the section's own family — blake2b-8 (16 hex chars)
-     * for the `questions/` family, sha256 truncated to its first 16 hex
-     * chars for every other family (Damascus, cases, library-adjacent
-     * files — the algorithms the publishing pipeline built the manifest
-     * with; phase-4 audit verified 180/181 entries this way). Returns
-     * null only if the file cannot be read.
-     */
-    private fun computeManifestHash(path: String, file: File): String? {
-        return try {
-            val bytes = file.readBytes()
-            // Family rule exactly as the publishing pipeline + phase-4
-            // audit define it: any path starting with "questions"
-            // (the questions/ shards AND the root questions.json index)
-            // is blake2b-8; everything else is sha256[:16].
-            if (path.startsWith("questions")) {
-                Blake2b.hashHex(bytes, digestSize = 8)
-            } else {
-                val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
-                digest.joinToString("") { "%02x".format(it) }.take(16)
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     suspend fun downloadSection(
         path: String,
         entry: ManifestFileEntry,
@@ -280,82 +253,30 @@ class WataniRepository(private val context: Context) {
             }
 
             // F-01: verify the INSTALLED file against the manifest entry
-            // BEFORE recording it: actual byte size and the family's own
-            // hash (blake2b-8 for questions/, sha256[:16] for every other
-            // family — the algorithms the manifest itself was built
-            // with, phase-4 audit) must both match when the manifest
-            // declares them. A mismatch deletes the file and fails
-            // visibly instead of blessing corrupt/swapped bytes.
-            val declaredSize = entry.size
-            if (declaredSize != null && file.length() != declaredSize) {
-                val actualSize = file.length()
+            // BEFORE recording it (pure core in SectionVerification —
+            // the exact logic is unit-tested off-device): actual byte
+            // size and the family's own hash must both match when the
+            // manifest declares them. A mismatch deletes the file and
+            // fails visibly instead of blessing corrupt/swapped bytes.
+            val installedBytes = file.readBytes()
+            val mismatch = SectionVerification.manifestMismatch(
+                path, installedBytes, entry.size, entry.hash
+            )
+            if (mismatch != null) {
                 file.delete()
-                return@withContext Result.failure(Exception("حجم ملف القسم غير مطابق للفهرس (المتوقع $declaredSize والفعلي $actualSize) — أعد التحميل."))
+                return@withContext Result.failure(Exception(mismatch))
             }
-            val computedHash = computeManifestHash(path, file)
-            val declaredHash = entry.hash?.trim().orEmpty()
-            if (declaredHash.isNotEmpty() && computedHash != null &&
-                !computedHash.equals(declaredHash, ignoreCase = true)) {
-                file.delete()
-                return@withContext Result.failure(Exception("بصمة ملف القسم غير مطابقة للفهرس — أعد التحميل."))
-            }
+            val computedHash = SectionVerification.manifestHashHex(path, installedBytes)
 
+            // F-02/F-03/F-04: content verification (pure core in
+            // SectionVerification): real parse + honest declared-count
+            // comparison, no coerced counts anywhere.
             val jsonString = file.readText(Charsets.UTF_8)
-            var actualCount = 0
-
-            // A3 + F-02/F-03/F-04: verification against the file's own
-            // declared count, with NO coerced counts anywhere: a parsed
-            // count of zero for a non-empty section is an explicit
-            // failure, guide.json is really parsed, and the cases check
-            // is the honest declared-vs-actual comparison for any value.
-            if (path.contains("cases.json")) {
-                val casesEnv = moshi.adapter(CasesEnvelope::class.java).fromJson(jsonString)
-                val declaredCount = casesEnv?.count
-                actualCount = casesEnv?.cases?.size ?: 0
-                if (casesEnv == null || declaredCount == null || actualCount != declaredCount) {
-                    file.delete()
-                    return@withContext Result.failure(Exception("خطأ في تطابق عدد الحالات الداخلي (المتوقع $declaredCount والفعلي $actualCount)"))
-                }
-            } else if (path == "guide.json") {
-                val guideEnv = moshi.adapter(GuideEnvelope::class.java).fromJson(jsonString)
-                if (guideEnv == null) {
-                    file.delete()
-                    return@withContext Result.failure(Exception("ملف الدليل غير صالح — أعد التحميل."))
-                }
-                actualCount = guideEnv.groups?.size ?: 0
-                if (actualCount == 0) {
-                    file.delete()
-                    return@withContext Result.failure(Exception("ملف الدليل بلا مجموعات — أعد التحميل."))
-                }
-            } else if (path == "ddx.json") {
-                val ddxEnv = moshi.adapter(DdxEnvelope::class.java).fromJson(jsonString)
-                val declaredCount = ddxEnv?.count ?: 0
-                actualCount = ddxEnv?.cases?.size ?: 0
-                if (ddxEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
-                    file.delete()
-                    return@withContext Result.failure(Exception("خطأ في تطابق عدد حالات التشخيص التفريقي الداخلي (المتوقع $declaredCount والفعلي $actualCount)"))
-                }
-            } else if (path == "reverse.json") {
-                val revEnv = moshi.adapter(ReverseEnvelope::class.java).fromJson(jsonString)
-                val declaredCount = revEnv?.count ?: 0
-                actualCount = revEnv?.rounds?.size ?: 0
-                if (revEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
-                    file.delete()
-                    return@withContext Result.failure(Exception("خطأ في تطابق عدد جولات اقلبها الداخلي (المتوقع $declaredCount والفعلي $actualCount)"))
-                }
-            } else {
-                val subjEnv = moshi.adapter(SubjectEnvelope::class.java).fromJson(jsonString)
-                val declaredCount = subjEnv?.count ?: 0
-                val tCount = subjEnv?.topics?.sumOf { it.questions?.size ?: 0 } ?: 0
-                val sCount = subjEnv?.sessions?.sumOf { it.questions?.size ?: 0 } ?: 0
-                actualCount = if (tCount > 0) tCount else sCount
-                // F-02: zero parsed questions is an explicit failure —
-                // the old `actualCount = declaredCount` coercion made
-                // an empty/gutted file install as "complete".
-                if (subjEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-                    file.delete()
-                    return@withContext Result.failure(Exception("خطأ في تطابق عدد أسئلة القسم الداخلي (المتوقع $declaredCount والفعلي $actualCount)"))
-                }
+            val actualCount = try {
+                SectionVerification.verifySectionCount(path, jsonString, moshi)
+            } catch (e: IllegalStateException) {
+                file.delete()
+                return@withContext Result.failure(Exception(e.message))
             }
 
             // F-01: the registry stores the hash COMPUTED from the
@@ -365,7 +286,7 @@ class WataniRepository(private val context: Context) {
             val entity = DownloadedSectionEntity(
                 sectionPath = path,
                 version = entry.version ?: "1.0",
-                hash = computedHash ?: (entry.hash ?: ""),
+                hash = computedHash,
                 count = actualCount,
                 downloadedAt = System.currentTimeMillis()
             )

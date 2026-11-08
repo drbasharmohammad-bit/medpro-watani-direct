@@ -397,18 +397,13 @@ object WorkerActivationApi {
                     .build()
                 client.newCall(request).execute().use { resp ->
                     val text = resp.body?.string() ?: "{}"
-                    val json = try {
-                        JSONObject(text)
-                    } catch (_: Exception) {
-                        JSONObject()
-                    }
-                    if (!resp.isSuccessful || !json.optBoolean("ok", false)) {
-                        return@withContext false
-                    }
-                    val token = json.optString("token", "")
-                    val code = json.optString("code", "")
-                    if (token.isBlank() || code.isBlank()) return@withContext false
-                    storeActivation(context, user.uid, code, token, parseExpiresAt(json))
+                    // Pure decision (RestoreResponse — unit-tested):
+                    // success only on HTTP success + ok:true + token +
+                    // code; every other answer is a rejection and the
+                    // manual code-entry path stays exactly as it was.
+                    val restored = RestoreResponse.parse(resp.isSuccessful, text)
+                        ?: return@withContext false
+                    storeActivation(context, user.uid, restored.code, restored.token, restored.expiresAtMillis)
                     try { uploadFcmToken(context) } catch (_: Exception) { }
                     true
                 }

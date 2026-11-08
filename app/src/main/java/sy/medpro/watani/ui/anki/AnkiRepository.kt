@@ -45,8 +45,6 @@ class AnkiRepository(private val context: Context) {
         .add(KotlinJsonAdapterFactory())
         .build()
 
-    private val setAdapter = moshi.adapter(AnkiSetDto::class.java)
-
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -58,12 +56,12 @@ class AnkiRepository(private val context: Context) {
         // guaranteed floor. Both are parsed through the same strict
         // validation; an invalid cache falls back to the asset.
         val cachedText = readCache()
-        val cachedSet = cachedText?.let { validatedParse(it) }
+        val cachedSet = cachedText?.let { AnkiValidation.validatedParse(it, moshi) }
         val working: Pair<String?, AnkiSet> = when {
             cachedSet != null -> cachedText to cachedSet
             else -> {
                 val assetText = readBundledAsset()
-                assetText to (assetText?.let { validatedParse(it) }
+                assetText to (assetText?.let { AnkiValidation.validatedParse(it, moshi) }
                     ?: AnkiSet(version = null, subjects = emptyList()))
             }
         }
@@ -72,11 +70,11 @@ class AnkiRepository(private val context: Context) {
 
         val remoteText = fetchRemote()
         if (remoteText != null) {
-            val remoteSet = validatedParse(remoteText)
+            val remoteSet = AnkiValidation.validatedParse(remoteText, moshi)
             val remoteVersion = remoteSet?.version?.takeIf { it.isNotBlank() }
             val workingVersion = workingSet.version?.takeIf { it.isNotBlank() }
             if (remoteSet != null && remoteVersion != null &&
-                isStrictlyNewer(remoteVersion, workingVersion)
+                AnkiValidation.isStrictlyNewer(remoteVersion, workingVersion)
             ) {
                 // Atomic adoption: content + version persist together,
                 // only after full validation above.
@@ -87,35 +85,6 @@ class AnkiRepository(private val context: Context) {
             }
         }
         workingSet
-    }
-
-    /**
-     * Strict adoption validation (F-05): parses fully and returns the
-     * set only when it has at least one card AND its declared `total`
-     * (when present) equals the actual parsed card count. Anything
-     * else is rejected wholesale — never partially adopted.
-     */
-    private fun validatedParse(text: String): AnkiSet? {
-        val parsed = parse(text) ?: return null
-        if (parsed.cards.isEmpty()) return null
-        val declaredTotal = try {
-            setAdapter.fromJson(text)?.total
-        } catch (_: Exception) {
-            null
-        }
-        if (declaredTotal != null && declaredTotal != parsed.cards.size) return null
-        return parsed
-    }
-
-    /** Explicit version ordering for `yyyy-MM-dd` versions. */
-    private fun isStrictlyNewer(remote: String, working: String?): Boolean {
-        if (working == null) return true
-        val dateShape = Regex("""^\d{4}-\d{2}-\d{2}$""")
-        return if (dateShape.matches(remote) && dateShape.matches(working)) {
-            remote > working
-        } else {
-            remote > working
-        }
     }
 
     private fun readBundledAsset(): String? = try {
@@ -155,34 +124,6 @@ class AnkiRepository(private val context: Context) {
         const val MAX_FETCH_ATTEMPTS = 3
         const val RETRY_DELAY_MS = 1500L
     }
-
-    private fun parse(text: String): AnkiSet? =
-        try {
-            val dto = setAdapter.fromJson(text) ?: return null
-            val subjects = dto.subjects.orEmpty().mapNotNull { s ->
-                val subjectName = s.name?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                val topics = s.topics.orEmpty().mapNotNull { t ->
-                    val topicName = t.name?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                    val cards = t.cards.orEmpty().mapNotNull { c ->
-                        val front = c.front?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                        val back = c.back?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                        AnkiCard(
-                            id = ankiCardId(subjectName, topicName, front, back),
-                            subject = subjectName,
-                            topic = topicName,
-                            front = front,
-                            back = back,
-                            src = c.src?.trim()?.takeIf { it.isNotEmpty() }
-                        )
-                    }
-                    AnkiTopic(topicName, cards)
-                }
-                AnkiSubject(subjectName, topics)
-            }
-            AnkiSet(version = dto.version, subjects = subjects)
-        } catch (_: Exception) {
-            null
-        }
 
     private fun cacheFile(): File {
         val dir = File(context.filesDir, "anki")
