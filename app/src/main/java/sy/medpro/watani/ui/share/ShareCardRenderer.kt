@@ -274,11 +274,22 @@ object ShareCardRenderer {
         }
     }
 
-    /** Saves the card PNG into cacheDir/share_images and returns the file. */
+    /**
+     * Saves the card PNG into cacheDir/share_images and returns the file.
+     * F-15: a single FIXED file name, overwritten on every share — the
+     * old timestamped names accumulated one PNG per share in the cache
+     * forever. Legacy timestamped files from older builds are swept on
+     * each save so the folder holds exactly one card.
+     */
     fun saveToCache(context: Context, bitmap: Bitmap): File {
         val dir = File(context.cacheDir, "share_images")
         if (!dir.exists()) dir.mkdirs()
-        val file = File(dir, "question_card_${System.currentTimeMillis()}.png")
+        dir.listFiles()?.forEach { f ->
+            if (f.name.startsWith("question_card_") && f.name != "question_card.png") {
+                try { f.delete() } catch (_: Exception) { }
+            }
+        }
+        val file = File(dir, "question_card.png")
         FileOutputStream(file).use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
         return file
     }

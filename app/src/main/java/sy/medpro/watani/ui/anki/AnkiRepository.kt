@@ -14,10 +14,30 @@ import java.util.concurrent.TimeUnit
 import kotlin.text.Charsets
 
 /**
- * Loads the published Anki set (`v1/anki/anki.json`) and caches it under filesDir/anki.
- * Remote version wins: unchanged version → cache is used without re-download, newer
- * version → download and replace. Offline → cache. Any failure without a cache, or any
- * parse failure, yields an empty set — never fabricated cards, never a crash.
+ * Loads the Anki set with a guaranteed working copy at all times:
+ *
+ * 1. BUNDLED ASSET (`assets/anki.json`, the doctor's 9,071-card set,
+ *    version 2026-11-07) ships inside the APK, so the section works
+ *    fully offline from the very first launch — no fetch can ever
+ *    leave a new device card-less again.
+ * 2. The cache file (filesDir/anki/anki.json) holds the last ADOPTED
+ *    remote set when one was fully verified.
+ * 3. Remote updates are ATOMIC (F-05/F-06 fix): the remote text is
+ *    parsed completely and adopted only when (a) it parses, (b) the
+ *    parsed card count equals the file's declared `total`, (c) it has
+ *    at least one card, and (d) its version is strictly NEWER than the
+ *    working copy's version under an explicit ordering. Only then are
+ *    content and version persisted together (checked rename). Any
+ *    failure at any step keeps the working copy — a version is never
+ *    stored for content that was not adopted, and a corrupt/older
+ *    remote can never poison the cache (the old code persisted the
+ *    raw remote text BEFORE parsing it).
+ *
+ * Version ordering: versions are `yyyy-MM-dd` dates (e.g. 2026-11-07),
+ * so lexicographic comparison IS chronological order for this format;
+ * a version that does not match the date shape is compared
+ * lexicographically as a fallback, and a missing remote version is
+ * never adopted over a versioned working copy.
  */
 class AnkiRepository(private val context: Context) {
 
@@ -34,26 +54,75 @@ class AnkiRepository(private val context: Context) {
         .build()
 
     suspend fun load(): AnkiSet = withContext(Dispatchers.IO) {
+        // Working copy: adopted cache first, bundled asset as the
+        // guaranteed floor. Both are parsed through the same strict
+        // validation; an invalid cache falls back to the asset.
         val cachedText = readCache()
-        val remoteText = fetchRemote()
-        val text = when {
-            remoteText == null -> cachedText
-            cachedText == null -> {
-                persistCache(remoteText)
-                remoteText
-            }
+        val cachedSet = cachedText?.let { validatedParse(it) }
+        val working: Pair<String?, AnkiSet> = when {
+            cachedSet != null -> cachedText to cachedSet
             else -> {
-                val remoteVersion = versionOf(remoteText)
-                val cachedVersion = versionOf(cachedText)
-                if (remoteVersion != null && remoteVersion != cachedVersion) {
-                    persistCache(remoteText)
-                    remoteText
-                } else {
-                    cachedText
+                val assetText = readBundledAsset()
+                assetText to (assetText?.let { validatedParse(it) }
+                    ?: AnkiSet(version = null, subjects = emptyList()))
+            }
+        }
+        var workingText = working.first
+        var workingSet = working.second
+
+        val remoteText = fetchRemote()
+        if (remoteText != null) {
+            val remoteSet = validatedParse(remoteText)
+            val remoteVersion = remoteSet?.version?.takeIf { it.isNotBlank() }
+            val workingVersion = workingSet.version?.takeIf { it.isNotBlank() }
+            if (remoteSet != null && remoteVersion != null &&
+                isStrictlyNewer(remoteVersion, workingVersion)
+            ) {
+                // Atomic adoption: content + version persist together,
+                // only after full validation above.
+                if (persistCache(remoteText)) {
+                    workingText = remoteText
+                    workingSet = remoteSet
                 }
             }
         }
-        text?.let { parse(it) } ?: AnkiSet(version = null, subjects = emptyList())
+        workingSet
+    }
+
+    /**
+     * Strict adoption validation (F-05): parses fully and returns the
+     * set only when it has at least one card AND its declared `total`
+     * (when present) equals the actual parsed card count. Anything
+     * else is rejected wholesale — never partially adopted.
+     */
+    private fun validatedParse(text: String): AnkiSet? {
+        val parsed = parse(text) ?: return null
+        if (parsed.cards.isEmpty()) return null
+        val declaredTotal = try {
+            setAdapter.fromJson(text)?.total
+        } catch (_: Exception) {
+            null
+        }
+        if (declaredTotal != null && declaredTotal != parsed.cards.size) return null
+        return parsed
+    }
+
+    /** Explicit version ordering for `yyyy-MM-dd` versions. */
+    private fun isStrictlyNewer(remote: String, working: String?): Boolean {
+        if (working == null) return true
+        val dateShape = Regex("""^\d{4}-\d{2}-\d{2}$""")
+        return if (dateShape.matches(remote) && dateShape.matches(working)) {
+            remote > working
+        } else {
+            remote > working
+        }
+    }
+
+    private fun readBundledAsset(): String? = try {
+        context.assets.open("anki.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
+            .takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
     }
 
     // تحصين (7 نوفمبر 23:47، بأمر الدكتور): إعادة محاولة الجلب حتى 3 مرات عند
@@ -86,9 +155,6 @@ class AnkiRepository(private val context: Context) {
         const val MAX_FETCH_ATTEMPTS = 3
         const val RETRY_DELAY_MS = 1500L
     }
-
-    private fun versionOf(text: String): String? =
-        try { setAdapter.fromJson(text)?.version?.takeIf { it.isNotBlank() } } catch (_: Exception) { null }
 
     private fun parse(text: String): AnkiSet? =
         try {
@@ -131,13 +197,25 @@ class AnkiRepository(private val context: Context) {
         null
     }
 
-    private fun persistCache(text: String) {
-        try {
+    /**
+     * Atomic cache persist (F-07): write to temp, then a CHECKED rename
+     * over the old file in one step — the old cache is never deleted
+     * before its replacement exists, and a failed rename reports
+     * failure so the caller keeps the previous working copy.
+     */
+    private fun persistCache(text: String): Boolean {
+        return try {
             val file = cacheFile()
             val temp = File(file.parentFile, "${file.name}.tmp")
             temp.writeText(text, Charsets.UTF_8)
-            if (file.exists()) file.delete()
-            temp.renameTo(file)
-        } catch (_: Exception) {}
+            if (temp.renameTo(file)) {
+                true
+            } else {
+                if (temp.exists()) temp.delete()
+                false
+            }
+        } catch (_: Exception) {
+            false
+        }
     }
 }

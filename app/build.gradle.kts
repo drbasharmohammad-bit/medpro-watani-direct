@@ -15,8 +15,11 @@ android {
     applicationId = "sy.medpro.watani"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    // Unified fixes build (Nov 2026): a real, ascending versionCode
+    // (74273, the build number after 74272) so this build installs as
+    // an update over every previous one, and a meaningful versionName.
+    versionCode = 74273
+    versionName = "1.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -111,7 +114,9 @@ dependencies {
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
   implementation(libs.firebase.appcheck.recaptcha)
-  implementation(libs.firebase.appcheck.debug)
+  // App Check debug provider is a DEBUG-only aid: it must never ship
+  // in a release build (unified fixes package, Nov 2026).
+  debugImplementation(libs.firebase.appcheck.debug)
   implementation(libs.firebase.auth)
   implementation(libs.firebase.messaging)
   implementation(libs.androidx.credentials)

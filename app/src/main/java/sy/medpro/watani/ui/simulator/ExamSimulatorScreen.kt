@@ -274,8 +274,11 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                                         topic.questions?.forEach { q ->
                                                             val qSpec = subjName
                                                             val opts = q.options ?: emptyList()
-                                                            val correctIdx = getCorrectIndices(q, opts).firstOrNull() ?: 0
-                                                            if (opts.isNotEmpty()) {
+                                                            // F-08: invalid key -> the question is
+                                                            // excluded from the simulation entirely
+                                                            // instead of being graded as option 0.
+                                                            val correctIdx = getCorrectIndices(q, opts).firstOrNull()
+                                                            if (opts.isNotEmpty() && correctIdx != null) {
                                                                 list.add(
                                                                     SimQuestion(
                                                                         id = list.size + 1,

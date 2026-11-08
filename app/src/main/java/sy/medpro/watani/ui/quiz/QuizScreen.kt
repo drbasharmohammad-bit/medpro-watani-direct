@@ -68,8 +68,14 @@ fun QuizScreen(
     LaunchedEffect(Unit) {
         OfflineStudyVault.ensureInitialized(context)
     }
-    var selectedAnswers by remember { mutableStateOf(mapOf<Int, Int>()) }
-    var ruledOutMap by remember { mutableStateOf(mapOf<Int, Set<Int>>()) }
+    // F-14: in-progress answers survive process death / activity
+    // recreation via rememberSaveable (the quiz is keyed by its
+    // question set: a different quiz instance starts clean because
+    // the caller composes a fresh screen state per quiz). Previously
+    // plain remember{} lost every answer when Android killed the
+    // process mid-quiz.
+    var selectedAnswers by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(mapOf<Int, Int>()) }
+    var ruledOutMap by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(mapOf<Int, Set<Int>>()) }
     var questionTimes by remember { mutableStateOf(mapOf<Int, Int>()) }
     var activeQuestionTimerSeconds by remember { mutableStateOf(0) }
     var highlightKeywords by remember { mutableStateOf(true) }
@@ -316,22 +322,28 @@ fun QuizScreen(
                                         questionTimes = questionTimes.toMutableMap().apply {
                                             put(index, activeQuestionTimerSeconds.coerceAtLeast(1))
                                         }
-                                        val isCor = correctIndices.contains(optionIndex)
-                                        if (isCor) {
-                                            score++
+                                        // F-08: an empty correctIndices means the
+                                        // question's key is invalid — the tap is
+                                        // shown as selected above, but the question
+                                        // is never graded, scored, or recorded.
+                                        if (correctIndices.isNotEmpty()) {
+                                            val isCor = correctIndices.contains(optionIndex)
+                                            if (isCor) {
+                                                score++
+                                            }
+                                            val correctText = options.getOrNull(correctIndices.firstOrNull() ?: 0) ?: ""
+                                            val selectedText = options.getOrNull(optionIndex) ?: ""
+                                            OfflineStudyVault.recordQuestionAttempt(
+                                                context = context,
+                                                subjectTitle = title,
+                                                questionId = question.id ?: "${title}_${index + 1}",
+                                                questionText = question.text ?: "",
+                                                selectedOptionText = selectedText,
+                                                correctOptionText = correctText,
+                                                explanation = question.explanation ?: "",
+                                                isCorrect = isCor
+                                            )
                                         }
-                                        val correctText = options.getOrNull(correctIndices.firstOrNull() ?: 0) ?: ""
-                                        val selectedText = options.getOrNull(optionIndex) ?: ""
-                                        OfflineStudyVault.recordQuestionAttempt(
-                                            context = context,
-                                            subjectTitle = title,
-                                            questionId = question.id ?: "${title}_${index + 1}",
-                                            questionText = question.text ?: "",
-                                            selectedOptionText = selectedText,
-                                            correctOptionText = correctText,
-                                            explanation = question.explanation ?: "",
-                                            isCorrect = isCor
-                                        )
                                     }
                                 }
                             )
@@ -668,7 +680,13 @@ private fun shareQuestionAsImage(
             }
         )
     } catch (_: Exception) {
-        // Image generation failed: share nothing (no text fallback).
+        // F-15: the failure is VISIBLE now (the old code swallowed it
+        // and the share tap looked dead). Still no text fallback:
+        // image-only sharing is the doctor's rule — nothing is shared
+        // on failure, the user is simply told.
+        try {
+            android.widget.Toast.makeText(context, "تعذّرت مشاركة السؤال — أعد المحاولة.", android.widget.Toast.LENGTH_SHORT).show()
+        } catch (_: Exception) { }
     }
 }
 

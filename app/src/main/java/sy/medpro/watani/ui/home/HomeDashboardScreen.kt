@@ -38,12 +38,9 @@ import sy.medpro.watani.ui.theme.*
 @Composable
 fun HomeDashboardScreen(
     manifestVersion: String?,
-    hasResume: Boolean = false,
-    onResumeLastSection: () -> Unit = {},
     onOpenSupport: () -> Unit = {},
     onOpenFocusTimer: () -> Unit = {},
-    onOpenReviewDue: () -> Unit = {},
-    onOpenActivation: () -> Unit = {}
+    onOpenReviewDue: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var animateIn by remember { mutableStateOf(false) }
@@ -252,49 +249,6 @@ fun HomeDashboardScreen(
             }
         }
 
-        // بطاقة «يومك الدراسي»: أيام متبقية + أسئلة اليوم + استئناف.
-        item {
-            val yourDayAccent = Color(0xFF1565C0)
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, RoseOutline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Today, contentDescription = null, tint = yourDayAccent, modifier = Modifier.size(22.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("يومك الدراسي", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = yourDayAccent)
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = if (hasExamDate) "الأيام المتبقية للامتحان: $days يومًا" else "لم تُحدَّد تاريخ الامتحان بعد",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "أسئلة حللتها اليوم: ${stats.answeredToday}",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                    )
-                    if (hasResume) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = onResumeLastSection,
-                            colors = ButtonDefaults.buttonColors(containerColor = yourDayAccent),
-                            shape = MaterialTheme.shapes.medium,
-                            modifier = Modifier.fillMaxWidth().height(46.dp)
-                        ) {
-                            Text("أكمل من وين وقّفت", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        }
-                    }
-                }
-            }
-        }
-
         // بطاقة البومودورو: العدّاد الحي من محرك المؤقت المشترك نفسه.
         item {
             val focusAccent = Color(0xFF4527A0)
@@ -343,11 +297,6 @@ fun HomeDashboardScreen(
                     }
                 }
             }
-        }
-
-        // بطاقة «سؤال اليوم» (لا تُرسم إطلاقًا بلا أقسام محمّلة).
-        item {
-            DailyQuestionCard(onOpenActivation = onOpenActivation)
         }
 
         // بطاقة المراجعة المستحقة — شرطية: لا تُرسم عند صفر العناصر.

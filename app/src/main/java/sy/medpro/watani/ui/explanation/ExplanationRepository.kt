@@ -39,6 +39,15 @@ import kotlin.text.Charsets
  *   shows a retry button) instead of silent "absent" — success(null) now
  *   strictly means "the layer loaded and this question has no record".
  */
+/**
+ * F-09: carries the HTTP status of a failed explanation-index fetch so
+ * callers can distinguish a permanently absent layer (404 — the layer
+ * was retired server-side and creates no obligation) from a transient
+ * failure (network error / 5xx / parse error — a real incompleteness
+ * that must surface, never be swallowed as success).
+ */
+class ExplanationIndexException(val httpCode: Int?, message: String) : Exception(message)
+
 class ExplanationRepository(
     private val context: Context,
     layerBasePath: String = "explanations/"
@@ -147,19 +156,25 @@ class ExplanationRepository(
                 if (keys.isEmpty()) return@withContext Result.success(Unit)
                 val indexResult = fetchLayerIndex()
                 if (indexResult.isFailure) {
-                    // Unified explanation rule (Nov 2026): an absent or
-                    // unreachable layer creates NO prefetch obligation —
-                    // a question the layer cannot even be consulted for
-                    // must never surface as "incomplete" after a section
-                    // download (the old layer was retired server-side,
-                    // and its 404 failed every unified section whose
-                    // explanations are in fact embedded in the file).
-                    // Genuine incompleteness is only a shard that the
-                    // loaded index maps a key to and that then fails to
-                    // load (handled below). Per-question lazy lookup is
-                    // unchanged and remains the source of truth at
-                    // reading time.
-                    return@withContext Result.success(Unit)
+                    // F-09 (refines the Nov 2026 unified rule): only a
+                    // PERMANENTLY ABSENT layer (HTTP 404 — the old layer
+                    // was retired server-side) creates no prefetch
+                    // obligation. A transient index failure (network
+                    // error, 5xx, parse failure) is a genuine
+                    // incompleteness: the prefetch FAILS so the caller
+                    // keeps the "explanations incomplete" banner + retry
+                    // for sections that really depend on the layer. The
+                    // 74272 structural rule is untouched: questions with
+                    // a non-blank embedded explanation never reach this
+                    // function at all (MainViewModel filters them out),
+                    // so the unified bank can never show the banner.
+                    val cause = indexResult.exceptionOrNull()
+                    val httpCode = (cause as? ExplanationIndexException)?.httpCode
+                    return@withContext if (httpCode == 404) {
+                        Result.success(Unit)
+                    } else {
+                        Result.failure(cause ?: Exception("تعذر تحميل فهرس الشروحات"))
+                    }
                 }
                 val index = indexResult.getOrNull() ?: return@withContext Result.success(Unit)
                 val qidIndex = index.qidIndex ?: return@withContext Result.success(Unit)
@@ -196,7 +211,7 @@ class ExplanationRepository(
                 }
                 if (!resp.isSuccessful) {
                     return@withContext readIndexFromDisk(diskFile)
-                        ?: Result.failure(Exception("تعذر تحميل فهرس الشروحات"))
+                        ?: Result.failure(ExplanationIndexException(resp.code, "تعذر تحميل فهرس الشروحات"))
                 }
                 val text = resp.body?.string()
                     ?: return@withContext readIndexFromDisk(diskFile)

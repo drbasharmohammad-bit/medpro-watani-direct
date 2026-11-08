@@ -39,7 +39,7 @@ name: Build Watani Final APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feature/home-package]
 
 jobs:
   build:
@@ -87,6 +87,40 @@ jobs:
           echo "$WATANI_KEYSTORE_BASE64" | base64 -d > debug.keystore
           keytool -list -v -keystore debug.keystore -storetype "$WATANI_KEYSTORE_TYPE" -storepass "$WATANI_KEYSTORE_PASSWORD" -alias "$WATANI_KEY_ALIAS" \
             | grep -E "SHA1:" | tee debug-sha1.txt
+
+      - name: Unit tests (unified fixes regressions)
+        env:
+          WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
+          WATANI_KEY_ALIAS: watani
+          WATANI_KEY_PASSWORD: ${{ secrets.WATANI_KEY_PASSWORD }}
+          WATANI_KEYSTORE_TYPE: PKCS12
+        run: |
+          gradle :app:testDebugUnitTest --tests "sy.medpro.watani.data.UnifiedFixesTest" --console=plain --max-workers=2
+
+      - name: Lint (errors fail the build; warnings are reported)
+        env:
+          WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
+          WATANI_KEY_ALIAS: watani
+          WATANI_KEY_PASSWORD: ${{ secrets.WATANI_KEY_PASSWORD }}
+          WATANI_KEYSTORE_TYPE: PKCS12
+        run: |
+          # Unified fixes package (Nov 2026): lint runs on every build.
+          # gradle lint exits non-zero on lint ERRORS only by default
+          # (warnings do not fail it), which is exactly the required
+          # bar: surface errors, never break the build on legacy
+          # warnings. The HTML/text reports are uploaded below.
+          gradle :app:lintRelease --console=plain --max-workers=2
+
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: |
+            app/build/reports/lint-results-release.html
+            app/build/reports/lint-results-release.txt
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Build final release APK
         env:

@@ -166,14 +166,14 @@ val calcSpecsSet1: List<CalcSpec> = listOf(
     CalcSpec(
         id = "meld_na",
         titleAr = "MELD-Na",
-        formula = "MELD-Na = MELD + 1.32 × (137 - Na) - 0.033 × MELD × (137 - Na)، حيث Na هو صوديوم المصل (mEq/L) مقيدا بين 125 و137 قبل الحساب. الناتج يقرّب إلى عدد صحيح، ويسقف عند 40.",
+        formula = "قاعدة الأرضية (OPTN): إذا كان MELD ≤ 11 فإن MELD-Na = MELD نفسه (لا يُطبَّق تعديل الصوديوم). وإلا: MELD-Na = MELD + 1.32 × (137 - Na) - 0.033 × MELD × (137 - Na)، حيث Na هو صوديوم المصل (mEq/L) مقيدا بين 125 و137 قبل الحساب. الناتج يقرّب إلى عدد صحيح، ويُقيَّد بين 6 و40.",
         inputs = listOf(
             CalcInputSpec("meld", "MELD", "نقطة", 6.0, 40.0, 20.0),
             CalcInputSpec("na", "صوديوم المصل", "mEq/L", 110.0, 160.0, 130.0)
         ),
         interpretation = "يضيف الصوديوم لأنه يتنبأ بالوفاة مستقلا عن MELD، خاصة في MELD المنخفض والمتوسط. يفسر بنفس مقياس MELD للوفاة والأولوية، وهو المعتمد في تخصيص الكبد في الولايات المتحدة منذ 2016 (ثم استبدل جزئيا بـ MELD 3.0 لاحقا، لكن MELD-Na ما زال واسع الاستخدام).",
         source = "Biggins et al., Gastroenterology 2006 (MELD-Na); OPTN allocation policy 2016",
-        workedExample = "MELD 20، Na 130: MELD-Na = 20 + 1.32×7 - 0.033×20×7 = 20 + 9.24 - 4.62 = 24.62، أي 25."
+        workedExample = "MELD 20، Na 130: MELD-Na = 20 + 1.32×7 - 0.033×20×7 = 20 + 9.24 - 4.62 = 24.62، أي 25. ومثال حدّي: MELD 8، Na 125: لأن MELD ≤ 11 تُطبَّق قاعدة الأرضية فيبقى MELD-Na = 8 (لا 21 كما تعطيه الصيغة بلا الأرضية)."
     ),
     CalcSpec(
         id = "child_pugh",

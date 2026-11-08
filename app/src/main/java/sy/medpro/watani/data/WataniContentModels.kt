@@ -40,7 +40,9 @@ data class ManifestFileEntry(
  *   is a trimmed, case-insensitive TEXT comparison of the stored and
  *   manifest values exactly as they are: the hash algorithm differs
  *   per section family (blake2b-8 for the questions family, sha256[:16] for
- *   Damascus files) and content hashes are never recomputed here.
+ *   Damascus files). Since the F-01 fix the stored hash is COMPUTED by
+ *   the repository from the installed file itself (never copied from
+ *   the manifest), so this comparison is a real integrity check.
  */
 fun isSectionUpToDate(downloaded: DownloadedSectionEntity?, entry: ManifestFileEntry): Boolean {
     if (downloaded == null) return false
@@ -180,8 +182,22 @@ data class CriticalFactDto(
     @Json(name = "definitiveGroup") val definitiveGroup: String?
 )
 
-fun normalizeCorrectIndex(correct: Any?, options: List<String>?): Int {
-    if (correct == null || options.isNullOrEmpty()) return 0
+/**
+ * F-08: strict key resolution. Returns the question's correct indices,
+ * or null when the key cannot be determined (missing, unparseable, or
+ * out of range). The old behaviour silently mapped every broken key to
+ * option 0, so a source-corrupt question was graded as "أ" forever.
+ *
+ * Byte-for-byte compatibility for VALID content (hard requirement):
+ * every parse step below mirrors the legacy [normalizeCorrectIndex]
+ * exactly — Number, numeric string, the Arabic/letter map, and exact
+ * option-text match — and [getCorrectIndices] returns the identical
+ * list for every question whose key resolves. Only keys that
+ * previously FELL THROUGH to the invented 0 (or were dropped out of a
+ * correctIndices list) now resolve to null instead.
+ */
+fun parseCorrectIndexOrNull(correct: Any?, options: List<String>?): Int? {
+    if (correct == null || options.isNullOrEmpty()) return null
     if (correct is Number) {
         val idx = correct.toInt()
         if (idx in options.indices) return idx
@@ -202,20 +218,51 @@ fun normalizeCorrectIndex(correct: Any?, options: List<String>?): Int {
     options.forEachIndexed { index, option ->
         if (option.trim() == str) return index
     }
-    return 0
+    return null
 }
 
-fun getCorrectIndices(dto: QuestionDto, options: List<String>?): List<Int> {
+fun normalizeCorrectIndex(correct: Any?, options: List<String>?): Int =
+    parseCorrectIndexOrNull(correct, options) ?: 0
+
+/**
+ * Resolves a question's correct indices, or null when its key is
+ * invalid (F-08). A non-empty `correctIndices` list is valid only when
+ * EVERY entry parses and lies inside the options range — a partially
+ * corrupt list rejects the question instead of silently dropping the
+ * bad entries and grading on the rest.
+ */
+fun resolveCorrectIndices(dto: QuestionDto, options: List<String>?): List<Int>? {
     if (!dto.correctIndices.isNullOrEmpty()) {
-        val indices = dto.correctIndices.mapNotNull {
-            when (it) {
-                is Number -> it.toInt()
-                else -> it.toString().toIntOrNull()
+        val parsed = dto.correctIndices.map { raw ->
+            when (raw) {
+                is Number -> raw.toInt()
+                else -> raw.toString().toIntOrNull()
             }
-        }.filter { options == null || it in options.indices }
-        if (indices.isNotEmpty()) return indices
+        }
+        if (parsed.any { it == null }) return null
+        val indices = parsed.filterNotNull()
+        if (options != null && indices.any { it !in options.indices }) return null
+        return indices
     }
-    return listOf(normalizeCorrectIndex(dto.correct, options))
+    return parseCorrectIndexOrNull(dto.correct, options)?.let { listOf(it) }
+}
+
+/** Countable trace of questions rejected for an invalid key (F-08). */
+val invalidCorrectKeyCount = java.util.concurrent.atomic.AtomicInteger(0)
+
+/**
+ * The question's correct indices for grading/display. F-08: an invalid
+ * key yields an EMPTY list (the question is excluded from grading and
+ * shown without correction) and increments [invalidCorrectKeyCount],
+ * instead of the legacy invented index 0.
+ */
+fun getCorrectIndices(dto: QuestionDto, options: List<String>?): List<Int> {
+    val resolved = resolveCorrectIndices(dto, options)
+    if (resolved == null) {
+        invalidCorrectKeyCount.incrementAndGet()
+        return emptyList()
+    }
+    return resolved
 }
 
 @JsonClass(generateAdapter = true)

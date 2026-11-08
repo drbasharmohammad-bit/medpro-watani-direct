@@ -1,21 +1,23 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
+# Project-specific ProGuard/R8 rules.
 #
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
-
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# R8 groundwork (prepared Nov 2026, NOT enabled — build.gradle.kts keeps
+# isMinifyEnabled=false for the unified fixes build).
+#
+# R8 was evaluated for this build and DEFERRED under the strict gate:
+# enabling it requires (a) green CI, (b) dex proof that every DTO class
+# and field survives with its real name, and (c) runtime confidence —
+# and this project parses JSON through BOTH Moshi codegen adapters and
+# the reflective KotlinJsonAdapterFactory (WataniRepository,
+# WorkerActivationApi, gateway sync), which is exactly the surface R8
+# breaks silently. With no device/emulator available to prove runtime
+# behaviour, the safe call is to ship without R8 and enable it later
+# with these rules already in place.
+#
+# Keep rules to activate together with isMinifyEnabled=true:
+# -keep class sy.medpro.watani.data.** { *; }
+# -keep class sy.medpro.watani.ui.anki.** { *; }
+# -keep class sy.medpro.watani.ui.explanation.** { *; }
+# -keep class com.google.firebase.** { *; }
+# -keep class com.google.android.gms.** { *; }
+# -keepattributes Signature, *Annotation*, EnclosingMethod, InnerClasses
+# -keep class com.squareup.moshi.** { *; }

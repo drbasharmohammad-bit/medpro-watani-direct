@@ -230,6 +230,20 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(currentUser) {
                         val user = currentUser
                         if (user != null) {
+                            // Activation restore (Nov 2026): one silent
+                            // attempt at this sign-in moment only, and
+                            // only when the account has no local
+                            // activation. Success stores the activation
+                            // (the code prompt simply never appears);
+                            // rejection changes nothing — manual code
+                            // entry stays as it was. Daily entry never
+                            // depends on the network: this effect is the
+                            // sign-in moment, which needs network anyway.
+                            if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(contextForSync)) {
+                                try {
+                                    sy.medpro.watani.data.WorkerActivationApi.tryRestoreActivation(contextForSync, user)
+                                } catch (_: Exception) { }
+                            }
                             sy.medpro.watani.data.WataniGatewaySync.ensureAndSyncUser(contextForSync, user)
                             // Best-effort FCM token upload on sign-in
                             // (deduped inside; never blocks the UI).
@@ -798,12 +812,9 @@ class MainActivity : ComponentActivity() {
                                                         AppTab.HOME -> {
                                                             HomeDashboardScreen(
                                                                 manifestVersion = uiState.manifestVersion,
-                                                                hasResume = sy.medpro.watani.data.ResumeStore.hasResume(context),
-                                                                onResumeLastSection = { viewModel.resumeLastSection() },
                                                                 onOpenSupport = { drawerScreen = "الدعم النفسي" },
                                                                 onOpenFocusTimer = { drawerScreen = "مؤقت التركيز" },
                                                                 onOpenReviewDue = { openRestrictedDrawer("المراجعة الذكية Anki") },
-                                                                onOpenActivation = { showActivationPrompt = true }
                                                             )
                                                         }
                                                         AppTab.BANK, AppTab.UNIVERSITIES, AppTab.UWORLD -> {

@@ -361,6 +361,63 @@ object WorkerActivationApi {
         }
 
     /**
+     * Activation restore (Nov 2026, doctor's decision): ONE silent
+     * attempt, made only at a successful Google sign-in moment when the
+     * account has NO local activation. The gateway decides with the
+     * same verifyAccess conditions as activation (uid taken from the
+     * Firebase ID token only, 2-device limit, expiry/ban) and answers
+     * {ok, token, expiresAt, code} on success.
+     *
+     * On success the returned activation is stored through the existing
+     * [storeActivation] and the code prompt is simply never shown. On
+     * ANY rejection or failure nothing changes: the manual code-entry
+     * path stays exactly as it was. Daily entry never depends on this:
+     * it runs only inside the sign-in LaunchedEffect, never on cold
+     * start with an existing session, and never blocks the UI.
+     *
+     * Returns true only when an activation was restored and stored.
+     */
+    suspend fun tryRestoreActivation(context: Context, user: FirebaseUser): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                if (isActivated(context)) return@withContext false
+                val idToken = try {
+                    user.getIdToken(false).await().token
+                } catch (_: Exception) {
+                    null
+                } ?: return@withContext false
+                val bodyJson = JSONObject().apply {
+                    put("idToken", idToken)
+                    put("deviceId", deviceId(context))
+                }.toString()
+                val request = Request.Builder()
+                    .url("$WORKER_BASE/v1/activate/restore")
+                    .header("Authorization", "Bearer $idToken")
+                    .post(bodyJson.toRequestBody(JSON_MEDIA_TYPE))
+                    .build()
+                client.newCall(request).execute().use { resp ->
+                    val text = resp.body?.string() ?: "{}"
+                    val json = try {
+                        JSONObject(text)
+                    } catch (_: Exception) {
+                        JSONObject()
+                    }
+                    if (!resp.isSuccessful || !json.optBoolean("ok", false)) {
+                        return@withContext false
+                    }
+                    val token = json.optString("token", "")
+                    val code = json.optString("code", "")
+                    if (token.isBlank() || code.isBlank()) return@withContext false
+                    storeActivation(context, user.uid, code, token, parseExpiresAt(json))
+                    try { uploadFcmToken(context) } catch (_: Exception) { }
+                    true
+                }
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+    /**
      * Uploads the current FCM token to POST /v1/devices/register so the
      * admin panel can push to this device. Best-effort and idempotent:
      * never throws, uploads only when the token changed since the last

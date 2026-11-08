@@ -1,19 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Data extraction rules (unified fixes build, Nov 2026): the same
+  sensitive stores excluded from cloud backup are also excluded from
+  device-to-device transfer — an activation must never migrate to a
+  new phone via transfer; the new device activates (or restores at
+  sign-in) through the gateway like any other device.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="watani_activation.xml" />
+        <exclude domain="sharedpref" path="watani_downloaded_sections.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="watani_activation.xml" />
+        <exclude domain="sharedpref" path="watani_downloaded_sections.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

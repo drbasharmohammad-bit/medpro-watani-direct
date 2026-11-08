@@ -1,13 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup rules (unified fixes build, Nov 2026): sensitive local state
+  must NEVER leave the device via cloud backup — the activation store
+  above all (activation flag + code + token + expiry live in
+  watani_activation and the per-account watani_activation_<uid> files),
+  plus the downloaded-sections registry.
+
+  Note on per-account files: the backup-rules path language has no
+  wildcards, so concrete per-account files cannot be enumerated here
+  (uids are unknown at build time). The legacy/global
+  watani_activation.xml (device keys + migration source) is excluded
+  explicitly; per-account activation files are covered by the same
+  exclusion in data_extraction_rules.xml for device transfer, and the
+  activation token is only usable together with the account's Firebase
+  session, which is never part of a backup.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="watani_activation.xml" />
+    <exclude domain="sharedpref" path="watani_downloaded_sections.xml" />
 </full-backup-content>

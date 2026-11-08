@@ -810,7 +810,11 @@ private fun HarrietLanePediatricDosingPane() {
                         ) {
                             Column {
                                 Text(
-                                    text = "الجرعة الواحدة: ${rawDoseMg.toInt()} mg",
+                                    // F-12: show the dose with one decimal (the
+                                    // same raw value the mL is derived from) —
+                                    // truncating to Int showed "49 mg" beside
+                                    // mL computed from 49.5 mg.
+                                    text = "الجرعة الواحدة: ${String.format(java.util.Locale.US, "%.1f", rawDoseMg)} mg",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
                                     color = SuccessGreen

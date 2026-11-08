@@ -158,6 +158,33 @@ class WataniRepository(private val context: Context) {
         return File(dir, "$sanitized.json")
     }
 
+    /**
+     * F-01: the manifest hash of the INSTALLED file, computed with the
+     * algorithm of the section's own family — blake2b-8 (16 hex chars)
+     * for the `questions/` family, sha256 truncated to its first 16 hex
+     * chars for every other family (Damascus, cases, library-adjacent
+     * files — the algorithms the publishing pipeline built the manifest
+     * with; phase-4 audit verified 180/181 entries this way). Returns
+     * null only if the file cannot be read.
+     */
+    private fun computeManifestHash(path: String, file: File): String? {
+        return try {
+            val bytes = file.readBytes()
+            // Family rule exactly as the publishing pipeline + phase-4
+            // audit define it: any path starting with "questions"
+            // (the questions/ shards AND the root questions.json index)
+            // is blake2b-8; everything else is sha256[:16].
+            if (path.startsWith("questions")) {
+                Blake2b.hashHex(bytes, digestSize = 8)
+            } else {
+                val digest = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+                digest.joinToString("") { "%02x".format(it) }.take(16)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     suspend fun downloadSection(
         path: String,
         entry: ManifestFileEntry,
@@ -202,6 +229,12 @@ class WataniRepository(private val context: Context) {
                 resp.close()
                 resp = client.newCall(baseRequest).execute()
             }
+            // F-13: the response and both streams are closed on EVERY
+            // exit path from here on (use{}), including the early
+            // 401/403 and HTTP-failure returns below — an interrupted
+            // download on a weak network must not leak connections or
+            // leave the resume temp file unflushed.
+            resp.use {
             if (resp.code == 401 || resp.code == 403) {
                 // M3: no generic HTTP message, no cached fallback —
                 // activation is lost (cleared + wiped + prompt event).
@@ -222,38 +255,78 @@ class WataniRepository(private val context: Context) {
             val contentLength = body.contentLength()
             val totalBytes = if (contentLength > 0) contentLength + actualExistingBytes else (entry.size ?: 1L)
 
-            val inputStream = body.byteStream()
-            val outputStream = java.io.FileOutputStream(tempFile, actualExistingBytes > 0)
-
-            val buffer = ByteArray(8192)
-            var bytesCopied = actualExistingBytes
-            var read: Int
-            while (inputStream.read(buffer).also { read = it } != -1) {
-                outputStream.write(buffer, 0, read)
-                bytesCopied += read
-                val progress = (bytesCopied.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
-                onProgress(progress)
+            body.byteStream().use { inputStream ->
+                java.io.FileOutputStream(tempFile, actualExistingBytes > 0).use { outputStream ->
+                    val buffer = ByteArray(8192)
+                    var bytesCopied = actualExistingBytes
+                    var read: Int
+                    while (inputStream.read(buffer).also { read = it } != -1) {
+                        outputStream.write(buffer, 0, read)
+                        bytesCopied += read
+                        val progress = (bytesCopied.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                        onProgress(progress)
+                    }
+                    outputStream.flush()
+                }
             }
-            outputStream.close()
-            inputStream.close()
+            } // resp.use (F-13)
 
-            if (file.exists()) file.delete()
-            tempFile.renameTo(file)
+            // F-07: never delete the working copy before the replacement
+            // is proven: the temp file is renamed over the target in one
+            // step and the rename RESULT is checked. On failure the old
+            // file stays untouched and the download fails visibly.
+            if (!tempFile.renameTo(file)) {
+                return@withContext Result.failure(Exception("تعذر حفظ ملف القسم على الجهاز — أعد المحاولة."))
+            }
+
+            // F-01: verify the INSTALLED file against the manifest entry
+            // BEFORE recording it: actual byte size and the family's own
+            // hash (blake2b-8 for questions/, sha256[:16] for every other
+            // family — the algorithms the manifest itself was built
+            // with, phase-4 audit) must both match when the manifest
+            // declares them. A mismatch deletes the file and fails
+            // visibly instead of blessing corrupt/swapped bytes.
+            val declaredSize = entry.size
+            if (declaredSize != null && file.length() != declaredSize) {
+                val actualSize = file.length()
+                file.delete()
+                return@withContext Result.failure(Exception("حجم ملف القسم غير مطابق للفهرس (المتوقع $declaredSize والفعلي $actualSize) — أعد التحميل."))
+            }
+            val computedHash = computeManifestHash(path, file)
+            val declaredHash = entry.hash?.trim().orEmpty()
+            if (declaredHash.isNotEmpty() && computedHash != null &&
+                !computedHash.equals(declaredHash, ignoreCase = true)) {
+                file.delete()
+                return@withContext Result.failure(Exception("بصمة ملف القسم غير مطابقة للفهرس — أعد التحميل."))
+            }
 
             val jsonString = file.readText(Charsets.UTF_8)
             var actualCount = 0
 
-            // A3: Verification self-consistency against file's own declared count
+            // A3 + F-02/F-03/F-04: verification against the file's own
+            // declared count, with NO coerced counts anywhere: a parsed
+            // count of zero for a non-empty section is an explicit
+            // failure, guide.json is really parsed, and the cases check
+            // is the honest declared-vs-actual comparison for any value.
             if (path.contains("cases.json")) {
                 val casesEnv = moshi.adapter(CasesEnvelope::class.java).fromJson(jsonString)
-                val declaredCount = casesEnv?.count ?: 436
-                actualCount = casesEnv?.cases?.size ?: declaredCount
-                if (casesEnv == null || (declaredCount > 0 && actualCount != declaredCount && path == "cases.json" && actualCount != 436)) {
+                val declaredCount = casesEnv?.count
+                actualCount = casesEnv?.cases?.size ?: 0
+                if (casesEnv == null || declaredCount == null || actualCount != declaredCount) {
                     file.delete()
                     return@withContext Result.failure(Exception("خطأ في تطابق عدد الحالات الداخلي (المتوقع $declaredCount والفعلي $actualCount)"))
                 }
             } else if (path == "guide.json") {
-                actualCount = 1
+                val guideEnv = moshi.adapter(GuideEnvelope::class.java).fromJson(jsonString)
+                if (guideEnv == null) {
+                    file.delete()
+                    return@withContext Result.failure(Exception("ملف الدليل غير صالح — أعد التحميل."))
+                }
+                actualCount = guideEnv.groups?.size ?: 0
+                if (actualCount == 0) {
+                    file.delete()
+                    return@withContext Result.failure(Exception("ملف الدليل بلا مجموعات — أعد التحميل."))
+                }
             } else if (path == "ddx.json") {
                 val ddxEnv = moshi.adapter(DdxEnvelope::class.java).fromJson(jsonString)
                 val declaredCount = ddxEnv?.count ?: 0
@@ -276,18 +349,24 @@ class WataniRepository(private val context: Context) {
                 val tCount = subjEnv?.topics?.sumOf { it.questions?.size ?: 0 } ?: 0
                 val sCount = subjEnv?.sessions?.sumOf { it.questions?.size ?: 0 } ?: 0
                 actualCount = if (tCount > 0) tCount else sCount
-                if (actualCount == 0) actualCount = declaredCount
-                if (subjEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
+                // F-02: zero parsed questions is an explicit failure —
+                // the old `actualCount = declaredCount` coercion made
+                // an empty/gutted file install as "complete".
+                if (subjEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
                     file.delete()
                     return@withContext Result.failure(Exception("خطأ في تطابق عدد أسئلة القسم الداخلي (المتوقع $declaredCount والفعلي $actualCount)"))
                 }
             }
 
+            // F-01: the registry stores the hash COMPUTED from the
+            // installed file (never a verbatim copy of entry.hash), so
+            // isSectionUpToDate compares two independently derived
+            // values and a swapped/corrupt file cannot look current.
             val entity = DownloadedSectionEntity(
                 sectionPath = path,
                 version = entry.version ?: "1.0",
-                hash = entry.hash ?: "",
-                count = entry.count ?: actualCount,
+                hash = computedHash ?: (entry.hash ?: ""),
+                count = actualCount,
                 downloadedAt = System.currentTimeMillis()
             )
             saveDownloadedSection(entity)
@@ -398,8 +477,17 @@ class WataniRepository(private val context: Context) {
             val fileUrl = "${WataniApi.BASE_URL}auscultation_ar.json"
             val resp = client.newCall(okhttp3.Request.Builder().url(fileUrl).build()).execute()
             if (!resp.isSuccessful) {
+                // Auscultation AR layer (Nov 2026): the Arabic
+                // description file is an OPTIONAL overlay that is
+                // currently absent server-side (404). Its absence is
+                // fully silent — no failure is surfaced to the user;
+                // the caller treats any non-success as "no Arabic
+                // overlay" and the audio material + cache layer are
+                // untouched. (Result.failure is kept as the internal
+                // signal only; the screen never displays it.)
+                resp.close()
                 if (tempFile.exists()) tempFile.delete()
-                return@withContext Result.failure(Exception("فشل تحميل الوصف العربي (HTTP ${resp.code})"))
+                return@withContext Result.failure(Exception("auscultation_ar unavailable (HTTP ${resp.code})"))
             }
             val body = resp.body
                 ?: return@withContext Result.failure(Exception("استجابة فارغة من الخادم."))
@@ -528,8 +616,15 @@ class WataniRepository(private val context: Context) {
                 val file = getSectionFile("library.json")
                 val tempFile = File(file.parentFile, "${file.name}.tmp")
                 tempFile.writeText(text, Charsets.UTF_8)
-                if (file.exists()) file.delete()
-                tempFile.renameTo(file)
+                // F-07: replace only via a checked rename — the old
+                // copy is the fallback below, so a failed save must
+                // surface as a failure, never as success (the old code
+                // returned success even when the rename failed and the
+                // library then vanished on the next cold start).
+                if (!tempFile.renameTo(file)) {
+                    if (tempFile.exists()) tempFile.delete()
+                    throw Exception("تعذر حفظ ملف المكتبة على الجهاز")
+                }
                 return@withContext Result.success(parsed)
             } catch (e: Exception) {
                 lastError = e

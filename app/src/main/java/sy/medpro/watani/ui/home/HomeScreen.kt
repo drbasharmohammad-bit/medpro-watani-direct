@@ -503,6 +503,19 @@ fun TopicSelectionScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                     }
+                    // Topic/session rows (giant-card fix, Nov 2026):
+                    // rows are COMPACT and height-bounded exactly like
+                    // the app's other lists (Anki subject picker): the
+                    // card height is capped (52–76dp), the name takes
+                    // the flexible width with at most 2 lines, and the
+                    // count is a fixed trailing label. Previously these
+                    // cards carried NO height bound of their own and the
+                    // LazyColumn sat unbounded inside the fillMaxSize
+                    // Box of a Scaffold nested in AnimatedContent — on
+                    // the doctor's device the cards rendered as giant
+                    // empty squares filling the screen (two topics per
+                    // screen). The explicit bound makes that layout
+                    // impossible regardless of ancestor measurement.
                     if (showYears) {
                         items(orderedSessions) { session ->
                             val sessionName = session.name ?: "جلسة"
@@ -516,15 +529,16 @@ fun TopicSelectionScreen(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .heightIn(min = 52.dp, max = 76.dp)
                                     .clickable { onSessionClick(session.id ?: sessionName, sessionName) }
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(16.dp),
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column {
-                                        Text(sessionName, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(sessionName, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                         if (yearText.isNotEmpty()) {
                                             Text(
                                                 yearText,
@@ -533,6 +547,7 @@ fun TopicSelectionScreen(
                                             )
                                         }
                                     }
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         "(${session.questions?.size ?: session.questionCount ?: 0} سؤال)",
                                         fontSize = 13.sp,
@@ -548,14 +563,16 @@ fun TopicSelectionScreen(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .heightIn(min = 52.dp, max = 76.dp)
                                 .clickable { onTopicClick(topic.name ?: "") }
                         ) {
                             Row(
-                                modifier = Modifier.padding(16.dp),
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(topic.name ?: "موضوع", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(topic.name ?: "موضوع", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     "(${topic.questions?.size ?: 0} سؤال)",
                                     fontSize = 13.sp,

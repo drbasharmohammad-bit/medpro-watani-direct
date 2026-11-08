@@ -233,10 +233,26 @@ fun evaluateCalcSpec(specId: String, inputs: Map<String, Double>): CalcOutcome {
         "meld_na" -> {
             val meld = inputs["meld"] ?: return missingInputs()
             val na = inputs["na"] ?: return missingInputs()
+            // F-10 (OPTN/UNOS documented floor rule): the MELD-Na
+            // formula applies only when MELD > 11. At MELD <= 11 the
+            // sodium adjustment is NOT applied and MELD-Na = MELD —
+            // without this branch a low-MELD hyponatremic patient was
+            // inflated absurdly (MELD 8 / Na 125 computed 21, not 8).
+            if (meld <= 11.0) {
+                val vFloor = minOf(maxOf(meld.roundToInt(), 6), 40)
+                val floorBand = when {
+                    vFloor < 10 -> "وفيات 3 أشهر نحو 2% (بمقياس MELD)"
+                    vFloor <= 19 -> "وفيات 3 أشهر نحو 6% (بمقياس MELD)"
+                    vFloor <= 29 -> "وفيات 3 أشهر نحو 20% (بمقياس MELD)"
+                    vFloor <= 39 -> "وفيات 3 أشهر نحو 53% (بمقياس MELD)"
+                    else -> "وفيات 3 أشهر نحو 71% (بمقياس MELD)"
+                }
+                return CalcOutcome.Value("MELD-Na = $vFloor — $floorBand")
+            }
             val naC = minOf(maxOf(na, 125.0), 137.0)
             val diff = 137.0 - naC
             val raw = meld + 1.32 * diff - 0.033 * meld * diff
-            val v = minOf(raw, 40.0).roundToInt()
+            val v = minOf(maxOf(raw, 6.0), 40.0).roundToInt()
             val band = when {
                 v < 10 -> "وفيات 3 أشهر نحو 2% (بمقياس MELD)"
                 v <= 19 -> "وفيات 3 أشهر نحو 6% (بمقياس MELD)"

@@ -781,21 +781,29 @@ private fun GcsRadioGroup(title: String, options: List<String>, selected: Int, o
 
 @Composable
 private fun GcsCalculator() {
-    var eye by remember { mutableIntStateOf(4) }
-    var verbal by remember { mutableIntStateOf(5) }
-    var motor by remember { mutableIntStateOf(6) }
-    val total = eye + verbal + motor
-    val (band, action) = when (total) {
-        in 13..15 -> "إصابة خفيفة" to "مراقبة وتصوير حسب الموجودات؛ إعادة التقييم المتكررة."
-        in 9..12 -> "إصابة متوسطة" to "مراقبة حثيثة وتصوير دماغي؛ استشارة جراحة الأعصاب حسب السبب."
-        else -> "إصابة وخيمة (غيبوبة)" to "تُقيَّم الحاجة لتأمين الطريق الهوائي والتنبيب فورًا مع الإنعاش والتصوير الإسعافي."
-    }
+    // F-11: axes start UNSELECTED (null) and no result card is shown
+    // until the examiner has actually chosen all three — the old
+    // defaults (4/5/6) presented a ready-made "15/15 — إصابة خفيفة"
+    // before any input, which could be misread as a real assessment.
+    var eye by remember { mutableStateOf<Int?>(null) }
+    var verbal by remember { mutableStateOf<Int?>(null) }
+    var motor by remember { mutableStateOf<Int?>(null) }
+    val total = if (eye != null && verbal != null && motor != null) eye!! + verbal!! + motor!! else null
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("مقياس غلاسكو للغيبوبة (GCS) — اختر أفضل استجابة في كل محور:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
-        GcsRadioGroup("الاستجابة العينية (1-4)", listOf("لا يفتح عينيه (1)", "للألم (2)", "للصوت (3)", "تلقائيًا (4)"), eye) { eye = it }
-        GcsRadioGroup("الاستجابة اللفظية (1-5)", listOf("لا استجابة (1)", "أصوات غير مفهومة (2)", "كلمات غير مناسبة (3)", "مرتبك (4)", "موجه (5)"), verbal) { verbal = it }
-        GcsRadioGroup("الاستجابة الحركية (1-6)", listOf("لا استجابة (1)", "بسط (2)", "انثناء شاذ (3)", "انسحاب من الألم (4)", "يحدد الألم (5)", "يطيع الأوامر (6)"), motor) { motor = it }
-        ScoreResultCard("$total / 15  (عيني $eye + لفظي $verbal + حركي $motor)", band, action)
+        GcsRadioGroup("الاستجابة العينية (1-4)", listOf("لا يفتح عينيه (1)", "للألم (2)", "للصوت (3)", "تلقائيًا (4)"), eye ?: 0) { eye = it }
+        GcsRadioGroup("الاستجابة اللفظية (1-5)", listOf("لا استجابة (1)", "أصوات غير مفهومة (2)", "كلمات غير مناسبة (3)", "مرتبك (4)", "موجه (5)"), verbal ?: 0) { verbal = it }
+        GcsRadioGroup("الاستجابة الحركية (1-6)", listOf("لا استجابة (1)", "بسط (2)", "انثناء شاذ (3)", "انسحاب من الألم (4)", "يحدد الألم (5)", "يطيع الأوامر (6)"), motor ?: 0) { motor = it }
+        if (total != null) {
+            val (band, action) = when (total) {
+                in 13..15 -> "إصابة خفيفة" to "مراقبة وتصوير حسب الموجودات؛ إعادة التقييم المتكررة."
+                in 9..12 -> "إصابة متوسطة" to "مراقبة حثيثة وتصوير دماغي؛ استشارة جراحة الأعصاب حسب السبب."
+                else -> "إصابة وخيمة (غيبوبة)" to "تُقيَّم الحاجة لتأمين الطريق الهوائي والتنبيب فورًا مع الإنعاش والتصوير الإسعافي."
+            }
+            ScoreResultCard("$total / 15  (عيني $eye + لفظي $verbal + حركي $motor)", band, action)
+        } else {
+            Text("اختر الاستجابة في المحاور الثلاثة لعرض النتيجة.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+        }
         Text("المصدر: Teasdale & Jennett 1974 (13-15 خفيف، 9-12 متوسط، ≤8 وخيم).", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
     }
 }
