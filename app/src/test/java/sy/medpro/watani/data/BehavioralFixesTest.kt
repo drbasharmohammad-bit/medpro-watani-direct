@@ -115,6 +115,7 @@ class BehavioralFixesTest {
 
 /** Restore-endpoint decision (org.json needs Robolectric's real implementation). */
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [34])
 class RestoreResponseTest {
 
     @Test
