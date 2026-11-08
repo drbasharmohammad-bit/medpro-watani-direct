@@ -53,11 +53,7 @@ object RestoreResponse {
                             v > 1_000_000_000L -> v * 1000L
                             else -> v
                         }
-                    } ?: try {
-                        java.time.Instant.parse(s).toEpochMilli()
-                    } catch (_: Exception) {
-                        0L
-                    }
+                    } ?: parseIso8601(s)
                 }
                 else -> 0L
             }
@@ -65,4 +61,30 @@ object RestoreResponse {
             0L
         }
     }
+}
+
+/**
+ * ISO-8601 parsing WITHOUT java.time (minSdk is 24 and core library
+ * desugaring is not enabled, so java.time would be a NewApi hazard in
+ * this new file): SimpleDateFormat patterns cover the shapes the
+ * worker emits ("...Z", fractional seconds, numeric offsets).
+ */
+private fun parseIso8601(s: String): Long {
+    val patterns = arrayOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+        "yyyy-MM-dd'T'HH:mm:ssX",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS",
+        "yyyy-MM-dd'T'HH:mm:ss"
+    )
+    for (pattern in patterns) {
+        try {
+            val fmt = java.text.SimpleDateFormat(pattern, java.util.Locale.US)
+            fmt.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            fmt.isLenient = false
+            return fmt.parse(s)?.time ?: continue
+        } catch (_: Exception) {
+            // try the next pattern
+        }
+    }
+    return 0L
 }
