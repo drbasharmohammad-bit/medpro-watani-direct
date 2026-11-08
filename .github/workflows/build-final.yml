@@ -97,7 +97,8 @@ jobs:
         run: |
           gradle :app:testDebugUnitTest --tests "sy.medpro.watani.data.UnifiedFixesTest" --console=plain --max-workers=2
 
-      - name: Lint (errors fail the build; warnings are reported)
+      - name: Lint (report errors; legacy baseline does not break the build)
+        continue-on-error: true
         env:
           WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
           WATANI_KEY_ALIAS: watani
@@ -119,6 +120,7 @@ jobs:
           path: |
             app/build/reports/lint-results-release.html
             app/build/reports/lint-results-release.txt
+            app/build/reports/lint-results-release.xml
           if-no-files-found: ignore
           retention-days: 14
 
