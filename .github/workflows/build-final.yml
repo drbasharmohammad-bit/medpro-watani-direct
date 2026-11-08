@@ -77,7 +77,7 @@ jobs:
           # serves a truncated zip (two consecutive runs failed unzip
           # with "End-of-central-directory signature not found").
           ok=""
-          for url in https://services.gradle.org/distributions/gradle-9.3.1-bin.zip https://downloads.gradle.org/distributions/gradle-9.3.1-bin.zip https://github.com/gradle/gradle-distributions/releases/download/v9.3.1/gradle-9.3.1-bin.zip; do
+          for url in https://services.gradle.org/distributions/gradle-9.3.1-bin.zip https://downloads.gradle.org/distributions/gradle-9.3.1-bin.zip https://mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip https://mirrors.cloud.tencent.com/gradle/gradle-9.3.1-bin.zip https://github.com/gradle/gradle-distributions/releases/download/v9.3.1/gradle-9.3.1-bin.zip; do
             for attempt in 1 2; do
               if curl -fsSL --retry 2 "$url" -o /tmp/gradle-9.3.1-bin.zip && unzip -tq /tmp/gradle-9.3.1-bin.zip >/dev/null; then ok=1; break; fi
               echo "Gradle download from $url (attempt $attempt) failed/corrupt; retrying..."
