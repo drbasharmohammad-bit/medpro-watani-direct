@@ -81,7 +81,7 @@ fun GermanCasesScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) { loadGermanCases() }
 
     if (selectedCase != null) {
-        CasePlayerScreen(caseItem = selectedCase!!, onBack = { selectedCase = null })
+        CasePlayerScreen(caseItem = selectedCase!!, onBack = { selectedCase = null }, german = true)
         return
     }
 

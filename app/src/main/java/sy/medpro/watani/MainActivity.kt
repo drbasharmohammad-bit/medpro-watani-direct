@@ -907,35 +907,6 @@ class MainActivity : ComponentActivity() {
                                                             } else {
                                                                 casesList.isNotEmpty()
                                                             }
-                                                            Column(modifier = Modifier.fillMaxSize()) {
-                                                                // Fix 1.2.2: the German cases lived only
-                                                                // behind a Tools entry, so they were
-                                                                // undiscoverable from this cases tab
-                                                                // where they belong (doctor's device
-                                                                // report). Their entry now sits at the
-                                                                // top of the tab in both states.
-                                                                Card(
-                                                                    onClick = { drawerScreen = "الحالات الألمانية" },
-                                                                    shape = MaterialTheme.shapes.large,
-                                                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                                                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
-                                                                ) {
-                                                                    Row(
-                                                                        modifier = Modifier.padding(16.dp),
-                                                                        verticalAlignment = Alignment.CenterVertically
-                                                                    ) {
-                                                                        Icon(Icons.Default.Language, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(26.dp))
-                                                                        Spacer(modifier = Modifier.width(12.dp))
-                                                                        Column(modifier = Modifier.weight(1f)) {
-                                                                            Text("الحالات الألمانية (Deutsche Fälle)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                                                            Spacer(modifier = Modifier.height(2.dp))
-                                                                            Text("حالات سريرية كاملة باللغة الألمانية", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                                                        }
-                                                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = MaroonPrimary)
-                                                                    }
-                                                                }
-                                                                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                                                             if (casesList.isEmpty() || !casesUpToDate) {
                                                                 val casesEntry = uiState.files["cases.json"]
                                                                 Box(
@@ -1014,8 +985,6 @@ class MainActivity : ComponentActivity() {
                                                                     cases = casesList,
                                                                     onCaseClick = { caseItem -> viewModel.openCasePlayer(caseItem) }
                                                                 )
-                                                            }
-                                                                }
                                                             }
                                                         }
                                                         AppTab.LEADERBOARD -> {

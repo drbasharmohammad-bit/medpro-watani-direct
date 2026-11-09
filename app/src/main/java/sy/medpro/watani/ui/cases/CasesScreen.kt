@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.icons.SubjectIcon
@@ -144,8 +146,27 @@ fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> 
     }
 }
 
+/** Player chrome localization: Arabic (default) or German. */
+private fun localized(de: Boolean, ar: String, deu: String): String = if (de) deu else ar
+
 @Composable
-fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
+fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit, german: Boolean = false) {
+    // Fix 1.2.2: inside a German case EVERYTHING is German and LTR —
+    // direction and every chrome label (doctor's device report: the
+    // list was fine, the player interior stayed Arabic/RTL). The
+    // Arabic path keeps the old behavior exactly.
+    if (german) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+            CasePlayerContent(caseItem, onBack, german = true)
+        }
+    } else {
+        CasePlayerContent(caseItem, onBack, german = false)
+    }
+}
+
+@Composable
+private fun CasePlayerContent(caseItem: ClinicalCaseDto, onBack: () -> Unit, german: Boolean) {
+    val de = german
     BackHandler { onBack() }
     val context = androidx.compose.ui.platform.LocalContext.current
     // Account binding: favorites live per account, never in one shared store.
@@ -153,7 +174,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
     val favPrefsName = if (favUid.isNullOrBlank()) "watani_favorites" else "watani_favorites_$favUid"
     val favPrefs = remember(favUid) { context.getSharedPreferences(favPrefsName, android.content.Context.MODE_PRIVATE) }
     var favList by remember(favUid) { mutableStateOf(favPrefs.getStringSet("fav_list", emptySet()) ?: emptySet()) }
-    val cId = caseItem.id ?: caseItem.title ?: "حالة"
+    val cId = caseItem.id ?: caseItem.title ?: localized(de, "حالة", "Fall")
     val isFav = favList.contains(cId)
 
     var revealedHistory by remember { mutableStateOf(setOf<Int>()) }
@@ -213,9 +234,9 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
     if (pendingDiagnosis != null) {
         AlertDialog(
             onDismissRequest = { pendingDiagnosis = null },
-            title = { Text("تشخيص مبكر") },
+            title = { Text(localized(de, "تشخيص مبكر", "Frühe Diagnose")) },
             text = {
-                Text("لم تسأل بعدُ سؤالًا واحدًا على الأقل في 3 مجالات مختلفة من القصة. التشخيص الآن ممكن، لكنه سيُسجَّل في تقريرك كتشخيص مبكر، وما لم تسأل عنه سيبقى غائبًا عن درجتك.")
+                Text(localized(de, "لم تسأل بعدُ سؤالًا واحدًا على الأقل في 3 مجالات مختلفة من القصة. التشخيص الآن ممكن، لكنه سيُسجَّل في تقريرك كتشخيص مبكر، وما لم تسأل عنه سيبقى غائبًا عن درجتك.", "Sie haben noch nicht in mindestens 3 verschiedenen Anamnese-Bereichen je eine Frage gestellt. Eine Diagnose ist jetzt möglich, wird aber in Ihrem Bericht als frühe Diagnose vermerkt, und nicht Erfragtes fehlt in Ihrer Bewertung."))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -223,16 +244,16 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                     selectedDiagnosis = pendingDiagnosis
                     showExplanation = true
                     pendingDiagnosis = null
-                }) { Text("التشخيص الآن") }
+                }) { Text(localized(de, "التشخيص الآن", "Jetzt diagnostizieren")) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDiagnosis = null }) { Text("متابعة أخذ القصة") }
+                TextButton(onClick = { pendingDiagnosis = null }) { Text(localized(de, "متابعة أخذ القصة", "Anamnese fortsetzen")) }
             }
         )
     }
 
     DrawerScreenScaffold(
-        title = caseItem.title ?: "محاكي المريض الافتراضي",
+        title = caseItem.title ?: localized(de, "محاكي المريض الافتراضي", "Virtueller Patient"),
         onBack = onBack
     ) { padding ->
         LazyColumn(
@@ -256,9 +277,9 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(caseItem.specialty ?: "حالة سريرية", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text(caseItem.specialty ?: localized(de, "حالة سريرية", "Klinischer Fall"), color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("مكافأة الإنجاز: +${caseItem.xpReward ?: 50} XP", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(localized(de, "مكافأة الإنجاز: +${caseItem.xpReward ?: 50} XP", "Abschlussbelohnung: +${caseItem.xpReward ?: 50} XP"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 IconButton(
                                     onClick = {
@@ -270,7 +291,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 ) {
                                     Icon(
                                         imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = "إضافة للمفضلة",
+                                        contentDescription = localized(de, "إضافة للمفضلة", "Zu Favoriten hinzufügen"),
                                         tint = if (isFav) Color.Red else Color.White.copy(alpha = 0.8f),
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -279,7 +300,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (isV2) "المقدّمة السريرية (Opening):" else "القصة السريرية والعرض البدئي (Presentation):",
+                            text = if (isV2) localized(de, "المقدّمة السريرية (Opening):", "Einführung (Opening):") else localized(de, "القصة السريرية والعرض البدئي (Presentation):", "Krankengeschichte und Präsentation (Presentation):"),
                             fontWeight = FontWeight.Bold,
                             color = GoldAccent,
                             fontSize = 13.sp
@@ -287,9 +308,9 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (isV2) {
-                                caseItem.openingVignette ?: caseItem.presentation ?: caseItem.legacyPresentation ?: "لا توجد قصة متاحة"
+                                caseItem.openingVignette ?: caseItem.presentation ?: caseItem.legacyPresentation ?: localized(de, "لا توجد قصة متاحة", "Keine Geschichte verfügbar")
                             } else {
-                                caseItem.presentation ?: "لا توجد قصة متاحة"
+                                caseItem.presentation ?: localized(de, "لا توجد قصة متاحة", "Keine Geschichte verfügbar")
                             },
                             color = Color.White,
                             fontSize = 15.sp,
@@ -308,19 +329,19 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                 val bank = caseItem.historyBank.orEmpty()
                 val domainOrder = listOf("hpi", "associated", "red_flags", "past_medical", "meds_allergy", "social")
                 val domainTitles = mapOf(
-                    "hpi" to "الشكاية الحالية وتطوّرها",
-                    "associated" to "أعراض مرافقة ومراجعة أجهزة",
-                    "red_flags" to "أعلام حمراء",
-                    "past_medical" to "سوابق مرضية وجراحية",
-                    "meds_allergy" to "أدوية وحساسية",
-                    "social" to "اجتماعي وعادات"
+                    "hpi" to localized(de, "الشكاية الحالية وتطوّرها", "Aktuelle Beschwerden und Verlauf"),
+                    "associated" to localized(de, "أعراض مرافقة ومراجعة أجهزة", "Begleitsymptome und Organsysteme"),
+                    "red_flags" to localized(de, "أعلام حمراء", "Red Flags (Warnzeichen)"),
+                    "past_medical" to localized(de, "سوابق مرضية وجراحية", "Vorerkrankungen und Operationen"),
+                    "meds_allergy" to localized(de, "أدوية وحساسية", "Medikamente und Allergien"),
+                    "social" to localized(de, "اجتماعي وعادات", "Soziales und Gewohnheiten")
                 )
                 val grouped = bank.groupBy { it.domain ?: "" }
                 val orderedDomains = domainOrder.filter { grouped.containsKey(it) } +
                     grouped.keys.filter { it !in domainOrder }
 
                 item {
-                    Text("القصة المرضية — اسأل المريض بنفسك (History):", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                    Text(localized(de, "القصة المرضية — اسأل المريض بنفسك (History):", "Anamnese — Befragen Sie den Patienten selbst (History):"), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
                 }
                 orderedDomains.forEach { domain ->
                     item {
@@ -339,7 +360,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
                                 Text(
-                                    text = question.text ?: "سؤال",
+                                    text = question.text ?: localized(de, "سؤال", "Frage"),
                                     fontSize = 14.sp,
                                     color = MaroonPrimary,
                                     fontWeight = FontWeight.Bold
@@ -352,7 +373,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
-                                            text = "جواب المريض: ${question.answer ?: "لا توجد معلومات إضافية"}",
+                                            text = localized(de, "جواب المريض: ", "Antwort des Patienten: ") + (question.answer ?: localized(de, "لا توجد معلومات إضافية", "Keine weiteren Angaben")),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             modifier = Modifier.padding(10.dp)
@@ -360,7 +381,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     }
                                 } else {
                                     Spacer(modifier = Modifier.height(2.dp))
-                                    Text("اضغط لطرح السؤال على المريض...", fontSize = 11.sp, color = GoldAccentDark)
+                                    Text(localized(de, "اضغط لطرح السؤال على المريض...", "Tippen, um die Frage zu stellen..."), fontSize = 11.sp, color = GoldAccentDark)
                                 }
                             }
                         }
@@ -371,7 +392,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
             // History (القصة المرضية والسوابق) — legacy cases only
             if (!isV2 && !caseItem.history.isNullOrEmpty()) {
                 item {
-                    Text("القصة السريرية والسوابق الموجهة (History):", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                    Text(localized(de, "القصة السريرية والسوابق الموجهة (History):", "Krankengeschichte und Vorgeschichte (History):"), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
                 }
                 items(caseItem.history.size) { idx ->
                     val item = caseItem.history[idx]
@@ -385,7 +406,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
-                                text = item.text ?: "سؤال القصة ${idx + 1}",
+                                text = item.text ?: localized(de, "سؤال القصة ${idx + 1}", "Anamnesefrage ${idx + 1}"),
                                 fontSize = 14.sp,
                                 color = MaroonPrimary,
                                 fontWeight = FontWeight.Bold
@@ -398,7 +419,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "النتيجة / الإجابة: ${item.answer ?: "لا توجد معلومات إضافية"}",
+                                        text = localized(de, "النتيجة / الإجابة: ", "Ergebnis / Antwort: ") + (item.answer ?: localized(de, "لا توجد معلومات إضافية", "Keine weiteren Angaben")),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.padding(10.dp)
@@ -406,7 +427,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 }
                             } else {
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text("اضغط لكشف الجواب...", fontSize = 11.sp, color = GoldAccentDark)
+                                Text(localized(de, "اضغط لكشف الجواب...", "Tippen, um die Antwort zu zeigen..."), fontSize = 11.sp, color = GoldAccentDark)
                             }
                         }
                     }
@@ -417,7 +438,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
             if (!caseItem.examinations.isNullOrEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("الفحص السريري العضوي (Physical Examinations):", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                    Text(localized(de, "الفحص السريري العضوي (Physical Examinations):", "Körperliche Untersuchung (Physical Examinations):"), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
                 }
                 items(caseItem.examinations.size) { idx ->
                     val item = caseItem.examinations[idx]
@@ -431,7 +452,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
-                                text = item.text ?: "الفحص ${idx + 1}",
+                                text = item.text ?: localized(de, "الفحص ${idx + 1}", "Untersuchung ${idx + 1}"),
                                 fontSize = 14.sp,
                                 color = MaroonPrimary,
                                 fontWeight = FontWeight.Bold
@@ -444,7 +465,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "الموجودات السريرية: ${item.finding ?: item.text ?: "طبيعي / لا يوجد شذوذ"}",
+                                        text = localized(de, "الموجودات السريرية: ", "Klinische Befunde: ") + (item.finding ?: item.text ?: localized(de, "طبيعي / لا يوجد شذوذ", "Unauffällig / keine Abweichung")),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = SuccessGreen,
@@ -453,7 +474,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 }
                             } else {
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text("اضغط لإجراء الفحص وكشف الموجودات...", fontSize = 11.sp, color = GoldAccentDark)
+                                Text(localized(de, "اضغط لإجراء الفحص وكشف الموجودات...", "Tippen, um zu untersuchen und die Befunde zu zeigen..."), fontSize = 11.sp, color = GoldAccentDark)
                             }
                         }
                     }
@@ -464,7 +485,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
             if (!caseItem.tests.isNullOrEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("الاستقصاءات المخبرية والشعاعية (Diagnostic Tests):", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                    Text(localized(de, "الاستقصاءات المخبرية والشعاعية (Diagnostic Tests):", "Labor und Bildgebung (Diagnostic Tests):"), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
                 }
                 items(caseItem.tests.size) { idx ->
                     val item = caseItem.tests[idx]
@@ -478,7 +499,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
-                                text = item.text ?: "التحليل ${idx + 1}",
+                                text = item.text ?: localized(de, "التحليل ${idx + 1}", "Test ${idx + 1}"),
                                 fontSize = 14.sp,
                                 color = MaroonPrimary,
                                 fontWeight = FontWeight.Bold
@@ -491,7 +512,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "نتيجة التحليل / الصورة: ${item.result ?: "متوفر"}",
+                                        text = localized(de, "نتيجة التحليل / الصورة: ", "Test-/Bildergebnis: ") + (item.result ?: localized(de, "متوفر", "Verfügbar")),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.padding(10.dp)
@@ -499,7 +520,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 }
                             } else {
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text("اضغط لطلب الاستقصاء وقراءة النتيجة...", fontSize = 11.sp, color = GoldAccentDark)
+                                Text(localized(de, "اضغط لطلب الاستقصاء وقراءة النتيجة...", "Tippen, um den Test anzufordern und das Ergebnis zu lesen..."), fontSize = 11.sp, color = GoldAccentDark)
                             }
                         }
                     }
@@ -510,7 +531,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
             if (!caseItem.diagnosisOptions.isNullOrEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(6.dp))
-                    Text("التشخيص التفريقي والتشخيص النهائي (Diagnosis):", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                    Text(localized(de, "التشخيص التفريقي والتشخيص النهائي (Diagnosis):", "Differenzialdiagnose und Enddiagnose (Diagnosis):"), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
                 }
                 items(caseItem.diagnosisOptions) { option ->
                     val isSelected = selectedDiagnosis == option
@@ -609,7 +630,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("تقرير أداء الحالة السريرية", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        Text(localized(de, "تقرير أداء الحالة السريرية", "Leistungsbericht zum Fall"), color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                         Surface(
                                             color = GoldAccent,
                                             shape = MaterialTheme.shapes.small
@@ -624,32 +645,32 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(10.dp))
-                                    Text("الدرجة المركّبة: ${fmtScore(score.total)} / 100", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    Text(localized(de, "الدرجة المركّبة: ${fmtScore(score.total)} / 100", "Gesamtpunktzahl: ${fmtScore(score.total)} / 100"), color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                     Spacer(modifier = Modifier.height(6.dp))
                                     if (score.historyMerged) {
-                                        Text("• القصة — تغطية الجوهري (لا أسئلة أعلام حمراء موثّقة في هذه الحالة): ${fmtScore(score.historyEssentialPoints)} / 40 (${score.essentialAsked}/${score.essentialTotal})", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                        Text(localized(de, "• القصة — تغطية الجوهري (لا أسئلة أعلام حمراء موثّقة في هذه الحالة): ${fmtScore(score.historyEssentialPoints)} / 40 (${score.essentialAsked}/${score.essentialTotal})", "• Anamnese — Wesentliches abgedeckt (keine dokumentierten Red-Flag-Fragen in diesem Fall): ${fmtScore(score.historyEssentialPoints)} / 40 (${score.essentialAsked}/${score.essentialTotal})"), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
                                     } else {
-                                        Text("• القصة — تغطية الجوهري: ${fmtScore(score.historyEssentialPoints)} / 25 (${score.essentialAsked}/${score.essentialTotal})", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
-                                        Text("• القصة — الأعلام الحمراء: ${fmtScore(score.historyRedFlagPoints)} / 15 (${score.redFlagAsked}/${score.redFlagTotal})", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                        Text(localized(de, "• القصة — تغطية الجوهري: ${fmtScore(score.historyEssentialPoints)} / 25 (${score.essentialAsked}/${score.essentialTotal})", "• Anamnese — Wesentliches: ${fmtScore(score.historyEssentialPoints)} / 25 (${score.essentialAsked}/${score.essentialTotal})"), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                        Text(localized(de, "• القصة — الأعلام الحمراء: ${fmtScore(score.historyRedFlagPoints)} / 15 (${score.redFlagAsked}/${score.redFlagTotal})", "• Anamnese — Red Flags: ${fmtScore(score.historyRedFlagPoints)} / 15 (${score.redFlagAsked}/${score.redFlagTotal})"), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
                                     }
                                     if (score.distractorsAsked > 0) {
-                                        Text("• كفاءة القصة: سألت ${score.distractorsAsked} سؤالًا مشتّتًا (المجاني منها: ${score.freeDistractors}) — الخصم من مكوّن القصة: ${fmtScore(score.distractorPenalty)} نقطة", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                        Text(localized(de, "• كفاءة القصة: سألت ${score.distractorsAsked} سؤالًا مشتّتًا (المجاني منها: ${score.freeDistractors}) — الخصم من مكوّن القصة: ${fmtScore(score.distractorPenalty)} نقطة", "• Anamnese-Effizienz: ${score.distractorsAsked} ablenkende Fragen gestellt (davon frei: ${score.freeDistractors}) — Abzug von der Anamnese-Komponente: ${fmtScore(score.distractorPenalty)} Punkte"), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
                                     }
-                                    Text("• مكوّن القصة الإجمالي: ${fmtScore(score.historyTotal)} / 40", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
-                                    Text("• الفحص والاستقصاءات — تغطية العناصر الأساسية: ${fmtScore(score.examCoveragePoints)} / 15 (${score.examKeyRevealed}/${score.examKeyTotal})", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                    Text(localized(de, "• مكوّن القصة الإجمالي: ${fmtScore(score.historyTotal)} / 40", "• Anamnese gesamt: ${fmtScore(score.historyTotal)} / 40"), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                    Text(localized(de, "• الفحص والاستقصاءات — تغطية العناصر الأساسية: ${fmtScore(score.examCoveragePoints)} / 15 (${score.examKeyRevealed}/${score.examKeyTotal})", "• Untersuchung und Tests — Kernelemente abgedeckt: ${fmtScore(score.examCoveragePoints)} / 15 (${score.examKeyRevealed}/${score.examKeyTotal})"), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
                                     Text(
-                                        "• الفحص والاستقصاءات — الكفاءة: ${fmtScore(score.examEfficiencyPoints)} / 5" +
-                                            if (score.examEfficiencyPenalty > 0) " (طُلب ${score.examDistractorsRequested} عنصرًا مشتّتًا — الخصم: ${fmtScore(score.examEfficiencyPenalty)})" else "",
+                                        localized(de, "• الفحص والاستقصاءات — الكفاءة: ${fmtScore(score.examEfficiencyPoints)} / 5", "• Untersuchung und Tests — Effizienz: ${fmtScore(score.examEfficiencyPoints)} / 5") +
+                                            if (score.examEfficiencyPenalty > 0) localized(de, " (طُلب ${score.examDistractorsRequested} عنصرًا مشتّتًا — الخصم: ${fmtScore(score.examEfficiencyPenalty)})", " (${score.examDistractorsRequested} ablenkende Elemente angefordert — Abzug: ${fmtScore(score.examEfficiencyPenalty)})") else "",
                                         color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp
                                     )
-                                    Text("• التشخيص: ${fmtScore(score.diagnosisPoints)} / 40 (${if (score.diagnosisCorrect) "صحيح" else "غير صحيح"})", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                    Text(localized(de, "• التشخيص: ${fmtScore(score.diagnosisPoints)} / 40 (${if (score.diagnosisCorrect) "صحيح" else "غير صحيح"})", "• Diagnose: ${fmtScore(score.diagnosisPoints)} / 40 (${if (score.diagnosisCorrect) "Richtig" else "Falsch"})"), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
                                     if (earlyDiagnosis) {
                                         Spacer(modifier = Modifier.height(4.dp))
-                                        Text("⚠ تشخيص مبكر: شخّصت قبل سؤال سؤال واحد على الأقل في 3 مجالات مختلفة من القصة.", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Text(localized(de, "⚠ تشخيص مبكر: شخّصت قبل سؤال سؤال واحد على الأقل في 3 مجالات مختلفة من القصة.", "⚠ Frühe Diagnose: Sie haben diagnostiziert, bevor Sie in mindestens 3 Anamnese-Bereichen je mindestens eine Frage gestellt hatten."), color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                     }
                                     if (score.missedFacts.isEmpty()) {
                                         Spacer(modifier = Modifier.height(4.dp))
-                                        Text("كشفتَ كل الوقائع الحاسمة في هذه الحالة. أحسنت.", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Text(localized(de, "كشفتَ كل الوقائع الحاسمة في هذه الحالة. أحسنت.", "Sie haben alle entscheidenden Fakten dieses Falls aufgedeckt. Gut gemacht."), color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                     }
                                 }
                             }
@@ -666,10 +687,10 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     shape = MaterialTheme.shapes.large
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp)) {
-                                        Text("⚠ تنبيه سلامة", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                        Text(localized(de, "⚠ تنبيه سلامة", "⚠ Sicherheitshinweis"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
-                                            "لم تسأل أيًّا من أسئلة الأعلام الحمراء في هذه الحالة (${score.redFlagTotal} سؤالًا متاحًا). استبعاد التشاخيص المهدِّدة للحياة بسؤال المريض جزء أساسي من التقييم الآمن.",
+                                            localized(de, "لم تسأل أيًّا من أسئلة الأعلام الحمراء في هذه الحالة (${score.redFlagTotal} سؤالًا متاحًا). استبعاد التشاخيص المهدِّدة للحياة بسؤال المريض جزء أساسي من التقييم الآمن.", "Sie haben keine der Red-Flag-Fragen in diesem Fall gestellt (${score.redFlagTotal} Fragen verfügbar). Lebensbedrohliche Diagnosen durch gezielte Befragung auszuschließen, ist ein wesentlicher Teil der sicheren Beurteilung."),
                                             color = Color.White, fontSize = 13.sp, lineHeight = 20.sp
                                         )
                                     }
@@ -684,16 +705,16 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.6f))
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp)) {
-                                        Text("وقائع حاسمة لم تُكشف (${score.missedFacts.size}):", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
+                                        Text(localized(de, "وقائع حاسمة لم تُكشف (${score.missedFacts.size}):", "Nicht aufgedeckte entscheidende Fakten (${score.missedFacts.size}):"), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
                                         score.missedFacts.forEach { fact ->
                                             Spacer(modifier = Modifier.height(8.dp))
-                                            Text("• ${fact.label ?: "واقعة حاسمة"}", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                            Text("• ${fact.label ?: localized(de, "واقعة حاسمة", "Entscheidender Fakt")}", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                             if (!fact.whyCritical.isNullOrEmpty()) {
-                                                Text("لماذا هي حاسمة: ${fact.whyCritical}", fontSize = 12.sp)
+                                                Text(localized(de, "لماذا هي حاسمة: ${fact.whyCritical}", "Warum entscheidend: ${fact.whyCritical}"), fontSize = 12.sp)
                                             }
                                             if (fact.revealerIds.isNotEmpty()) {
-                                                val revealerNames = fact.revealerIds.joinToString("، ") { revealerTexts[it] ?: it }
-                                                Text("كان يكشفها: $revealerNames", fontSize = 12.sp, color = GoldAccentDark, fontWeight = FontWeight.SemiBold)
+                                                val revealerNames = fact.revealerIds.joinToString(localized(de, "، ", ", ")) { revealerTexts[it] ?: it }
+                                                Text(localized(de, "كان يكشفها: $revealerNames", "Aufzudecken durch: $revealerNames"), fontSize = 12.sp, color = GoldAccentDark, fontWeight = FontWeight.SemiBold)
                                             }
                                         }
                                     }
@@ -711,7 +732,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("تقرير أداء الحالة السريرية", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Text(localized(de, "تقرير أداء الحالة السريرية", "Leistungsbericht zum Fall"), color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                                     Surface(
                                         color = GoldAccent,
                                         shape = MaterialTheme.shapes.small
@@ -726,13 +747,13 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(10.dp))
-                                Text("كشف النقاط الحرجة (Key Items):", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(localized(de, "كشف النقاط الحرجة (Key Items):", "Aufdeckung der Kernelemente (Key Items):"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 Spacer(modifier = Modifier.height(6.dp))
-                                Text("• القصة السريرية: $historyPct% ($revealedHistoryKey/$totalHistoryKey)", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
-                                Text("• الفحص العضوي: $examsPct% ($revealedExamsKey/$totalExamsKey)", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
-                                Text("• الاستقصاءات: $testsPct% ($revealedTestsKey/$totalTestsKey)", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                Text(localized(de, "• القصة السريرية: $historyPct% ($revealedHistoryKey/$totalHistoryKey)", "• Anamnese: $historyPct% ($revealedHistoryKey/$totalHistoryKey)"), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                Text(localized(de, "• الفحص العضوي: $examsPct% ($revealedExamsKey/$totalExamsKey)", "• Körperliche Untersuchung: $examsPct% ($revealedExamsKey/$totalExamsKey)"), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+                                Text(localized(de, "• الاستقصاءات: $testsPct% ($revealedTestsKey/$totalTestsKey)", "• Tests: $testsPct% ($revealedTestsKey/$totalTestsKey)"), color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text("• الكفاءة الإجمالية لكشف النقاط المفتاحية: $overallPct%", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text(localized(de, "• الكفاءة الإجمالية لكشف النقاط المفتاحية: $overallPct%", "• Gesamteffizienz der Kernelemente: $overallPct%"), color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
                         }
                         }
@@ -745,7 +766,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    Text("الشرح العلمي والتدبير السريري:", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
+                                    Text(localized(de, "الشرح العلمي والتدبير السريري:", "Wissenschaftliche Erklärung und klinisches Management:"), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(caseItem.explanation!!, fontSize = 14.sp, lineHeight = 21.sp)
                                 }
@@ -760,7 +781,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                 border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f))
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    Text("نقاط التعلم السريرية الأساسية (Learning Points):", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
+                                    Text(localized(de, "نقاط التعلم السريرية الأساسية (Learning Points):", "Klinische Lernpunkte (Learning Points):"), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
                                     Spacer(modifier = Modifier.height(6.dp))
                                     caseItem.learningPoints.forEach { lp ->
                                         Text("• $lp", fontSize = 13.sp, modifier = Modifier.padding(vertical = 2.dp))
@@ -782,7 +803,7 @@ fun CasePlayerScreen(caseItem: ClinicalCaseDto, onBack: () -> Unit) {
                                     border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.4f))
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp)) {
-                                        Text("القصة الكاملة كما في السجل:", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
+                                        Text(localized(de, "القصة الكاملة كما في السجل:", "Die vollständige Geschichte laut Akte:"), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(fullStory, fontSize = 14.sp, lineHeight = 21.sp)
                                     }
