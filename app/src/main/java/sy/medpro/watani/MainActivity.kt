@@ -1040,10 +1040,22 @@ class MainActivity : ComponentActivity() {
                                                     } else {
                                                         topicEntity != null
                                                     }
+                                                    // Fix 1.2.1: a section downloaded from INSIDE
+                                                    // this screen (the English twin is the main
+                                                    // case) left activeSubjectEnvelope null, so
+                                                    // the screen kept showing the download prompt
+                                                    // forever and the download looked broken.
+                                                    LaunchedEffect(screen.path, isDownloaded) {
+                                                        if (isDownloaded && activeSubjectEnvelope == null) {
+                                                            activeSubjectEnvelope = viewModel.getSubjectEnvelope(screen.path)
+                                                        }
+                                                    }
                                                     TopicSelectionScreen(
                                                         subjectName = screen.subjectName,
                                                         subjectEnvelope = activeSubjectEnvelope,
                                                         downloaded = isDownloaded,
+                                                        isDownloading = uiState.downloadingPaths.contains(screen.path),
+                                                        downloadProgress = uiState.downloadingProgress[screen.path] ?: 0f,
                                                         onDownloadClick = {
                                                             uiState.files[screen.path]?.let { entry ->
                                                                 viewModel.downloadSection(screen.path, entry)

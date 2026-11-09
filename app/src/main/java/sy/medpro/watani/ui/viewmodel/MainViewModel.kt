@@ -177,9 +177,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             downloadError = if (error is ActivationRevokedException) {
                                 error.localizedMessage
                             } else {
-                                // M14: Arabic only — the raw exception text
-                                // stays in the failure cause, never in UI.
-                                "فشل تحميل $path — تحقق من الاتصال وحاول مجددًا."
+                                // M14 stays for RAW technical text (English
+                                // exception strings never reach the UI), but
+                                // our own Arabic user-facing reasons (the
+                                // SectionVerification / repository messages)
+                                // are shown as-is — Fix 1.2.1: masking them
+                                // made real defects undiagnosable on device
+                                // (the 1.2 download failures, 10 Nov 2026).
+                                val reason = error.localizedMessage?.takeIf { m ->
+                                    m.any { it.code in 0x0600..0x06FF }
+                                }
+                                if (reason != null) {
+                                    "فشل تحميل $path — $reason"
+                                } else {
+                                    "فشل تحميل $path — تحقق من الاتصال وحاول مجددًا."
+                                }
                             }
                         )
                     }

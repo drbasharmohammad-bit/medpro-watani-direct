@@ -88,6 +88,52 @@ class BehavioralFixesTest {
         }
     }
 
+    // ---------- Fix 1.2.1: non-subject envelopes have their own branches ----------
+    @Test
+    fun auscultationEnvelopeCountsClips() {
+        val clip = """{"id":"c1","file":"auscultation/c1.wav","category":"heart","label":"l","dataset":"d"}"""
+        val ok = """{"version":"1","count":2,"clips":[$clip,$clip]}"""
+        assertEquals(2, SectionVerification.verifySectionCount("auscultation.json", ok, moshi))
+        val bad = """{"version":"1","count":48,"clips":[$clip]}"""
+        try {
+            SectionVerification.verifySectionCount("auscultation.json", bad, moshi)
+            fail("auscultation declared-vs-actual mismatch must fail")
+        } catch (_: IllegalStateException) {
+        }
+        val empty = """{"version":"1","count":0,"clips":[]}"""
+        try {
+            SectionVerification.verifySectionCount("auscultation.json", empty, moshi)
+            fail("empty auscultation pack must fail")
+        } catch (_: IllegalStateException) {
+        }
+    }
+
+    @Test
+    fun germanCasesUseTheCasesBranch() {
+        val caseJson = """{"id":"c1","title":"t","presentation":"p","explanation":"e"}"""
+        val ok = """{"version":"1","count":2,"cases":[$caseJson,$caseJson]}"""
+        assertEquals(2, SectionVerification.verifySectionCount("cases_de.json", ok, moshi))
+        val bad = """{"version":"1","count":436,"cases":[$caseJson]}"""
+        try {
+            SectionVerification.verifySectionCount("cases_de.json", bad, moshi)
+            fail("cases_de declared-vs-actual mismatch must fail")
+        } catch (_: IllegalStateException) {
+        }
+    }
+
+    @Test
+    fun osceEnvelopeCountsStations() {
+        val station = """{"id":"s1","title":"t"}"""
+        val ok = """{"version":"1","count":2,"stations":[$station,$station]}"""
+        assertEquals(2, SectionVerification.verifySectionCount("osce.json", ok, moshi))
+        val bad = """{"version":"1","count":70,"stations":[$station]}"""
+        try {
+            SectionVerification.verifySectionCount("osce.json", bad, moshi)
+            fail("osce declared-vs-actual mismatch must fail")
+        } catch (_: IllegalStateException) {
+        }
+    }
+
     // ---------- Anki F-05/F-06: atomic adoption ----------
     private fun ankiJson(version: String, total: Int, cards: Int): String {
         val card = """{"front":"f","back":"b"}"""

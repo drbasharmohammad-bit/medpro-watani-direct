@@ -422,7 +422,9 @@ fun TopicSelectionScreen(
     onSessionClick: (String, String) -> Unit = { _, _ -> },
     onBack: () -> Unit,
     englishPath: String? = null,
-    onOpenEnglish: (String) -> Unit = {}
+    onOpenEnglish: (String) -> Unit = {},
+    isDownloading: Boolean = false,
+    downloadProgress: Float = 0f
 ) {
     // «حسب السنوات» (مواصفة الدكتور 21:51): المواد التي تحمل sessions[]
     // بالشاردة المنزّلة تعرض مبدّلًا بين عرض المواضيع (الأصلي، لا يتغير)
@@ -474,11 +476,24 @@ fun TopicSelectionScreen(
                 ) {
                     Text("القسم غير محمل أو لم يتم تنزيل ملفاته بعد.", fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
-                    Button(shape = MaterialTheme.shapes.medium,
-                        onClick = onDownloadClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("تحميل القسم الآن")
+                    if (isDownloading) {
+                        // Fix 1.2.1: the prompt state used to show the button
+                        // unchanged during an in-screen download — the tap
+                        // looked dead. Show real progress instead.
+                        LinearProgressIndicator(
+                            progress = { downloadProgress },
+                            modifier = Modifier.fillMaxWidth(0.7f),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("جاري تحميل القسم...", fontSize = 13.sp)
+                    } else {
+                        Button(shape = MaterialTheme.shapes.medium,
+                            onClick = onDownloadClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("تحميل القسم الآن")
+                        }
                     }
                 }
             } else {

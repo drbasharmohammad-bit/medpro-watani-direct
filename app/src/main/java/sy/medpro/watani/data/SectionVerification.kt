@@ -18,6 +18,12 @@ import com.squareup.moshi.Moshi
  *   NO coerced count anywhere: zero parsed questions for a subject
  *   envelope is a failure, guide.json is really parsed, and the cases
  *   comparison is the honest declared-vs-actual check for any value.
+ *   Every non-subject envelope downloaded through downloadSection has
+ *   its OWN branch here (cases/cases_de, guide, ddx, reverse,
+ *   auscultation, osce): an envelope shape without a branch falls into
+ *   the subject check, counts 0 and can NEVER download (the 1.2 defect
+ *   fixed in 1.2.1 — auscultation, German cases and OSCE all failed
+ *   this way on device).
  */
 object SectionVerification {
 
@@ -53,7 +59,7 @@ object SectionVerification {
 
     /** F-02/F-03/F-04: parse + declared-count verification. */
     fun verifySectionCount(path: String, jsonString: String, moshi: Moshi): Int {
-        if (path.contains("cases.json")) {
+        if (path.contains("cases.json") || path == "cases_de.json") {
             val casesEnv = moshi.adapter(CasesEnvelope::class.java).fromJson(jsonString)
             val declaredCount = casesEnv?.count
             val actualCount = casesEnv?.cases?.size ?: 0
@@ -77,6 +83,32 @@ object SectionVerification {
             val actualCount = ddxEnv?.cases?.size ?: 0
             if (ddxEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
                 throw IllegalStateException("خطأ في تطابق عدد حالات التشخيص التفريقي الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+            }
+            return actualCount
+        }
+        if (path == "auscultation.json") {
+            // Fix 1.2.1: the auscultation pack is a clips envelope, not a
+            // subject envelope — before this branch existed it fell into
+            // the subject check below, counted 0 questions and EVERY pack
+            // download was deleted as "corrupt" (doctor's device report,
+            // 10 Nov 2026). Declared count vs actual clips, same honesty
+            // rule as the other envelopes.
+            val auscEnv = moshi.adapter(AuscultationEnvelope::class.java).fromJson(jsonString)
+            val declaredCount = auscEnv?.count ?: 0
+            val actualCount = auscEnv?.clips?.size ?: 0
+            if (auscEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
+                throw IllegalStateException("خطأ في تطابق عدد مقاطع الإصغاء الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+            }
+            return actualCount
+        }
+        if (path == "osce.json") {
+            // Fix 1.2.1: same defect class as auscultation — a stations
+            // envelope fell into the subject check and could never pass.
+            val osceEnv = moshi.adapter(OsceEnvelope::class.java).fromJson(jsonString)
+            val declaredCount = osceEnv?.count ?: 0
+            val actualCount = osceEnv?.stations?.size ?: 0
+            if (osceEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
+                throw IllegalStateException("خطأ في تطابق عدد محطات الأوسكي الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
             }
             return actualCount
         }
