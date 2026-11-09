@@ -29,5 +29,10 @@ data class AuscultationClipDto(
     @Json(name = "file") val file: String?,
     @Json(name = "category") val category: String?,
     @Json(name = "label") val label: String?,
-    @Json(name = "dataset") val dataset: String?
+    @Json(name = "dataset") val dataset: String?,
+    // Fix 1.2.2: the pack has carried a per-clip waveform PNG since the
+    // 9 Nov enrichment and it is live server-side, but the DTO never
+    // read the field, so the trainer could not display it (doctor's
+    // device report: "the trainer looks undeveloped").
+    @Json(name = "waveform") val waveform: String?
 )

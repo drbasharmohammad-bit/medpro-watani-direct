@@ -2,6 +2,7 @@ package sy.medpro.watani.ui.clinical
 
 import android.content.Context
 import android.media.MediaPlayer
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -17,6 +18,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,11 +31,45 @@ import sy.medpro.watani.data.*
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import java.io.File
 
+/**
+ * Fix 1.2.2: per-clip waveform (published with the pack on 9 Nov but
+ * never displayed — the trainer looked "undeveloped" on device).
+ * Downloaded once into the same clips cache as the audio
+ * (downloadAuscultationClip is path-generic), decoded off the main
+ * thread, shown full-width under the clip's heading. A missing or
+ * failed waveform renders nothing — the audio is the feature.
+ */
+@Composable
+private fun WaveformImage(waveformPath: String?, repo: WataniRepository) {
+    var bitmap by remember(waveformPath) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(waveformPath) {
+        val path = waveformPath ?: return@LaunchedEffect
+        val res = repo.downloadAuscultationClip(path)
+        if (res.isSuccess) {
+            val file = res.getOrThrow()
+            bitmap = withContext(Dispatchers.IO) {
+                android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+            }
+        }
+    }
+    val bmp = bitmap
+    if (bmp != null) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Image(
+            bitmap = bmp.asImageBitmap(),
+            contentDescription = "المخطط الموجي للصوت",
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            contentScale = ContentScale.FillWidth
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuscultationTrainerScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val repo = remember { WataniRepository(context) }
     var auscultationEnvelope by remember { mutableStateOf<AuscultationEnvelope?>(null) }
     var arabicClips by remember { mutableStateOf<Map<String, AuscultationArClipDto>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -214,6 +251,7 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
                                                     val ar = arabicClips[clip.id ?: ""]
                                                     Text(ar?.arTitle ?: clip.label ?: "صوت إصغائي", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                                     Text("الفئة: ${clip.category} • المصدر: ${clip.dataset ?: "CirCor/ICBHI"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                                                    WaveformImage(clip.waveform, repo)
                                                     if (ar != null) {
                                                         Spacer(modifier = Modifier.height(6.dp))
                                                         Text(ar.arDescription ?: "", fontSize = 14.sp, fontWeight = FontWeight.Normal)
@@ -252,6 +290,7 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Text("تشغيل مقطع الصوت للإصغاء")
                                             }
+                                            WaveformImage(qClip.waveform, repo)
                                         }
                                     }
                                     quizOptions.forEach { opt ->
