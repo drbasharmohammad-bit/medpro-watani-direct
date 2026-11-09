@@ -60,7 +60,8 @@ fun QuizScreen(
     questions: List<QuestionDto>,
     onBack: () -> Unit,
     sourcePath: String? = null,
-    subjectName: String? = null
+    subjectName: String? = null,
+    ltr: Boolean = false
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
@@ -300,6 +301,7 @@ fun QuizScreen(
                                 questionNumber = index + 1,
                                 question = question,
                                 options = options,
+                                ltr = ltr,
                                 selectedOption = selectedOption,
                                 correctIndices = correctIndices,
                                 isAnswered = isAnswered,
@@ -366,6 +368,7 @@ fun QuestionCard(
     isAnswered: Boolean,
     ruledOutIndices: Set<Int> = emptySet(),
     highlightKeywords: Boolean = true,
+    ltr: Boolean = false,
     timeSpentSeconds: Int? = null,
     subjectLabel: String = "",
     onToggleRuleOut: (Int) -> Unit = {},
@@ -495,6 +498,10 @@ fun QuestionCard(
                 else AnnotatedString(rawStem)
             }
 
+            // English-bank mode (questions_en/): stems and options render
+            // LTR; the card chrome and the (Arabic) explanation below
+            // stay RTL.
+            CompositionLocalProvider(LocalLayoutDirection provides if (ltr) LayoutDirection.Ltr else LocalLayoutDirection.current) {
             Text(
                 text = styledStem,
                 fontSize = 16.sp,
@@ -575,6 +582,7 @@ fun QuestionCard(
                         }
                     }
                 }
+            }
             }
 
             AnimatedVisibility(

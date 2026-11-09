@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
+import sy.medpro.watani.ui.icons.SubjectIcon
+import sy.medpro.watani.ui.icons.subjectIconRes
 import sy.medpro.watani.ui.theme.*
 
 // A case plays the upgraded (v2) flow only when it carries the full
@@ -91,13 +93,21 @@ fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> 
                                     color = MaroonPrimary.copy(alpha = 0.1f),
                                     shape = MaterialTheme.shapes.small
                                 ) {
-                                    Text(
-                                        text = caseItem.specialty ?: "طب عام وباطنة",
-                                        color = MaroonPrimary,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (subjectIconRes(caseItem.specialty) != null) {
+                                            SubjectIcon(caseItem.specialty, Modifier.size(13.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                        }
+                                        Text(
+                                            text = caseItem.specialty ?: "طب عام وباطنة",
+                                            color = MaroonPrimary,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                    }
                                 }
                                 Surface(
                                     color = GoldAccent.copy(alpha = 0.2f),

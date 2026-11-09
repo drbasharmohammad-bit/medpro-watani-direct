@@ -39,7 +39,10 @@ object SubjectIcons {
         "جراحة الأورام" to R.drawable.ic_subject_surgical_oncology,
         "جراحة الأوعية" to R.drawable.ic_subject_vascular_surgery,
         "جراحة الصدر" to R.drawable.ic_subject_thoracic_surgery,
-        "جراحة القلب" to R.drawable.ic_subject_cardiac_surgery
+        "جراحة القلب" to R.drawable.ic_subject_cardiac_surgery,
+        // أيقونتان مولّدتان 9 نوفمبر بنفس الأسلوب (سُدّت فجوتهما):
+        "الأشعة" to R.drawable.ic_subject_radiology,
+        "الطب الإسعافي" to R.drawable.ic_subject_emergency_medicine
     )
 
     fun forName(name: String): Int? = byName[name.trim()]
@@ -60,7 +63,6 @@ object DrawerIcons {
         "المفضلة" to R.drawable.ic_drawer_favorites,
         "ملاحظاتي" to R.drawable.ic_drawer_my_notes,
         "سجلّ حالاتي" to R.drawable.ic_drawer_case_log,
-        "إعدادات وسجل الإشعارات" to R.drawable.ic_drawer_settings,
         "التواصل" to R.drawable.ic_drawer_contact,
         "محطات OSCE" to R.drawable.ic_drawer_osce,
         "القلب والإصغاء" to R.drawable.ic_drawer_heart_auscultation,

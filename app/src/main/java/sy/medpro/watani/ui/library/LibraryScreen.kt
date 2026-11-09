@@ -26,6 +26,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.LibraryItem
 import sy.medpro.watani.data.LibrarySubject
+import sy.medpro.watani.ui.icons.LibrarySubjectIcon
+import sy.medpro.watani.ui.icons.librarySubjectIconRes
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.GoldAccent
 
@@ -258,12 +260,18 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    subject.name ?: "موضوع",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = MaroonPrimary
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    if (librarySubjectIconRes(subject.id, subject.name) != null) {
+                                        LibrarySubjectIcon(subject.id, subject.name, Modifier.size(30.dp))
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                    }
+                                    Text(
+                                        subject.name ?: "موضوع",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = MaroonPrimary
+                                    )
+                                }
                                 Icon(
                                     if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                     null,

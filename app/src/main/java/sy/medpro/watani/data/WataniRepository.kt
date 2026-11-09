@@ -325,6 +325,18 @@ class WataniRepository(private val context: Context) {
         }
     }
 
+    // الحالات الألمانية (نقل 9 نوفمبر): نفس غلاف الحالات تمامًا، ملف مستقل.
+    suspend fun getCasesDeEnvelope(): CasesEnvelope? = withContext(Dispatchers.IO) {
+        try {
+            val file = getSectionFile("cases_de.json")
+            if (!file.exists()) return@withContext null
+            val jsonString = file.readText(Charsets.UTF_8)
+            moshi.adapter(CasesEnvelope::class.java).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun getGuideEnvelope(): GuideEnvelope? = withContext(Dispatchers.IO) {
         try {
             val file = getSectionFile("guide.json")

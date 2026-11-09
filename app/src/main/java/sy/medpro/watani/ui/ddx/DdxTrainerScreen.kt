@@ -25,6 +25,8 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import sy.medpro.watani.data.*
+import sy.medpro.watani.ui.icons.SubjectIcon
+import sy.medpro.watani.ui.icons.subjectIconRes
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
 // ---------------------------------------------------------------------------
@@ -372,12 +374,18 @@ fun DdxTrainerScreen(onBack: () -> Unit) {
                                                 Text(c.titleAr, fontSize = 13.sp)
                                             }
                                             Spacer(modifier = Modifier.height(6.dp))
-                                            Text(
-                                                listOfNotNull(c.systemAr, c.specialtyAr)
-                                                    .joinToString(" • "),
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                if (subjectIconRes(c.specialtyAr) != null) {
+                                                    SubjectIcon(c.specialtyAr, Modifier.size(13.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                }
+                                                Text(
+                                                    listOfNotNull(c.systemAr, c.specialtyAr)
+                                                        .joinToString(" • "),
+                                                    fontSize = 12.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                )
+                                            }
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Icon(

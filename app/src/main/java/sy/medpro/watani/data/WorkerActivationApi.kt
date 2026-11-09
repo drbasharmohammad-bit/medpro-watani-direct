@@ -93,6 +93,7 @@ object WorkerActivationApi {
     /** Restricted prefixes under v1/ (contract) + the exact library.json file. */
     private val RESTRICTED_PREFIXES = listOf(
         "questions/",
+        "questions_en/",
         "dawrat/",
         "dawrat_jami3at/",
         "uworld/",

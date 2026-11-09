@@ -37,7 +37,10 @@ sealed class ScreenState {
          * subject-label fallback). */
         val sourcePath: String? = null,
         /** Envelope subject_name when known (share-card subject label). */
-        val subjectName: String? = null
+        val subjectName: String? = null,
+        /** English-bank quizzes (questions_en/): stems/options render
+         * LTR while chrome and explanations stay RTL (Nov 2026). */
+        val ltr: Boolean = false
     ) : ScreenState()
     data class CasePlayer(val caseItem: ClinicalCaseDto) : ScreenState()
 }
@@ -328,7 +331,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     topicName,
                     questions,
                     sourcePath = path,
-                    subjectName = envelope?.subjectName
+                    subjectName = envelope?.subjectName,
+                    ltr = path.startsWith("questions_en/")
                 )
             )
         }
@@ -363,7 +367,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sessionName,
                     questions,
                     sourcePath = path,
-                    subjectName = envelope?.subjectName
+                    subjectName = envelope?.subjectName,
+                    ltr = path.startsWith("questions_en/")
                 )
             )
         }

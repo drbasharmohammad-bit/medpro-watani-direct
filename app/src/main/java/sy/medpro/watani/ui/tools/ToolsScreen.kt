@@ -68,6 +68,7 @@ private val TOOL_GROUPS = listOf(
         tools = listOf(
             ToolEntry("مدرّب التشخيص التفريقي", "رتّب التشخيصات التفريقية واكشف مراحل الحالة تدريجيًا", Icons.Default.AccountTree, Color(0xFF6A1B9A), "مدرّب التشخيص التفريقي"),
             ToolEntry("اقلبها", "ابنِ الصورة السريرية للتشخيص، ميّز العنصر الدخيل، وأكمل العبارة الناقصة", Icons.Default.FlipCameraAndroid, Color(0xFF00897B), "اقلبها"),
+            ToolEntry("الحالات الألمانية", "حالات مريض افتراضي بالألمانية (Deutsche Fälle)", Icons.Default.Language, Color(0xFF00695C), "الحالات الألمانية"),
             ToolEntry("غرفة الطوارئ", "مناوبة إسعافية تفاعلية بحالات متغيرة", Icons.Default.Emergency, Color(0xFFC62828), "غرفة الطوارئ"),
             ToolEntry("محطات OSCE", "محطات فحص سريري تفاعلية", Icons.Default.FactCheck, Color(0xFF283593), "محطات OSCE"),
             ToolEntry("أطلس تخطيط القلب", "راسم موجات تفاعلي للحالات الحرجة وتوضع الاحتشاء", Icons.Default.MonitorHeart, Color(0xFFAD1457), "أطلس تخطيط القلب"),

@@ -420,7 +420,9 @@ fun TopicSelectionScreen(
     onDownloadClick: () -> Unit,
     onTopicClick: (String) -> Unit,
     onSessionClick: (String, String) -> Unit = { _, _ -> },
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    englishPath: String? = null,
+    onOpenEnglish: (String) -> Unit = {}
 ) {
     // «حسب السنوات» (مواصفة الدكتور 21:51): المواد التي تحمل sessions[]
     // بالشاردة المنزّلة تعرض مبدّلًا بين عرض المواضيع (الأصلي، لا يتغير)
@@ -431,7 +433,20 @@ fun TopicSelectionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (showYears) "جلسات: $subjectName" else "مواضيع: $subjectName", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val titleIconRes = sy.medpro.watani.ui.SubjectIcons.forName(subjectName)
+                        if (titleIconRes != null) {
+                            Image(
+                                painter = painterResource(titleIconRes),
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(if (showYears) "جلسات: $subjectName" else "مواضيع: $subjectName", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
@@ -477,6 +492,39 @@ fun TopicSelectionScreen(
                     }
                 )
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // مدخل ثالث بمستوى مدخلي المادة (المواضيع/السنوات) — بأمر
+                    // الدكتور: «باللغة الإنجليزية» يفتح شاردة المادة
+                    // الإنجليزية (questions_en/) بنفس تصفح المواضيع، ولا
+                    // يظهر إطلاقًا إن غابت الشاردة من الفهرس.
+                    if (englishPath != null) {
+                        item {
+                            Card(
+                                shape = MaterialTheme.shapes.small,
+                                colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.08f)),
+                                border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.45f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenEnglish(englishPath) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("باللغة الإنجليزية", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                                        Text(
+                                            "نفس أسئلة المادة بالإنجليزية (الشرح يبقى بالعربية)",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                                        )
+                                    }
+                                    Icon(Icons.Default.Language, contentDescription = null, tint = MaroonPrimary)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
                     if (sessions.isNotEmpty()) {
                         item {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

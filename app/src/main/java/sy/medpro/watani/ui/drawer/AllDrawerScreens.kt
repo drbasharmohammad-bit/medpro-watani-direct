@@ -1001,27 +1001,8 @@ fun MyNotesScreen(onBack: () -> Unit) {
     }
 }
 
-// 17. Settings
-@Composable
-fun SettingsScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("watani_settings", Context.MODE_PRIVATE) }
-    var darkMode by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
-
-    DrawerScreenScaffold(title = "الإعدادات", onBack = onBack) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("الوضع الليلي الداكن", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Switch(checked = darkMode, onCheckedChange = { darkMode = it; prefs.edit().putBoolean("dark", it).apply() }, colors = SwitchDefaults.colors(checkedThumbColor = MaroonPrimary))
-                    }
-                }
-            }
-        }
-    }
-}
+// 17. (حُذفت شاشة الإعدادات بنقل 9 نوفمبر: لم يكن فيها سوى مفتاح
+// الوضع الليلي، وهو الآن مدخل مباشر بمفتاح Switch في الدرج نفسه.)
 
 // 19. Contact Admin — روابط التواصل من بوابة /v1/config/contact-links
 // (ContactLinksStore: تُرسم فورًا من الكاش/الافتراضيات وتتحدث بالخلفية)،

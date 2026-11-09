@@ -54,6 +54,7 @@ import sy.medpro.watani.ui.activation.ActivationPromptDialog
 import sy.medpro.watani.ui.welcome.VideoSplashScreen
 import sy.medpro.watani.ui.cases.CasePlayerScreen
 import sy.medpro.watani.ui.cases.CasesScreen
+import sy.medpro.watani.ui.cases.GermanCasesScreen
 import sy.medpro.watani.ui.clinical.BedsideClinicalTab
 import sy.medpro.watani.ui.drawer.*
 import sy.medpro.watani.ui.home.*
@@ -432,7 +433,7 @@ class MainActivity : ComponentActivity() {
                                                 "المفضلة",
                                                 "ملاحظاتي",
                                                 "سجلّ حالاتي",
-                                                "إعدادات وسجل الإشعارات",
+                                                "الوضع الليلي",
                                                 "التواصل",
                                                 "محطات OSCE",
                                                 "القلب والإصغاء",
@@ -460,7 +461,7 @@ class MainActivity : ComponentActivity() {
                                                     "المفضلة" -> Icons.Default.Favorite
                                                     "ملاحظاتي" -> Icons.Default.NoteAlt
                                                     "سجلّ حالاتي" -> Icons.Default.Assignment
-                                                    "إعدادات وسجل الإشعارات" -> Icons.Default.Settings
+                                                    "الوضع الليلي" -> Icons.Default.DarkMode
                                                     "التواصل" -> Icons.Default.SupportAgent
                                                     "محطات OSCE" -> Icons.Default.MedicalServices
                                                     "القلب والإصغاء" -> Icons.Default.MonitorHeart
@@ -482,31 +483,49 @@ class MainActivity : ComponentActivity() {
                                                     },
                                                     label = { Text(title, fontWeight = FontWeight.Medium, fontSize = 13.sp) },
                                                     selected = false,
+                                                    badge = if (title == "الوضع الليلي") {
+                                                        {
+                                                            Switch(
+                                                                checked = darkTheme,
+                                                                onCheckedChange = { prefs.edit().putBoolean("dark", it).apply() },
+                                                                colors = SwitchDefaults.colors(checkedThumbColor = MaroonPrimary)
+                                                            )
+                                                        }
+                                                    } else null,
                                                     onClick = {
-                                                        drawerOpen = false
-                                                        if (title == "تسجيل الخروج") {
-                                                            // AuthStateListener above refreshes currentUser;
-                                                            // sign-out no longer drops the user to a gate —
-                                                            // the app stays browsable, signed out.
-                                                            // Activation is NOT cleared here (Nov 2026
-                                                            // fix): it is stored per account, so signing
-                                                            // back in with the same account keeps it,
-                                                            // while a different account finds no token
-                                                            // and must activate itself. The old M2 wipe
-                                                            // made every sign-out lose the activation.
-                                                            FirebaseAuth.getInstance().signOut()
-                                                            viewModel.refreshDownloadedSections()
-                                                        } else if (title == "المريض الافتراضي") {
-                                                            drawerScreen = null
-                                                            viewModel.setTab(AppTab.CASES)
-                                                        } else if (title == "المراجعة الذكية Anki") {
-                                                            // M8 + activation: the smart-review
-                                                            // drawer screen must pass the same
-                                                            // gates as the bank tabs instead of
-                                                            // opening ungated from the drawer.
-                                                            openRestrictedDrawer(title)
+                                                        if (title == "الوضع الليلي") {
+                                                            // تبديل مباشر للوضع الليلي (بأمر الدكتور، نوفمبر 2026):
+                                                            // يحل محل شاشة «إعدادات وسجل الإشعارات» التي لم يكن
+                                                            // فيها سوى هذا المفتاح. الدرج يبقى مفتوحًا ليرى
+                                                            // الطالب أثر التبديل فورًا، ومستمع التفضيلات أعلاه
+                                                            // يطبّق السمة مباشرة.
+                                                            prefs.edit().putBoolean("dark", !darkTheme).apply()
                                                         } else {
-                                                            drawerScreen = title
+                                                            drawerOpen = false
+                                                            if (title == "تسجيل الخروج") {
+                                                                // AuthStateListener above refreshes currentUser;
+                                                                // sign-out no longer drops the user to a gate —
+                                                                // the app stays browsable, signed out.
+                                                                // Activation is NOT cleared here (Nov 2026
+                                                                // fix): it is stored per account, so signing
+                                                                // back in with the same account keeps it,
+                                                                // while a different account finds no token
+                                                                // and must activate itself. The old M2 wipe
+                                                                // made every sign-out lose the activation.
+                                                                FirebaseAuth.getInstance().signOut()
+                                                                viewModel.refreshDownloadedSections()
+                                                            } else if (title == "المريض الافتراضي") {
+                                                                drawerScreen = null
+                                                                viewModel.setTab(AppTab.CASES)
+                                                            } else if (title == "المراجعة الذكية Anki") {
+                                                                // M8 + activation: the smart-review
+                                                                // drawer screen must pass the same
+                                                                // gates as the bank tabs instead of
+                                                                // opening ungated from the drawer.
+                                                                openRestrictedDrawer(title)
+                                                            } else {
+                                                                drawerScreen = title
+                                                            }
                                                         }
                                                     }
                                                 )
@@ -734,7 +753,7 @@ class MainActivity : ComponentActivity() {
                                                 "المفضلة" -> FavoritesScreen(onBack = { drawerScreen = null })
                                                 "ملاحظاتي" -> MyNotesScreen(onBack = { drawerScreen = null })
                                                 "سجلّ حالاتي" -> LogbookScreen(onBack = { drawerScreen = null })
-                                                "إعدادات وسجل الإشعارات" -> SettingsScreen(onBack = { drawerScreen = null })
+                                                "الحالات الألمانية" -> GermanCasesScreen(onBack = { drawerScreen = null })
                                                 "الدعم النفسي" -> SupportScreen(onBack = { drawerScreen = null })
                                                 "التواصل" -> ContactScreen(onBack = { drawerScreen = null })
                                                 "التواصل مع الإدارة" -> ContactScreen(onBack = { drawerScreen = null })
@@ -1036,7 +1055,21 @@ class MainActivity : ComponentActivity() {
                                                         onSessionClick = { sessionKey, sessionName ->
                                                             viewModel.openSessionQuiz(screen.path, sessionKey, sessionName, screen.subjectName)
                                                         },
-                                                        onBack = { viewModel.goBack() }
+                                                        onBack = { viewModel.goBack() },
+                                                        // المدخل الثالث «باللغة الإنجليزية»: توأم
+                                                        // الشاردة الإنجليزي إن وُجد بالفهرس فقط —
+                                                        // يفتح بنفس شاشة المواضيع (ومسار الأسئلة
+                                                        // نفسه يضبط اتجاه LTR من البادئة).
+                                                        englishPath = if (screen.path.startsWith("questions/")) {
+                                                            val twin = "questions_en/" + screen.path.removePrefix("questions/")
+                                                            twin.takeIf { uiState.files.containsKey(it) }
+                                                        } else null,
+                                                        onOpenEnglish = { enPath ->
+                                                            coroutineScope.launch {
+                                                                activeSubjectEnvelope = viewModel.getSubjectEnvelope(enPath)
+                                                                viewModel.openSubject(enPath, screen.subjectName, AppTab.BANK)
+                                                            }
+                                                        }
                                                     )
                                                 }
                                                 is ScreenState.UniversitySubjects -> {
@@ -1063,7 +1096,8 @@ class MainActivity : ComponentActivity() {
                                                         questions = screen.questions,
                                                         onBack = { viewModel.goBack() },
                                                         sourcePath = screen.sourcePath,
-                                                        subjectName = screen.subjectName
+                                                        subjectName = screen.subjectName,
+                                                        ltr = screen.ltr
                                                     )
                                                 }
                                                 is ScreenState.CasePlayer -> {

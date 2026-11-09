@@ -22,6 +22,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.OfflineStudyVault
+import sy.medpro.watani.ui.icons.SubjectIcon
+import sy.medpro.watani.ui.icons.subjectIconRes
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.SuccessGreen
 import sy.medpro.watani.ui.theme.ErrorRed
@@ -43,9 +45,23 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
     val subjects = loadedSet?.subjects.orEmpty()
     val allCards = remember(loadedSet) { loadedSet?.cards.orEmpty() }
 
+    // SRS layer (local-only scheduling): due ids/counts recompute
+    // whenever a grade lands (AnkiSrs.changes) or the set reloads.
+    val srsChanges by AnkiSrs.changes.collectAsState()
+    val dueIds = remember(allCards, srsChanges) {
+        if (allCards.isEmpty()) emptyList()
+        else AnkiSrs.dueIds(context, allCards.map { it.id })
+    }
+    val dueCountBySubject = remember(subjects, srsChanges) {
+        subjects.associate { s ->
+            s.name to AnkiSrs.dueCount(context, s.topics.flatMap { it.cards }.map { it.id })
+        }
+    }
+
     var selectedSubject by remember { mutableStateOf(ANKI_ALL) }
     var selectedTopic by remember { mutableStateOf(ANKI_ALL) }
     var wrongOnlyMode by remember { mutableStateOf(wrongOnly) }
+    var dueOnlyMode by remember { mutableStateOf(false) }
     var sessionStarted by remember { mutableStateOf(false) }
 
     val topicsForSubject = remember(subjects, selectedSubject) {
@@ -69,25 +85,40 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
     var newlyMasteredThisSession by remember { mutableStateOf(0) }
     var finished by remember { mutableStateOf(false) }
 
-    fun buildQueueFor(subject: String, topic: String, wrong: Boolean): List<AnkiCard> {
+    fun buildQueueFor(subject: String, topic: String, wrong: Boolean, due: Boolean = false): List<AnkiCard> {
         val masteredIds = OfflineStudyVault.statsFlow.value.masteredFlashcardIds
         val wrongIds = OfflineStudyVault.statsFlow.value.wrongFlashcardIds
+        if (due) {
+            val dueNow = AnkiSrs.dueIds(context, allCards.map { it.id }).toSet()
+            return allCards.filter { card ->
+                card.id in dueNow &&
+                    (subject == ANKI_ALL || card.subject == subject) &&
+                    (topic == ANKI_ALL || card.topic == topic)
+            }.sortedBy { AnkiSrs.state(context, it.id)?.dueAtMillis ?: Long.MAX_VALUE }
+        }
         return if (wrong) {
             allCards.filter { it.id in wrongIds && it.id !in masteredIds }
         } else {
+            // SRS scheduling: a reviewed card leaves the general queue
+            // until its due date arrives (vault mastery still removes
+            // it outright, exactly as before).
+            val srsStates = AnkiSrs.states(context, allCards.map { it.id })
+            val now = System.currentTimeMillis()
             allCards.filter { card ->
                 (subject == ANKI_ALL || card.subject == subject) &&
                     (topic == ANKI_ALL || card.topic == topic) &&
-                    card.id !in masteredIds
+                    card.id !in masteredIds &&
+                    (srsStates[card.id] == null || srsStates[card.id]!!.dueAtMillis <= now)
             }
         }
     }
 
-    fun startSession(subject: String, topic: String, wrong: Boolean) {
+    fun startSession(subject: String, topic: String, wrong: Boolean, due: Boolean = false) {
         selectedSubject = subject
         selectedTopic = topic
         wrongOnlyMode = wrong
-        queue = buildQueueFor(subject, topic, wrong)
+        dueOnlyMode = due
+        queue = buildQueueFor(subject, topic, wrong, due)
         currentIndex = 0
         showAnswer = false
         reviewedThisSession = 0
@@ -99,6 +130,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
     fun backToPicker() {
         sessionStarted = false
         wrongOnlyMode = false
+        dueOnlyMode = false
         queue = emptyList()
         currentIndex = 0
         showAnswer = false
@@ -120,7 +152,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
     LaunchedEffect(selectedSubject, selectedTopic) {
         if (lastSelection == selectedSubject to selectedTopic) return@LaunchedEffect
         lastSelection = selectedSubject to selectedTopic
-        if (sessionStarted && !wrongOnlyMode) {
+        if (sessionStarted && !wrongOnlyMode && !dueOnlyMode) {
             queue = buildQueueFor(selectedSubject, selectedTopic, false)
             currentIndex = 0
             showAnswer = false
@@ -131,7 +163,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
     }
 
     fun rebuildSession() {
-        queue = buildQueueFor(selectedSubject, selectedTopic, wrongOnlyMode)
+        queue = buildQueueFor(selectedSubject, selectedTopic, wrongOnlyMode, dueOnlyMode)
         currentIndex = 0
         showAnswer = false
         reviewedThisSession = 0
@@ -165,9 +197,12 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                     allCards = allCards,
                     mastered = mastered,
                     wrongCount = stats.wrongFlashcardIds.size,
+                    dueCount = dueIds.size,
+                    dueCountBySubject = dueCountBySubject,
                     onSubjectSelected = { name -> startSession(name, ANKI_ALL, false) },
                     onMixedSelected = { startSession(ANKI_ALL, ANKI_ALL, false) },
-                    onWrongSelected = { startSession(ANKI_ALL, ANKI_ALL, true) }
+                    onWrongSelected = { startSession(ANKI_ALL, ANKI_ALL, true) },
+                    onDueSelected = { startSession(ANKI_ALL, ANKI_ALL, false, due = true) }
                 )
             } else {
                 if (wrongOnlyMode) {
@@ -176,6 +211,15 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = ErrorRed,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                } else if (dueOnlyMode) {
+                    Text(
+                        text = "مراجعة مستحقات اليوم",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaroonPrimary,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center
                     )
@@ -214,6 +258,27 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                                 modifier = Modifier.height(50.dp),
                                 shape = MaterialTheme.shapes.medium) {
                                 Text("رجوع")
+                            }
+                        }
+                    }
+                } else if (queue.isEmpty()) {
+                    // SRS: everything in scope is scheduled for later —
+                    // that is not "all mastered", so say so plainly.
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Icon(Icons.Default.Style, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(64.dp))
+                            Text("لا توجد بطاقات مستحقة الآن في هذا النطاق.", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary, textAlign = TextAlign.Center)
+                            Text("البطاقات التي راجعتها ستعود إليك في مواعيدها المجدولة حسب تقييمك لها.", fontSize = 14.sp, textAlign = TextAlign.Center)
+                            Button(
+                                onClick = { backToPicker() },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                                modifier = Modifier.height(50.dp),
+                                shape = MaterialTheme.shapes.medium) {
+                                Text("اختيار مادة أخرى")
                             }
                         }
                     }
@@ -307,32 +372,63 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                     }
 
                     if (showAnswer) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button(
-                                onClick = {
+                        // SRS grading (Anki-style, Nov 2026): every grade
+                        // schedules this card's next due date in the local
+                        // SRS store. The vault lists keep their old meaning
+                        // for the other screens: إعادة = wrong (+unmaster),
+                        // صعب/جيد = clear wrong, سهل = mastered.
+                        fun gradeCurrent(grade: AnkiGrade) {
+                            AnkiSrs.grade(context, card.id, grade)
+                            when (grade) {
+                                AnkiGrade.AGAIN -> {
                                     OfflineStudyVault.addFlashcardWrong(context, card.id)
-                                    showAnswer = false
+                                    if (OfflineStudyVault.statsFlow.value.masteredFlashcardIds.contains(card.id)) {
+                                        OfflineStudyVault.toggleFlashcardMastered(context, card.id)
+                                    }
                                     queue = queue + card
-                                    currentIndex++
-                                    reviewedThisSession++
-                                },
+                                }
+                                AnkiGrade.HARD, AnkiGrade.GOOD ->
+                                    OfflineStudyVault.removeFlashcardWrong(context, card.id)
+                                AnkiGrade.EASY -> {
+                                    OfflineStudyVault.addFlashcardMastered(context, card.id)
+                                    newlyMasteredThisSession++
+                                }
+                            }
+                            showAnswer = false
+                            currentIndex++
+                            reviewedThisSession++
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { gradeCurrent(AnkiGrade.AGAIN) },
                                 colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
                                 modifier = Modifier.weight(1f).height(50.dp),
                                 shape = MaterialTheme.shapes.medium) {
-                                Text("صعب / إعادة")
+                                Text("إعادة", fontSize = 13.sp)
                             }
                             Button(
-                                onClick = {
-                                    OfflineStudyVault.addFlashcardMastered(context, card.id)
-                                    showAnswer = false
-                                    currentIndex++
-                                    reviewedThisSession++
-                                    newlyMasteredThisSession++
-                                },
+                                onClick = { gradeCurrent(AnkiGrade.HARD) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                modifier = Modifier.weight(1f).height(50.dp),
+                                shape = MaterialTheme.shapes.medium) {
+                                Text("صعب", fontSize = 13.sp)
+                            }
+                            Button(
+                                onClick = { gradeCurrent(AnkiGrade.GOOD) },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                                modifier = Modifier.weight(1f).height(50.dp),
+                                shape = MaterialTheme.shapes.medium) {
+                                Text("جيد", fontSize = 13.sp)
+                            }
+                            Button(
+                                onClick = { gradeCurrent(AnkiGrade.EASY) },
                                 colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
                                 modifier = Modifier.weight(1f).height(50.dp),
                                 shape = MaterialTheme.shapes.medium) {
-                                Text("سهل / تثبيت")
+                                Text("سهل", fontSize = 13.sp)
                             }
                         }
                     } else {
@@ -356,9 +452,12 @@ private fun AnkiSubjectPicker(
     allCards: List<AnkiCard>,
     mastered: Set<Int>,
     wrongCount: Int,
+    dueCount: Int,
+    dueCountBySubject: Map<String, Int>,
     onSubjectSelected: (String) -> Unit,
     onMixedSelected: () -> Unit,
-    onWrongSelected: () -> Unit
+    onWrongSelected: () -> Unit,
+    onDueSelected: () -> Unit
 ) {
     val totalCards = allCards.size
     val totalUnmastered = allCards.count { it.id !in mastered }
@@ -372,9 +471,37 @@ private fun AnkiSubjectPicker(
         )
         Spacer(modifier = Modifier.height(16.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item {
+                Card(
+                    onClick = { if (dueCount > 0) onDueSelected() },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (dueCount > 0) MaroonPrimary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("مستحق اليوم", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                            Text(
+                                if (dueCount > 0) "$dueCount بطاقة حان موعد مراجعتها المجدولة" else "لا بطاقات مستحقة اليوم — راجع لاحقًا",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        if (dueCount > 0) {
+                            Icon(Icons.Default.ArrowForwardIos, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
             items(subjects) { subject ->
                 val subjectCards = subject.topics.flatMap { it.cards }
                 val unmasteredCount = subjectCards.count { it.id !in mastered }
+                val subjectDue = dueCountBySubject[subject.name] ?: 0
                 Card(
                     onClick = { onSubjectSelected(subject.name) },
                     shape = RoundedCornerShape(12.dp),
@@ -386,10 +513,15 @@ private fun AnkiSubjectPicker(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (subjectIconRes(subject.name) != null) {
+                            SubjectIcon(subject.name, Modifier.size(32.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(subject.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
                             Text(
-                                "${subjectCards.size} بطاقة • $unmasteredCount غير متقنة",
+                                "${subjectCards.size} بطاقة • $unmasteredCount غير متقنة" +
+                                    if (subjectDue > 0) " • $subjectDue مستحقة اليوم" else "",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
