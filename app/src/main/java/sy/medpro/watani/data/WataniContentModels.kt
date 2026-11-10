@@ -92,6 +92,16 @@ data class QuestionDto(
     @Json(name = "correct") val correct: Any?,
     @Json(name = "correctIndices") val correctIndices: List<Any>?,
     @Json(name = "explanation") val explanation: String?,
+    // Structured explanation fields (build 1.2.3, doctor's order):
+    // explanation waves for every family sharing this DTO (questions/,
+    // dawrat_jami3at/, uworld/) arrive as CONTENT updates only — the
+    // same section files republished with these fields added per
+    // question. All nullable with defaults: files published before the
+    // waves parse exactly as before (fields absent -> null -> no
+    // explanation button), and no APK change is needed when they land.
+    @Json(name = "why_correct") val whyCorrect: String? = null,
+    @Json(name = "why_wrong") val whyWrong: Map<String, String>? = null,
+    @Json(name = "summary") val summary: String? = null,
     @Json(name = "years") val years: List<Any>?,
     @Json(name = "source") val source: String?,
     @Json(name = "session") val session: String?,

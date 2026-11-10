@@ -32,6 +32,7 @@ import org.json.JSONObject
 import sy.medpro.watani.data.*
 import sy.medpro.watani.ui.anki.AnkiFlashcardScreen
 import sy.medpro.watani.ui.explanation.ExplanationSection
+import sy.medpro.watani.ui.explanation.GatedExplanationSection
 import sy.medpro.watani.ui.explanation.ExplanationUiState
 import sy.medpro.watani.ui.explanation.normalizeExplanationKey
 import sy.medpro.watani.ui.explanation.rememberExplanationState
@@ -331,6 +332,9 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
     var selectedQuestion by remember { mutableStateOf<Pair<String, QuestionDto>?>(null) }
     var selectedOptionIndex by remember { mutableStateOf<Int?>(null) }
     var submitted by remember { mutableStateOf(false) }
+    // «إظهار الشرح» gate for the daily question's embedded explanation
+    // (build 1.2.3) — same rule as the quiz card.
+    var dailyShowExplanation by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         val dir = File(context.filesDir, "sections_cache")
@@ -454,10 +458,22 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
                             Text(if (selectedOptionIndex == correctIdx) "إجابة صحيحة!" else "إجابة غير صحيحة. الجواب الصحيح: ${options.getOrNull(correctIdx)}", fontWeight = FontWeight.Bold, color = MaroonPrimary)
                             if (!q.explanation.isNullOrBlank()) {
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text("الشرح: ${q.explanation}", fontSize = 13.sp)
+                                if (!dailyShowExplanation) {
+                                    OutlinedButton(
+                                        onClick = { dailyShowExplanation = true },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = MaterialTheme.shapes.medium,
+                                        border = BorderStroke(1.dp, MaroonPrimary),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaroonPrimary)
+                                    ) {
+                                        Text("إظهار الشرح", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                } else {
+                                    Text("الشرح: ${q.explanation}", fontSize = 13.sp)
+                                }
                             }
                             when (val ex = dailyExplanationState) {
-                                is ExplanationUiState.Present -> ExplanationSection(content = ex.content)
+                                is ExplanationUiState.Present -> GatedExplanationSection(content = ex.content)
                                 ExplanationUiState.Loading -> Box(
                                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                                     contentAlignment = Alignment.Center

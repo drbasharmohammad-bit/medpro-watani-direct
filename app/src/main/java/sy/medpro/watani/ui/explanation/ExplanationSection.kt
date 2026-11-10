@@ -7,10 +7,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +39,41 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
  *   - Sources list - shown as given, never invented.
  *   - Flags, when the layer provides them.
  */
+/**
+ * «إظهار الشرح» gate (doctor's order, build 1.2.3): the layer explanation
+ * is long, so it must NOT appear automatically when the student answers.
+ * A question WITH an explanation shows only the «إظهار الشرح» button; on
+ * tap, the full [ExplanationSection] renders inline in the caller's
+ * natural scroll column — no text clipping, no fixed/capped height, no
+ * nested scroll. A question WITHOUT an explanation renders nothing (no
+ * button). The shown state is keyed on the content itself, so moving to
+ * another question resets the gate to the button.
+ */
+@Composable
+fun GatedExplanationSection(content: ExplanationContent?, modifier: Modifier = Modifier) {
+    if (content == null || !content.hasAnyText) return
+    var shown by remember(content) { mutableStateOf(false) }
+    if (!shown) {
+        OutlinedButton(
+            onClick = { shown = true },
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, MaroonPrimary),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaroonPrimary)
+        ) {
+            Text(
+                text = "إظهار الشرح",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    } else {
+        ExplanationSection(content = content, modifier = modifier)
+    }
+}
+
 @Composable
 fun ExplanationSection(content: ExplanationContent?, modifier: Modifier = Modifier) {
     if (content == null || !content.hasAnyText) return

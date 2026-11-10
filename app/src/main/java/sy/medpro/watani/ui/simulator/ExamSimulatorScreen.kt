@@ -29,6 +29,7 @@ import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.data.getCorrectIndices
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.explanation.ExplanationSection
+import sy.medpro.watani.ui.explanation.GatedExplanationSection
 import sy.medpro.watani.ui.explanation.ExplanationUiState
 import sy.medpro.watani.ui.explanation.normalizeExplanationKey
 import sy.medpro.watani.ui.explanation.rememberExplanationState
@@ -538,6 +539,10 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                             normalizeExplanationKey(q.natId),
                             enabled = q.explanation.isBlank()
                         )
+                        // «إظهار الشرح» (build 1.2.3): the embedded
+                        // explanation in the review list is gated by
+                        // the same button as everywhere else.
+                        var simShowExplanation by remember(q.natId ?: idx.toString()) { mutableStateOf(false) }
                         Card(
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -553,11 +558,25 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text("الجواب المعتمد: ${q.options[q.correctIndex]}", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(q.explanation, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+                                if (q.explanation.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    if (!simShowExplanation) {
+                                        OutlinedButton(
+                                            onClick = { simShowExplanation = true },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = BorderStroke(1.dp, MaroonPrimary),
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaroonPrimary)
+                                        ) {
+                                            Text("إظهار الشرح", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    } else {
+                                        Text(q.explanation, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+                                    }
+                                }
                             }
                             when (val ex = simExplanationState) {
-                                is ExplanationUiState.Present -> ExplanationSection(content = ex.content, modifier = Modifier.padding(horizontal = 14.dp))
+                                is ExplanationUiState.Present -> GatedExplanationSection(content = ex.content, modifier = Modifier.padding(horizontal = 14.dp))
                                 ExplanationUiState.Loading -> Box(
                                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                                     contentAlignment = Alignment.Center

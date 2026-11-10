@@ -18,12 +18,15 @@ import kotlinx.coroutines.launch
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
 /**
- * Team 1 note: this screen is NO LONGER the app entry gate (MainActivity
- * no longer shows it when the user is signed out — the welcome screen is
- * the entry point and every section except Questions/Library is free).
- * It is kept as a reusable full-screen sign-in card; its Google flow now
- * delegates to [GoogleSignInHelper], the same helper used by the welcome
- * screen, the profile screen and the activation prompt.
+ * Entry gate again (build 1.2.3, doctor's order 11 Nov 2026 — supersedes
+ * the Team 1 "no sign-in wall" note): MainActivity shows this screen
+ * after the splash whenever there is NO locally persisted Google
+ * session. A saved session never reaches it — the gate checks local
+ * session presence only, never the network — so daily offline entry
+ * for signed-in users is untouched. After sign-in, free sections open
+ * at once; Questions/Library keep their activation gate as before.
+ * The Google flow delegates to [GoogleSignInHelper], the same helper
+ * used by the profile screen and the activation prompt.
  */
 @Composable
 fun SignInGate(onSignedIn: () -> Unit) {

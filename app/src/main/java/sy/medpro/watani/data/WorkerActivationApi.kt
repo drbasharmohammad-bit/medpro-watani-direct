@@ -881,6 +881,53 @@ object WorkerActivationApi {
         }
     }
 
+    /**
+     * min_version floor (build 1.2.3, protection phase 2): GET
+     * /v1/config is the gateway's public config channel — the same one
+     * the exam date and contact links already ride on. Its payload
+     * carries `minVersion` (the DO's app_config.min_version). The
+     * callback receives the floor, or null on ANY failure/absence —
+     * offline, a missing field, or a malformed body all mean "no
+     * floor", and the caller must treat null as no restriction at all.
+     * Nothing here changes any server value: the app only READS the
+     * floor; raising it stays an admin-side act for a later phase.
+     */
+    fun fetchMinVersionAsync(onResult: (Int?) -> Unit) {
+        try {
+            val request = Request.Builder()
+                .url("$WORKER_BASE/v1/config")
+                .get()
+                .build()
+            client.newCall(request).enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                    onResult(null)
+                }
+
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    val floor = try {
+                        response.use { resp ->
+                            if (!resp.isSuccessful) null
+                            else {
+                                val json = JSONObject(resp.body?.string() ?: "")
+                                val raw = if (json.has("minVersion")) {
+                                    json.optInt("minVersion", 0)
+                                } else {
+                                    json.optInt("min_version", 0)
+                                }
+                                raw.takeIf { it > 0 }
+                            }
+                        }
+                    } catch (_: Exception) {
+                        null
+                    }
+                    onResult(floor)
+                }
+            })
+        } catch (_: Exception) {
+            onResult(null)
+        }
+    }
+
     suspend fun postToWorker(user: FirebaseUser, path: String, json: JSONObject): WorkerIdResult = withContext(Dispatchers.IO) {
         val token = googleIdToken(user) ?: return@withContext WorkerIdResult(-1, null)
         try {

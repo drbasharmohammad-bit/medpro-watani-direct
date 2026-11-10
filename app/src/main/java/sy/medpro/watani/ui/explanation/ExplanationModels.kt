@@ -124,6 +124,37 @@ fun optionLetterRank(letter: String): Int {
     }
 }
 
+/**
+ * Builds an [ExplanationContent] from explanation fields embedded on the
+ * question object itself (build 1.2.3): content waves add
+ * why_correct / why_wrong / summary directly to section files
+ * (dawrat_jami3at first) — no separate layer file, no APK update. The
+ * same normalization as the layer path (blank filtering, letter-rank
+ * ordering); returns null when nothing usable is present, which the UI
+ * reads as "no explanation -> no «إظهار الشرح» button".
+ */
+fun explanationContentOf(
+    summary: String?,
+    whyCorrect: String?,
+    whyWrong: Map<String, String>?
+): ExplanationContent? {
+    val wrong = whyWrong.orEmpty().entries
+        .filter { it.value.isNotBlank() }
+        .sortedBy { optionLetterRank(it.key) }
+        .map { it.key.trim() to it.value }
+    val content = ExplanationContent(
+        summary = summary?.trim()?.takeIf { it.isNotEmpty() },
+        whyCorrect = whyCorrect?.trim()?.takeIf { it.isNotEmpty() },
+        whyWrong = wrong,
+        sources = emptyList(),
+        confidence = null,
+        flags = emptyList(),
+        correctLabel = null,
+        nOptions = null
+    )
+    return content.takeIf { it.hasAnyText }
+}
+
 fun ExplanationRecordDto.toContent(): ExplanationContent? {
     val block = explanation ?: return null
     val wrong = block.whyWrong.orEmpty().entries

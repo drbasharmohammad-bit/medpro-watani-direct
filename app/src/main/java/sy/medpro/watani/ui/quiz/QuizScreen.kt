@@ -47,6 +47,7 @@ import sy.medpro.watani.data.WataniGatewaySync
 import sy.medpro.watani.data.getCorrectIndices
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.explanation.ExplanationSection
+import sy.medpro.watani.ui.explanation.explanationContentOf
 import sy.medpro.watani.ui.explanation.ExplanationUiState
 import sy.medpro.watani.ui.explanation.normalizeExplanationKey
 import sy.medpro.watani.ui.explanation.rememberExplanationState
@@ -388,10 +389,24 @@ fun QuestionCard(
     // consults the separate explanation layer — the lookup is disabled,
     // so the retired layer can no longer produce a false "failed to
     // load" state or a retry button under an explanation already shown.
+    // Structured explanation embedded on the question object itself
+    // (build 1.2.3 content waves: why_correct/why_wrong/summary added
+    // to section files, dawrat_jami3at first). When present it IS the
+    // explanation — the separate layer lookup stays disabled, exactly
+    // like the embedded-text rule above.
+    val structuredContent = remember(question.id, question.summary, question.whyCorrect, question.whyWrong) {
+        explanationContentOf(question.summary, question.whyCorrect, question.whyWrong)
+    }
     val explanationState = rememberExplanationState(
         qLookupKey,
-        enabled = question.explanation.isNullOrBlank()
+        enabled = question.explanation.isNullOrBlank() && structuredContent == null
     )
+    // «إظهار الشرح» (doctor's order, build 1.2.3): after answering,
+    // NOTHING of the explanation shows automatically — a single button
+    // reveals all of it (embedded text, structured fields, layer
+    // content) inline in this card's natural scroll column: no text
+    // clipping, no capped height, no nested scroll.
+    var showExplanation by remember(question.id) { mutableStateOf(false) }
     val isFav = favList.contains(qId)
 
     Card(
@@ -592,6 +607,25 @@ fun QuestionCard(
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(12.dp))
+                    val layerPresent = explanationState as? ExplanationUiState.Present
+                    val hasExplanation = !question.explanation.isNullOrBlank() ||
+                        structuredContent != null || layerPresent != null
+                    if (hasExplanation && !showExplanation) {
+                        // «إظهار الشرح» — the only explanation element
+                        // shown until the student taps it. A question
+                        // with NO explanation never reaches this branch
+                        // (hasExplanation false): no button, and the
+                        // card below keeps its fallback line as before.
+                        OutlinedButton(
+                            onClick = { showExplanation = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, MaroonPrimary),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaroonPrimary)
+                        ) {
+                            Text("إظهار الشرح", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
                         shape = RoundedCornerShape(12.dp),
@@ -624,8 +658,16 @@ fun QuestionCard(
                             )
                         }
                     }
+                    if (showExplanation) {
+                        structuredContent?.let { ExplanationSection(content = it) }
+                        layerPresent?.let { ExplanationSection(content = it.content) }
+                    }
+                    }
                     when (val ex = explanationState) {
-                        is ExplanationUiState.Present -> ExplanationSection(content = ex.content)
+                        // Present is rendered above, behind the
+                        // «إظهار الشرح» button; only the load states
+                        // remain here.
+                        is ExplanationUiState.Present -> Unit
                         ExplanationUiState.Loading -> Box(
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                             contentAlignment = Alignment.Center
