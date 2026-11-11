@@ -50,6 +50,7 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.data.SubjectEnvelope
+import sy.medpro.watani.ui.SlimMainBar
 import sy.medpro.watani.ui.activation.ActivationPromptDialog
 import sy.medpro.watani.ui.welcome.VideoSplashScreen
 import sy.medpro.watani.ui.cases.CasePlayerScreen
@@ -704,33 +705,15 @@ class MainActivity : ComponentActivity() {
                             }
                             Scaffold(
                                 topBar = {
+                                    // Slim chrome (1.2.7): one 52dp row —
+                                    // drawer icon + tab title only. The
+                                    // slogan left the bar for good (it
+                                    // lives on the sign-in screen only);
+                                    // the old two-line 64dp block is gone.
                                     if (!readerFullscreen && !isLandscape)
-                                    TopAppBar(
-                                        title = {
-                                            Column {
-                                                Text(
-                                                    topBarTitle,
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 18.sp,
-                                                    color = androidx.compose.ui.graphics.Color.White
-                                                )
-                                                Text(
-                                                    "نجاحك في الوطني يبدأ من هنا",
-                                                    fontSize = 11.sp,
-                                                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f)
-                                                )
-                                            }
-                                        },
-                                        navigationIcon = {
-                                            IconButton(onClick = { drawerOpen = true }) {
-                                                Icon(
-                                                    Icons.Default.Menu,
-                                                    contentDescription = "القائمة",
-                                                    tint = androidx.compose.ui.graphics.Color.White
-                                                )
-                                            }
-                                        },
-                                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary)
+                                    SlimMainBar(
+                                        title = topBarTitle,
+                                        onMenuClick = { drawerOpen = true }
                                     )
                                 },
                                 bottomBar = {
@@ -738,16 +721,24 @@ class MainActivity : ComponentActivity() {
                                     // margins, large corners, shadow. The Scaffold
                                     // measures the whole slot, so innerPadding
                                     // already clears bar height + bottom gap.
+                                    // Slim chrome (1.2.7): same bar, tighter
+                                    // vertical footprint — 72dp tall (was the
+                                    // 80dp stock height; 72 leaves the items
+                                    // their full room above the gesture
+                                    // inset the bar pads for internally)
+                                    // and an 8dp bottom gap (was 12dp).
+                                    // Icons/labels/behavior are identical.
                                     if (!readerFullscreen)
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                                            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                                         shape = MaterialTheme.shapes.extraLarge,
                                         color = MaterialTheme.colorScheme.surface,
                                         shadowElevation = 8.dp
                                     ) {
                                     NavigationBar(
+                                        modifier = Modifier.height(72.dp),
                                         containerColor = Color.Transparent,
                                         tonalElevation = 0.dp
                                     ) {

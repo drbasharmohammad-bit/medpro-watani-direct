@@ -28,6 +28,7 @@ import sy.medpro.watani.data.MistakesBank
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.data.getCorrectIndices
+import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.explanation.ExplanationSection
 import sy.medpro.watani.ui.explanation.GatedExplanationSection
@@ -188,37 +189,32 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("محاكاة الامتحان الوطني الموحد", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        if (mode == "RUNNING") {
-                            val mm = remainingSeconds / 60
-                            val ss = remainingSeconds % 60
-                            Text(
-                                text = String.format("الزمن المتبقي: %02d:%02d • سؤال %d من %d", mm, ss, currentIndex + 1, activeQuestions.size),
-                                fontSize = 11.sp,
-                                color = GoldAccent
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (mode == "SETUP") onBack() else mode = "SETUP"
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                },
+            // Slim chrome (1.2.7): 48dp sub-bar; same title/timer lines
+            // and the same conditional lab-values action, tighter type.
+            SlimSubBar(
+                onBack = { if (mode == "SETUP") onBack() else mode = "SETUP" },
                 actions = {
                     if (mode == "RUNNING") {
                         IconButton(onClick = { showLabModal = true }) {
                             Icon(Icons.Default.Science, contentDescription = "القيم المخبرية", tint = MaterialTheme.colorScheme.onPrimary)
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary, titleContentColor = MaterialTheme.colorScheme.onPrimary)
-            )
+                }
+            ) {
+                Column {
+                    Text("محاكاة الامتحان الوطني الموحد", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                    if (mode == "RUNNING") {
+                        val mm = remainingSeconds / 60
+                        val ss = remainingSeconds % 60
+                        Text(
+                            text = String.format("الزمن المتبقي: %02d:%02d • سؤال %d من %d", mm, ss, currentIndex + 1, activeQuestions.size),
+                            fontSize = 10.sp,
+                            color = GoldAccent,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
         }
     ) { padding ->
         when (mode) {

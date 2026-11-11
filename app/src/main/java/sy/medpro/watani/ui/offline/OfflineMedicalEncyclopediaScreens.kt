@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.R
 import sy.medpro.watani.data.OfflineStudyVault
+import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.theme.*
 import kotlin.math.PI
 import kotlin.math.exp
@@ -348,23 +349,12 @@ fun EponymsAtlasScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("موسوعة المتلازمات والعلامات المسماة", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("تعمل أوفلاين 100% • Eponyms & Named Signs", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f))
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaroonPrimary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+            SlimSubBar(onBack = onBack) {
+                Column {
+                    Text("موسوعة المتلازمات والعلامات المسماة", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                    Text("تعمل أوفلاين 100% • Eponyms & Named Signs", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1)
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -505,23 +495,12 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("أطلس تخطيط القلب التفاعلي (ECG)", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("تخطيطات حقيقية أوفلاين 100% للحالات الامتحانية الحرجة", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f))
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaroonPrimary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+            SlimSubBar(onBack = onBack) {
+                Column {
+                    Text("أطلس تخطيط القلب التفاعلي (ECG)", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                    Text("تخطيطات حقيقية أوفلاين 100% للحالات الامتحانية الحرجة", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1)
+                }
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -800,23 +779,12 @@ fun SmartStudyPlannerScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("مخطط جدول الدراسة الذكي للوطني", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("يعمل أوفلاين 100% • توزيع معياري حسب ثقل المواد", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f))
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaroonPrimary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+            SlimSubBar(onBack = onBack) {
+                Column {
+                    Text("مخطط جدول الدراسة الذكي للوطني", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                    Text("يعمل أوفلاين 100% • توزيع معياري حسب ثقل المواد", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1)
+                }
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -1024,23 +992,12 @@ fun OfflineClinicalCalculatorsScreen(onBack: () -> Unit, initialTab: Int = 0) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("الحاسبات والمعايير السريرية الأوفلاين", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("CURB-65 • مفسر غازات الدم الشرياني ABG والفجوة الأنيونية", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f))
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaroonPrimary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+            SlimSubBar(onBack = onBack) {
+                Column {
+                    Text("الحاسبات والمعايير السريرية الأوفلاين", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                    Text("CURB-65 • مفسر غازات الدم الشرياني ABG والفجوة الأنيونية", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1)
+                }
+            }
         }
     ) { padding ->
         Column(

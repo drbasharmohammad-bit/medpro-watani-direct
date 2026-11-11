@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.OfflineStudyVault
+import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.icons.SubjectIcon
 import sy.medpro.watani.ui.icons.subjectIconRes
 import sy.medpro.watani.ui.theme.MaroonPrimary
@@ -173,13 +174,10 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("البطاقات الذكية - Anki", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary) }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary, titleContentColor = MaterialTheme.colorScheme.onPrimary)
-            )
+            // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
+            SlimSubBar(onBack = onBack) {
+                Text("البطاقات الذكية - Anki", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            }
         }
     ) { padding ->
         Column(

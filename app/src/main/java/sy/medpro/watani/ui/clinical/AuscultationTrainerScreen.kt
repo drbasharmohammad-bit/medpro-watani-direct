@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sy.medpro.watani.data.*
+import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import java.io.File
 
@@ -188,15 +189,10 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("مدرب الإصغاء السريري", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary, titleContentColor = MaterialTheme.colorScheme.onPrimary)
-            )
+            // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
+            SlimSubBar(onBack = onBack) {
+                Text("مدرب الإصغاء السريري", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            }
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {

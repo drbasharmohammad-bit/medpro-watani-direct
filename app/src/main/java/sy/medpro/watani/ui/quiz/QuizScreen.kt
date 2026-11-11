@@ -47,6 +47,7 @@ import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.QuestionDto
 import sy.medpro.watani.data.WataniGatewaySync
 import sy.medpro.watani.data.getCorrectIndices
+import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.explanation.ExplanationSection
 import sy.medpro.watani.ui.explanation.explanationContentOf
@@ -144,22 +145,10 @@ fun QuizScreen(
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text("اختبار: $title", fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1)
-                            Text(
-                                text = "عدد الأسئلة: ${questions.size} • وضع التدريب السريري المتقدم",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                        }
-                    },
+                // Slim chrome (1.2.7): 48dp sub-bar; same title lines and
+                // the same two action buttons, just tighter type.
+                SlimSubBar(
+                    onBack = onBack,
                     actions = {
                         IconButton(onClick = { highlightKeywords = !highlightKeywords }) {
                             Icon(
@@ -175,12 +164,18 @@ fun QuizScreen(
                                 tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaroonPrimary,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                )
+                    }
+                ) {
+                    Column {
+                        Text("اختبار: $title", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                        Text(
+                            text = "عدد الأسئلة: ${questions.size} • وضع التدريب السريري المتقدم",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                            maxLines = 1
+                        )
+                    }
+                }
             }
         ) { padding ->
             if (showReferenceSheet) {

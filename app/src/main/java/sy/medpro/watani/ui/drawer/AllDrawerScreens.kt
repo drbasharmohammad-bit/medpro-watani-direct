@@ -30,6 +30,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import sy.medpro.watani.data.*
+import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.anki.AnkiFlashcardScreen
 import sy.medpro.watani.ui.explanation.ExplanationSection
 import sy.medpro.watani.ui.explanation.GatedExplanationSection
@@ -47,15 +48,10 @@ import java.io.File
 fun DrawerScreenScaffold(title: String, onBack: () -> Unit, content: @Composable (PaddingValues) -> Unit) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary, titleContentColor = MaterialTheme.colorScheme.onPrimary)
-            )
+            // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
+            SlimSubBar(onBack = onBack) {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            }
         },
         content = { padding ->
             // Tablet pass (1.2.5): every drawer screen's content is

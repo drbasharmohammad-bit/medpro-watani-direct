@@ -26,6 +26,7 @@ import sy.medpro.watani.data.DownloadedSectionEntity
 import sy.medpro.watani.data.ManifestFileEntry
 import sy.medpro.watani.data.isSectionUpToDate
 import sy.medpro.watani.data.SubjectEnvelope
+import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.cases.CasesScreen
 import sy.medpro.watani.ui.theme.GoldAccent
 import sy.medpro.watani.ui.theme.MaroonPrimary
@@ -434,31 +435,21 @@ fun TopicSelectionScreen(
     val showYears = byYears && sessions.isNotEmpty()
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val titleIconRes = sy.medpro.watani.ui.SubjectIcons.forName(subjectName)
-                        if (titleIconRes != null) {
-                            Image(
-                                painter = painterResource(titleIconRes),
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-                        Text(if (showYears) "جلسات: $subjectName" else "مواضيع: $subjectName", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
+            SlimSubBar(onBack = onBack, containerColor = MaterialTheme.colorScheme.primary) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val titleIconRes = sy.medpro.watani.ui.SubjectIcons.forName(subjectName)
+                    if (titleIconRes != null) {
+                        Image(
+                            painter = painterResource(titleIconRes),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                     }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+                    Text(if (showYears) "جلسات: $subjectName" else "مواضيع: $subjectName", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                }
+            }
         }
     ) { padding ->
         Box(
@@ -670,18 +661,10 @@ fun UniversitySubjectsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(universityName, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع", tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+            // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
+            SlimSubBar(onBack = onBack, containerColor = MaterialTheme.colorScheme.primary) {
+                Text(universityName, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            }
         }
     ) { padding ->
         LazyColumn(

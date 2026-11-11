@@ -40,8 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.EcgEnvelope
 import sy.medpro.watani.data.EcgPatternDto
 import sy.medpro.watani.data.WataniRepository
+import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.WidthBreakpoints
 import sy.medpro.watani.ui.isMediumWidth
 import sy.medpro.watani.ui.clinical.AuscultationTrainerScreen
@@ -87,19 +86,10 @@ internal fun EcgSubScaffold(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(title, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaroonPrimary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+            // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
+            SlimSubBar(onBack = onBack) {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            }
         }
     ) { padding ->
         // Tablet pass (1.2.5): every ECG sub-screen centers its content
@@ -317,19 +307,10 @@ fun EcgCourseScreen(onBack: () -> Unit) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("كورس القلب المصغّر", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaroonPrimary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
+            // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
+            SlimSubBar(onBack = onBack) {
+                Text("كورس القلب المصغّر", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            }
         }
     ) { padding ->
         Box(
