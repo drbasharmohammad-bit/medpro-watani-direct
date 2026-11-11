@@ -3,6 +3,7 @@ package sy.medpro.watani.ui.ecg
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,6 +41,7 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
  * strip with live Δt / implied-rate readout, plus a Bazett QTc helper.
  * All math is EcgMath (unit-tested); this screen is presentation only.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CaliperScreen(envelope: EcgEnvelope, onBack: () -> Unit) {
     val strips = envelope.strips ?: emptyList()

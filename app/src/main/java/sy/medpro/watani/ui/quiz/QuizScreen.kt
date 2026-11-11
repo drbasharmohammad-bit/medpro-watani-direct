@@ -56,7 +56,7 @@ import sy.medpro.watani.ui.explanation.rememberExplanationState
 import sy.medpro.watani.ui.theme.*
 import kotlin.math.abs
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun QuizScreen(
     title: String,

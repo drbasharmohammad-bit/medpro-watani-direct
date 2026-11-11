@@ -347,6 +347,11 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                     val weak = store.weakPatternIds(patterns.mapNotNull { it.id })
                     // progressTick read so returning from a unit refreshes figures.
                     @Suppress("UNUSED_EXPRESSION") progressTick
+                    // Width read HERE, in composable context: the
+                    // LazyColumn content lambda is a LazyListScope
+                    // scope (not @Composable), so isMediumWidth()
+                    // cannot be called from inside it.
+                    val mediumWidth = isMediumWidth()
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().widthIn(max = WidthBreakpoints.CONTENT_MAX).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -448,7 +453,7 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                             UnitEntry("اختبار الإصغاء", "اسمع وخمّن — أفضل نتيجة: ${store.auscQuizBestScore()}/10",
                                 Icons.Default.Hearing, false, EcgDest.AUSC_QUIZ)
                         )
-                        if (isMediumWidth()) {
+                        if (mediumWidth) {
                             items(units.chunked(2)) { pair ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     pair.forEach { unit ->
