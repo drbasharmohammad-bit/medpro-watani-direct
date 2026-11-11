@@ -158,6 +158,33 @@ class WataniRepository(private val context: Context) {
         return File(dir, "$sanitized.json")
     }
 
+    /**
+     * Silent best-effort refresh of an already-downloaded section
+     * (build 1.2.6): the self-loading pack screens call this AFTER a
+     * local copy loaded successfully, so a republished pack reaches
+     * the device without the user revisiting the sections manager.
+     *
+     * Contract: returns true only when a newer file was downloaded
+     * and installed (the caller then re-reads the pack from disk).
+     * ANY failure — offline, manifest fetch failure, stale cached
+     * manifest, download/verification failure — returns false and
+     * leaves the local copy untouched; this function never throws,
+     * so callers can invoke it inside their existing load flow with
+     * no error surfacing and no UI flicker.
+     */
+    suspend fun refreshSectionIfStale(path: String): Boolean {
+        return try {
+            val manifest = fetchManifest().getOrNull() ?: return false
+            val entry = manifest.files?.get(path) ?: return false
+            val entity = _downloadedSectionsFlow.value
+                .firstOrNull { it.sectionPath == path }
+            if (!sectionNeedsRefresh(entity, entry)) return false
+            downloadSection(path, entry).isSuccess
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     suspend fun downloadSection(
         path: String,
         entry: ManifestFileEntry,

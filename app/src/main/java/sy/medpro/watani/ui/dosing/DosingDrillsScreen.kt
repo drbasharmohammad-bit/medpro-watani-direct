@@ -69,6 +69,11 @@ fun DosingDrillsScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            // 1.2.6: silently refresh a stale local pack (see
+            // WataniRepository.refreshSectionIfStale).
+            if (!list.isNullOrEmpty() && repo.refreshSectionIfStale("dosing_drills.json")) {
+                list = repo.getDosingDrills() ?: list
+            }
             if (list.isNullOrEmpty()) {
                 list = repo.getBundledDosingDrills()
             }

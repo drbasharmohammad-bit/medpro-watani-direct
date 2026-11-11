@@ -54,6 +54,33 @@ fun isSectionUpToDate(downloaded: DownloadedSectionEntity?, entry: ManifestFileE
     return storedHash.equals(manifestHash, ignoreCase = true)
 }
 
+/**
+ * Refresh decision for the self-loading pack screens (build 1.2.6,
+ * doctor's device report): a pack screen that already holds a local
+ * copy must silently re-download it when the manifest moved on —
+ * before this fix the screens only downloaded when NO local file
+ * existed, so a republished pack (e.g. ecg.json 44 -> 92 strips)
+ * never reached installed devices.
+ *
+ * Pure decision, kept separate from the repository so it is
+ * unit-testable off-device:
+ * - No manifest [entry] (offline, or the freshest manifest available
+ *   is a stale disk cache that predates the pack) -> no refresh; the
+ *   local copy stays authoritative.
+ * - No downloaded [downloaded] entity -> no refresh; the pack was
+ *   never registered as downloaded, and the screen's existing
+ *   missing-file flow owns the first download.
+ * - Otherwise refresh exactly when the section is not up to date
+ *   (see [isSectionUpToDate] for the hash/count rules; a successful
+ *   refresh records the computed hash, so the next open is a no-op —
+ *   no repeated-download loop).
+ */
+fun sectionNeedsRefresh(downloaded: DownloadedSectionEntity?, entry: ManifestFileEntry?): Boolean {
+    if (entry == null) return false
+    if (downloaded == null) return false
+    return !isSectionUpToDate(downloaded, entry)
+}
+
 @JsonClass(generateAdapter = true)
 data class SubjectEnvelope(
     @Json(name = "version") val version: Any?,

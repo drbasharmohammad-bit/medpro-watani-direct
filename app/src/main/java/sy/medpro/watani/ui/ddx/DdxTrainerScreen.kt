@@ -171,6 +171,11 @@ fun DdxTrainerScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            // 1.2.6: silently refresh a stale local pack (see
+            // WataniRepository.refreshSectionIfStale).
+            if (env != null && repo.refreshSectionIfStale("ddx.json")) {
+                env = repo.getDdxEnvelope() ?: env
+            }
             ddxEnvelope = env
             attemptRecords = readDdxAttemptRecords(context)
             isLoading = false

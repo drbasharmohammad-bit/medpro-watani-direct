@@ -115,6 +115,11 @@ fun AuscultationQuizScreen(store: EcgProgressStore, onBack: () -> Unit) {
                 env = repo.getAuscultationEnvelope()
             }
         }
+        // 1.2.6: silently refresh a stale local pack (see
+        // WataniRepository.refreshSectionIfStale).
+        if (env != null && repo.refreshSectionIfStale("auscultation.json")) {
+            env = repo.getAuscultationEnvelope() ?: env
+        }
         val arEnv = repo.getAuscultationArEnvelope()
         arabicTitles = arEnv?.clips?.mapNotNull { clip ->
             val id = clip.id

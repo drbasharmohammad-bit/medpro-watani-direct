@@ -68,6 +68,11 @@ fun ProceduresWingScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            // 1.2.6: silently refresh a stale local pack (see
+            // WataniRepository.refreshSectionIfStale).
+            if (!list.isNullOrEmpty() && repo.refreshSectionIfStale("osce_procedures.json")) {
+                list = repo.getOsceProcedures() ?: list
+            }
             if (list.isNullOrEmpty()) {
                 list = repo.getBundledOsceProcedures()
             }

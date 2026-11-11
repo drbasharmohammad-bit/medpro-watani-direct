@@ -70,6 +70,11 @@ fun OsceStationsScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            // 1.2.6: silently refresh a stale local pack (see
+            // WataniRepository.refreshSectionIfStale).
+            if (env != null && repo.refreshSectionIfStale("osce.json")) {
+                env = repo.getOsceEnvelope() ?: env
+            }
             if (env != null && !env.stations.isNullOrEmpty()) {
                 stations = env.stations!!
             } else {

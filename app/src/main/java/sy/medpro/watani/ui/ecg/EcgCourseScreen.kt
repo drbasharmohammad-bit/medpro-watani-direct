@@ -179,6 +179,12 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                 env = repo.getEcgEnvelope()
             }
         }
+        // 1.2.6: a local pack is no longer the end of the story — if
+        // the server republished ecg.json, silently swap in the new
+        // file before first paint (any failure keeps the local copy).
+        if (env != null && repo.refreshSectionIfStale("ecg.json")) {
+            env = repo.getEcgEnvelope() ?: env
+        }
         if (env == null) {
             env = repo.getBundledEcgEnvelope()
             usedSample = env != null

@@ -117,6 +117,11 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            // 1.2.6: silently refresh a stale local pack (see
+            // WataniRepository.refreshSectionIfStale).
+            if (env != null && repo.refreshSectionIfStale("auscultation.json")) {
+                env = repo.getAuscultationEnvelope() ?: env
+            }
             auscultationEnvelope = env
             if (env?.clips != null && env.clips.isNotEmpty()) {
                 var arEnv = repo.getAuscultationArEnvelope()

@@ -574,6 +574,11 @@ fun StudyGuideScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            // 1.2.6: silently refresh a stale local pack (see
+            // WataniRepository.refreshSectionIfStale).
+            if (env != null && repo.refreshSectionIfStale("guide.json")) {
+                env = repo.getGuideEnvelope() ?: env
+            }
             guideEnvelope = env
             isLoading = false
         }
@@ -1085,6 +1090,11 @@ fun ContactScreen(onBack: () -> Unit) {
                         env = repo.getGuideEnvelope()
                     }
                 }
+            }
+            // 1.2.6: silently refresh a stale local pack (see
+            // WataniRepository.refreshSectionIfStale).
+            if (env != null && repo.refreshSectionIfStale("guide.json")) {
+                env = repo.getGuideEnvelope() ?: env
             }
             guideEnvelope = env
         }

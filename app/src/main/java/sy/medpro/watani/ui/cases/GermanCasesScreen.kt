@@ -66,6 +66,11 @@ fun GermanCasesScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            // 1.2.6: silently refresh a stale local pack (see
+            // WataniRepository.refreshSectionIfStale).
+            if (env != null && repo.refreshSectionIfStale("cases_de.json")) {
+                env = repo.getCasesDeEnvelope() ?: env
+            }
             if (env != null && !env.cases.isNullOrEmpty()) {
                 cases = env.cases!!
             } else {

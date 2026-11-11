@@ -100,6 +100,11 @@ fun ReverseTrainerScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            // 1.2.6: silently refresh a stale local pack (see
+            // WataniRepository.refreshSectionIfStale).
+            if (env != null && repo.refreshSectionIfStale("reverse.json")) {
+                env = repo.getReverseEnvelope() ?: env
+            }
             reverseEnvelope = env
             val rounds = env?.rounds.orEmpty()
             bestScores = loadBestScores(context, rounds)
