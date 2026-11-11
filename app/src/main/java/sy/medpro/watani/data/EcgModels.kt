@@ -14,6 +14,9 @@ import com.squareup.moshi.JsonClass
  * {
  *   "version": 1,
  *   "method":   [{step, title, ar, source}],
+ *   "methodLessons": [{id, title, level, minutes,
+ *                 sections: [{h, t, points[], source}],
+ *                 stripIds[], checklist[]}],   (optional, 1.2.5)
  *   "patterns": [{id, ar, en, category, level, hooks[], pitfalls[],
  *                 criteria: [{ar, source}], sourceLine}],
  *   "strips":   [{id, patternId, hr, axis, age, sex, fs,
@@ -33,9 +36,37 @@ import com.squareup.moshi.JsonClass
 data class EcgEnvelope(
     @Json(name = "version") val version: Int?,
     @Json(name = "method") val method: List<EcgMethodStepDto>?,
+    @Json(name = "methodLessons") val methodLessons: List<EcgMethodLessonDto>?,
     @Json(name = "patterns") val patterns: List<EcgPatternDto>?,
     @Json(name = "strips") val strips: List<EcgStripDto>?,
     @Json(name = "leadMap") val leadMap: List<EcgLeadMapDto>?
+)
+
+/**
+ * One lesson of the systematic reading course (build 1.2.5) — the
+ * long-form «منهج القراءة» curriculum that takes the student from
+ * first principles to heavy pathology. Optional end-to-end like every
+ * other pack field: a pack without "methodLessons" simply hides the
+ * course tile. (The JSON name is methodLessons because "method" is
+ * already the five-step checklist of the live pack schema.)
+ */
+@JsonClass(generateAdapter = true)
+data class EcgMethodLessonDto(
+    @Json(name = "id") val id: String?,
+    @Json(name = "title") val title: String?,
+    @Json(name = "level") val level: String?,
+    @Json(name = "minutes") val minutes: Int?,
+    @Json(name = "sections") val sections: List<EcgMethodSectionDto>?,
+    @Json(name = "stripIds") val stripIds: List<String>?,
+    @Json(name = "checklist") val checklist: List<String>?
+)
+
+@JsonClass(generateAdapter = true)
+data class EcgMethodSectionDto(
+    @Json(name = "h") val h: String?,
+    @Json(name = "t") val t: String?,
+    @Json(name = "points") val points: List<String>?,
+    @Json(name = "source") val source: String?
 )
 
 @JsonClass(generateAdapter = true)

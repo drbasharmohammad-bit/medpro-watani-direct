@@ -2,6 +2,7 @@ package sy.medpro.watani.ui.ecg
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.EcgEnvelope
@@ -59,12 +61,26 @@ fun CaliperScreen(envelope: EcgEnvelope, onBack: () -> Unit) {
                 Text("لا شرائط متاحة للقياس بعد.", fontSize = 14.sp)
                 return@Column
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Strip picker: a wrapping FlowRow at natural chip width.
+            // The previous plain Row squeezed every chip into the
+            // remaining row width on narrow screens — the labels were
+            // measured a few dp wide and stacked glyph-over-glyph in a
+            // tall narrow box (doctor's device screenshot, 1.2.4).
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 strips.take(6).forEach { candidate ->
                     SuggestionChip(
                         onClick = { selectedStripId = candidate.id },
                         label = {
-                            Text(patternsById[candidate.patternId]?.ar ?: (candidate.id ?: "شريط"))
+                            Text(
+                                patternsById[candidate.patternId]?.ar ?: (candidate.id ?: "شريط"),
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     )
                 }

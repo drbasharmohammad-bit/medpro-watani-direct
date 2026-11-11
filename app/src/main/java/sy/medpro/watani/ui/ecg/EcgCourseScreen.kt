@@ -59,7 +59,7 @@ import sy.medpro.watani.ui.theme.RoseSurfaceVariant
 
 /** Internal destinations of the ECG course (single-activity, no nav graph). */
 private enum class EcgDest {
-    HOME, METHOD, PATTERNS, PATTERN_DETAIL, COMPARE, GUIDED_LIST, GUIDED,
+    HOME, METHOD, METHOD_COURSE, PATTERNS, PATTERN_DETAIL, COMPARE, GUIDED_LIST, GUIDED,
     DRILL, LEAD_MAP, CALIPERS, AUSCULTATION, AUSC_QUIZ
 }
 
@@ -171,6 +171,17 @@ fun EcgCourseScreen(onBack: () -> Unit) {
         EcgDest.HOME -> Unit
         EcgDest.METHOD -> {
             EcgMethodScreen(envelope, store, onBack = backToHome)
+            return
+        }
+        EcgDest.METHOD_COURSE -> {
+            MethodCourseScreen(
+                envelope = envelope,
+                onOpenStrip = { stripId ->
+                    selectedStripId = stripId
+                    dest = EcgDest.GUIDED
+                },
+                onBack = backToHome
+            )
             return
         }
         EcgDest.PATTERNS -> {
@@ -319,6 +330,41 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            }
+                        }
+                        if ((env.methodLessons ?: emptyList()).isNotEmpty()) {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().clickable { dest = EcgDest.METHOD_COURSE },
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaroonPrimary),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(18.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.MenuBook,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.padding(end = 12.dp)
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                "منهج القراءة — من الأساس إلى الاحتراف",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 17.sp,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                            Text(
+                                                "دروس مرقّمة بمستويات: من أول مبادئ التخطيط إلى الحالات الثقيلة، بمصادر موثّقة وشرائط تطبيقية",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         item {
