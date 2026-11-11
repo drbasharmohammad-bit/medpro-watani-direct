@@ -427,6 +427,87 @@ class WataniRepository(private val context: Context) {
         }
     }
 
+    /**
+     * OSCE procedures pack (build 1.2.6): the downloaded
+     * "osce_procedures.json" section file from sections_cache — a BARE
+     * ARRAY of procedures (see SkillsModels), parsed leniently; null
+     * when the pack has not been downloaded yet (the procedures wing
+     * then pulls it through the manifest + downloadSection path, like
+     * the OSCE stations screen).
+     */
+    suspend fun getOsceProcedures(): List<ProcedureDto>? = withContext(Dispatchers.IO) {
+        try {
+            val file = getSectionFile("osce_procedures.json")
+            if (!file.exists()) return@withContext null
+            val jsonString = file.readText(Charsets.UTF_8)
+            val listType = com.squareup.moshi.Types.newParameterizedType(
+                List::class.java, ProcedureDto::class.java
+            )
+            moshi.adapter<List<ProcedureDto>>(listType).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Bundled fallback (assets/osce_procedures_sample.json): one full
+     * sample procedure so the procedures wing opens and teaches even
+     * before the pipeline's real pack is published to the manifest.
+     * Used ONLY when neither the downloaded pack nor a manifest
+     * download is available — the server pack always wins when present.
+     */
+    suspend fun getBundledOsceProcedures(): List<ProcedureDto>? = withContext(Dispatchers.IO) {
+        try {
+            val jsonString = context.assets.open("osce_procedures_sample.json")
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val listType = com.squareup.moshi.Types.newParameterizedType(
+                List::class.java, ProcedureDto::class.java
+            )
+            moshi.adapter<List<ProcedureDto>>(listType).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Dosing drills pack (build 1.2.6): the downloaded
+     * "dosing_drills.json" section file from sections_cache — a BARE
+     * ARRAY of drills (see SkillsModels); null when not downloaded yet
+     * (the drills screen then pulls it through the manifest +
+     * downloadSection path).
+     */
+    suspend fun getDosingDrills(): List<DosingDrillDto>? = withContext(Dispatchers.IO) {
+        try {
+            val file = getSectionFile("dosing_drills.json")
+            if (!file.exists()) return@withContext null
+            val jsonString = file.readText(Charsets.UTF_8)
+            val listType = com.squareup.moshi.Types.newParameterizedType(
+                List::class.java, DosingDrillDto::class.java
+            )
+            moshi.adapter<List<DosingDrillDto>>(listType).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Bundled fallback (assets/dosing_drills_sample.json): two sample
+     * drills (adult + pediatric) used ONLY when neither the downloaded
+     * pack nor a manifest download is available.
+     */
+    suspend fun getBundledDosingDrills(): List<DosingDrillDto>? = withContext(Dispatchers.IO) {
+        try {
+            val jsonString = context.assets.open("dosing_drills_sample.json")
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val listType = com.squareup.moshi.Types.newParameterizedType(
+                List::class.java, DosingDrillDto::class.java
+            )
+            moshi.adapter<List<DosingDrillDto>>(listType).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun getAuscultationArEnvelope(): AuscultationArEnvelope? = withContext(Dispatchers.IO) {
         try {
             val file = getSectionFile("auscultation_ar.json")
