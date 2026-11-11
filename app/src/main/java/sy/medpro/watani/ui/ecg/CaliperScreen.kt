@@ -1,6 +1,7 @@
 package sy.medpro.watani.ui.ecg
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.EcgEnvelope
+import sy.medpro.watani.ui.isExpandedWidth
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
 /**
@@ -85,6 +87,7 @@ fun CaliperScreen(envelope: EcgEnvelope, onBack: () -> Unit) {
                     )
                 }
             }
+            val stripBlock: @Composable () -> Unit = {
             EcgCalipersView(
                 strip = strip,
                 modifier = Modifier.fillMaxWidth().height(150.dp),
@@ -101,6 +104,8 @@ fun CaliperScreen(envelope: EcgEnvelope, onBack: () -> Unit) {
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            }
+            val qtcCard: @Composable () -> Unit = {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -141,6 +146,22 @@ fun CaliperScreen(envelope: EcgEnvelope, onBack: () -> Unit) {
                         )
                     }
                 }
+            }
+            }
+            // Tablet pass (1.2.5): at ≥840 dp window width the strip and
+            // the QTc bench sit side by side; narrower windows keep the
+            // stacked phone order. Width-keyed, never orientation-keyed.
+            if (isExpandedWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(
+                        modifier = Modifier.weight(1.3f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) { stripBlock() }
+                    Box(modifier = Modifier.weight(1f)) { qtcCard() }
+                }
+            } else {
+                stripBlock()
+                qtcCard()
             }
         }
     }

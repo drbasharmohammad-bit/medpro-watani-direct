@@ -2,6 +2,7 @@ package sy.medpro.watani.ui.ecg
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import sy.medpro.watani.data.EcgEnvelope
+import sy.medpro.watani.ui.isMediumWidth
 import sy.medpro.watani.data.EcgPatternDto
 import sy.medpro.watani.data.EcgStripDto
 import sy.medpro.watani.ui.theme.MaroonPrimary
@@ -209,7 +211,7 @@ fun FlashDrillScreen(
                 modifier = Modifier.fillMaxWidth().height(120.dp),
                 interactive = false
             )
-            q.options.forEach { option ->
+            val optionCard: @Composable (sy.medpro.watani.data.EcgPatternDto) -> Unit = { option ->
                 val isCorrect = option.id == q.correct.id
                 val isPicked = pickedId == option.id
                 val answered = pickedId != null || timedOut
@@ -235,6 +237,22 @@ fun FlashDrillScreen(
                         fontSize = 14.sp
                     )
                 }
+            }
+            // Tablet pass (1.2.5): answer options in two governed
+            // columns at >=600 dp window width; stacked below it.
+            if (isMediumWidth()) {
+                q.options.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        pair.forEach { option ->
+                            Box(modifier = Modifier.weight(1f)) { optionCard(option) }
+                        }
+                        if (pair.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            } else {
+                q.options.forEach { option -> optionCard(option) }
             }
             if (pickedId != null || timedOut) {
                 if (timedOut) {

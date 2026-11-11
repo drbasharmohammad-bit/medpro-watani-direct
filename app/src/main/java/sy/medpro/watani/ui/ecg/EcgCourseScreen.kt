@@ -10,7 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,9 +58,19 @@ import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.EcgEnvelope
 import sy.medpro.watani.data.EcgPatternDto
 import sy.medpro.watani.data.WataniRepository
+import sy.medpro.watani.ui.WidthBreakpoints
+import sy.medpro.watani.ui.isMediumWidth
 import sy.medpro.watani.ui.clinical.AuscultationTrainerScreen
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.RoseSurfaceVariant
+
+private data class UnitEntry(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val done: Boolean,
+    val dest: EcgDest
+)
 
 /** Internal destinations of the ECG course (single-activity, no nav graph). */
 private enum class EcgDest {
@@ -87,7 +102,17 @@ internal fun EcgSubScaffold(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) { content() }
+        // Tablet pass (1.2.5): every ECG sub-screen centers its content
+        // under a governed max width instead of stretching blindly on
+        // wide windows; below the cap (all phones) nothing changes.
+        Box(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Box(modifier = Modifier.fillMaxSize().widthIn(max = WidthBreakpoints.CONTENT_MAX)) {
+                content()
+            }
+        }
     }
 }
 
@@ -301,7 +326,10 @@ fun EcgCourseScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentAlignment = Alignment.TopCenter
+        ) {
             when {
                 isLoading -> CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center),
@@ -320,7 +348,7 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                     // progressTick read so returning from a unit refreshes figures.
                     @Suppress("UNUSED_EXPRESSION") progressTick
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(16.dp),
+                        modifier = Modifier.fillMaxSize().widthIn(max = WidthBreakpoints.CONTENT_MAX).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (usedSample) {
@@ -396,73 +424,59 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                                 }
                             }
                         }
-                        item {
-                            EcgUnitCard(
-                                title = "منهج القراءة",
-                                subtitle = "الخطوات الخمس لقراءة أي تخطيط بثقة",
-                                icon = Icons.Default.MenuBook,
-                                done = methodCount > 0 && store.methodDoneCount(methodCount) == methodCount,
-                                onClick = { dest = EcgDest.METHOD }
-                            )
-                        }
-                        item {
-                            EcgUnitCard(
-                                title = "مكتبة الأنماط",
-                                subtitle = "${patterns.size} نمطًا بعلامات اللمحة ومعايير موثّقة بالمصادر",
-                                icon = Icons.Default.Favorite,
-                                onClick = { dest = EcgDest.PATTERNS }
-                            )
-                        }
-                        item {
-                            EcgUnitCard(
-                                title = "القارئ الموجَّه",
-                                subtitle = "اقرأ شرائط حقيقية خطوة بخطوة مع كشف تدريجي",
-                                icon = Icons.Default.PlayArrow,
-                                done = strips.isNotEmpty() &&
-                                    store.guidedDoneCount(strips.mapNotNull { it.id }) == strips.size,
-                                onClick = { dest = EcgDest.GUIDED_LIST }
-                            )
-                        }
-                        item {
-                            EcgUnitCard(
-                                title = "تدريب اللمحات",
-                                subtitle = "10 شرائط × 10 ثوانٍ — ويتكيّف مع أخطائك",
-                                icon = Icons.Default.Speed,
-                                onClick = { dest = EcgDest.DRILL }
-                            )
-                        }
-                        item {
-                            EcgUnitCard(
-                                title = "الفرجار والقياس",
-                                subtitle = "قِس الفواصل بنفسك واحسب المعدّل وQTc",
-                                icon = Icons.Default.Straighten,
-                                onClick = { dest = EcgDest.CALIPERS }
-                            )
-                        }
-                        item {
-                            EcgUnitCard(
-                                title = "خريطة الاتجاهات",
-                                subtitle = "أي اتجاهات = أي جدار وأي شريان",
-                                icon = Icons.Default.Map,
-                                done = store.isLeadMapDone(),
-                                onClick = { dest = EcgDest.LEAD_MAP }
-                            )
-                        }
-                        item {
-                            EcgUnitCard(
-                                title = "الإصغاء القلبي",
-                                subtitle = "مدرّب الإصغاء والأصوات القلبية (48 صوتًا)",
-                                icon = Icons.Default.Hearing,
-                                onClick = { dest = EcgDest.AUSCULTATION }
-                            )
-                        }
-                        item {
-                            EcgUnitCard(
-                                title = "اختبار الإصغاء",
-                                subtitle = "اسمع وخمّن — أفضل نتيجة: ${store.auscQuizBestScore()}/10",
-                                icon = Icons.Default.Hearing,
-                                onClick = { dest = EcgDest.AUSC_QUIZ }
-                            )
+                        // Unit cards: one column on phones, two governed
+                        // columns at ≥600 dp window width (tablet pass).
+                        val units = listOf(
+                            UnitEntry("منهج القراءة", "الخطوات الخمس لقراءة أي تخطيط بثقة",
+                                Icons.Default.MenuBook,
+                                methodCount > 0 && store.methodDoneCount(methodCount) == methodCount,
+                                EcgDest.METHOD),
+                            UnitEntry("مكتبة الأنماط", "${patterns.size} نمطًا بعلامات اللمحة ومعايير موثّقة بالمصادر",
+                                Icons.Default.Favorite, false, EcgDest.PATTERNS),
+                            UnitEntry("القارئ الموجَّه", "اقرأ شرائط حقيقية خطوة بخطوة مع كشف تدريجي",
+                                Icons.Default.PlayArrow,
+                                strips.isNotEmpty() && store.guidedDoneCount(strips.mapNotNull { it.id }) == strips.size,
+                                EcgDest.GUIDED_LIST),
+                            UnitEntry("تدريب اللمحات", "10 شرائط × 10 ثوانٍ — ويتكيّف مع أخطائك",
+                                Icons.Default.Speed, false, EcgDest.DRILL),
+                            UnitEntry("الفرجار والقياس", "قِس الفواصل بنفسك واحسب المعدّل وQTc",
+                                Icons.Default.Straighten, false, EcgDest.CALIPERS),
+                            UnitEntry("خريطة الاتجاهات", "أي اتجاهات = أي جدار وأي شريان",
+                                Icons.Default.Map, store.isLeadMapDone(), EcgDest.LEAD_MAP),
+                            UnitEntry("الإصغاء القلبي", "مدرّب الإصغاء والأصوات القلبية (48 صوتًا)",
+                                Icons.Default.Hearing, false, EcgDest.AUSCULTATION),
+                            UnitEntry("اختبار الإصغاء", "اسمع وخمّن — أفضل نتيجة: ${store.auscQuizBestScore()}/10",
+                                Icons.Default.Hearing, false, EcgDest.AUSC_QUIZ)
+                        )
+                        if (isMediumWidth()) {
+                            items(units.chunked(2)) { pair ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    pair.forEach { unit ->
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            EcgUnitCard(
+                                                title = unit.title,
+                                                subtitle = unit.subtitle,
+                                                icon = unit.icon,
+                                                done = unit.done,
+                                                onClick = { dest = unit.dest }
+                                            )
+                                        }
+                                    }
+                                    if (pair.size == 1) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        } else {
+                            items(units) { unit ->
+                                EcgUnitCard(
+                                    title = unit.title,
+                                    subtitle = unit.subtitle,
+                                    icon = unit.icon,
+                                    done = unit.done,
+                                    onClick = { dest = unit.dest }
+                                )
+                            }
                         }
                     }
                 }

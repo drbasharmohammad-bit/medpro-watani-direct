@@ -39,6 +39,7 @@ import sy.medpro.watani.ui.explanation.rememberExplanationState
 import sy.medpro.watani.ui.simulator.ExamSimulatorScreen
 import sy.medpro.watani.ui.theme.GoldAccent
 import sy.medpro.watani.ui.theme.MaroonPrimary
+import sy.medpro.watani.ui.WidthBreakpoints
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,7 +57,22 @@ fun DrawerScreenScaffold(title: String, onBack: () -> Unit, content: @Composable
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary, titleContentColor = MaterialTheme.colorScheme.onPrimary)
             )
         },
-        content = content
+        content = { padding ->
+            // Tablet pass (1.2.5): every drawer screen's content is
+            // centered under a governed max width on wide windows
+            // instead of stretching edge to edge; at phone widths the
+            // cap never binds and layouts are byte-identical. Screens
+            // keep consuming the Scaffold padding themselves, exactly
+            // as before.
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Box(modifier = Modifier.fillMaxSize().widthIn(max = WidthBreakpoints.CONTENT_MAX)) {
+                    content(padding)
+                }
+            }
+        }
     )
 }
 

@@ -2,6 +2,8 @@ package sy.medpro.watani.ui.ecg
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +36,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.EcgEnvelope
+import sy.medpro.watani.ui.isMediumWidth
+import sy.medpro.watani.ui.WidthBreakpoints
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
 import sy.medpro.watani.data.EcgMethodLessonDto
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
@@ -73,11 +80,7 @@ fun MethodCourseScreen(
             }
             return@EcgSubScaffold
         }
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            itemsIndexed(lessons) { index, lesson ->
+        val lessonCard: @Composable (Int, EcgMethodLessonDto) -> Unit = { index, lesson ->
                 Card(
                     modifier = Modifier.fillMaxWidth().clickable {
                         selectedLessonId = lesson.id
@@ -112,6 +115,28 @@ fun MethodCourseScreen(
                         Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaroonPrimary)
                     }
                 }
+        }
+        // Tablet pass (1.2.5): two governed columns of lessons at
+        // >=600 dp window width; one column below it.
+        if (isMediumWidth()) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(lessons.withIndex().toList()) { (index, lesson) ->
+                    lessonCard(index, lesson)
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(lessons) { index, lesson ->
+                    lessonCard(index, lesson)
+                }
             }
         }
     }
@@ -131,8 +156,10 @@ private fun MethodLessonDetail(
     var checked by remember(lesson.id) { mutableStateOf<Set<Int>>(emptySet()) }
 
     EcgSubScaffold(title = lesson.title ?: "درس", onBack = onBack) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier.fillMaxSize().widthIn(max = WidthBreakpoints.READING_MAX)
+                .align(Alignment.TopCenter).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
@@ -219,6 +246,7 @@ private fun MethodLessonDetail(
                     }
                 }
             }
+        }
         }
     }
 }

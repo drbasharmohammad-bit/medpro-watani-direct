@@ -2,6 +2,8 @@ package sy.medpro.watani.ui.ecg
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.EcgEnvelope
+import sy.medpro.watani.ui.isMediumWidth
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.RoseSurfaceVariant
 
@@ -56,7 +59,7 @@ fun LeadMapScreen(envelope: EcgEnvelope, store: EcgProgressStore, onBack: () -> 
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            entries.forEachIndexed { index, entry ->
+            val entryCard: @Composable (Int, sy.medpro.watani.data.EcgLeadMapDto) -> Unit = { index, entry ->
                 val isSelected = selected == index
                 Card(
                     modifier = Modifier.fillMaxWidth().clickable {
@@ -102,6 +105,22 @@ fun LeadMapScreen(envelope: EcgEnvelope, store: EcgProgressStore, onBack: () -> 
                         }
                     }
                 }
+            }
+            // Tablet pass (1.2.5): two governed columns at >=600 dp
+            // window width; one column below it (all phones).
+            if (isMediumWidth()) {
+                entries.withIndex().chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        pair.forEach { (index, entry) ->
+                            Box(modifier = Modifier.weight(1f)) { entryCard(index, entry) }
+                        }
+                        if (pair.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            } else {
+                entries.forEachIndexed { index, entry -> entryCard(index, entry) }
             }
             if (entries.isNotEmpty() && viewed.size >= entries.size) {
                 Text(

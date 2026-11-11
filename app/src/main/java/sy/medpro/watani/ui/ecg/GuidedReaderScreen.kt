@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.EcgEnvelope
+import sy.medpro.watani.ui.isExpandedWidth
 import sy.medpro.watani.data.EcgStripDto
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.RoseSurfaceVariant
@@ -93,6 +94,7 @@ fun GuidedReaderScreen(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            val stripsBlock: @Composable () -> Unit = {
             Text(
                 listOfNotNull(
                     strip.age?.let { "العمر $it" },
@@ -114,6 +116,8 @@ fun GuidedReaderScreen(
                 modifier = Modifier.fillMaxWidth().height(110.dp)
             )
 
+            }
+            val panelBlock: @Composable () -> Unit = {
             if (finished) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -266,6 +270,26 @@ fun GuidedReaderScreen(
                     }
                 }
             }
+            }
+            // Tablet pass (1.2.5): at >=840 dp window width the
+            // strips and the step panel sit side by side; narrower
+            // windows keep the stacked phone order.
+            if (isExpandedWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(
+                        modifier = Modifier.weight(1.25f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) { stripsBlock() }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) { panelBlock() }
+                }
+            } else {
+                stripsBlock()
+                panelBlock()
+            }
+
         }
     }
 }

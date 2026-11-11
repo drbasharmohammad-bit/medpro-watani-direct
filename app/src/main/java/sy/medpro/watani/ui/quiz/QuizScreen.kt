@@ -266,9 +266,14 @@ fun QuizScreen(
 
                                     Spacer(modifier = Modifier.height(8.dp))
 
-                                    Row(
+                                    // FlowRow, not Row (1.2.5 layout-fix
+                                    // class): the first chip's label is
+                                    // long — a plain Row squeezes chip
+                                    // widths on narrow screens.
+                                    FlowRow(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         AssistChip(
                                             onClick = { highlightKeywords = !highlightKeywords },
