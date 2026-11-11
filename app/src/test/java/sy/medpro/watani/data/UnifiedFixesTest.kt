@@ -74,4 +74,115 @@ class UnifiedFixesTest {
         assertTrue(getCorrectIndices(q(null, listOf(1.0, 9.0)), opts).isEmpty())
         assertEquals(before + 4, invalidCorrectKeyCount.get())
     }
+
+    // ---- Build 1.2.6: skills trainers (procedures ordering + dosing) ----
+
+    @Test
+    fun procedureOrderingPerfectScore() {
+        val correct = (1..5).toList()
+        val score = sy.medpro.watani.ui.osce.ProcedureScoring.score(
+            correctOrders = correct,
+            studentOrders = correct,
+            criticalOrders = setOf(2, 4)
+        )
+        assertEquals(5, score.totalSteps)
+        assertEquals(5, score.exactPositions)
+        assertEquals(100, score.percent)
+        assertTrue(score.positionCorrect.all { it })
+        assertTrue(score.missedCriticalOrders.isEmpty())
+        assertTrue(
+            sy.medpro.watani.ui.osce.ProcedureScoring.isCompleteArrangement(correct, correct)
+        )
+    }
+
+    @Test
+    fun procedureOrderingSwappedCriticalStepIsFlagged() {
+        // Steps 2 (critical) and 3 swapped; everything else exact.
+        val score = sy.medpro.watani.ui.osce.ProcedureScoring.score(
+            correctOrders = listOf(1, 2, 3, 4, 5),
+            studentOrders = listOf(1, 3, 2, 4, 5),
+            criticalOrders = setOf(2)
+        )
+        assertEquals(3, score.exactPositions)
+        assertEquals(60, score.percent)
+        assertEquals(listOf(true, false, false, true, true), score.positionCorrect)
+        // The critical step 2 missed its position; step 3 is wrong but
+        // not critical, so it must NOT appear in the critical list.
+        assertEquals(listOf(2), score.missedCriticalOrders)
+    }
+
+    @Test
+    fun procedureOrderingReversedScoresZero() {
+        val score = sy.medpro.watani.ui.osce.ProcedureScoring.score(
+            correctOrders = listOf(1, 2, 3, 4),
+            studentOrders = listOf(4, 3, 2, 1),
+            criticalOrders = setOf(1, 4)
+        )
+        assertEquals(0, score.exactPositions)
+        assertEquals(0, score.percent)
+        assertEquals(listOf(1, 4), score.missedCriticalOrders)
+        // A partial arrangement (missing a step) is not complete.
+        assertTrue(
+            !sy.medpro.watani.ui.osce.ProcedureScoring.isCompleteArrangement(
+                listOf(1, 2, 3, 4), listOf(4, 3, 2)
+            )
+        )
+    }
+
+    @Test
+    fun dosingSessionScoringCountsAndMisses() {
+        val answers = listOf(
+            sy.medpro.watani.ui.dosing.DrillAnswer("dose-01", chosenIndex = 1, correctIndex = 1),
+            sy.medpro.watani.ui.dosing.DrillAnswer("dose-02", chosenIndex = 0, correctIndex = 2),
+            sy.medpro.watani.ui.dosing.DrillAnswer("dose-03", chosenIndex = 3, correctIndex = 3),
+            sy.medpro.watani.ui.dosing.DrillAnswer("dose-04", chosenIndex = 2, correctIndex = 0)
+        )
+        val score = sy.medpro.watani.ui.dosing.DosingScoring.score(answers)
+        assertEquals(4, score.total)
+        assertEquals(2, score.correct)
+        assertEquals(50, score.percent)
+        assertEquals(listOf("dose-02", "dose-04"), score.missedDrillIds)
+
+        val empty = sy.medpro.watani.ui.dosing.DosingScoring.score(emptyList())
+        assertEquals(0, empty.total)
+        assertEquals(0, empty.percent)
+        assertTrue(empty.missedDrillIds.isEmpty())
+    }
+
+    @Test
+    fun skillsPacksVerifyAsBareArrays() {
+        val moshi = com.squareup.moshi.Moshi.Builder()
+            .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+            .build()
+        val proceduresJson = """
+            [{"id":"p1","ar":"إجراء","en":"Proc","category":"تشخيصي",
+              "indicationsAr":[],"contraindicationsAr":[],"equipmentAr":[],
+              "steps":[{"order":1,"ar":"خطوة","whyAr":"سبب","critical":true}],
+              "aftercareAr":[],"complicationsAr":[],
+              "sources":[{"name":"Src","url":"https://example.com"}],"sourceNote":"ملاحظة"}]
+        """.trimIndent()
+        assertEquals(
+            1,
+            SectionVerification.verifySectionCount("osce_procedures.json", proceduresJson, moshi)
+        )
+        val drillsJson = """
+            [{"id":"dose-01","drug":"Drug","scenarioAr":"حالة",
+              "patient":{"age":30,"sex":"M","weightKg":70},
+              "focusAr":"سؤال","options":["a","b","c","d"],"correctIndex":1,
+              "explanationAr":"شرح",
+              "source":{"name":"Src","detail":"d","url":"https://example.com"}}]
+        """.trimIndent()
+        assertEquals(
+            1,
+            SectionVerification.verifySectionCount("dosing_drills.json", drillsJson, moshi)
+        )
+        // An empty pack must be rejected, never blessed as count 0.
+        var rejected = false
+        try {
+            SectionVerification.verifySectionCount("osce_procedures.json", "[]", moshi)
+        } catch (e: IllegalStateException) {
+            rejected = true
+        }
+        assertTrue(rejected)
+    }
 }

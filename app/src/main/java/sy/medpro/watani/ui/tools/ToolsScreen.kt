@@ -71,6 +71,7 @@ private val TOOL_GROUPS = listOf(
             ToolEntry("الحالات الألمانية", "حالات مريض افتراضي بالألمانية (Deutsche Fälle)", Icons.Default.Language, Color(0xFF00695C), "الحالات الألمانية"),
             ToolEntry("غرفة الطوارئ", "مناوبة إسعافية تفاعلية بحالات متغيرة", Icons.Default.Emergency, Color(0xFFC62828), "غرفة الطوارئ"),
             ToolEntry("محطات OSCE", "محطات فحص سريري تفاعلية", Icons.Default.FactCheck, Color(0xFF283593), "محطات OSCE"),
+            ToolEntry("مدرب الجرعات", "سيناريوهات جرعات وأدوية بجرعات موثّقة بمصادرها", Icons.Default.MedicalServices, Color(0xFFAD1457), "مدرب الجرعات"),
             // Fix 1.2.2 (doctor's order): ONE tools entry — «القلب والإصغاء».
             // The ECG atlas lives inside that same screen as its own tab;
             // a separate «أطلس تخطيط القلب» entry duplicated the content.

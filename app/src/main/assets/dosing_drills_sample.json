@@ -1,0 +1,50 @@
+[
+ {
+  "correctIndex": 1,
+  "drug": "Epinephrine (Adrenaline)",
+  "explanationAr": "حسب إرشاد WAO للتأق: الأدرينالين عضليًا في منتصف الوجه الأمامي الوحشي للفخذ بجرعة 0.01 mg/kg من محلول 1 mg/mL، وبحد أقصى 0.5 mg عند البالغ — ووزن المريض 78 kg يعني أن الجرعة المحسوبة تتجاوز السقف فتُعطى 0.5 mg، وتُكرَّر كل 5–15 دقيقة عند الحاجة. الدفعة الوريدية المباشرة بهذا التركيز خطرة خارج توقف القلب، والحقن تحت الجلد أبطأ وأقل موثوقية.",
+  "focusAr": "ما الجرعة والطريق الصحيحان للأدرينالين كخط أول فوري؟",
+  "id": "dose-01",
+  "options": [
+   "أدرينالين 0.1 mg IV دفعة وريدية مباشرة بتركيز 1 mg/mL",
+   "أدرينالين 0.5 mg IM في الوجه الأمامي الوحشي الأوسط للفخذ بتركيز 1 mg/mL",
+   "أدرينالين 0.5 mg SC تحت الجلد في الذراع بتركيز 1 mg/mL",
+   "أدرينالين 1 mg IM في العضلة الدالية بتركيز 1 mg/mL"
+  ],
+  "patient": {
+   "age": 34,
+   "sex": "M",
+   "weightKg": 78
+  },
+  "scenarioAr": "رجل عمره 34 سنة، بعد دقائق من بدء البنسلين وريديًا ظهر لديه شرى معمّم وصفير صدري وانخفاض ضغط 82/48 مع صعوبة تنفس. التشخيص تأق (anaphylaxis) ولا يوجد توقف قلب.",
+  "source": {
+   "detail": "Anaphylaxis poster, Initial Treatment step 5: epinephrine IM mid-anterolateral thigh, 0.01 mg/kg of 1 mg/mL, maximum 0.5 mg (adult), repeat every 5-15 min if needed",
+   "name": "World Allergy Organization Anaphylaxis Guidance 2020",
+   "url": "https://www.worldallergy.org/media/PDFs/Anaphylaxis_Guidelines_Poster.pdf"
+  }
+ },
+ {
+  "correctIndex": 1,
+  "drug": "Amoxicillin",
+  "explanationAr": "الصحيح الجرعة العالية 80–90 ملغ/كغ/يوم مقسمة على جرعتين كل 12 ساعة: لطفل 20 كغ يعني 1600–1800 ملغ/يوم، أي 800–900 ملغ كل 12 ساعة. جدول AAP (Table 5) يضع الأموكسيسيلين بهذه الجرعة خياراً أول لتغطية المكورات الرئوية منخفضة الحساسية؛ الجرعة الاعتيادية 40 ملغ/كغ/يوم لا تحقق تركيزاً كافياً في الأذن الوسطى، والتقسيم كل 8 ساعات بنفس الجرعة المفردة يرفع المجموع إلى 120 ملغ/كغ/يوم بلا مبرر.",
+  "focusAr": "جرعة الأموكسيسيلين العالية لالتهاب الأذن الوسطى الحاد عند طفل وزنه 20 كغ",
+  "id": "dose-17",
+  "options": [
+   "400 ملغ فموياً كل 12 ساعة (40 ملغ/كغ/يوم — الجرعة الاعتيادية)",
+   "800–900 ملغ فموياً كل 12 ساعة (80–90 ملغ/كغ/يوم مقسمة على جرعتين)",
+   "800 ملغ فموياً كل 8 ساعات (120 ملغ/كغ/يوم)",
+   "500 ملغ فموياً كل 12 ساعة بجرعة البالغين المصغّرة"
+  ],
+  "patient": {
+   "age": 5,
+   "sex": "M",
+   "weightKg": 20
+  },
+  "scenarioAr": "طفل عمره 5 سنوات، وزنه 20 كغ، لديه التهاب أذن وسطى حاد مؤكد (انتباج شديد بغشاء الطبل وحرارة 39.5°م)، ولم يتناول أموكسيسيلين خلال آخر 30 يوماً ولا توجد حساسية للبنسلين ولا التهاب ملتحمة قيحي مرافق.\nقررت المعالجة بالمضاد الحيوي الخيار الأول وفق إرشادات AAP.",
+  "source": {
+   "detail": "Table 5 'Recommended Antibiotics for (Initial or Delayed) Treatment': Amoxicillin (80–90 mg/kg per day in 2 divided doses) as recommended first-line treatment",
+   "name": "American Academy of Pediatrics — Clinical Practice Guideline: The Diagnosis and Management of Acute Otitis Media (Lieberthal et al., Pediatrics 2013)",
+   "url": "https://publications.aap.org/view-large/7504404?autologincheck=redirected"
+  }
+ }
+]

@@ -46,6 +46,10 @@ fun OsceStationsScreen(onBack: () -> Unit) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedStation by remember { mutableStateOf<OsceStation?>(null) }
     var activeExamMode by remember { mutableStateOf(false) }
+    // Build 1.2.6: the procedures wing (osce_procedures.json checklists
+    // + ordering trainer) lives inside this section behind its own
+    // entry card — it has its own scaffold and loading flow.
+    var showProcedures by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -80,6 +84,11 @@ fun OsceStationsScreen(onBack: () -> Unit) {
 
     LaunchedEffect(Unit) {
         loadOsce()
+    }
+
+    if (showProcedures) {
+        ProceduresWingScreen(onBack = { showProcedures = false })
+        return
     }
 
     DrawerScreenScaffold(
@@ -160,6 +169,44 @@ fun OsceStationsScreen(onBack: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
+                        item {
+                            // Build 1.2.6: «الإجراءات» entry — opens the
+                            // procedures wing (sourced checklists +
+                            // step-ordering trainer).
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaroonPrimary),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showProcedures = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color.White.copy(alpha = 0.15f),
+                                        modifier = Modifier.size(48.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.Checklist, contentDescription = null, tint = Color.White)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("الإجراءات", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            "إجراءات عملية بقوائم فحص موثّقة المصدر + تدرّب على ترتيب الخطوات",
+                                            color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp
+                                        )
+                                    }
+                                    Icon(Icons.Default.ChevronLeft, contentDescription = null, tint = Color.White)
+                                }
+                            }
+                        }
+
                         item {
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = MaroonDeep),

@@ -20,7 +20,8 @@ import com.squareup.moshi.Moshi
  *   comparison is the honest declared-vs-actual check for any value.
  *   Every non-subject envelope downloaded through downloadSection has
  *   its OWN branch here (cases/cases_de, guide, ddx, reverse,
- *   auscultation, osce): an envelope shape without a branch falls into
+ *   auscultation, osce, osce_procedures, dosing_drills): an envelope
+ *   shape without a branch falls into
  *   the subject check, counts 0 and can NEVER download (the 1.2 defect
  *   fixed in 1.2.1 — auscultation, German cases and OSCE all failed
  *   this way on device).
@@ -109,6 +110,37 @@ object SectionVerification {
             val actualCount = osceEnv?.stations?.size ?: 0
             if (osceEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
                 throw IllegalStateException("خطأ في تطابق عدد محطات الأوسكي الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+            }
+            return actualCount
+        }
+        if (path == "osce_procedures.json") {
+            // Build 1.2.6: the OSCE procedures pack is a BARE ARRAY of
+            // procedures (no envelope, no declared count) — without this
+            // branch it would fall into the subject check, count 0 and
+            // never download (the exact 1.2.1 defect class). Honest
+            // check: the array must parse and be non-empty; the returned
+            // count is the real number of procedures.
+            val listType = com.squareup.moshi.Types.newParameterizedType(
+                List::class.java, ProcedureDto::class.java
+            )
+            val procedures = moshi.adapter<List<ProcedureDto>>(listType).fromJson(jsonString)
+            val actualCount = procedures?.size ?: 0
+            if (procedures == null || actualCount == 0) {
+                throw IllegalStateException("ملف إجراءات الأوسكي بلا إجراءات — أعد التحميل.")
+            }
+            return actualCount
+        }
+        if (path == "dosing_drills.json") {
+            // Build 1.2.6: same bare-array shape as osce_procedures —
+            // the dosing drills pack must parse and be non-empty; the
+            // returned count is the real number of drills.
+            val listType = com.squareup.moshi.Types.newParameterizedType(
+                List::class.java, DosingDrillDto::class.java
+            )
+            val drills = moshi.adapter<List<DosingDrillDto>>(listType).fromJson(jsonString)
+            val actualCount = drills?.size ?: 0
+            if (drills == null || actualCount == 0) {
+                throw IllegalStateException("ملف تدريبات الجرعات بلا تدريبات — أعد التحميل.")
             }
             return actualCount
         }
