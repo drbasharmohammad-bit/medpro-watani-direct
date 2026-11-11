@@ -74,4 +74,32 @@ class UnifiedFixesTest {
         assertTrue(getCorrectIndices(q(null, listOf(1.0, 9.0)), opts).isEmpty())
         assertEquals(before + 4, invalidCorrectKeyCount.get())
     }
+
+    @Test
+    fun libraryVideosOnlyStripsBooksAndBooksOnlySubjects() {
+        // Doctor's order (11 Nov 2026): books are published outside the
+        // app and must never surface in the in-app Library.
+        fun item(id: String) = LibraryItem(id, id, "https://x/$id", 1L, null, null)
+        val envelope = LibraryEnvelope(
+            listOf(
+                // Books-only subject (the real library.json shape: all 17
+                // books live in one such subject) — must vanish entirely.
+                LibrarySubject("books", "كتب", listOf(item("b1"), item("b2")), emptyList()),
+                // Mixed subject — videos survive untouched, books dropped.
+                LibrarySubject("cardio", "قلبية", listOf(item("b3")), listOf(item("v1"), item("v2"))),
+                // Videos-only subject — unchanged.
+                LibrarySubject("neuro", "عصبية", emptyList(), listOf(item("v3"))),
+                // Null-books subject — unchanged.
+                LibrarySubject("renal", "كلية", null, listOf(item("v4")))
+            )
+        )
+        val filtered = envelope.videosOnly()
+        assertEquals(listOf("cardio", "neuro", "renal"), filtered.subjects!!.map { it.id })
+        assertTrue(filtered.subjects!!.all { it.books.isNullOrEmpty() })
+        assertEquals(listOf("v1", "v2"), filtered.subjects!![0].videos!!.map { it.id })
+        assertEquals(4, filtered.subjects!!.sumOf { it.videos!!.size })
+        // Original envelope is not mutated (repository caches stay raw).
+        assertEquals(4, envelope.subjects!!.size)
+        assertEquals(2, envelope.subjects!![0].books!!.size)
+    }
 }

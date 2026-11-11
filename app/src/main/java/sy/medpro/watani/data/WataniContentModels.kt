@@ -345,6 +345,21 @@ data class LibrarySubject(
     @Json(name = "videos") val videos: List<LibraryItem>?
 )
 
+/**
+ * Doctor's order (11 Nov 2026): library books are published publicly
+ * OUTSIDE the app, so they must never surface in the in-app Library.
+ * Data-layer filter applied by the repository on every path that hands
+ * an envelope to the UI (fresh fetch + offline cache): drops all books
+ * and any subject left with no videos (e.g. a books-only subject), so
+ * no screen — list, tab or search — can leak a book. The underlying
+ * library.json file and the book files themselves are untouched.
+ */
+fun LibraryEnvelope.videosOnly(): LibraryEnvelope = copy(
+    subjects = subjects.orEmpty()
+        .map { it.copy(books = emptyList()) }
+        .filter { !it.videos.isNullOrEmpty() }
+)
+
 @JsonClass(generateAdapter = true)
 data class LibraryItem(
     @Json(name = "id") val id: String?,

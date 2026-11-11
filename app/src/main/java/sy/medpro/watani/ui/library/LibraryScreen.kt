@@ -35,7 +35,6 @@ data class LibraryReaderState(
     val item: LibraryItem,
     val file: java.io.File?,
     val url: String?,
-    val isBook: Boolean,
     val subtitleFile: java.io.File? = null,
     val subtitleUrl: String? = null
 )
@@ -115,7 +114,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                     Text(
-                        "سيظهر هنا عند إضافة كتب وفيديوهات جديدة",
+                        "سيظهر هنا عند إضافة فيديوهات جديدة",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -140,7 +139,6 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
         return
     }
 
-    var selectedTab by remember { mutableStateOf(0) }
     var expandedSubjectId by remember { mutableStateOf<String?>(null) }
     var showDownloadedOnly by remember { mutableStateOf(false) }
     var currentReader by remember { mutableStateOf<LibraryReaderState?>(null) }
@@ -154,36 +152,21 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
             currentReader = null
             onReaderFullscreenChange?.invoke(false)
         }
-        when {
-            reader.isBook -> {
-                if (reader.file != null) {
-                    PdfViewerScreen(
-                        reader.file, reader.item.title ?: "كتاب", onBack = onReaderBack,
-                        onDeleteCorrupt = {
-                            viewModel.closeItem(reader.item)
-                            viewModel.deleteItem(reader.item)
-                            currentReader = null
-                            onReaderFullscreenChange?.invoke(false)
-                        },
-                        onFullscreenChange = onReaderFullscreenChange
-                    )
-                }
-            }
-            else -> {
-                if (reader.file != null && reader.file.exists()) {
-                    VideoPlayerScreen(
-                        reader.file, reader.item.title ?: "فيديو", onBack = onReaderBack,
-                        subtitleFile = reader.subtitleFile, subtitleUrl = reader.subtitleUrl,
-                        onFullscreenChange = onReaderFullscreenChange
-                    )
-                } else if (!reader.url.isNullOrEmpty()) {
-                    VideoPlayerScreen(
-                        null, reader.item.title ?: "فيديو", onBack = onReaderBack,
-                        videoFileUrl = reader.url, subtitleUrl = reader.subtitleUrl,
-                        onFullscreenChange = onReaderFullscreenChange
-                    )
-                }
-            }
+        // Videos only: books were removed from the in-app Library by the
+        // doctor's order (11 Nov 2026) — the repository strips them at the
+        // data layer, so no book can ever reach this reader.
+        if (reader.file != null && reader.file.exists()) {
+            VideoPlayerScreen(
+                reader.file, reader.item.title ?: "فيديو", onBack = onReaderBack,
+                subtitleFile = reader.subtitleFile, subtitleUrl = reader.subtitleUrl,
+                onFullscreenChange = onReaderFullscreenChange
+            )
+        } else if (!reader.url.isNullOrEmpty()) {
+            VideoPlayerScreen(
+                null, reader.item.title ?: "فيديو", onBack = onReaderBack,
+                videoFileUrl = reader.url, subtitleUrl = reader.subtitleUrl,
+                onFullscreenChange = onReaderFullscreenChange
+            )
         }
         return
     }
@@ -194,19 +177,6 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
         modifier = Modifier.fillMaxSize()
     ) {
         Column(Modifier.fillMaxSize()) {
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = MaroonPrimary,
-                contentColor = Color.White
-            ) {
-                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
-                    Text("الكتب", Modifier.padding(vertical = 14.dp), fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal)
-                }
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
-                    Text("الفيديوهات", Modifier.padding(vertical = 14.dp), fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal)
-                }
-            }
-
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -233,7 +203,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(library.subjects!!) { subject ->
-                    val items = if (selectedTab == 0) subject.books else subject.videos
+                    val items = subject.videos
                     if (items.isNullOrEmpty()) return@items
 
                     val filteredItems = if (showDownloadedOnly) {
@@ -284,9 +254,9 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
                                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     filteredItems.forEach { item ->
                                         val itemId = item.id ?: item.fileUrl ?: ""
-                                        LibraryItemRow(item, selectedTab == 0, viewModel, state.downloadingIds, downloadProgress = state.downloadingProgress[itemId], downloadError = state.downloadErrors[itemId], onOpenReader = { file, url ->
+                                        LibraryItemRow(item, viewModel, state.downloadingIds, downloadProgress = state.downloadingProgress[itemId], downloadError = state.downloadErrors[itemId], onOpenReader = { file, url ->
                                             currentReader = LibraryReaderState(
-                                                item, file, url, selectedTab == 0,
+                                                item, file, url,
                                                 // Local SRT side-car only for downloaded videos;
                                                 // streamed videos use the item's subtitleUrl.
                                                 subtitleFile = if (file != null) viewModel.getSubtitleFile(item) else null,
@@ -307,7 +277,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
 }
 
 @Composable
-private fun LibraryItemRow(item: LibraryItem, isBook: Boolean, viewModel: LibraryViewModel, downloadingIds: Set<String>, downloadProgress: Float? = null, downloadError: String? = null, onOpenReader: (java.io.File?, String?) -> Unit = { _, _ -> }, onOpenError: (String) -> Unit = {}) {
+private fun LibraryItemRow(item: LibraryItem, viewModel: LibraryViewModel, downloadingIds: Set<String>, downloadProgress: Float? = null, downloadError: String? = null, onOpenReader: (java.io.File?, String?) -> Unit = { _, _ -> }, onOpenError: (String) -> Unit = {}) {
     val id = item.id ?: item.fileUrl ?: ""
     val isDownloading = id in downloadingIds
     val isDownloaded by remember { derivedStateOf { viewModel.isItemDownloaded(item) } }
@@ -366,7 +336,7 @@ private fun LibraryItemRow(item: LibraryItem, isBook: Boolean, viewModel: Librar
                             }
                         }, modifier = Modifier.size(32.dp)) {
                             Icon(
-                                if (isBook) Icons.Default.Description else Icons.Default.PlayArrow,
+                                Icons.Default.PlayArrow,
                                 "فتح",
                                 tint = GoldAccent
                             )
@@ -390,7 +360,7 @@ private fun LibraryItemRow(item: LibraryItem, isBook: Boolean, viewModel: Librar
                 )
             }
 
-            if (!isDownloaded && !isBook && !item.fileUrl.isNullOrEmpty()) {
+            if (!isDownloaded && !item.fileUrl.isNullOrEmpty()) {
                 Row(
                     Modifier
                         .fillMaxWidth()

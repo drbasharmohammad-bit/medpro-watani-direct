@@ -543,7 +543,8 @@ class WataniRepository(private val context: Context) {
         try {
             val file = getSectionFile("library.json")
             if (!file.exists()) return@withContext null
-            libraryAdapter.fromJson(file.readText(Charsets.UTF_8))
+            // Books never surface in-app (see LibraryEnvelope.videosOnly).
+            libraryAdapter.fromJson(file.readText(Charsets.UTF_8))?.videosOnly()
         } catch (e: Exception) {
             null
         }
@@ -593,7 +594,9 @@ class WataniRepository(private val context: Context) {
                     if (tempFile.exists()) tempFile.delete()
                     throw Exception("تعذر حفظ ملف المكتبة على الجهاز")
                 }
-                return@withContext Result.success(parsed)
+                // Books never surface in-app (see LibraryEnvelope.videosOnly);
+                // the raw file on disk stays byte-identical for the cache.
+                return@withContext Result.success(parsed.videosOnly())
             } catch (e: Exception) {
                 lastError = e
                 if (attempt < retries) Thread.sleep(700L * attempt)
