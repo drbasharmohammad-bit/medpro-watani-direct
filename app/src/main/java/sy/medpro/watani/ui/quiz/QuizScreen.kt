@@ -41,6 +41,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import sy.medpro.watani.data.MistakeKeys
+import sy.medpro.watani.data.MistakesBank
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.QuestionDto
 import sy.medpro.watani.data.WataniGatewaySync
@@ -346,6 +348,36 @@ fun QuizScreen(
                                                 explanation = question.explanation ?: "",
                                                 isCorrect = isCor
                                             )
+                                            // بنك أخطائي (1.2.5): the SAME central
+                                            // grading point also files a wrong
+                                            // answer — with its full re-askable
+                                            // payload — into the personal
+                                            // mistakes bank for spaced review.
+                                            // This one hook covers every bank
+                                            // that renders through QuizScreen
+                                            // (questions/, questions_en/,
+                                            // dawrat_jami3at/, uworld/). The
+                                            // bank is local-only; grading and
+                                            // scoring above are untouched.
+                                            if (!isCor) {
+                                                val (mbBank, mbFile) = MistakeKeys.bankOf(sourcePath, title)
+                                                MistakesBank.recordWrong(
+                                                    context = context,
+                                                    bank = mbBank,
+                                                    file = mbFile,
+                                                    questionId = question.id,
+                                                    indexInFile = index,
+                                                    subject = subjectName ?: title,
+                                                    stem = question.text ?: "",
+                                                    options = options,
+                                                    correctIndex = correctIndices.first(),
+                                                    explanation = question.explanation ?: "",
+                                                    whyCorrect = question.whyCorrect,
+                                                    whyWrong = question.whyWrong,
+                                                    summary = question.summary,
+                                                    ltr = ltr
+                                                )
+                                            }
                                         }
                                     }
                                 }

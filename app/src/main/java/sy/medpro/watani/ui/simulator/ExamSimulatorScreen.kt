@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
+import sy.medpro.watani.data.MistakesBank
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.data.getCorrectIndices
@@ -157,6 +158,26 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                     explanation = q.explanation,
                     isCorrect = isCor
                 )
+                // بنك أخطائي (1.2.5): questions the student actually
+                // answered wrong join the mistakes bank (unanswered
+                // ones stay out — never attempted, nothing to review).
+                // Real bank questions key on their natId; the built-in
+                // sample questions fall back to the stem-hash key.
+                if (userAns != null && userAns != q.correctIndex) {
+                    MistakesBank.recordWrong(
+                        context = context,
+                        bank = "simulator",
+                        file = "",
+                        questionId = q.natId,
+                        indexInFile = if (q.natId != null) idx else -1,
+                        subject = q.specialty,
+                        stem = q.stem,
+                        options = q.options,
+                        correctIndex = q.correctIndex,
+                        explanation = q.explanation,
+                        ltr = false
+                    )
+                }
             }
         }
     }

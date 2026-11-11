@@ -91,6 +91,7 @@ private val TOOL_GROUPS = listOf(
         header = "دراستي وتنظيمي",
         tools = listOf(
             ToolEntry("المراجعة الذكية Anki", "مراجعة بطاقات Anki والأخطاء المتباعدة", Icons.Default.Style, Color(0xFF0277BD), "المراجعة الذكية Anki"),
+            ToolEntry("بنك أخطائي", "أخطاؤك من كل البنوك بمراجعة متباعدة حتى الإتقان", Icons.Default.Quiz, Color(0xFFAD1457), "بنك أخطائي"),
             ToolEntry("دليل الدراسة", "خطة دراسة منظمة للوطني", Icons.Default.Book, Color(0xFF33691E), "دليل الدراسة"),
             ToolEntry("مخطط جدول الدراسة", "توزيع الأيام المتبقية حسب ثقل المواد", Icons.Default.CalendarMonth, Color(0xFF455A64), "مخطط جدول الدراسة"),
             ToolEntry("سجل أخطائي والاختبارات", "أسئلتك الخاطئة واختباراتك السابقة", Icons.Default.History, Color(0xFFB71C1C), "سجل أخطائي والاختبارات"),

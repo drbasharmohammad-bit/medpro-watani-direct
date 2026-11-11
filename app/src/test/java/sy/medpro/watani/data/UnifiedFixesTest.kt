@@ -74,4 +74,122 @@ class UnifiedFixesTest {
         assertTrue(getCorrectIndices(q(null, listOf(1.0, 9.0)), opts).isEmpty())
         assertEquals(before + 4, invalidCorrectKeyCount.get())
     }
+
+    // -----------------------------------------------------------------
+    // بنك أخطائي (1.2.5): identity composition + SM-2-lite scheduling.
+    // -----------------------------------------------------------------
+
+    @Test
+    fun mistakeKeyPrefersStableId() {
+        assertEquals(
+            "questions|questions/القلبية.json|id:NAT-CAR-0001",
+            MistakeKeys.composeKey("questions", "questions/القلبية.json", "NAT-CAR-0001", 5, "نص السؤال")
+        )
+        // Blank/whitespace ids count as missing and fall through.
+        assertEquals(
+            "uworld|uworld/القلبية.json|idx:3",
+            MistakeKeys.composeKey("uworld", "uworld/القلبية.json", "  ", 3, "stem")
+        )
+    }
+
+    @Test
+    fun mistakeKeyFallsBackToIndexThenStemHash() {
+        assertEquals(
+            "dawrat_jami3at|dawrat_jami3at/damascus/قلبية.json|idx:42",
+            MistakeKeys.composeKey("dawrat_jami3at", "dawrat_jami3at/damascus/قلبية.json", null, 42, "أي نص")
+        )
+        val a = MistakeKeys.composeKey("daily", "", null, -1, "ما هو التشخيص؟")
+        val b = MistakeKeys.composeKey("daily", "", null, -1, "ما هو التشخيص؟")
+        val c = MistakeKeys.composeKey("daily", "", null, -1, "سؤال مختلف تمامًا")
+        assertEquals(a, b) // deterministic for the same stem
+        assertTrue(a.startsWith("daily||stem:"))
+        assertTrue(a != c)
+        // Normalization: extra whitespace does not change the hash key.
+        assertEquals(
+            a,
+            MistakeKeys.composeKey("daily", "", null, -1, "  ما  هو   التشخيص؟ ")
+        )
+    }
+
+    @Test
+    fun mistakeBankOfSplitsSourcePath() {
+        assertEquals(
+            "dawrat_jami3at" to "dawrat_jami3at/hama/القلبية.json",
+            MistakeKeys.bankOf("dawrat_jami3at/hama/القلبية.json", "عنوان")
+        )
+        assertEquals(
+            "questions_en" to "questions_en/القلبية.json",
+            MistakeKeys.bankOf("questions_en/القلبية.json", "عنوان")
+        )
+        assertEquals("quiz" to "اختبار سريع", MistakeKeys.bankOf(null, "اختبار سريع"))
+        assertEquals("quiz" to "اختبار سريع", MistakeKeys.bankOf("  ", "اختبار سريع"))
+    }
+
+    @Test
+    fun srsLadderGrowsThreeSevenTwentyOne() {
+        var s = MistakesSrs.initial()
+        assertEquals(MistakeSrsState(1, 0, false), s)
+        s = MistakesSrs.onCorrect(s)
+        assertEquals(MistakeSrsState(3, 0, false), s)
+        s = MistakesSrs.onCorrect(s)
+        assertEquals(MistakeSrsState(7, 0, false), s)
+        // First correct at a >=7d interval: streak 1, interval grows to 21.
+        s = MistakesSrs.onCorrect(s)
+        assertEquals(MistakeSrsState(21, 1, false), s)
+        // Second consecutive correct at a >=7d interval: mastered.
+        s = MistakesSrs.onCorrect(s)
+        assertEquals(MistakeSrsState(21, 2, true), s)
+        // Mastered is terminal for scheduling.
+        assertEquals(s, MistakesSrs.onCorrect(s))
+    }
+
+    @Test
+    fun srsWrongResetsToOneDayAndUnmasters() {
+        val progressed = MistakeSrsState(21, 1, false)
+        assertEquals(MistakeSrsState(1, 0, false), MistakesSrs.onWrong(progressed))
+        val mastered = MistakeSrsState(21, 2, true)
+        assertEquals(MistakeSrsState(1, 0, false), MistakesSrs.onWrong(mastered))
+        assertEquals(MistakeSrsState(1, 0, false), MistakesSrs.onWrong(MistakesSrs.initial()))
+    }
+
+    @Test
+    fun srsDueMathAndQueueOrder() {
+        val t0 = 1_700_000_000_000L
+        assertEquals(t0 + MistakesSrs.DAY_MS, MistakesSrs.dueAtMillis(t0, 1))
+        assertEquals(t0 + 21 * MistakesSrs.DAY_MS, MistakesSrs.dueAtMillis(t0, 21))
+
+        fun entry(key: String, dueAt: Long, lastWrongAt: Long, mastered: Boolean = false) =
+            MistakeEntry(
+                key = key, bank = "questions", file = "questions/x.json", questionId = key,
+                subject = "القلبية", stem = "stem $key", options = listOf("a", "b"),
+                correctIndex = 0, explanation = "", whyCorrect = null, whyWrong = null,
+                summary = null, ltr = false, firstWrongAt = lastWrongAt,
+                lastWrongAt = lastWrongAt, wrongCount = 1, intervalDays = 1,
+                longIntervalStreak = 0, mastered = mastered, dueAt = dueAt
+            )
+
+        val now = t0 + 10 * MistakesSrs.DAY_MS
+        val overdueLong = entry("a", dueAt = t0 + 1 * MistakesSrs.DAY_MS, lastWrongAt = t0)
+        val overdueShort = entry("b", dueAt = t0 + 5 * MistakesSrs.DAY_MS, lastWrongAt = t0)
+        val futureRecent = entry("c", dueAt = t0 + 30 * MistakesSrs.DAY_MS, lastWrongAt = t0 + 9 * MistakesSrs.DAY_MS)
+        val futureOld = entry("d", dueAt = t0 + 30 * MistakesSrs.DAY_MS, lastWrongAt = t0 + 2 * MistakesSrs.DAY_MS)
+        val masteredOne = entry("e", dueAt = t0, lastWrongAt = t0, mastered = true)
+
+        assertTrue(MistakesSrs.isDue(overdueLong, now))
+        assertTrue(!MistakesSrs.isDue(futureRecent, now))
+        assertTrue(!MistakesSrs.isDue(masteredOne, now))
+
+        val queue = MistakesSrs.buildSessionQueue(
+            listOf(futureOld, masteredOne, overdueShort, futureRecent, overdueLong),
+            nowMillis = now,
+            limit = 20
+        )
+        // Due first (most overdue first), then recent non-due; mastered out.
+        assertEquals(listOf("a", "b", "c", "d"), queue.map { it.key })
+        // Limit is honored.
+        assertEquals(
+            listOf("a", "b"),
+            MistakesSrs.buildSessionQueue(listOf(overdueLong, overdueShort, futureRecent), now, limit = 2).map { it.key }
+        )
+    }
 }

@@ -60,6 +60,7 @@ import sy.medpro.watani.ui.drawer.*
 import sy.medpro.watani.ui.home.*
 import sy.medpro.watani.ui.leaderboard.LeaderboardScreen
 import sy.medpro.watani.ui.logbook.LogbookScreen
+import sy.medpro.watani.ui.mistakes.MistakesBankScreen
 import sy.medpro.watani.ui.ddx.DdxTrainerScreen
 import sy.medpro.watani.ui.reverse.ReverseTrainerScreen
 import sy.medpro.watani.ui.library.LibraryScreen
@@ -804,6 +805,7 @@ class MainActivity : ComponentActivity() {
                                                 )
                                                 "المراجعة الذكية Anki" -> FlashcardsReviewScreen(initialTab = 1, onBack = { drawerScreen = null })
                                                 "المراجعة الذكية Anki - الخاطئة" -> FlashcardsReviewScreen(initialTab = 1, ankiWrongOnly = true, onBack = { drawerScreen = null })
+                                                "بنك أخطائي" -> MistakesBankScreen(onBack = { drawerScreen = null })
                                                 "نقاط الضعف" -> WeakPointsScreen(onBack = { drawerScreen = null })
                                                 "مؤقت التركيز" -> FocusTimerScreen(onBack = { drawerScreen = null })
                                                 "الإنجازات والأوسمة" -> BadgesScreen(onBack = { drawerScreen = null })

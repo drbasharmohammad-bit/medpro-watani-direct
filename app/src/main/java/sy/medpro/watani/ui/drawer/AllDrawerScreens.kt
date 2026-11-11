@@ -386,7 +386,8 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
         } else {
             val (subj, q) = selectedQuestion!!
             val options = q.options ?: emptyList()
-            val correctIdx = getCorrectIndices(q, options).firstOrNull() ?: 0
+            val correctIndices = getCorrectIndices(q, options)
+            val correctIdx = correctIndices.firstOrNull() ?: 0
             // Unified explanation rule (Nov 2026): an embedded explanation
             // (displayed below on submit) disables the layer lookup.
             val dailyExplanationState = rememberExplanationState(
@@ -444,6 +445,30 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
                                 explanation = q.explanation ?: "لا توجد تفاصيل إضافية.",
                                 isCorrect = isCorrect
                             )
+                            // بنك أخطائي (1.2.5): a missed daily question
+                            // joins the mistakes bank too. The daily pool
+                            // loses each question's source file, so the
+                            // bank is "daily" and id-less questions fall
+                            // back to the stem-hash key. Invalid keys
+                            // (F-08: empty correctIndices) are not filed.
+                            if (!isCorrect && correctIndices.isNotEmpty()) {
+                                MistakesBank.recordWrong(
+                                    context = context,
+                                    bank = "daily",
+                                    file = "",
+                                    questionId = q.id,
+                                    indexInFile = -1,
+                                    subject = subj,
+                                    stem = q.text ?: "",
+                                    options = options,
+                                    correctIndex = correctIdx,
+                                    explanation = q.explanation ?: "",
+                                    whyCorrect = q.whyCorrect,
+                                    whyWrong = q.whyWrong,
+                                    summary = q.summary,
+                                    ltr = false
+                                )
+                            }
                         }
                     },
                     enabled = selectedOptionIndex != null && !submitted,
