@@ -165,6 +165,9 @@ class MainActivity : ComponentActivity() {
                 // with no network at all, and daily offline entry for
                 // signed-in users is unchanged.
                 var currentUser by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
+                // Build 1.2.5: flips once the one-time name ask below is
+                // continued past, so the check does not re-run mid-session.
+                var nameGatePassed by remember { mutableStateOf(false) }
                 DisposableEffect(Unit) {
                     val listener = FirebaseAuth.AuthStateListener { auth ->
                         currentUser = auth.currentUser
@@ -283,6 +286,24 @@ class MainActivity : ComponentActivity() {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         sy.medpro.watani.ui.auth.SignInGate(
                             onSignedIn = { currentUser = FirebaseAuth.getInstance().currentUser }
+                        )
+                    }
+                } else if (!nameGatePassed &&
+                    !sy.medpro.watani.data.ProfileNameStore.isNamePromptDone(context, currentUser?.uid) &&
+                    sy.medpro.watani.data.ProfileNameStore.savedName(context, currentUser?.uid) == null
+                ) {
+                    // One-time name ask (build 1.2.5): an already
+                    // signed-in account that has no saved display name
+                    // yet sees the same gate card once — name only, no
+                    // Google step, no network, and continuing with an
+                    // empty field is allowed (the Google displayName is
+                    // stored as fallback). The prompt-done flag is set
+                    // by the gate itself, so it never reappears; daily
+                    // offline entry afterwards is the plain else branch.
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        sy.medpro.watani.ui.auth.SignInGate(
+                            existingUser = currentUser,
+                            onSignedIn = { nameGatePassed = true }
                         )
                     }
                 } else {

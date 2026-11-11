@@ -180,8 +180,19 @@ fun HomeDashboardScreen(
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
+                                // Approved greeting (build 1.2.5): «د. <الاسم>»
+                                // from the same profile store the gate writes
+                                // and the profile screen edits; the generic
+                                // fallback stays when no name exists anywhere.
+                                val greetingName = sy.medpro.watani.data.ProfileNameStore.resolveName(
+                                    sy.medpro.watani.data.ProfileNameStore.savedName(
+                                        context,
+                                        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                                    ),
+                                    com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.displayName
+                                )
                                 Text(
-                                    text = "أهلاً بك يا طبيب المستقبل",
+                                    text = sy.medpro.watani.data.ProfileNameStore.greetingFor(greetingName),
                                     color = Color.White,
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold
