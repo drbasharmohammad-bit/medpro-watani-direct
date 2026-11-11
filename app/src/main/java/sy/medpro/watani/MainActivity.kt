@@ -57,6 +57,7 @@ import sy.medpro.watani.ui.cases.CasesScreen
 import sy.medpro.watani.ui.cases.GermanCasesScreen
 import sy.medpro.watani.ui.clinical.BedsideClinicalTab
 import sy.medpro.watani.ui.drawer.*
+import sy.medpro.watani.ui.ecg.EcgCourseScreen
 import sy.medpro.watani.ui.home.*
 import sy.medpro.watani.ui.leaderboard.LeaderboardScreen
 import sy.medpro.watani.ui.logbook.LogbookScreen
@@ -822,7 +823,10 @@ class MainActivity : ComponentActivity() {
                                                 "مخطط جدول الدراسة" -> SmartStudyPlannerScreen(onBack = { drawerScreen = null })
                                                 // مجموعات 28 أكتوبر: الأسماء القديمة أسماء مستعارة تفتح
                                                 // المجموعة على التبويب المقابل، فلا تنكسر روابط الرئيسية.
-                                                "القلب والإصغاء" -> HeartAuscultationScreen(onBack = { drawerScreen = null })
+                                                // بناء 1.2.4: مدخل «القلب والإصغاء» صار كورس
+                                                // القلب المصغّر التفاعلي (ECG + إصغاء). الأسماء
+                                                // المستعارة القديمة تحتها تبقى على شاشة التبويبات.
+                                                "القلب والإصغاء" -> EcgCourseScreen(onBack = { drawerScreen = null })
                                                 "مدرب تخطيط القلب" -> HeartAuscultationScreen(initialTab = 0, onBack = { drawerScreen = null })
                                                 "أطلس تخطيط القلب" -> HeartAuscultationScreen(initialTab = 1, onBack = { drawerScreen = null })
                                                 "مدرب الإصغاء" -> HeartAuscultationScreen(initialTab = 2, onBack = { drawerScreen = null })

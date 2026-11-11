@@ -74,7 +74,7 @@ private val TOOL_GROUPS = listOf(
             // Fix 1.2.2 (doctor's order): ONE tools entry — «القلب والإصغاء».
             // The ECG atlas lives inside that same screen as its own tab;
             // a separate «أطلس تخطيط القلب» entry duplicated the content.
-            ToolEntry("القلب والإصغاء", "مدرب الإصغاء وأصوات القلب والرئة وأطلس تخطيط القلب", Icons.Default.Favorite, Color(0xFFE65100), "القلب والإصغاء")
+            ToolEntry("القلب والإصغاء", "كورس القلب المصغّر: قراءة ECG تفاعلية وفرجار قياس ومدرب إصغاء", Icons.Default.Favorite, Color(0xFFE65100), "القلب والإصغاء")
         )
     ),
     ToolGroup(

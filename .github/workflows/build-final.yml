@@ -111,7 +111,7 @@ jobs:
           # upstream 504s (GitHub Releases / Gradle CDN); Gradle caches
           # progress between attempts, so a retry usually completes.
           for attempt in 1 2 3; do
-            if gradle :app:testDebugUnitTest --tests "sy.medpro.watani.data.UnifiedFixesTest" --tests "sy.medpro.watani.data.BehavioralFixesTest" --tests "sy.medpro.watani.data.RestoreResponseTest" --console=plain --max-workers=2; then break; fi
+            if gradle :app:testDebugUnitTest --tests "sy.medpro.watani.data.UnifiedFixesTest" --tests "sy.medpro.watani.data.BehavioralFixesTest" --tests "sy.medpro.watani.data.RestoreResponseTest" --tests "sy.medpro.watani.ui.ecg.EcgMathTest" --console=plain --max-workers=2; then break; fi
             if [ "$attempt" = "3" ]; then exit 1; fi
             echo "Gradle attempt $attempt failed; retrying in 30s..."; sleep 30
           done

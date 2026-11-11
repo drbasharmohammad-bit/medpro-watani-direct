@@ -370,6 +370,41 @@ class WataniRepository(private val context: Context) {
         }
     }
 
+    /**
+     * ECG mini-course pack (1.2.4) — mirrors [getAuscultationEnvelope]
+     * exactly: the downloaded "ecg.json" section file from
+     * sections_cache, parsed leniently; null when the pack has not been
+     * downloaded yet (the course screen then pulls it through the
+     * manifest + downloadSection path, like the auscultation trainer).
+     */
+    suspend fun getEcgEnvelope(): EcgEnvelope? = withContext(Dispatchers.IO) {
+        try {
+            val file = getSectionFile("ecg.json")
+            if (!file.exists()) return@withContext null
+            val jsonString = file.readText(Charsets.UTF_8)
+            moshi.adapter(EcgEnvelope::class.java).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Bundled fallback (assets/ecg_sample.json): a small sample pack so
+     * the ECG course opens and teaches even before the pipeline's real
+     * ecg.json is published to the manifest. Used ONLY when neither the
+     * downloaded pack nor a manifest download is available — the server
+     * pack always wins when present.
+     */
+    suspend fun getBundledEcgEnvelope(): EcgEnvelope? = withContext(Dispatchers.IO) {
+        try {
+            val jsonString = context.assets.open("ecg_sample.json")
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
+            moshi.adapter(EcgEnvelope::class.java).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun getDdxEnvelope(): DdxEnvelope? = withContext(Dispatchers.IO) {
         try {
             val file = getSectionFile("ddx.json")

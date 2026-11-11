@@ -20,7 +20,7 @@ import com.squareup.moshi.Moshi
  *   comparison is the honest declared-vs-actual check for any value.
  *   Every non-subject envelope downloaded through downloadSection has
  *   its OWN branch here (cases/cases_de, guide, ddx, reverse,
- *   auscultation, osce): an envelope shape without a branch falls into
+ *   auscultation, osce, ecg): an envelope shape without a branch falls into
  *   the subject check, counts 0 and can NEVER download (the 1.2 defect
  *   fixed in 1.2.1 — auscultation, German cases and OSCE all failed
  *   this way on device).
@@ -111,6 +111,24 @@ object SectionVerification {
                 throw IllegalStateException("خطأ في تطابق عدد محطات الأوسكي الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
             }
             return actualCount
+        }
+        if (path == "ecg.json") {
+            // Build 1.2.4: the ECG course pack is a method/patterns/
+            // strips envelope with NO declared count field in its
+            // contract — without this branch it would fall into the
+            // subject check, count 0 and never download (the exact
+            // 1.2.1 defect class). Honest check: the pack must parse
+            // and carry teaching content (patterns or strips); the
+            // returned count is the number of strips, or patterns
+            // when the pack ships patterns ahead of strips.
+            val ecgEnv = moshi.adapter(EcgEnvelope::class.java).fromJson(jsonString)
+                ?: throw IllegalStateException("ملف كورس تخطيط القلب غير صالح — أعد التحميل.")
+            val patternCount = ecgEnv.patterns?.size ?: 0
+            val stripCount = ecgEnv.strips?.size ?: 0
+            if (patternCount == 0 && stripCount == 0) {
+                throw IllegalStateException("ملف كورس تخطيط القلب بلا أنماط أو شرائط — أعد التحميل.")
+            }
+            return if (stripCount > 0) stripCount else patternCount
         }
         if (path == "reverse.json") {
             val revEnv = moshi.adapter(ReverseEnvelope::class.java).fromJson(jsonString)
