@@ -17,8 +17,10 @@ class HardeningLogicTest {
 
     @Test
     fun pinning_coversBothHosts_withAtLeastTwoPinsEach() {
-        val workerPins = NetworkPinning.pinner.pins.count { it.hostname == NetworkPinning.WORKER_HOST }
-        val contentPins = NetworkPinning.pinner.pins.count { it.hostname == NetworkPinning.CONTENT_HOST }
+        // OkHttp 4.10: one Pin entry per hash, keyed by `pattern`
+        // (there is no `hostname` property on CertificatePinner.Pin).
+        val workerPins = NetworkPinning.pinner.pins.count { it.pattern == NetworkPinning.WORKER_HOST }
+        val contentPins = NetworkPinning.pinner.pins.count { it.pattern == NetworkPinning.CONTENT_HOST }
         assertTrue("worker host needs >= 2 pins", workerPins >= 2)
         assertTrue("content host needs >= 2 pins", contentPins >= 2)
         assertTrue(NetworkPinning.PINNING_ENABLED)
