@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import sy.medpro.watani.data.SectionCacheCrypto
 import sy.medpro.watani.data.WorkerActivationApi
 import java.io.File
 import java.io.FileOutputStream
@@ -38,6 +39,25 @@ import kotlin.text.Charsets
  * - network/index/shard failures are returned as Result.failure (the UI
  *   shows a retry button) instead of silent "absent" — success(null) now
  *   strictly means "the layer loaded and this question has no record".
+ *
+ * Phase-2b hardening (Nov 2026 — cache completion): the on-disk cache in
+ * `filesDir/explanation_layers` (index.json + hashed shard files) is
+ * RESTRICTED content and is now stored AES-GCM encrypted through the
+ * same central point as sections_cache ([SectionCacheCrypto] over
+ * security/ContentEncryption, same Keystore key and byte format), under
+ * the UNCHANGED file names — so the revocation wipe in
+ * data/RestrictedInventory (whole-directory delete) works exactly as
+ * before. Writes happen only after the existing parse validation
+ * (index parsed / shard records non-empty), reads go through the
+ * central decrypting read, and a legacy plaintext cache file is
+ * migrated to encrypted form on first read (shard JSON starts with
+ * '[', index JSON with '{' — both pass SectionCacheCrypto's legacy
+ * check). The only plaintext left in the directory is the resumable
+ * download temp (`<hash>.tmp`): Range resume appends raw bytes, so it
+ * cannot be ciphertext — the exact same discipline as the
+ * sections_cache download temp. It is deleted the moment the full
+ * shard is persisted encrypted, and the whole directory (temps
+ * included) is wiped on activation revocation.
  */
 /**
  * F-09: carries the HTTP status of a failed explanation-index fetch so
@@ -65,11 +85,12 @@ class ExplanationRepository(
 
     private val indexAdapter = moshi.adapter(ExplanationIndex::class.java)
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.NONE })
-        .build()
+    private val client = sy.medpro.watani.security.NetworkPinning.apply(
+        OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.NONE })
+    ).build()
 
     /** In-memory cache of shard contents for the current process lifetime, keyed by shard path. */
     private val shardCache = mutableMapOf<String, List<ExplanationRecordDto>>()
@@ -224,8 +245,10 @@ class ExplanationRepository(
                     ?: Result.failure(Exception("تعذر قراءة فهرس الشروحات"))
                 cachedIndex = parsed
                 try {
-                    diskFile.parentFile?.mkdirs()
-                    diskFile.writeText(text, Charsets.UTF_8)
+                    // Phase-2b: stored ENCRYPTED via the central point,
+                    // after the parse validation just above (verified
+                    // plaintext only — ciphertext is never validated).
+                    SectionCacheCrypto.writeText(context, diskFile, text)
                 } catch (_: Exception) {
                 }
                 Result.success(parsed)
@@ -238,7 +261,10 @@ class ExplanationRepository(
     private fun readIndexFromDisk(diskFile: File): Result<ExplanationIndex?>? {
         if (!diskFile.exists()) return null
         return try {
-            val parsed = indexAdapter.fromJson(diskFile.readText(Charsets.UTF_8))
+            // Phase-2b: central decrypting read — a legacy plaintext
+            // index.json is migrated to encrypted form on this read.
+            val text = SectionCacheCrypto.readText(context, diskFile) ?: return null
+            val parsed = indexAdapter.fromJson(text)
             if (parsed == null) {
                 null
             } else {
@@ -257,7 +283,10 @@ class ExplanationRepository(
         val cacheFile = shardCacheFile(shardName)
         if (cacheFile.exists()) {
             try {
-                val records = parseShard(cacheFile.readText(Charsets.UTF_8))
+                // Phase-2b: central decrypting read — a legacy plaintext
+                // shard is migrated to encrypted form on this read.
+                val cachedText = SectionCacheCrypto.readText(context, cacheFile)
+                val records = if (cachedText == null) emptyList() else parseShard(cachedText)
                 if (records.isNotEmpty()) {
                     shardCache[shardName] = records
                     return Result.success(records)
@@ -290,6 +319,15 @@ class ExplanationRepository(
      * (the gateway serves 206 from its cache) and KEEPS the partial file
      * on failure, so the next attempt resumes instead of restarting an
      * 8MB shard from zero on a slow connection.
+     *
+     * Phase-2b note: the temp is a raw-byte resume buffer and therefore
+     * stays plaintext while a download is in flight / awaiting resume —
+     * Range appends cannot target GCM ciphertext. This is the same
+     * accepted discipline as the sections_cache download temp; the
+     * PERSISTED shard is always encrypted (see [persistShardCache]),
+     * the temp is deleted on persist, and RestrictedInventory wipes
+     * the whole explanation_layers directory (temps included) on
+     * activation revocation.
      */
     private suspend fun downloadShard(shardName: String): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -367,7 +405,11 @@ class ExplanationRepository(
     private fun persistShardCache(shardName: String, text: String) {
         try {
             val file = shardCacheFile(shardName)
-            file.writeText(text, Charsets.UTF_8)
+            // Phase-2b: ENCRYPTED via the central point. The caller
+            // (loadShard) has already validated the text — it parsed
+            // to a non-empty record list — so only verified plaintext
+            // is ever encrypted, exactly like sections_cache.
+            SectionCacheCrypto.writeText(context, file, text)
             // The resume temp is no longer needed once the full shard is cached.
             val temp = shardTempFile(shardName)
             if (temp.exists()) temp.delete()
@@ -407,9 +449,13 @@ class ExplanationRepository(
         try {
             val dir = explanationDir()
             val keep = Regex("^[0-9a-f]{16}\\.(json|tmp)$")
+            // Phase-2b: the encrypted store writes atomically via a
+            // "<name>.enc.tmp" sibling (ContentEncryption) — never let
+            // this sweep delete an in-flight encrypted write.
+            val keepEncTmp = Regex("^[0-9a-f]{16}\\.json\\.enc\\.tmp$")
             dir.listFiles()?.forEach { f ->
-                if (f.name == "index.json") return@forEach
-                if (!keep.matches(f.name)) {
+                if (f.name == "index.json" || f.name == "index.json.enc.tmp") return@forEach
+                if (!keep.matches(f.name) && !keepEncTmp.matches(f.name)) {
                     try {
                         f.delete()
                     } catch (_: Exception) {

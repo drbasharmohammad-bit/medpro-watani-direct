@@ -23,8 +23,12 @@ import androidx.activity.compose.BackHandler
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import sy.medpro.watani.data.EncryptedHlsDataSource
+import sy.medpro.watani.data.GatewayHlsDataSource
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import java.io.File
 
@@ -99,7 +103,24 @@ fun VideoPlayerScreen(
     }
 
     val player = remember(videoUri, subtitleUri) {
-        ExoPlayer.Builder(context).build().apply {
+        // Phase-3 (§4.2 + §6): THE DataSource chain for all playback —
+        // the single touch point in this screen, its external contract
+        // is unchanged:
+        //  - file:// (session playlist temps, SRT temps) is served by
+        //    DefaultDataSource itself;
+        //  - watani-enc:/// segments of a downloaded tree are decrypted
+        //    in memory by EncryptedHlsDataSource;
+        //  - http(s):// streaming (playlists, segments, subtitle URL)
+        //    goes through GatewayHlsDataSource, which rebuilds every
+        //    request via WorkerActivationApi.contentRequestForUrl with
+        //    the activation token — no direct fetch from the public
+        //    origin remains in any playback path.
+        val gatewayFactory = GatewayHlsDataSource.Factory(context)
+        val encFactory = EncryptedHlsDataSource.Factory(context, gatewayFactory)
+        val dataSourceFactory = DefaultDataSource.Factory(context, encFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(dataSourceFactory)
+        ExoPlayer.Builder(context).setMediaSourceFactory(mediaSourceFactory).build().apply {
             if (videoUri != null) {
                 val itemBuilder = MediaItem.Builder().setUri(videoUri)
                 if (subtitleUri != null) {

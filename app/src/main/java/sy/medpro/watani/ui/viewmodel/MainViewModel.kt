@@ -334,6 +334,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _activationPromptRequests.tryEmit(Unit)
                     return@launch
                 }
+                // Phase-2 gentle lease: >30 days without a successful
+                // server verification — downloaded restricted sections
+                // are treated as unavailable until one online check.
+                // Downloads are NOT deleted by this path.
+                if (WorkerActivationApi.isRestrictedLeaseExpired(getApplication<Application>().applicationContext)) {
+                    _uiState.update { it.copy(gateMessage = WorkerActivationApi.LEASE_EXPIRED_MESSAGE) }
+                    return@launch
+                }
             }
             val envelope = repository.getSubjectEnvelope(path)
             val topic = envelope?.topics?.find { it.name == topicName }
@@ -367,6 +375,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (!WorkerActivationApi.isActivated(getApplication<Application>().applicationContext)) {
                     _activationPromptRequests.tryEmit(Unit)
+                    return@launch
+                }
+                // Phase-2 gentle lease: >30 days without a successful
+                // server verification — downloaded restricted sections
+                // are treated as unavailable until one online check.
+                // Downloads are NOT deleted by this path.
+                if (WorkerActivationApi.isRestrictedLeaseExpired(getApplication<Application>().applicationContext)) {
+                    _uiState.update { it.copy(gateMessage = WorkerActivationApi.LEASE_EXPIRED_MESSAGE) }
                     return@launch
                 }
             }

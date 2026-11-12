@@ -24,13 +24,15 @@ class WataniRepository(private val context: Context) {
         .build()
 
     // A2: Remove body-level HttpLoggingInterceptor from shared OkHttp client (Level.NONE)
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.NONE
-        })
-        .build()
+    // Phase-2 hardening: SPKI pinning for the content/gateway hosts.
+    private val client = sy.medpro.watani.security.NetworkPinning.apply(
+        OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .addInterceptor(HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.NONE
+            })
+    ).build()
 
     private val retrofit = Retrofit.Builder()
         .baseUrl(WataniApi.BASE_URL)
@@ -116,8 +118,14 @@ class WataniRepository(private val context: Context) {
 
     private fun saveManifestCache(manifest: ManifestResponse) {
         try {
-            manifestCacheFile().writeText(
-                moshi.adapter(ManifestResponse::class.java).toJson(manifest), Charsets.UTF_8
+            // Phase-2b hardening: the disk copy lists restricted
+            // sections and is already wiped on revocation
+            // (RestrictedInventory) — it is now also stored ENCRYPTED
+            // through the central point, after serialization of the
+            // already-fetched (verified) manifest above.
+            SectionCacheCrypto.writeText(
+                context, manifestCacheFile(),
+                moshi.adapter(ManifestResponse::class.java).toJson(manifest)
             )
         } catch (_: Exception) {
             // Best-effort: a failed cache write must never fail the fetch.
@@ -128,7 +136,10 @@ class WataniRepository(private val context: Context) {
         return try {
             val file = manifestCacheFile()
             if (!file.exists()) return null
-            moshi.adapter(ManifestResponse::class.java).fromJson(file.readText(Charsets.UTF_8))
+            // Phase-2b: central decrypting read — a legacy plaintext
+            // manifest_cache.json is migrated to encrypted form here.
+            val text = SectionCacheCrypto.readText(context, file) ?: return null
+            moshi.adapter(ManifestResponse::class.java).fromJson(text)
         } catch (_: Exception) {
             null
         }
@@ -184,6 +195,24 @@ class WataniRepository(private val context: Context) {
             false
         }
     }
+
+    // ------------------------------------------------------------------
+    // Phase-2 hardening (Nov 2026): encrypted sections_cache.
+    // THE central read/write point for section files — every getter
+    // below reads through [readSectionText] and every save goes
+    // through [writeSectionBytes]/[writeSectionText], which store
+    // AES-GCM ciphertext (see SectionCacheCrypto). Legacy plaintext
+    // files are migrated to encrypted form on first read there.
+    // ------------------------------------------------------------------
+
+    private fun readSectionText(path: String): String? =
+        SectionCacheCrypto.readText(context, getSectionFile(path))
+
+    private fun writeSectionBytes(path: String, bytes: ByteArray): Boolean =
+        SectionCacheCrypto.writeBytes(context, getSectionFile(path), bytes)
+
+    private fun writeSectionText(path: String, text: String): Boolean =
+        SectionCacheCrypto.writeText(context, getSectionFile(path), text)
 
     suspend fun downloadSection(
         path: String,
@@ -271,26 +300,22 @@ class WataniRepository(private val context: Context) {
             }
             } // resp.use (F-13)
 
-            // F-07: never delete the working copy before the replacement
-            // is proven: the temp file is renamed over the target in one
-            // step and the rename RESULT is checked. On failure the old
-            // file stays untouched and the download fails visibly.
-            if (!tempFile.renameTo(file)) {
-                return@withContext Result.failure(Exception("تعذر حفظ ملف القسم على الجهاز — أعد المحاولة."))
-            }
-
-            // F-01: verify the INSTALLED file against the manifest entry
-            // BEFORE recording it (pure core in SectionVerification —
-            // the exact logic is unit-tested off-device): actual byte
-            // size and the family's own hash must both match when the
-            // manifest declares them. A mismatch deletes the file and
-            // fails visibly instead of blessing corrupt/swapped bytes.
-            val installedBytes = file.readBytes()
+            // Phase-2 hardening (Nov 2026) — verification order is
+            // UNCHANGED, only the final persisted form changed:
+            // F-01/F-02 verification still runs on the PLAINTEXT bytes
+            // (the downloaded temp file), BEFORE anything is saved;
+            // the section is then stored ENCRYPTED (SectionCacheCrypto)
+            // and the plaintext temp is deleted, so no plaintext
+            // question JSON ever persists in sections_cache. The old
+            // working copy is replaced only by the checked encrypted
+            // write (F-07 spirit): a failed verification or a failed
+            // encryption leaves the previously installed copy untouched.
+            val installedBytes = tempFile.readBytes()
             val mismatch = SectionVerification.manifestMismatch(
                 path, installedBytes, entry.size, entry.hash
             )
             if (mismatch != null) {
-                file.delete()
+                tempFile.delete()
                 return@withContext Result.failure(Exception(mismatch))
             }
             val computedHash = SectionVerification.manifestHashHex(path, installedBytes)
@@ -298,17 +323,23 @@ class WataniRepository(private val context: Context) {
             // F-02/F-03/F-04: content verification (pure core in
             // SectionVerification): real parse + honest declared-count
             // comparison, no coerced counts anywhere.
-            val jsonString = file.readText(Charsets.UTF_8)
+            val jsonString = String(installedBytes, Charsets.UTF_8)
             val actualCount = try {
                 SectionVerification.verifySectionCount(path, jsonString, moshi)
             } catch (e: IllegalStateException) {
-                file.delete()
+                tempFile.delete()
                 return@withContext Result.failure(Exception(e.message))
             }
 
+            if (!writeSectionBytes(path, installedBytes)) {
+                tempFile.delete()
+                return@withContext Result.failure(Exception("تعذر حفظ ملف القسم على الجهاز — أعد المحاولة."))
+            }
+            tempFile.delete()
+
             // F-01: the registry stores the hash COMPUTED from the
-            // installed file (never a verbatim copy of entry.hash), so
-            // isSectionUpToDate compares two independently derived
+            // verified plaintext (never a verbatim copy of entry.hash),
+            // so isSectionUpToDate compares two independently derived
             // values and a swapped/corrupt file cannot look current.
             val entity = DownloadedSectionEntity(
                 sectionPath = path,
@@ -318,6 +349,11 @@ class WataniRepository(private val context: Context) {
                 downloadedAt = System.currentTimeMillis()
             )
             saveDownloadedSection(entity)
+            // Gentle lease: a successful restricted download is a
+            // successful server verification.
+            if (WorkerActivationApi.isRestrictedPath(path)) {
+                WorkerActivationApi.noteServerVerified(context)
+            }
             Result.success(actualCount)
         } catch (e: Exception) {
             // Typed revocation passes through unwrapped (M3): callers
@@ -332,9 +368,13 @@ class WataniRepository(private val context: Context) {
 
     suspend fun getSubjectEnvelope(path: String): SubjectEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile(path)
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            // Gentle lease: an expired lease makes downloaded
+            // restricted sections behave as unavailable (free paths
+            // are never gated here).
+            if (WorkerActivationApi.isRestrictedPath(path) &&
+                WorkerActivationApi.isRestrictedLeaseExpired(context)
+            ) return@withContext null
+            val jsonString = readSectionText(path) ?: return@withContext null
             moshi.adapter(SubjectEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
@@ -343,9 +383,7 @@ class WataniRepository(private val context: Context) {
 
     suspend fun getCasesEnvelope(): CasesEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("cases.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            val jsonString = readSectionText("cases.json") ?: return@withContext null
             moshi.adapter(CasesEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
@@ -355,9 +393,7 @@ class WataniRepository(private val context: Context) {
     // الحالات الألمانية (نقل 9 نوفمبر): نفس غلاف الحالات تمامًا، ملف مستقل.
     suspend fun getCasesDeEnvelope(): CasesEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("cases_de.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            val jsonString = readSectionText("cases_de.json") ?: return@withContext null
             moshi.adapter(CasesEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
@@ -366,9 +402,7 @@ class WataniRepository(private val context: Context) {
 
     suspend fun getGuideEnvelope(): GuideEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("guide.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            val jsonString = readSectionText("guide.json") ?: return@withContext null
             moshi.adapter(GuideEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
@@ -377,9 +411,7 @@ class WataniRepository(private val context: Context) {
 
     suspend fun getOsceEnvelope(): OsceEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("osce.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            val jsonString = readSectionText("osce.json") ?: return@withContext null
             moshi.adapter(OsceEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
@@ -388,9 +420,7 @@ class WataniRepository(private val context: Context) {
 
     suspend fun getAuscultationEnvelope(): AuscultationEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("auscultation.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            val jsonString = readSectionText("auscultation.json") ?: return@withContext null
             moshi.adapter(AuscultationEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
@@ -406,9 +436,9 @@ class WataniRepository(private val context: Context) {
      */
     suspend fun getEcgEnvelope(): EcgEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("ecg.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            // Encrypted sections_cache (phase-2 hardening): read through
+            // the central crypto point like every other section getter.
+            val jsonString = readSectionText("ecg.json") ?: return@withContext null
             moshi.adapter(EcgEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
@@ -434,9 +464,7 @@ class WataniRepository(private val context: Context) {
 
     suspend fun getDdxEnvelope(): DdxEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("ddx.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            val jsonString = readSectionText("ddx.json") ?: return@withContext null
             moshi.adapter(DdxEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
@@ -445,9 +473,7 @@ class WataniRepository(private val context: Context) {
 
     suspend fun getReverseEnvelope(): ReverseEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("reverse.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            val jsonString = readSectionText("reverse.json") ?: return@withContext null
             moshi.adapter(ReverseEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
@@ -464,9 +490,9 @@ class WataniRepository(private val context: Context) {
      */
     suspend fun getOsceProcedures(): List<ProcedureDto>? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("osce_procedures.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            // Encrypted sections_cache (phase-2 hardening): read through
+            // the central crypto point like every other section getter.
+            val jsonString = readSectionText("osce_procedures.json") ?: return@withContext null
             val listType = com.squareup.moshi.Types.newParameterizedType(
                 List::class.java, ProcedureDto::class.java
             )
@@ -505,9 +531,9 @@ class WataniRepository(private val context: Context) {
      */
     suspend fun getDosingDrills(): List<DosingDrillDto>? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("dosing_drills.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            // Encrypted sections_cache (phase-2 hardening): read through
+            // the central crypto point like every other section getter.
+            val jsonString = readSectionText("dosing_drills.json") ?: return@withContext null
             val listType = com.squareup.moshi.Types.newParameterizedType(
                 List::class.java, DosingDrillDto::class.java
             )
@@ -537,9 +563,7 @@ class WataniRepository(private val context: Context) {
 
     suspend fun getAuscultationArEnvelope(): AuscultationArEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("auscultation_ar.json")
-            if (!file.exists()) return@withContext null
-            val jsonString = file.readText(Charsets.UTF_8)
+            val jsonString = readSectionText("auscultation_ar.json") ?: return@withContext null
             moshi.adapter(AuscultationArEnvelope::class.java).fromJson(jsonString)
         } catch (e: Exception) {
             null
@@ -581,11 +605,13 @@ class WataniRepository(private val context: Context) {
                 return@withContext Result.failure(Exception("محتوى ملف الوصف العربي غير مطابق"))
             }
 
-            if (file.exists()) file.delete()
-            if (!tempFile.renameTo(file)) {
+            // Phase-2 hardening: validated plaintext is stored
+            // encrypted through the central section write point.
+            if (!writeSectionText("auscultation_ar.json", jsonString)) {
                 if (tempFile.exists()) tempFile.delete()
                 return@withContext Result.failure(Exception("تعذر حفظ ملف الوصف العربي"))
             }
+            if (tempFile.exists()) tempFile.delete()
             Result.success(parsed)
         } catch (e: Exception) {
             if (tempFile.exists()) tempFile.delete()
@@ -649,10 +675,11 @@ class WataniRepository(private val context: Context) {
 
     suspend fun getLibraryEnvelope(): LibraryEnvelope? = withContext(Dispatchers.IO) {
         try {
-            val file = getSectionFile("library.json")
-            if (!file.exists()) return@withContext null
+            // Gentle lease: library.json is a restricted file.
+            if (WorkerActivationApi.isRestrictedLeaseExpired(context)) return@withContext null
+            val text = readSectionText("library.json") ?: return@withContext null
             // Books never surface in-app (see LibraryEnvelope.videosOnly).
-            libraryAdapter.fromJson(file.readText(Charsets.UTF_8))?.videosOnly()
+            libraryAdapter.fromJson(text)?.videosOnly()
         } catch (e: Exception) {
             null
         }
@@ -690,20 +717,18 @@ class WataniRepository(private val context: Context) {
                 val text = body.string()
                 val parsed = libraryAdapter.fromJson(text)
                     ?: throw Exception("ملف المكتبة غير صالح")
-                val file = getSectionFile("library.json")
-                val tempFile = File(file.parentFile, "${file.name}.tmp")
-                tempFile.writeText(text, Charsets.UTF_8)
-                // F-07: replace only via a checked rename — the old
-                // copy is the fallback below, so a failed save must
-                // surface as a failure, never as success (the old code
-                // returned success even when the rename failed and the
-                // library then vanished on the next cold start).
-                if (!tempFile.renameTo(file)) {
-                    if (tempFile.exists()) tempFile.delete()
+                // Phase-2 hardening: the index is verified (parsed)
+                // on plaintext above, then stored ENCRYPTED through
+                // the central section write point. F-07 spirit kept:
+                // a failed save surfaces as a failure, never as
+                // success, and the old copy stays as fallback.
+                if (!writeSectionText("library.json", text)) {
                     throw Exception("تعذر حفظ ملف المكتبة على الجهاز")
                 }
+                WorkerActivationApi.noteServerVerified(context)
                 // Books never surface in-app (see LibraryEnvelope.videosOnly);
-                // the raw file on disk stays byte-identical for the cache.
+                // the stored copy stays complete — only the returned
+                // envelope is filtered.
                 return@withContext Result.success(parsed.videosOnly())
             } catch (e: Exception) {
                 lastError = e
@@ -729,13 +754,57 @@ class WataniRepository(private val context: Context) {
     /** Plain side-car SRT file for a video, next to its plain file.
      * Paired strictly by the same item (same base name), never by guesswork:
      * the SRT belongs to this item's id/file only. Stored in the app's
-     * private filesDir (not external storage) and deleted with the item. */
+     * private filesDir (not external storage) and deleted with the item.
+     * LEGACY layout for HLS items (pre-phase-3): new HLS downloads keep
+     * the SRT encrypted inside the encrypted tree (see
+     * [getLibraryEncryptedSubtitleFile]); this path remains for the
+     * non-HLS flow and for migration/deletion of legacy copies. */
     fun getLibrarySubtitleFile(item: LibraryItem): File {
         val plain = getLibraryFile(item)
         return File(plain.parentFile, "${plain.nameWithoutExtension}.srt")
     }
 
+    private fun libraryItemSafeName(item: LibraryItem): String {
+        val rawName = item.id ?: item.fileUrl?.substringAfterLast('/')?.substringBefore('?') ?: "item"
+        return rawName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+    }
+
+    /** Encrypted SRT side-car of an HLS item, inside its encrypted tree:
+     * same file name as the legacy plain side-car, but the CONTENT is in
+     * [sy.medpro.watani.security.ContentEncryption] format (phase-3 task
+     * decision: SRT side-cars are encrypted too, closing the documented
+     * U3 gap for HLS items). */
+    fun getLibraryEncryptedSubtitleFile(item: LibraryItem): File =
+        File(getLibraryHlsEncDir(item), "${libraryItemSafeName(item)}.srt")
+
+    /** Cache temp the encrypted SRT is decrypted into at presentation
+     * time only. Name carries the legacy `decrypt_temp_` prefix, so the
+     * app-close sweep (TempDecryptedFiles) collects it even after a
+     * process kill; [closeLibraryItem] deletes it deterministically. */
+    private fun getLibrarySubtitleTempFile(item: LibraryItem): File {
+        val file = File(context.cacheDir, "decrypt_temp_${libraryItemSafeName(item)}_srt.srt")
+        sy.medpro.watani.ui.security.TempDecryptedFiles.track(file)
+        return file
+    }
+
     fun getLibrarySubtitleFileIfExists(item: LibraryItem): File? {
+        if (isHlsItem(item)) {
+            val enc = getLibraryEncryptedSubtitleFile(item)
+            if (enc.exists()) {
+                // Decrypted ONLY when presented to the player (§4.2
+                // principle, same as the playlists): a small text file
+                // in cacheDir, never a plaintext copy in filesDir.
+                val bytes = sy.medpro.watani.security.ContentEncryption
+                    .decryptFileToBytes(enc) ?: return null
+                val temp = getLibrarySubtitleTempFile(item)
+                return try {
+                    temp.writeBytes(bytes)
+                    temp
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
         val f = getLibrarySubtitleFile(item)
         return if (f.exists()) f else null
     }
@@ -746,12 +815,13 @@ class WataniRepository(private val context: Context) {
     fun isHlsItem(item: LibraryItem): Boolean =
         item.fileUrl?.substringBefore('?')?.endsWith(".m3u8", ignoreCase = true) == true
 
+    /** LEGACY plain HLS tree dir (pre-phase-3 downloads). Kept only so
+     * migration and deletion can find old trees; nothing new is written
+     * here for HLS items. */
     fun getLibraryHlsDir(item: LibraryItem): File {
         val dir = File(context.filesDir, "library_files_plain")
         if (!dir.exists()) dir.mkdirs()
-        val rawName = item.id ?: item.fileUrl?.substringAfterLast('/')?.substringBefore('?') ?: "item"
-        val safe = rawName.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        return File(dir, safe)
+        return File(dir, libraryItemSafeName(item))
     }
 
     fun getLibraryHlsMasterFile(item: LibraryItem): File {
@@ -759,14 +829,172 @@ class WataniRepository(private val context: Context) {
         return File(getLibraryHlsDir(item), name)
     }
 
+    /** Phase-3 (§4.2): the encrypted HLS tree root for an item —
+     * `filesDir/library_hls_enc/<itemId>/`, same relative file names as
+     * the origin tree, every file's content in ContentEncryption format,
+     * plus a small `hls_meta.json` (names + PLAINTEXT sizes) that is the
+     * integrity basis replacing the old whole-tree byte-sum check. */
+    fun getLibraryHlsEncDir(item: LibraryItem): File {
+        val root = File(context.filesDir, "library_hls_enc")
+        if (!root.exists()) root.mkdirs()
+        return File(root, libraryItemSafeName(item))
+    }
+
+    fun getLibraryHlsEncMasterFile(item: LibraryItem): File {
+        val name = item.fileUrl?.substringAfterLast('/')?.substringBefore('?')?.takeIf { it.isNotBlank() } ?: "master.m3u8"
+        return File(getLibraryHlsEncDir(item), name)
+    }
+
+    private fun hlsMetaFile(dir: File): File = File(dir, "hls_meta.json")
+
+    /** Reads `hls_meta.json`: file name -> plaintext size. Null when the
+     * meta file is missing or unparseable (tree treated as absent). */
+    private fun readHlsMeta(dir: File): Map<String, Long>? {
+        val meta = hlsMetaFile(dir)
+        if (!meta.exists()) return null
+        return try {
+            val filesJson = org.json.JSONObject(meta.readText(Charsets.UTF_8))
+                .getJSONObject("files")
+            val out = mutableMapOf<String, Long>()
+            val keys = filesJson.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                out[k] = filesJson.getLong(k)
+            }
+            out
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun writeHlsMeta(dir: File, files: Map<String, Long>): Boolean {
+        return try {
+            val filesJson = org.json.JSONObject()
+            var total = 0L
+            for ((name, size) in files) {
+                filesJson.put(name, size)
+                total += size
+            }
+            val root = org.json.JSONObject()
+                .put("plainTotal", total)
+                .put("files", filesJson)
+            hlsMetaFile(dir).writeText(root.toString())
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** §4.3 downloaded check for the encrypted tree: meta present, the
+     * master listed, and every listed file present at exactly
+     * plaintext size + 28 (12-byte IV + 16-byte GCM tag). A segment that
+     * fails the GCM tag later, at open, fails playback explicitly and
+     * the tree is purged there — the same level the book flow uses
+     * (size at rest, header/tag verified at open). */
+    fun isHlsEncTreeValid(item: LibraryItem): Boolean {
+        val dir = getLibraryHlsEncDir(item)
+        if (!dir.exists()) return false
+        val meta = readHlsMeta(dir) ?: return false
+        val masterName = getLibraryHlsEncMasterFile(item).name
+        if (!meta.containsKey(masterName)) return false
+        return meta.all { (name, plainSize) ->
+            val f = File(dir, name)
+            f.exists() && f.length() == plainSize + 28L
+        }
+    }
+
     private fun hlsDirTotalBytes(dir: File): Long =
         if (!dir.exists()) 0L else dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
     fun isHlsItemDownloaded(item: LibraryItem): Boolean {
+        if (isHlsEncTreeValid(item)) return true
+        // Legacy plain tree, still downloadable-looking until the
+        // scheduled migration (§4.4) re-encrypts or invalidates it.
         val dir = getLibraryHlsDir(item)
         if (!dir.exists() || !getLibraryHlsMasterFile(item).exists()) return false
         val expected = item.size ?: 0L
         return expected <= 0L || hlsDirTotalBytes(dir) == expected
+    }
+
+    /**
+     * Phase-3 §4.4 migration of ONE legacy plain HLS tree, modelled on
+     * [migrateAnyPlainLibraryFile]: the plain tree is first verified
+     * complete by the old rule (whole-tree byte sum == item.size), then
+     * re-encrypted file by file into a temp dir, the meta is written,
+     * the temp dir is renamed into place atomically, the plain SRT
+     * side-car is encrypted into the tree, and only then is the plain
+     * tree deleted. On ANY failure both copies are dropped and the item
+     * shows as not downloaded (§4.4) — never a half-encrypted tree.
+     * Runs on IO (called from LibraryViewModel.loadLibrary and lazily
+     * from [openLibraryItem]); NEVER from a UI state check.
+     */
+    fun migratePlainHlsTree(item: LibraryItem): Boolean {
+        if (!isHlsItem(item)) return false
+        val plainDir = getLibraryHlsDir(item)
+        val plainSrt = getLibrarySubtitleFile(item)
+        if (isHlsEncTreeValid(item)) {
+            // Already migrated earlier; drop any plain leftover.
+            if (plainDir.exists()) plainDir.deleteRecursively()
+            if (plainSrt.exists()) plainSrt.delete()
+            return true
+        }
+        if (!plainDir.exists() || !getLibraryHlsMasterFile(item).exists()) return false
+        val expected = item.size ?: 0L
+        if (expected > 0 && hlsDirTotalBytes(plainDir) != expected) {
+            // Incomplete/corrupt legacy tree: §4.4 — invalidate, do not bless.
+            plainDir.deleteRecursively()
+            if (plainSrt.exists()) plainSrt.delete()
+            return false
+        }
+        val encDir = getLibraryHlsEncDir(item)
+        val tmpDir = File(encDir.parentFile, encDir.name + ".migtmp")
+        fun failMigration(): Boolean {
+            tmpDir.deleteRecursively()
+            encDir.deleteRecursively()
+            plainDir.deleteRecursively()
+            if (plainSrt.exists()) plainSrt.delete()
+            return false
+        }
+        try {
+            if (tmpDir.exists()) tmpDir.deleteRecursively()
+            tmpDir.mkdirs()
+            val meta = mutableMapOf<String, Long>()
+            val plainFiles = plainDir.walkTopDown().filter { it.isFile }.toList()
+            for (plainFile in plainFiles) {
+                val target = File(tmpDir, plainFile.name)
+                if (!sy.medpro.watani.security.ContentEncryption
+                        .encryptFile(context, plainFile, target)
+                ) return failMigration()
+                meta[plainFile.name] = plainFile.length()
+            }
+            if (plainSrt.exists()) {
+                val srtTarget = File(tmpDir, plainSrt.name)
+                if (!sy.medpro.watani.security.ContentEncryption
+                        .encryptFile(context, plainSrt, srtTarget)
+                ) return failMigration()
+            }
+            if (!writeHlsMeta(tmpDir, meta)) return failMigration()
+            if (encDir.exists()) encDir.deleteRecursively()
+            if (!tmpDir.renameTo(encDir)) return failMigration()
+        } catch (_: Exception) {
+            return failMigration()
+        }
+        plainDir.deleteRecursively()
+        if (plainSrt.exists()) plainSrt.delete()
+        return isHlsEncTreeValid(item)
+    }
+
+    /** Scheduled §4.4 migration sweep for every HLS item in the index.
+     * Called once from LibraryViewModel.loadLibrary on IO — heavy disk
+     * work that must never run inside a UI downloaded-state check. */
+    suspend fun migratePlainHlsTrees(items: List<LibraryItem>) = withContext(Dispatchers.IO) {
+        for (item in items) {
+            try {
+                migratePlainHlsTree(item)
+            } catch (_: Exception) {
+                // One bad tree must not stop the rest of the sweep.
+            }
+        }
     }
 
     private fun resolvePlaylistUrl(baseUrl: String, ref: String): String {
@@ -778,44 +1006,87 @@ class WataniRepository(private val context: Context) {
         url.substringAfterLast('/').substringBefore('?').takeIf { it.isNotBlank() } ?: "file"
 
     /** Downloads an HLS tree: master + variant playlists + all segments,
-     * preserving relative names so the local master plays offline as-is.
-     * No Range resume in this first version (fresh dir per attempt);
-     * total bytes must equal item.size, exactly like the single-file flow.
-     * Stored plain in the private filesDir (same level as SRT side-cars);
-     * at-rest encryption for HLS trees is a later step, not this fix. */
+     * preserving relative names. No Range resume in this version (fresh
+     * temp dir per attempt); the PLAINTEXT byte total must equal
+     * item.size, exactly like the single-file flow.
+     *
+     * Phase-3 (§4.2): every fetched file is verified as plaintext and
+     * then stored ENCRYPTED — segments land in a `.part` plaintext file
+     * inside the tree's temp dir only for the moments between fetch and
+     * [sy.medpro.watani.security.ContentEncryption.encryptFile], which
+     * are deleted immediately; playlists are encrypted from memory. The
+     * finished tree (temp dir + `hls_meta.json`) is renamed into
+     * `library_hls_enc/<itemId>/` atomically, so a half-encrypted tree
+     * never appears as downloaded. No plaintext segment persists. */
     private suspend fun downloadHlsItem(
         item: LibraryItem,
         onProgress: (Float) -> Unit
     ): LibraryDownloadResult {
         val url = item.fileUrl ?: return LibraryDownloadResult.fail("رابط الملف غير متوفر في محتوى المكتبة")
-        val dir = getLibraryHlsDir(item)
-        if (isHlsItemDownloaded(item)) {
-            return LibraryDownloadResult.ok(getLibraryHlsMasterFile(item))
+        if (isHlsEncTreeValid(item)) {
+            return LibraryDownloadResult.ok(getLibraryHlsEncMasterFile(item))
         }
-        if (dir.exists()) dir.deleteRecursively()
-        dir.mkdirs()
+        // A legacy plain tree still on disk: migrate it instead of
+        // re-downloading (§4.4); a failed migration invalidates it and
+        // the fresh download below proceeds from zero.
+        if (getLibraryHlsDir(item).exists()) {
+            migratePlainHlsTree(item)
+            if (isHlsEncTreeValid(item)) {
+                return LibraryDownloadResult.ok(getLibraryHlsEncMasterFile(item))
+            }
+        }
+        val encDir = getLibraryHlsEncDir(item)
+        val tmpDir = File(encDir.parentFile, encDir.name + ".dltmp")
+        if (tmpDir.exists()) tmpDir.deleteRecursively()
+        if (encDir.exists()) encDir.deleteRecursively()
+        tmpDir.mkdirs()
         var downloaded = 0L
         val total = item.size ?: 0L
-        fun fetchTo(targetUrl: String, targetFile: File): Boolean {
+        val meta = mutableMapOf<String, Long>()
+        fun fail(msg: String): LibraryDownloadResult {
+            tmpDir.deleteRecursively()
+            return LibraryDownloadResult.fail(msg)
+        }
+        /** Fetches one segment to a transient `.part`, encrypts it to
+         * its final name inside the temp tree, deletes the `.part`. */
+        fun fetchSegmentEncrypted(targetUrl: String, fileName: String): Boolean {
             val request = try {
                 WorkerActivationApi.contentRequestForUrl(context, targetUrl)
             } catch (_: IllegalArgumentException) {
                 return false
             } ?: return false
+            val partFile = File(tmpDir, "$fileName.part")
             try {
                 client.newCall(request).execute().use { resp ->
                     if (!resp.isSuccessful) return false
                     val body = resp.body ?: return false
-                    targetFile.parentFile?.mkdirs()
+                    partFile.parentFile?.mkdirs()
                     body.byteStream().use { input ->
-                        java.io.FileOutputStream(targetFile).use { output -> input.copyTo(output) }
+                        java.io.FileOutputStream(partFile).use { output -> input.copyTo(output) }
                     }
                 }
             } catch (_: Exception) {
+                partFile.delete()
                 return false
             }
-            downloaded += targetFile.length()
+            val plainSize = partFile.length()
+            val ok = sy.medpro.watani.security.ContentEncryption
+                .encryptFile(context, partFile, File(tmpDir, fileName))
+            partFile.delete()
+            if (!ok) return false
+            meta[fileName] = plainSize
+            downloaded += plainSize
             if (total > 0) onProgress((downloaded.toFloat() / total).coerceIn(0f, 0.9f))
+            return true
+        }
+        /** Encrypts playlist text (already held in memory) into the tree. */
+        fun storePlaylistEncrypted(text: String, fileName: String): Boolean {
+            val bytes = text.toByteArray(Charsets.UTF_8)
+            if (!sy.medpro.watani.security.ContentEncryption
+                    .encryptBytesToFile(bytes, File(tmpDir, fileName))
+            ) return false
+            meta[fileName] = bytes.size.toLong()
+            downloaded += bytes.size
             return true
         }
         fun readText(targetUrl: String): String? {
@@ -833,15 +1104,11 @@ class WataniRepository(private val context: Context) {
                 null
             }
         }
-        fun fail(msg: String): LibraryDownloadResult {
-            dir.deleteRecursively()
-            return LibraryDownloadResult.fail(msg)
-        }
         val masterText = readText(url)
             ?: return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
-        val masterFile = File(dir, playlistFileName(url))
-        masterFile.writeText(masterText)
-        downloaded += masterFile.length()
+        if (!storePlaylistEncrypted(masterText, playlistFileName(url))) {
+            return fail("فشل تشفير الملف")
+        }
         val variantUrls = mutableListOf<String>()
         val masterLines = masterText.lines()
         for (i in masterLines.indices) {
@@ -856,34 +1123,39 @@ class WataniRepository(private val context: Context) {
         for (variantUrl in variantUrls) {
             val variantText = readText(variantUrl)
                 ?: return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
-            val variantFile = File(dir, playlistFileName(variantUrl))
-            variantFile.writeText(variantText)
-            downloaded += variantFile.length()
-            for (line in variantText.lines()) {
-                val ref = line.trim()
-                if (ref.isEmpty() || ref.startsWith("#")) continue
+            if (!storePlaylistEncrypted(variantText, playlistFileName(variantUrl))) {
+                return fail("فشل تشفير الملف")
+            }
+            for (ref in HlsPlaylistRewrite.mediaReferences(variantText)) {
                 val segUrl = resolvePlaylistUrl(variantUrl, ref)
-                if (!fetchTo(segUrl, File(dir, playlistFileName(segUrl)))) {
+                if (!fetchSegmentEncrypted(segUrl, playlistFileName(segUrl))) {
                     return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
                 }
             }
         }
         for ((playlistUrl, playlistText) in playlistsToScan) {
-            for (line in playlistText.lines()) {
-                val ref = line.trim()
-                if (ref.isEmpty() || ref.startsWith("#")) continue
+            for (ref in HlsPlaylistRewrite.mediaReferences(playlistText)) {
                 val segUrl = resolvePlaylistUrl(playlistUrl, ref)
-                if (!fetchTo(segUrl, File(dir, playlistFileName(segUrl)))) {
+                if (!fetchSegmentEncrypted(segUrl, playlistFileName(segUrl))) {
                     return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
                 }
             }
         }
-        if (total > 0 && hlsDirTotalBytes(dir) != total) {
+        // Integrity, §4.3: plaintext byte total (recorded per file in
+        // the meta) must equal item.size — the on-disk ciphertext total
+        // is larger by 28 bytes per file and is never compared here.
+        if (total > 0 && downloaded != total) {
             return fail("حجم الملف غير مطابق للمتوقع")
+        }
+        if (!writeHlsMeta(tmpDir, meta)) {
+            return fail("تعذر حفظ ملف المكتبة على الجهاز")
+        }
+        if (!tmpDir.renameTo(encDir)) {
+            return fail("تعذر حفظ الملف على الجهاز")
         }
         downloadLibrarySubtitle(item)
         onProgress(1f)
-        return LibraryDownloadResult.ok(getLibraryHlsMasterFile(item))
+        return LibraryDownloadResult.ok(getLibraryHlsEncMasterFile(item))
     }
 
     /** Best-effort download of the item's SRT side-car. Never fails the
@@ -903,6 +1175,26 @@ class WataniRepository(private val context: Context) {
             } catch (_: IllegalArgumentException) {
                 return
             } ?: return
+            if (isHlsItem(item)) {
+                // Phase-3: an HLS item's SRT is stored ENCRYPTED inside
+                // its encrypted tree. It is fetched to a transient temp,
+                // encrypted into place, and the temp is deleted — no
+                // plaintext SRT persists in filesDir.
+                val target = getLibraryEncryptedSubtitleFile(item)
+                target.parentFile?.mkdirs()
+                val tmp = java.io.File(target.parentFile, "${target.name}.tmp")
+                client.newCall(request).execute().use { resp ->
+                    if (!resp.isSuccessful) return
+                    val body = resp.body ?: return
+                    body.byteStream().use { input ->
+                        java.io.FileOutputStream(tmp).use { output -> input.copyTo(output) }
+                    }
+                    sy.medpro.watani.security.ContentEncryption
+                        .encryptFile(context, tmp, target)
+                    tmp.delete()
+                }
+                return
+            }
             val target = getLibrarySubtitleFile(item)
             // Detector fix (b9): write to a temp file and rename — a
             // direct write interrupted mid-stream left a partial SRT
@@ -1038,9 +1330,20 @@ class WataniRepository(private val context: Context) {
         plainFile.delete()
         encFile.delete()
         getLibrarySubtitleFile(item).delete()
+        // Playback-session temps first: their names are derived from
+        // the tree's meta, which is about to be deleted.
+        deleteHlsSessionTemps(item)
+        // Legacy plain HLS tree + the phase-3 encrypted tree (same
+        // recursive delete — the encrypted layout changes only file
+        // contents, never the tree shape, so every existing deletion
+        // path keeps working on it).
         val hlsDir = getLibraryHlsDir(item)
         if (hlsDir.exists()) hlsDir.deleteRecursively()
-        return !plainFile.exists() && !encFile.exists() && !hlsDir.exists()
+        val hlsEncDir = getLibraryHlsEncDir(item)
+        if (hlsEncDir.exists()) hlsEncDir.deleteRecursively()
+        val srtTemp = getLibrarySubtitleTempFile(item)
+        if (srtTemp.exists()) srtTemp.delete()
+        return !plainFile.exists() && !encFile.exists() && !hlsDir.exists() && !hlsEncDir.exists()
     }
 
     suspend fun downloadLibraryItem(
@@ -1192,6 +1495,92 @@ class WataniRepository(private val context: Context) {
         return File(context.cacheDir, "decrypt_temp_$safe")
     }
 
+    // ------------------------------------------------------------------
+    // Phase-3 (§4.2): HLS playback session.
+    //
+    // openLibraryItem for an HLS item no longer returns a stored file:
+    // the three playlists (master + variants, each < a few KB) are
+    // decrypted IN MEMORY ONLY, rewritten, and written as small temp
+    // playlists in cacheDir (registered in TempDecryptedFiles, so the
+    // app-close sweep collects them even after a process kill):
+    //  - master: variant references become the bare temp file names;
+    //  - variants: segment references become watani-enc:/// URIs that
+    //    EncryptedHlsDataSource decrypts in memory while streaming.
+    // Segments are NEVER written decrypted anywhere. The returned File
+    // keeps the exact signature/call chain the UI already uses.
+    // ------------------------------------------------------------------
+
+    /** Deterministic session temp playlist for [fileName] of [item]. */
+    private fun getHlsSessionTempFile(item: LibraryItem, fileName: String): File {
+        val file = sy.medpro.watani.ui.security.TempDecryptedFiles.newTempFile(
+            context, "hls_${libraryItemSafeName(item)}_$fileName"
+        )
+        return file
+    }
+
+    /** Every session temp this item could have produced (master +
+    * variants listed in its meta). Used by close/delete. */
+    private fun hlsSessionTempFiles(item: LibraryItem): List<File> {
+        val names = mutableSetOf<String>()
+        names += getLibraryHlsEncMasterFile(item).name
+        readHlsMeta(getLibraryHlsEncDir(item))?.keys
+            ?.filter { it.endsWith(".m3u8", ignoreCase = true) }
+            ?.let { names += it }
+        return names.map { getHlsSessionTempFile(item, it) }
+    }
+
+    private fun deleteHlsSessionTemps(item: LibraryItem) {
+        for (file in hlsSessionTempFiles(item)) {
+            sy.medpro.watani.ui.security.TempDecryptedFiles.delete(file)
+        }
+    }
+
+    /** Builds the playback session for an encrypted HLS tree. Returns
+     * the temp master playlist file, or null on any failure — including
+     * a segment-independent failure here (playlist GCM failure): the
+     * caller then purges the tree so the next tap re-downloads, the
+     * same open-time integrity behaviour as the book flow. */
+    private fun buildHlsPlaybackSession(item: LibraryItem): File? {
+        val encDir = getLibraryHlsEncDir(item)
+        val masterEnc = getLibraryHlsEncMasterFile(item)
+        val masterBytes = sy.medpro.watani.security.ContentEncryption
+            .decryptFileToBytes(masterEnc) ?: return null
+        val masterText = String(masterBytes, Charsets.UTF_8)
+        deleteHlsSessionTemps(item)
+        // Decrypt + rewrite each variant playlist referenced by the master.
+        val variantNames = HlsPlaylistRewrite.mediaReferences(masterText)
+            .map { HlsPlaylistRewrite.fileNameOf(it) }
+            .filter { it.endsWith(".m3u8", ignoreCase = true) }
+        val itemKey = libraryItemSafeName(item)
+        for (variantName in variantNames) {
+            val variantBytes = sy.medpro.watani.security.ContentEncryption
+                .decryptFileToBytes(File(encDir, variantName)) ?: return null
+            val rewritten = HlsPlaylistRewrite.rewriteVariant(
+                String(variantBytes, Charsets.UTF_8), itemKey
+            )
+            val temp = getHlsSessionTempFile(item, variantName)
+            try {
+                temp.writeText(rewritten, Charsets.UTF_8)
+            } catch (_: Exception) {
+                return null
+            }
+        }
+        // A master that itself carries segments (single-playlist tree):
+        // rewrite its segment references the same way.
+        val rewrittenMaster = if (variantNames.isEmpty()) {
+            HlsPlaylistRewrite.rewriteVariant(masterText, itemKey)
+        } else {
+            HlsPlaylistRewrite.rewriteMaster(masterText)
+        }
+        val masterTemp = getHlsSessionTempFile(item, masterEnc.name)
+        return try {
+            masterTemp.writeText(rewrittenMaster, Charsets.UTF_8)
+            masterTemp
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     // Serializes opens: two concurrent opens of the same book used to
     // decrypt into the same cache temp path and interleave, producing a
     // corrupt plaintext that the reader then rejected as "not in PDF
@@ -1205,9 +1594,25 @@ class WataniRepository(private val context: Context) {
         }
 
         if (isHlsItem(item)) {
-            val master = getLibraryHlsMasterFile(item)
-            return@withContext if (master.exists()) Result.success(master)
-            else Result.failure(Exception("تعذر العثور على الملف المحمّل"))
+            // Phase-3 (§4.2/§4.4): a legacy plain tree still on disk is
+            // migrated on this first open after the update if the
+            // scheduled sweep has not reached it yet.
+            if (!isHlsEncTreeValid(item) && getLibraryHlsDir(item).exists()) {
+                migratePlainHlsTree(item)
+            }
+            if (!isHlsEncTreeValid(item)) {
+                return@withContext Result.failure(Exception("تعذر العثور على الملف المحمّل"))
+            }
+            val sessionMaster = buildHlsPlaybackSession(item)
+            if (sessionMaster == null || !sessionMaster.exists()) {
+                // Playlist integrity failed at open: purge the tree so
+                // the next tap re-downloads (book-flow behaviour).
+                deleteLibraryItem(item)
+                return@withContext Result.failure(
+                    Exception("النسخة المحفوظة تالفة — حُذفت، أعد تحميل الفيديو")
+                )
+            }
+            return@withContext Result.success(sessionMaster)
         }
 
         val encFile = getLibraryEncryptedFile(item)
@@ -1247,5 +1652,14 @@ class WataniRepository(private val context: Context) {
     fun closeLibraryItem(item: LibraryItem) {
         val tempFile = getDecryptTempFile(item)
         if (tempFile.exists()) tempFile.delete()
+        if (isHlsItem(item)) {
+            // Phase-3 (§4.2): closing an HLS reader deletes its session
+            // playlist temps and the decrypted SRT temp — after close,
+            // no plaintext of the item remains anywhere (segments were
+            // never written at all).
+            deleteHlsSessionTemps(item)
+            val srtTemp = getLibrarySubtitleTempFile(item)
+            if (srtTemp.exists()) srtTemp.delete()
+        }
     }
 }

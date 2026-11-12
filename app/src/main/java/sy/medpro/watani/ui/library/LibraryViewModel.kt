@@ -40,6 +40,20 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             result.fold(
                 onSuccess = { envelope ->
                     _state.update { it.copy(isLoading = false, library = envelope) }
+                    // Phase-3 §4.4: schedule the one-time migration of
+                    // legacy PLAIN HLS trees to the encrypted layout.
+                    // It runs off the UI path (repository switches to
+                    // IO) and never inside a downloaded-state check —
+                    // isItemDownloaded is called from derivedStateOf in
+                    // the UI and must stay a cheap read.
+                    val allItems = envelope?.subjects.orEmpty()
+                        .flatMap { (it.books.orEmpty()) + (it.videos.orEmpty()) }
+                    if (allItems.isNotEmpty()) {
+                        viewModelScope.launch {
+                            repository.migratePlainHlsTrees(allItems)
+                            _state.update { it }
+                        }
+                    }
                 },
                 onFailure = { error ->
                     _state.update { it.copy(isLoading = false, error = error.localizedMessage ?: "تعذر تحميل المكتبة") }

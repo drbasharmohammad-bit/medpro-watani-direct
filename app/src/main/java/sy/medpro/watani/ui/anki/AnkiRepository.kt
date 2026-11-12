@@ -45,11 +45,12 @@ class AnkiRepository(private val context: Context) {
         .add(KotlinJsonAdapterFactory())
         .build()
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.NONE })
-        .build()
+    private val client = sy.medpro.watani.security.NetworkPinning.apply(
+        OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.NONE })
+    ).build()
 
     suspend fun load(): AnkiSet = withContext(Dispatchers.IO) {
         // Working copy: adopted cache first, bundled asset as the

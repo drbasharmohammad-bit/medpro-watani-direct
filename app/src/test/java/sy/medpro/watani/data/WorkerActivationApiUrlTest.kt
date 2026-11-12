@@ -66,6 +66,33 @@ class WorkerActivationApiUrlTest {
     }
 
     @Test
+    fun libraryPrefix_isRestrictedSincePhase3() {
+        // Phase-3: HLS playlists, segments and SRT side-cars under
+        // library/ route through the gateway like every other
+        // restricted path (downloads AND streaming).
+        assertTrue(WorkerActivationApi.isRestrictedPath("library/cardiology/stemi/stemi_master.m3u8"))
+        assertTrue(WorkerActivationApi.isRestrictedPath("library/cardiology/stemi/seg_000.ts"))
+        assertTrue(WorkerActivationApi.isRestrictedPath("library/cardiology/stemi/stemi.srt"))
+        assertTrue(WorkerActivationApi.isRestrictedPath("v1/library/cardiology/stemi/stemi_720p.m3u8"))
+        // Sibling lookalikes must NOT be swallowed by the prefix.
+        assertFalse(WorkerActivationApi.isRestrictedPath("libraryx/seg_000.ts"))
+        assertFalse(WorkerActivationApi.isRestrictedPath("cases.json"))
+        // The pre-existing restricted set is unchanged.
+        assertTrue(WorkerActivationApi.isRestrictedPath("books/cardio.pdf"))
+        assertTrue(WorkerActivationApi.isRestrictedPath("library.json"))
+    }
+
+    @Test
+    fun gatewayUrl_forLibrarySegment_keepsLiteralSlashes() {
+        val url = WorkerActivationApi.buildGatewayUrl("library/cardiology/stemi/seg_000.ts")
+        assertEquals(
+            "https://watani-api.drbasharmohammad.workers.dev/v1/content?path=library/cardiology/stemi/seg_000.ts",
+            url
+        )
+        assertFalse(url.contains("%2F"))
+    }
+
+    @Test
     fun decodedPath_rejectsRemainingPercent_doubleEncoding() {
         // Clean paths pass.
         assertTrue(WorkerActivationApi.validateDecodedPath("questions/foo.json"))

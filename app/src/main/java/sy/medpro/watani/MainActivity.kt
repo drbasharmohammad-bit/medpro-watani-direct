@@ -103,6 +103,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Crashlytics test path (phase-2 hardening, DEBUG BUILDS ONLY):
+        // `adb shell am start -n sy.medpro.watani/.MainActivity
+        // --ez watani_test_crash true` crashes the app on launch so the
+        // Firebase console pipeline can be verified end to end. Release
+        // builds compile this branch out via BuildConfig.DEBUG=false.
+        if (sy.medpro.watani.BuildConfig.DEBUG &&
+            intent?.getBooleanExtra("watani_test_crash", false) == true
+        ) {
+            throw RuntimeException("Watani Crashlytics test crash (debug builds only)")
+        }
         enableEdgeToEdge()
         // Offline-activation fix (Nov 2026, doctor's order): when
         // connectivity returns while the app is open, verify the
@@ -185,6 +195,20 @@ class MainActivity : ComponentActivity() {
                 // order): the old first-run welcome screen is abolished —
                 // no buttons, no sign-in prompt; the video plays, tap
                 // skips, and it advances to the main interface on end.
+                // Phase-2 min-version gate: initialised SYNCHRONOUSLY
+                // from the persisted last-known minVersion (offline
+                // semantics in data/AppVersionGate), then refreshed
+                // from GET /v1/config after every successful fetch —
+                // the effect below runs once per cold start, which is
+                // the app's config fetch point.
+                var updateRequired by remember {
+                    mutableStateOf(sy.medpro.watani.data.AppVersionGate.isUpdateRequired(context))
+                }
+                LaunchedEffect(Unit) {
+                    try {
+                        updateRequired = sy.medpro.watani.data.AppVersionGate.refreshFromServer(context)
+                    } catch (_: Exception) { }
+                }
                 var showSplash by remember { mutableStateOf(true) }
                 var pendingTab by remember { mutableStateOf<AppTab?>(null) }
                 var pendingDrawer by remember { mutableStateOf<String?>(null) }
@@ -250,6 +274,10 @@ class MainActivity : ComponentActivity() {
                             gateDialogMessage = gate.userMessage
                             return false
                         }
+                        if (sy.medpro.watani.data.WorkerActivationApi.isRestrictedLeaseExpired(context)) {
+                            gateDialogMessage = sy.medpro.watani.data.WorkerActivationApi.LEASE_EXPIRED_MESSAGE
+                            return false
+                        }
                         if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
                             pendingTab = tab
                             showActivationPrompt = true
@@ -260,7 +288,11 @@ class MainActivity : ComponentActivity() {
                     return true
                 }
 
-                if (showSplash) {
+                if (updateRequired) {
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        sy.medpro.watani.ui.security.UpdateRequiredScreen()
+                    }
+                } else if (showSplash) {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         VideoSplashScreen(onDone = { showSplash = false })
                     }
@@ -387,6 +419,8 @@ class MainActivity : ComponentActivity() {
                         val drawerGate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
                         if (!drawerGate.allowed) {
                             gateDialogMessage = drawerGate.userMessage
+                        } else if (sy.medpro.watani.data.WorkerActivationApi.isRestrictedLeaseExpired(context)) {
+                            gateDialogMessage = sy.medpro.watani.data.WorkerActivationApi.LEASE_EXPIRED_MESSAGE
                         } else if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
                             pendingDrawer = title
                             showActivationPrompt = true

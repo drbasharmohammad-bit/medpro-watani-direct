@@ -1,6 +1,7 @@
 package sy.medpro.watani.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.provider.Settings
@@ -90,7 +91,38 @@ object WorkerActivationApi {
     /** Last FCM token uploaded to /v1/devices/register (dedup key). */
     private const val KEY_LAST_FCM_TOKEN = "last_fcm_token"
 
-    /** Restricted prefixes under v1/ (contract) + the exact library.json file. */
+    // Phase-2 hardening (Nov 2026): gentle lease + min-version state,
+    // stored in the same (now encrypted) prefs files. The lease stamp
+    // is per-account; the known min-version is device-level (global file).
+    private const val KEY_LAST_VERIFIED_AT = "last_server_verified_at"
+    private const val KEY_KNOWN_MIN_VERSION = "known_min_version"
+
+    /** Gentle-lease window: 30 days without a successful server
+     * verification locks DOWNLOADED restricted sections (free content
+     * is never affected, downloads are never deleted by this path). */
+    const val LEASE_DURATION_MS = 30L * 24 * 3600 * 1000
+
+    const val LEASE_EXPIRED_MESSAGE =
+        "مرّ وقت طويل دون اتصال بالخادم — اتصل بالإنترنت مرة واحدة لتجديد الوصول إلى الأقسام المحمّلة. المحتوى المجاني يعمل كالمعتاد."
+
+    /** Pure lease decision (unit-tested): a never-verified install
+     * (stamp 0 — e.g. activated before this build existed) is NOT
+     * locked; its next successful refresh/download stamps it. */
+    fun isLeaseExpired(lastVerifiedAtMs: Long, nowMs: Long): Boolean =
+        lastVerifiedAtMs != 0L && nowMs - lastVerifiedAtMs > LEASE_DURATION_MS
+
+    /**
+     * THE gateway set: restricted prefixes under v1/ (contract) + the
+     * exact library.json file. ONE set, shared by every classification
+     * in this file (downloads, streaming, wipe inventory) — phase-3
+     * hardening (Nov 2026) added "library/" so HLS playlists, segments
+     * and SRT side-cars are fetched through the gateway with the
+     * activation token like every other restricted path, in downloads
+     * (WataniRepository) and in streaming (GatewayHlsDataSource) alike.
+     * The gateway (watani-api) carries the mirror-image prefix in its
+     * own RESTRICTED_PREFIXES; the two lists are one contract and must
+     * change together.
+     */
     private val RESTRICTED_PREFIXES = listOf(
         "questions/",
         "questions_en/",
@@ -98,15 +130,17 @@ object WorkerActivationApi {
         "dawrat_jami3at/",
         "uworld/",
         "explanations/",
-        "books/"
+        "books/",
+        "library/"
     )
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+    private val client = sy.medpro.watani.security.NetworkPinning.apply(
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+    ).build()
 
     // ------------------------------------------------------------------
     // Device id.
@@ -131,7 +165,7 @@ object WorkerActivationApi {
             null
         }
         if (!androidId.isNullOrBlank()) return androidId
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = activationPrefs(context, null)
         var uuid = prefs.getString(KEY_DEVICE_UUID, null)
         if (uuid.isNullOrBlank()) {
             uuid = UUID.randomUUID().toString()
@@ -149,12 +183,92 @@ object WorkerActivationApi {
      * file, so it survives sign-out/sign-in with the same account and
      * is never inherited by a different account on this device. A null
      * uid (signed out) resolves to the legacy global file, whose
-     * activation keys are only ever read for one-time migration. */
-    private fun activationPrefs(context: Context, uid: String?) =
-        context.getSharedPreferences(
-            if (uid.isNullOrBlank()) PREFS_NAME else PREFS_NAME + "_" + uid,
-            Context.MODE_PRIVATE
+     * activation keys are only ever read for one-time migration.
+     *
+     * Phase-2 hardening (Nov 2026): the store is now
+     * EncryptedSharedPreferences (AES256-GCM values / AES256-SIV keys,
+     * MasterKey in the Android Keystore). First access per file runs a
+     * one-time migration: snapshot the legacy PLAIN values, create the
+     * encrypted store over the same file, clear the plain values, then
+     * re-write the snapshot encrypted. If encrypted storage cannot be
+     * created on this device (Keystore failure), the plain store is
+     * kept untouched as a fallback — activation must never break over
+     * a storage-encryption failure. Instances are cached per file name
+     * so migration runs once per process. */
+    private val encryptedPrefsCache = mutableMapOf<String, SharedPreferences>()
+
+    private fun activationPrefs(context: Context, uid: String?): SharedPreferences {
+        val name = if (uid.isNullOrBlank()) PREFS_NAME else PREFS_NAME + "_" + uid
+        // The whole check-and-migrate runs under one lock: two threads
+        // migrating the same file concurrently would snapshot each
+        // other's half-encrypted state and corrupt the store.
+        synchronized(encryptedPrefsCache) {
+            encryptedPrefsCache[name]?.let { return it }
+            val prefs = migrateToEncryptedPrefs(context, name)
+            encryptedPrefsCache[name] = prefs
+            return prefs
+        }
+    }
+
+    private fun migrateToEncryptedPrefs(context: Context, name: String): SharedPreferences {
+        val plain = context.getSharedPreferences(name, Context.MODE_PRIVATE)
+        val snapshot: Map<String, Any?> = try {
+            plain.all?.toMap() ?: emptyMap()
+        } catch (_: Exception) {
+            emptyMap()
+        }
+        val encrypted = try {
+            val masterKey = androidx.security.crypto.MasterKey.Builder(context)
+                .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            androidx.security.crypto.EncryptedSharedPreferences.create(
+                context,
+                name,
+                masterKey,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            Log.w("WorkerActivationApi", "encrypted prefs unavailable for $name; keeping plain store", e)
+            return plain
+        }
+        // Migration runs ONLY when the file still holds PLAIN entries
+        // under our known key names. On later cold starts the file
+        // already holds EncryptedSharedPreferences entries (encrypted
+        // key names never equal a literal key name), the snapshot then
+        // contains only ciphertext, and re-writing it through the
+        // encrypting handle would double-encrypt and destroy the
+        // store — so an already-encrypted file is returned untouched.
+        val knownPlainKeys = setOf(
+            KEY_ACTIVATED, KEY_CODE, KEY_TOKEN, KEY_EXPIRES_AT,
+            KEY_DEVICE_UUID, KEY_LAST_FCM_TOKEN,
+            KEY_LAST_VERIFIED_AT, KEY_KNOWN_MIN_VERSION
         )
+        if (snapshot.keys.any { it in knownPlainKeys }) {
+            try {
+                // Clear the plain values from the shared underlying file
+                // FIRST (synchronous commit), then re-write them through
+                // the encrypting handle. The snapshot lives only in
+                // memory between the two steps.
+                plain.edit().clear().commit()
+                val editor = encrypted.edit()
+                for ((key, value) in snapshot) {
+                    when (value) {
+                        is Boolean -> editor.putBoolean(key, value)
+                        is String -> editor.putString(key, value)
+                        is Long -> editor.putLong(key, value)
+                        is Int -> editor.putInt(key, value)
+                        is Float -> editor.putFloat(key, value)
+                        is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+                    }
+                }
+                editor.apply()
+            } catch (e: Exception) {
+                Log.w("WorkerActivationApi", "plain->encrypted prefs migration failed for $name", e)
+            }
+        }
+        return encrypted
+    }
 
     private fun currentUid(): String? =
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
@@ -182,7 +296,7 @@ object WorkerActivationApi {
     private fun adoptLegacyTokenIfOwned(context: Context, uid: String) {
         val owned = activationPrefs(context, uid)
         if (!owned.getString(KEY_TOKEN, null).isNullOrBlank()) return
-        val legacy = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val legacy = activationPrefs(context, null)
         val token = legacy.getString(KEY_TOKEN, null) ?: return
         if (token.isBlank()) return
         if (tokenPayloadUid(token) != uid) return
@@ -306,7 +420,70 @@ object WorkerActivationApi {
             .putString(KEY_CODE, code)
             .putString(KEY_TOKEN, token)
             .putLong(KEY_EXPIRES_AT, expiresAt)
+            // Gentle lease: every successful server-side activation
+            // round-trip (activate / restore / refresh all land here)
+            // is a successful verification and restarts the 30-day window.
+            .putLong(KEY_LAST_VERIFIED_AT, System.currentTimeMillis())
             .apply()
+    }
+
+    // ------------------------------------------------------------------
+    // Gentle lease + min-version state (phase-2 hardening).
+    // ------------------------------------------------------------------
+
+    /** Records a successful server verification (a restricted fetch
+     * that the gateway accepted). Called by the repository on download
+     * success; activation paths stamp via [storeActivation]. */
+    fun noteServerVerified(context: Context) {
+        try {
+            activationPrefs(context, currentUid()).edit()
+                .putLong(KEY_LAST_VERIFIED_AT, System.currentTimeMillis())
+                .apply()
+        } catch (_: Exception) {
+        }
+    }
+
+    /** True when downloaded restricted sections must be treated as
+     * unavailable until one successful online verification. Free
+     * content is never gated by this. */
+    fun isRestrictedLeaseExpired(context: Context): Boolean {
+        val uid = currentUid() ?: return false
+        val last = activationPrefs(context, uid).getLong(KEY_LAST_VERIFIED_AT, 0L)
+        return isLeaseExpired(last, System.currentTimeMillis())
+    }
+
+    /** Last minVersion learned from GET /v1/config; 0 = never learned
+     * (an offline user who never learned a value is never blocked). */
+    fun knownMinVersion(context: Context): Int =
+        activationPrefs(context, null).getInt(KEY_KNOWN_MIN_VERSION, 0)
+
+    fun saveKnownMinVersion(context: Context, minVersion: Int) {
+        if (minVersion <= 0) return
+        activationPrefs(context, null).edit()
+            .putInt(KEY_KNOWN_MIN_VERSION, minVersion)
+            .apply()
+    }
+
+    /** GET /v1/config (public): returns the parsed body or null on any
+     * failure — callers keep their last known values offline. */
+    suspend fun fetchAppConfig(): JSONObject? = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$WORKER_BASE/v1/config")
+                .get()
+                .build()
+            client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext null
+                val text = resp.body?.string() ?: return@withContext null
+                try {
+                    JSONObject(text)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     // ------------------------------------------------------------------
@@ -323,12 +500,24 @@ object WorkerActivationApi {
             val trimmed = code.trim()
             if (trimmed.isBlank()) return@withContext Pair(false, "يرجى إدخال كود تفعيل صالح.")
             try {
+                // Phase-2 hardening: authenticated activation — the
+                // Firebase ID token (same getIdToken pattern as the
+                // neighbouring restore/register calls) proves the uid/
+                // email; the gateway verifies it and, when present,
+                // takes the identity from the token ONLY. The legacy
+                // body fields stay for the transitional contract.
+                val idToken = try {
+                    user.getIdToken(false).await().token
+                } catch (_: Exception) {
+                    null
+                }
                 val bodyJson = JSONObject().apply {
                     put("code", trimmed)
                     put("uid", user.uid)
                     put("email", user.email ?: "")
                     put("displayName", user.displayName ?: "")
                     put("deviceId", deviceId(context))
+                    if (!idToken.isNullOrBlank()) put("idToken", idToken)
                 }.toString()
                 val request = Request.Builder()
                     .url("$WORKER_BASE/v1/activate")
@@ -429,7 +618,7 @@ object WorkerActivationApi {
                 } catch (_: Exception) {
                     return@withContext
                 }
-                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val prefs = activationPrefs(context, null)
                 if (prefs.getString(KEY_LAST_FCM_TOKEN, null) == token) return@withContext
                 val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return@withContext
                 val idToken = try {

@@ -19,6 +19,9 @@ import java.io.File
  *    the UI stops listing them as downloaded.
  *  - library_files_plain (plain library files + SRT side-cars; the
  *    directory holds library items only).
+ *  - library_hls_enc (phase-3: the encrypted HLS trees + their
+ *    hls_meta.json files + any in-flight .dltmp/.migtmp temp tree of an
+ *    interrupted download/migration; library items only).
  *  - encrypted_content (the ContentEncryption dir; it holds restricted
  *    library ciphertext and, after the pending repository swap,
  *    restricted section ciphertext — nothing free).
@@ -87,6 +90,7 @@ object RestrictedInventory {
         }
         // 3. Library dirs (library-only contents).
         deleteDirContents(File(context.filesDir, "library_files_plain"))
+        deleteDirContents(File(context.filesDir, "library_hls_enc"))
         try {
             deleteDirContents(
                 sy.medpro.watani.security.ContentEncryption.getEncryptedDir(context)

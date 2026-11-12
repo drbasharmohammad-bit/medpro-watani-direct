@@ -5,6 +5,9 @@ plugins {
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
+  // Phase-2 hardening (Nov 2026): Crashlytics symbol/mapping upload
+  // wiring for release builds (firebase-crashlytics via the BoM).
+  alias(libs.plugins.crashlytics)
 }
 
 android {
@@ -56,12 +59,19 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      // No R8 yet: obfuscation + shrinking without a device-proven rule
-      // set risks breaking Moshi/Room/Firebase reflection at runtime.
-      // The release variant differs from debug in debuggable=false and
-      // the file name — that is what makes it "final", not shrinking.
-      isMinifyEnabled = false
-      isShrinkResources = false
+      // Phase-2 hardening (Nov 2026): R8 enabled with the keep-rule
+      // set in proguard-rules.pro, which keeps every reflection-bound
+      // surface this app actually uses (all Moshi DTO packages,
+      // Retrofit interface, Firebase/GMS, Kotlin metadata). The rules
+      // were prepared in Nov 2026 for exactly this switch; see the
+      // header of proguard-rules.pro for the retained surfaces and
+      // the phase-2 report for the verification status.
+      isMinifyEnabled = true
+      isShrinkResources = true
+      proguardFiles(
+        getDefaultProguardFile("proguard-android-optimize.txt"),
+        "proguard-rules.pro"
+      )
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
@@ -127,6 +137,10 @@ dependencies {
   debugImplementation(libs.firebase.appcheck.debug)
   implementation(libs.firebase.auth)
   implementation(libs.firebase.messaging)
+  // Phase-2 hardening (Nov 2026): Crashlytics (version via the BoM)
+  // and EncryptedSharedPreferences for the activation token store.
+  implementation(libs.firebase.crashlytics)
+  implementation(libs.androidx.security.crypto)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)

@@ -284,7 +284,7 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                         dir.listFiles()?.forEach { file ->
                                             if (file.name.endsWith(".json") && !file.name.contains("cases") && !file.name.contains("guide") && !file.name.contains("osce")) {
                                                 try {
-                                                    val text = file.readText(Charsets.UTF_8)
+                                                    val text = sy.medpro.watani.data.SectionCacheCrypto.readText(context, file) ?: throw IllegalStateException("section cache unreadable")
                                                     val moshi = com.squareup.moshi.Moshi.Builder().add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
                                                     val env = moshi.adapter(SubjectEnvelope::class.java).fromJson(text)
                                                     val subjName = env?.subjectName ?: file.name.substringBefore(".json")

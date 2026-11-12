@@ -119,6 +119,66 @@ object ContentEncryption {
         }
     }
 
+    // ------------------------------------------------------------------
+    // Phase-2 hardening (Nov 2026): in-memory byte helpers, same format
+    // as encryptFile/decryptFile (12-byte IV prepended, AES/GCM/NoPadding,
+    // 128-bit tag, same Android Keystore key). Used by the sections_cache
+    // store (data/SectionCacheCrypto), which verifies plaintext BEFORE
+    // saving and therefore encrypts bytes it already holds instead of
+    // round-tripping a plaintext file on disk.
+    // ------------------------------------------------------------------
+
+    /** Encrypts [plain] and writes IV+ciphertext to [out] atomically
+     * (temp file in the same directory + checked rename). */
+    fun encryptBytesToFile(plain: ByteArray, out: File): Boolean {
+        return try {
+            val key = getOrCreateKey()
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, key)
+            val tmp = File(out.parentFile, out.name + ".enc.tmp")
+            FileOutputStream(tmp).use { output ->
+                output.write(cipher.iv)
+                output.write(cipher.doFinal(plain))
+            }
+            if (out.exists()) out.delete()
+            if (!tmp.renameTo(out)) {
+                tmp.delete()
+                return false
+            }
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /** Decrypts a file written by [encryptBytesToFile] / [encryptFile].
+     * Returns null on ANY failure — including a legacy plaintext file,
+     * whose bytes fail the GCM tag check; callers use that signal for
+     * one-time plaintext migration (see SectionCacheCrypto). */
+    fun decryptFileToBytes(encryptedFile: File): ByteArray? {
+        return try {
+            if (!encryptedFile.exists() || encryptedFile.length() <= IV_SIZE) return null
+            val key = getOrCreateKey()
+            FileInputStream(encryptedFile).use { input ->
+                val iv = ByteArray(IV_SIZE)
+                if (input.read(iv) != IV_SIZE) return null
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH, iv))
+                val rest = input.readBytes()
+                cipher.doFinal(rest)
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun encryptTextToFile(text: String, out: File): Boolean =
+        encryptBytesToFile(text.toByteArray(Charsets.UTF_8), out)
+
+    fun decryptFileToText(encryptedFile: File): String? =
+        decryptFileToBytes(encryptedFile)?.let { String(it, Charsets.UTF_8) }
+
     fun getEncryptedDir(context: Context): File {
         val dir = File(context.filesDir, "encrypted_content")
         if (!dir.exists()) {

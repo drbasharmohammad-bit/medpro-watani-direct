@@ -40,37 +40,25 @@ import java.io.File
  *    other free content — encrypting free content would add cost with
  *    no protection benefit, and the brief restricts the set.
  *
- * INTEGRATION STATUS — READ HONESTLY:
- * This module implements the full generalized mechanism (store, read,
- * migrate, temp discipline) and is wired to app close via SecurityChecks.
- * The repository call-site swap for question JSONs (downloadSection
- * writing .enc + getSubjectEnvelope/getCasesEnvelope decrypting through
- * here) is NOT applied in this branch: swapping the section readers
- * without a compiling build to verify against risks breaking question
- * loading outright, and local/CI builds are unavailable on this branch
- * (no push to main). The swap is a small, enumerated follow-up — see
- * "REPOSITORY SWAP (pending)" below — and until it lands, question JSONs
- * and library.json remain plaintext in sections_cache (pre-existing
- * state, unchanged by this branch). Library items are encrypted today
- * (pre-existing) and stay encrypted. Nothing in this file claims the
- * question-JSON swap is done.
- *
- * REPOSITORY SWAP (pending, for the follow-up that has a build to test):
- *  1. WataniRepository.downloadSection: after the count verification,
- *     encrypt the verified file with [storePlaintext] instead of leaving
- *     the plaintext file, and record the section as downloaded.
- *  2. WataniRepository.getSubjectEnvelope/getCasesEnvelope/getGuideEnvelope
- *     (and getLibraryEnvelope for library.json): replace the direct
- *     readText with [readRestrictedText], which decrypts to a registered
- *     temp, reads it, and deletes the temp in a finally block.
- *  3. WataniRepository.getSectionFile callers that read the file directly
- *     (ui/drawer/AllDrawerScreens sections_cache scans, ExamSimulatorScreen)
- *     must go through the repository instead of the raw dir, or the raw
- *     dir stays as a plaintext bypass.
- *  4. One-time migration on first launch after the swap: [migratePlainFile]
- *     for every sections_cache file whose path [isRestrictedPath] matches,
- *     then delete the plaintext original (migrate only deletes the plain
- *     file after encryptFile returns true).
+ * INTEGRATION STATUS — UPDATED by phase-2 hardening (Nov 2026):
+ * The repository swap HAS landed, in a form that keeps the existing
+ * sections_cache file NAMES (so the downloaded-sections registry and
+ * the RestrictedInventory wipe keep working unchanged) and encrypts
+ * the bytes in place through data/SectionCacheCrypto — the single
+ * read/write point every WataniRepository getter now uses:
+ *  1. WataniRepository.downloadSection verifies size/hash/count on the
+ *     plaintext download first (order unchanged), then stores it via
+ *     SectionCacheCrypto.writeBytes and deletes the plaintext temp.
+ *  2. Every envelope getter (subjects, cases, guide, osce, library…)
+ *     reads through SectionCacheCrypto.readText, which decrypts
+ *     transparently and migrates a legacy plaintext file to encrypted
+ *     form on first read.
+ *  3. The direct sections_cache readers (AllDrawerScreens scans,
+ *     ExamSimulatorScreen) now read through SectionCacheCrypto too —
+ *     no plaintext bypass remains in the tree.
+ * This store's own encrypted_content layout stays as designed for
+ * reader-style files; library items keep their pre-existing encrypted
+ * path. Both layers share the same ContentEncryption key/format.
  *
  * TEMP-DELETION PATHS (implemented in this branch):
  *  P1. Reader back-navigation: LibraryScreen.onReaderBack already calls
@@ -104,8 +92,13 @@ import java.io.File
  *      (pre-existing design; subtitles are text tracks, not the video).
  *      Encrypting them is possible through this store but was not done,
  *      to avoid breaking the player's subtitle loading unverified.
- *  U4. Direct sections_cache readers (AllDrawerScreens, ExamSimulatorScreen)
- *      bypass this store until the repository swap (step 3 above) lands.
+ *      UPDATE (phase-3, Nov 2026): HLS items' SRT side-cars ARE now
+ *      encrypted — stored in ContentEncryption format inside the
+ *      item's library_hls_enc tree and decrypted to a registered cache
+ *      temp only when presented to the player (see WataniRepository).
+ *      The plaintext layout survives only for legacy/non-HLS copies.
+ *  U4. (Resolved in phase-2, Nov 2026: the direct sections_cache
+ *      readers now decrypt through data/SectionCacheCrypto.)
  *
  * HONEST LIMIT (applies to the whole encryption layer): AES/GCM via the
  * Android Keystore protects files at rest against casual copying (another
