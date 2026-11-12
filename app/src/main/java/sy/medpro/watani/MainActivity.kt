@@ -113,6 +113,25 @@ class MainActivity : ComponentActivity() {
         ) {
             throw RuntimeException("Watani Crashlytics test crash (debug builds only)")
         }
+        // Whole-app root block (doctor's order, build 1.2.8): the
+        // multi-signal verdict (RootBlock — blocking needs hits in
+        // >= 2 independent signal categories, so a stock-ROM student
+        // is never locked out by a lone test-keys/busybox signal) is
+        // computed BEFORE any content wiring. On a blocked device the
+        // revocation callback is never registered, Firebase is never
+        // initialised, the ViewModel is never created and nothing is
+        // fetched or shown — the only UI is the block screen, whose
+        // button finishes the activity.
+        if (sy.medpro.watani.ui.security.RootBlockAndroid.isBlocked(this)) {
+            enableEdgeToEdge()
+            sy.medpro.watani.ui.security.SecurityChecks.install(this)
+            setContent {
+                WataniTheme(darkTheme = false) {
+                    sy.medpro.watani.ui.security.RootBlockedScreen(onClose = { finish() })
+                }
+            }
+            return
+        }
         enableEdgeToEdge()
         // Offline-activation fix (Nov 2026, doctor's order): when
         // connectivity returns while the app is open, verify the
