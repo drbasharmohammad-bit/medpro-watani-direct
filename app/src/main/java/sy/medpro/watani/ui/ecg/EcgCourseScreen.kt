@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -340,7 +341,8 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                     // cannot be called from inside it.
                     val mediumWidth = isMediumWidth()
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize().widthIn(max = WidthBreakpoints.CONTENT_MAX).padding(16.dp),
+                        modifier = Modifier.fillMaxSize().widthIn(max = WidthBreakpoints.CONTENT_MAX),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         if (usedSample) {
@@ -483,7 +485,8 @@ private fun EcgMethodScreen(envelope: EcgEnvelope?, store: EcgProgressStore, onB
     var tick by remember { mutableStateOf(0) }
     EcgSubScaffold(title = "منهج القراءة", onBack = onBack) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(steps) { step ->
@@ -540,7 +543,8 @@ private fun EcgPatternsScreen(
     val grouped = patterns.groupBy { it.category ?: "أنماط" }
     EcgSubScaffold(title = "مكتبة الأنماط", onBack = onBack) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             grouped.forEach { (category, list) ->
@@ -600,7 +604,8 @@ private fun EcgPatternDetailScreen(
     }
     EcgSubScaffold(title = pattern.ar ?: "نمط", onBack = onBack) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
@@ -675,7 +680,8 @@ private fun EcgGuidedListScreen(
     val patternsById = (envelope?.patterns ?: emptyList()).associateBy { it.id }
     EcgSubScaffold(title = "القارئ الموجَّه", onBack = onBack) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(strips) { strip ->

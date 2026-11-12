@@ -762,11 +762,20 @@ class MainActivity : ComponentActivity() {
                                     // inset the bar pads for internally)
                                     // and an 8dp bottom gap (was 12dp).
                                     // Icons/labels/behavior are identical.
+                                    // Bottom-bar crop fix (device report 11 Nov):
+                                    // the app is edge-to-edge, so without the
+                                    // navigation-bar inset the floating bar's
+                                    // own bottom sits under the gesture zone
+                                    // and looks sliced. navigationBarsPadding()
+                                    // lifts the whole slot by the system inset
+                                    // (Scaffold measures it, so content
+                                    // innerPadding grows with it).
                                     if (!readerFullscreen)
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                                            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                                            .navigationBarsPadding(),
                                         shape = MaterialTheme.shapes.extraLarge,
                                         color = MaterialTheme.colorScheme.surface,
                                         shadowElevation = 8.dp
