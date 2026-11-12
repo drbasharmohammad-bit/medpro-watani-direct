@@ -216,27 +216,16 @@ class MainActivity : ComponentActivity() {
                 var gateDialogMessage by remember { mutableStateOf<String?>(null) }
 
                 // min_version floor (build 1.2.3, protection phase 2):
-                // read once at startup from the gateway config channel
-                // (GET /v1/config — the same channel as the exam date
-                // and contact links). A null/absent floor (offline,
-                // field missing) means NO restriction: updateRequired
-                // stays false and this build behaves exactly as before.
-                // The app never writes the floor; raising it is an
-                // admin-side act for the later pull-from-Pages phase.
-                var minVersionFloor by remember { mutableStateOf(0) }
-                LaunchedEffect(Unit) {
-                    sy.medpro.watani.data.WorkerActivationApi.fetchMinVersionAsync { floor ->
-                        if (floor != null && floor > 0) minVersionFloor = floor
-                    }
-                }
-                val installedVersionCode = remember {
-                    try {
-                        androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(
-                            context.packageManager.getPackageInfo(context.packageName, 0)
-                        ).toInt()
-                    } catch (_: Exception) { 0 }
-                }
-                val updateRequired = installedVersionCode > 0 && minVersionFloor > installedVersionCode
+                // SUPERSEDED as the enforcement point by the phase-2
+                // hardening gate above (AppVersionGate): both read the
+                // same `minVersion` field from GET /v1/config, and
+                // AppVersionGate adds the persisted last-known value
+                // with offline cold-start semantics, so the floor
+                // feature lives on there — one gate, one state. The
+                // in-memory 1.2.3 duplicate (and its second render
+                // branch below) was removed at the 1.2.8 merge; the
+                // app still never WRITES the floor — raising it stays
+                // an admin-side act.
 
                 // Gateway revocation event (M3): any repository fetch that
                 // gets 401/403 clears + wipes and emits here; the prompt
@@ -295,15 +284,6 @@ class MainActivity : ComponentActivity() {
                 } else if (showSplash) {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         VideoSplashScreen(onDone = { showSplash = false })
-                    }
-                } else if (updateRequired) {
-                    // min_version floor: this build is below the gateway's
-                    // required minimum — a polite update block replaces
-                    // the whole interface, so no content is fetched
-                    // behind it. Inert whenever the floor is absent or
-                    // not above the installed versionCode.
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        UpdateRequiredGate()
                     }
                 } else if (currentUser == null) {
                     // Sign-in gate (doctor's order, build 1.2.3): opening
@@ -1365,56 +1345,3 @@ private fun GateBlockedMessage(message: String, onBackHome: () -> Unit) {
             }
         }
     }
-}
-
-/**
- * min_version floor block (build 1.2.3): shown when the gateway config's
- * minVersion is above the installed versionCode. Deliberately has no
- * bypass and no action button — the only way forward is updating the
- * app. It replaces the whole interface, so no content fetch happens
- * behind it. Never shown when the floor is absent or not above the
- * installed build.
- */
-@Composable
-private fun UpdateRequiredGate() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaroonPrimary)
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    Icons.Default.SystemUpdate,
-                    contentDescription = null,
-                    tint = MaroonPrimary,
-                    modifier = Modifier.size(48.dp)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "يلزم تحديث التطبيق",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    color = MaroonPrimary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "هذه النسخة لم تعد مدعومة. حدّث التطبيق إلى أحدث إصدار للمتابعة.",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            }
-        }
-    }
-}
