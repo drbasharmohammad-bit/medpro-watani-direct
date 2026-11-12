@@ -1345,3 +1345,4 @@ private fun GateBlockedMessage(message: String, onBackHome: () -> Unit) {
             }
         }
     }
+}
