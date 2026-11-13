@@ -20,7 +20,8 @@ import com.squareup.moshi.Moshi
  *   comparison is the honest declared-vs-actual check for any value.
  *   Every non-subject envelope downloaded through downloadSection has
  *   its OWN branch here (cases/cases_de, guide, ddx, reverse,
- *   auscultation, osce, ecg, osce_procedures, dosing_drills): an
+ *   auscultation, osce, ecg, osce_procedures, dosing_drills,
+ *   concepts): an
  *   envelope shape without a branch falls into
  *   the subject check, counts 0 and can NEVER download (the 1.2 defect
  *   fixed in 1.2.1 — auscultation, German cases and OSCE all failed
@@ -159,6 +160,21 @@ object SectionVerification {
             val actualCount = drills?.size ?: 0
             if (drills == null || actualCount == 0) {
                 throw IllegalStateException("ملف تدريبات الجرعات بلا تدريبات — أعد التحميل.")
+            }
+            return actualCount
+        }
+        if (path == "concepts.json") {
+            // Build 1.2.13: the «ادرس مع ميد برو» pack is a units
+            // envelope with NO declared count field in its contract —
+            // without this branch it would fall into the subject check,
+            // count 0 and never download (the exact 1.2.1 defect
+            // class). Honest check: the pack must parse and carry at
+            // least one unit; the returned count is the real number
+            // of units (the manifest entry's count is built from it).
+            val conceptsEnv = moshi.adapter(ConceptsEnvelope::class.java).fromJson(jsonString)
+            val actualCount = conceptsEnv?.units?.size ?: 0
+            if (conceptsEnv == null || actualCount == 0) {
+                throw IllegalStateException("ملف مفاهيم «ادرس مع ميد برو» بلا وحدات — أعد التحميل.")
             }
             return actualCount
         }

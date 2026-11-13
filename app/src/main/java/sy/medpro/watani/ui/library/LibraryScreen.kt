@@ -26,6 +26,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.LibraryItem
 import sy.medpro.watani.data.LibrarySubject
+import sy.medpro.watani.ui.concepts.ConceptUnitScreen
+import sy.medpro.watani.ui.concepts.ConceptsEntryCard
+import sy.medpro.watani.ui.concepts.ConceptsSubjectsScreen
+import sy.medpro.watani.ui.concepts.ConceptsTopicsScreen
+import sy.medpro.watani.ui.concepts.rememberConceptUnits
 import sy.medpro.watani.ui.icons.LibrarySubjectIcon
 import sy.medpro.watani.ui.icons.librarySubjectIconRes
 import sy.medpro.watani.ui.theme.MaroonPrimary
@@ -39,9 +44,23 @@ data class LibraryReaderState(
     val subtitleUrl: String? = null
 )
 
+/** «ادرس مع ميد برو» sub-navigation INSIDE the Library tab (1.2.13):
+ * Home is the video list itself; the concepts subjects/topics/unit
+ * screens replace it while open and back returns through them. */
+private sealed interface ConceptsRoute {
+    object Home : ConceptsRoute
+    object Subjects : ConceptsRoute
+    data class Topics(val subject: String) : ConceptsRoute
+    data class Unit(val unitId: String) : ConceptsRoute
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenChange: ((Boolean) -> Unit)? = null) {
+fun LibraryScreen(
+    viewModel: LibraryViewModel = viewModel(),
+    onReaderFullscreenChange: ((Boolean) -> Unit)? = null,
+    onOpenQuestionById: (String) -> Unit = {}
+) {
     // Team 1 (entry-activation): the Library is gated again per the
     // 30 Oct entry spec — Questions + Library require activation, all
     // other sections are free. Enforcement is the bottom-tab gate in
@@ -50,6 +69,14 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
     // this screen itself renders whatever the repository returns.
     // (The 28 Oct "library is free" note above is superseded.)
     val state by viewModel.state.collectAsState()
+    // «ادرس مع ميد برو» (1.2.13): the concepts pack state + the
+    // in-Library sub-navigation. The pack loads exactly like
+    // dosing_drills.json; while no downloaded pack with units exists
+    // the units stay empty and NOTHING of the section is rendered —
+    // the entry is hidden completely (doctor's conditional-display
+    // rule), and this screen behaves exactly as in 1.2.12.
+    val conceptState = rememberConceptUnits()
+    var conceptsRoute by remember { mutableStateOf<ConceptsRoute>(ConceptsRoute.Home) }
     var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(state.isLoading) {
         if (!state.isLoading) isRefreshing = false
@@ -80,6 +107,46 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
         return
     }
 
+    // «ادرس مع ميد برو» sub-screens: rendered instead of the video
+    // list while open (only reachable when a pack with units exists,
+    // because the entry points below render only then).
+    when (val route = conceptsRoute) {
+        is ConceptsRoute.Subjects -> {
+            ConceptsSubjectsScreen(
+                units = conceptState.units,
+                onSubjectClick = { conceptsRoute = ConceptsRoute.Topics(it) },
+                onBack = { conceptsRoute = ConceptsRoute.Home }
+            )
+            return
+        }
+        is ConceptsRoute.Topics -> {
+            ConceptsTopicsScreen(
+                subject = route.subject,
+                units = conceptState.units,
+                onUnitClick = { conceptsRoute = ConceptsRoute.Unit(it) },
+                onBack = { conceptsRoute = ConceptsRoute.Subjects }
+            )
+            return
+        }
+        is ConceptsRoute.Unit -> {
+            ConceptUnitScreen(
+                unitId = route.unitId,
+                onBack = {
+                    val subject = conceptState.units
+                        .firstOrNull { it.id == route.unitId }?.subject?.trim()
+                    conceptsRoute = if (!subject.isNullOrBlank()) {
+                        ConceptsRoute.Topics(subject)
+                    } else {
+                        ConceptsRoute.Subjects
+                    }
+                },
+                onOpenQuestionById = onOpenQuestionById
+            )
+            return
+        }
+        ConceptsRoute.Home -> Unit
+    }
+
     val library = state.library
     if (library == null || library.subjects.isNullOrEmpty()) {
         PullToRefreshBox(
@@ -93,6 +160,13 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.padding(24.dp)
                 ) {
+                    if (conceptState.units.isNotEmpty()) {
+                        ConceptsEntryCard(
+                            units = conceptState.units,
+                            onClick = { conceptsRoute = ConceptsRoute.Subjects }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     Surface(
                         shape = CircleShape,
                         color = GoldAccent.copy(alpha = 0.18f),
@@ -202,6 +276,17 @@ fun LibraryScreen(viewModel: LibraryViewModel = viewModel(), onReaderFullscreenC
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // «ادرس مع ميد برو» entry (1.2.13): one card at the top
+                // of the Library list — rendered ONLY when a concepts
+                // pack with units is downloaded on this device.
+                if (conceptState.units.isNotEmpty()) {
+                    item {
+                        ConceptsEntryCard(
+                            units = conceptState.units,
+                            onClick = { conceptsRoute = ConceptsRoute.Subjects }
+                        )
+                    }
+                }
                 items(library.subjects!!) { subject ->
                     val items = subject.videos
                     if (items.isNullOrEmpty()) return@items

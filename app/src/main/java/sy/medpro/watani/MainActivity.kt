@@ -1136,7 +1136,12 @@ class MainActivity : ComponentActivity() {
                                                                     onBackHome = { requestTab(AppTab.HOME) }
                                                                 )
                                                             } else {
-                                                                LibraryScreen(onReaderFullscreenChange = { readerFullscreen = it })
+                                                                LibraryScreen(
+                                                                    onReaderFullscreenChange = { readerFullscreen = it },
+                                                                    onOpenQuestionById = { qid ->
+                                                                        viewModel.openQuestionById(qid)
+                                                                    }
+                                                                )
                                                             }
                                                         }
                                                         AppTab.TOOLS -> {
@@ -1232,7 +1237,19 @@ class MainActivity : ComponentActivity() {
                                                         onBack = { viewModel.goBack() },
                                                         sourcePath = screen.sourcePath,
                                                         subjectName = screen.subjectName,
-                                                        ltr = screen.ltr
+                                                        ltr = screen.ltr,
+                                                        onOpenConceptUnit = { unitId ->
+                                                            viewModel.openConceptUnit(unitId)
+                                                        }
+                                                    )
+                                                }
+                                                is ScreenState.ConceptUnit -> {
+                                                    sy.medpro.watani.ui.concepts.ConceptUnitScreen(
+                                                        unitId = screen.unitId,
+                                                        onBack = { viewModel.goBack() },
+                                                        onOpenQuestionById = { qid ->
+                                                            viewModel.openQuestionById(qid)
+                                                        }
                                                     )
                                                 }
                                                 is ScreenState.CasePlayer -> {

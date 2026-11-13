@@ -43,6 +43,12 @@ sealed class ScreenState {
         val ltr: Boolean = false
     ) : ScreenState()
     data class CasePlayer(val caseItem: ClinicalCaseDto) : ScreenState()
+    /** «ادرس مع ميد برو» unit page opened from a quiz question's
+     * «شرح فكرة هالسؤال» link (build 1.2.13) — the Library entry
+     * point navigates inside LibraryScreen itself; this state is
+     * only the cross-screen path from QuizScreen, and back returns
+     * to the quiz through the shared back stack. */
+    data class ConceptUnit(val unitId: String) : ScreenState()
 }
 
 data class UiState(
@@ -408,6 +414,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openCasePlayer(caseItem: ClinicalCaseDto) {
         navigateTo(ScreenState.CasePlayer(caseItem))
+    }
+
+    /** Quiz -> concept unit (1.2.13): opens the unit page over the
+     * quiz; the shared back stack returns to the same quiz. */
+    fun openConceptUnit(unitId: String) {
+        navigateTo(ScreenState.ConceptUnit(unitId))
+    }
+
+    /**
+     * Concept self-test -> bank question (1.2.13): resolves the
+     * question by id in the downloaded banks and opens it in
+     * QuizScreen as a one-question quiz. When the question is not on
+     * the device nothing happens — the unit screen only shows the
+     * button after the same lookup succeeded there.
+     */
+    fun openQuestionById(qid: String) {
+        viewModelScope.launch {
+            val found = repository.findQuestionById(qid) ?: return@launch
+            val (question, title) = found
+            navigateTo(
+                ScreenState.Quiz(
+                    title = title.ifBlank { "سؤال من البنك" },
+                    questions = listOf(question)
+                )
+            )
+        }
     }
 
     suspend fun getSubjectEnvelope(path: String): SubjectEnvelope? {

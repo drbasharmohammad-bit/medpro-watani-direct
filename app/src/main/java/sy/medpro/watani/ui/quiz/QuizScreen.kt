@@ -46,7 +46,9 @@ import sy.medpro.watani.data.MistakesBank
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.QuestionDto
 import sy.medpro.watani.data.WataniGatewaySync
+import sy.medpro.watani.data.findConceptUnit
 import sy.medpro.watani.data.getCorrectIndices
+import sy.medpro.watani.ui.concepts.rememberConceptUnits
 import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.explanation.ExplanationSection
@@ -65,10 +67,15 @@ fun QuizScreen(
     onBack: () -> Unit,
     sourcePath: String? = null,
     subjectName: String? = null,
-    ltr: Boolean = false
+    ltr: Boolean = false,
+    onOpenConceptUnit: (String) -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
+    // «ادرس مع ميد برو» (1.2.13): the downloaded concepts pack, if
+    // any. Empty (no pack on device) -> no question gets a concept
+    // link and this screen behaves exactly as in 1.2.12.
+    val conceptState = rememberConceptUnits()
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         OfflineStudyVault.ensureInitialized(context)
@@ -299,6 +306,28 @@ fun QuizScreen(
                             val cardSubjectLabel = sy.medpro.watani.data.ShareLinks.subjectLabel(
                                 subjectName, sourcePath, title
                             )
+                            // «شرح فكرة هالسؤال» (1.2.13): match this
+                            // question's topic — the quiz title (the
+                            // topic it was opened from) plus any topic
+                            // strings the question itself carries —
+                            // against the downloaded concept units by
+                            // normalized exact text match. No match ->
+                            // null -> no link is rendered at all.
+                            val conceptUnit = remember(
+                                conceptState.units, subjectName, title,
+                                question.id, question.topics
+                            ) {
+                                if (conceptState.units.isEmpty()) {
+                                    null
+                                } else {
+                                    val candidates = listOf(title) +
+                                        question.topics.orEmpty()
+                                            .mapNotNull { it as? String }
+                                    findConceptUnit(
+                                        conceptState.units, subjectName, candidates
+                                    )
+                                }
+                            }
 
                             QuestionCard(
                                 questionNumber = index + 1,
@@ -312,6 +341,8 @@ fun QuizScreen(
                                 highlightKeywords = highlightKeywords,
                                 timeSpentSeconds = timeTaken,
                                 subjectLabel = cardSubjectLabel,
+                                conceptUnitId = conceptUnit?.id,
+                                onOpenConceptUnit = onOpenConceptUnit,
                                 onToggleRuleOut = { optIdx ->
                                     if (!isAnswered) {
                                         val currentSet = ruledOutMap[index] ?: emptySet()
@@ -436,6 +467,8 @@ fun QuestionCard(
     ltr: Boolean = false,
     timeSpentSeconds: Int? = null,
     subjectLabel: String = "",
+    conceptUnitId: String? = null,
+    onOpenConceptUnit: (String) -> Unit = {},
     onToggleRuleOut: (Int) -> Unit = {},
     onOptionSelected: (Int) -> Unit
 ) {
@@ -673,6 +706,38 @@ fun QuestionCard(
                     }
                 }
             }
+            }
+
+            // «شرح فكرة هالسؤال» (1.2.13): a plain text link under the
+            // options, shown only when this question's topic matched a
+            // downloaded «ادرس مع ميد برو» unit. Uncovered topics (and
+            // devices with no concepts pack) render nothing here.
+            if (!conceptUnitId.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onOpenConceptUnit(conceptUnitId) }
+                        .padding(horizontal = 6.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        Icons.Default.MenuBook,
+                        contentDescription = null,
+                        tint = MaroonPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "شرح فكرة هالسؤال",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaroonPrimary,
+                        style = LocalTextStyle.current.copy(
+                            textDecoration = TextDecoration.Underline
+                        )
+                    )
+                }
             }
 
             AnimatedVisibility(

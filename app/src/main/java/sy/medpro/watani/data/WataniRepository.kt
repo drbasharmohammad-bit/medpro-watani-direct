@@ -561,6 +561,64 @@ class WataniRepository(private val context: Context) {
         }
     }
 
+    /**
+     * «ادرس مع ميد برو» concepts pack (build 1.2.13): the downloaded
+     * "concepts.json" section file from sections_cache — an envelope
+     * of concept units (see ConceptsModels); null when not downloaded
+     * yet (the calling screens then pull it through the manifest +
+     * downloadSection path, exactly like dosing_drills.json). There
+     * is deliberately NO bundled fallback: the Library section stays
+     * hidden until a real pack with units exists on the device.
+     */
+    suspend fun getConcepts(): ConceptsEnvelope? = withContext(Dispatchers.IO) {
+        try {
+            // Encrypted sections_cache (phase-2 hardening): read through
+            // the central crypto point like every other section getter.
+            val jsonString = readSectionText("concepts.json") ?: return@withContext null
+            moshi.adapter(ConceptsEnvelope::class.java).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Finds a bank question by its id across the DOWNLOADED subject
+     * envelopes (topics and sessions), for the concepts self-test
+     * «افتح السؤال في البنك» button. Returns the question plus a
+     * display title (its topic/session name, else the envelope's
+     * subject name), or null when the question is not on the device —
+     * the caller then hides the button entirely. Restricted-envelope
+     * lease rules apply through [getSubjectEnvelope] itself.
+     */
+    suspend fun findQuestionById(qid: String): Pair<QuestionDto, String>? =
+        withContext(Dispatchers.IO) {
+            val wanted = qid.trim()
+            if (wanted.isEmpty()) return@withContext null
+            val paths = _downloadedSectionsFlow.value.map { it.sectionPath }
+            for (path in paths) {
+                // Only subject-envelope families can hold bank
+                // questions; the pack files (cases.json, ecg.json, …)
+                // parse to empty envelopes and are skipped by shape.
+                if (!path.contains('/')) continue
+                val envelope = getSubjectEnvelope(path) ?: continue
+                for (topic in envelope.topics.orEmpty()) {
+                    val hit = topic.questions.orEmpty()
+                        .firstOrNull { it.id?.trim() == wanted }
+                    if (hit != null) {
+                        return@withContext hit to (topic.name ?: envelope.subjectName ?: "")
+                    }
+                }
+                for (session in envelope.sessions.orEmpty()) {
+                    val hit = session.questions.orEmpty()
+                        .firstOrNull { it.id?.trim() == wanted }
+                    if (hit != null) {
+                        return@withContext hit to (session.name ?: envelope.subjectName ?: "")
+                    }
+                }
+            }
+            null
+        }
+
     suspend fun getAuscultationArEnvelope(): AuscultationArEnvelope? = withContext(Dispatchers.IO) {
         try {
             val jsonString = readSectionText("auscultation_ar.json") ?: return@withContext null
