@@ -41,6 +41,16 @@ data class OfflineStudyStats(
     val savedMistakes: List<SavedMistakeItem> = emptyList(),
     val specialtyAnswered: Map<String, Int> = emptyMap(),
     val specialtyCorrect: Map<String, Int> = emptyMap(),
+    /** أداء كل مادة بعنوانها الخام كما يمرّ في recordQuestionAttempt
+     * (بلا تصنيف الفئات الخمس — تلك لـ[specialtyAnswered]/[specialtyCorrect]
+     * وتستعملها واجهات أخرى). تُدفع للبوابة كـsubjectPerformance لتقارير
+     * الدراسة الشهرية عبر تليجرام. */
+    val subjectAnswered: Map<String, Int> = emptyMap(),
+    val subjectCorrect: Map<String, Int> = emptyMap(),
+    /** نشاط يومي: yyyy-MM-dd ← عدد الأسئلة المجابة ذلك اليوم (نفس عدّاد
+     * [answeredToday] لكنه متراكم عبر الأيام، ويُقتطع لآخر 35 يومًا).
+     * يُدفع للبوابة كـdailyActivity. */
+    val dailyActivity: Map<String, Int> = emptyMap(),
     /** أسئلة حُلّت اليوم (بطاقة «يومك» بالرئيسية): عدّاد يومي يُصفَّر
      * عند تغيّر [answeredTodayDate] (yyyy-MM-dd). */
     val answeredToday: Int = 0,
@@ -78,6 +88,8 @@ object OfflineStudyVault {
     private const val KEY_WRONG_FLASHCARDS = "wrong_flashcards"
     private const val KEY_SAVED_MISTAKES_JSON = "saved_mistakes_json"
     private const val KEY_SPECIALTY_STATS_JSON = "specialty_stats_json"
+    private const val KEY_SUBJECT_STATS_JSON = "subject_stats_json"
+    private const val KEY_DAILY_ACTIVITY_JSON = "daily_activity_json"
     private const val KEY_ANSWERED_TODAY = "answered_today"
     private const val KEY_ANSWERED_TODAY_DATE = "answered_today_date"
 
@@ -94,7 +106,10 @@ object OfflineStudyVault {
             dailyStudyHours = 8,
             savedMistakes = emptyList(),
             specialtyAnswered = emptyMap(),
-            specialtyCorrect = emptyMap()
+            specialtyCorrect = emptyMap(),
+            subjectAnswered = emptyMap(),
+            subjectCorrect = emptyMap(),
+            dailyActivity = emptyMap()
         )
     }
 
@@ -122,6 +137,20 @@ object OfflineStudyVault {
     }
 
     private fun todayString(): String = java.time.LocalDate.now().toString()
+
+    /** اقتطاع خريطة النشاط اليومي لآخر 35 يومًا (المفاتيح yyyy-MM-dd
+     * فالترتيب المعجمي هو الترتيب الزمني نفسه). */
+    private fun trimDailyActivity(map: Map<String, Int>): Map<String, Int> =
+        if (map.size <= 35) map
+        else map.entries.sortedBy { it.key }.takeLast(35).associate { it.key to it.value }
+
+    /** خريطة النشاط اليومي بعد إجابة جديدة: اليوم +1 ثم الاقتطاع. */
+    private fun bumpedDailyActivity(current: OfflineStudyStats): Map<String, Int> {
+        val today = todayString()
+        val next = current.dailyActivity.toMutableMap()
+        next[today] = (next[today] ?: 0) + 1
+        return trimDailyActivity(next)
+    }
 
     /** خطوة العدّاد اليومي: يوم جديد يبدأ من 1، ونفس اليوم يزيد 1. */
     private fun bumpedAnsweredToday(current: OfflineStudyStats): Pair<Int, String> {
@@ -175,6 +204,21 @@ object OfflineStudyVault {
             d.specialtyAnswered to d.specialtyCorrect
         }
 
+        // أداء المواد بالعنوان الخام: نفس صيغة JSON الخاصة بإحصاءات الفئات.
+        val subjectJson = prefs.getString(KEY_SUBJECT_STATS_JSON, null)
+        val (subjAns, subjCor) = if (!subjectJson.isNullOrBlank()) {
+            parseSpecialtyStats(subjectJson)
+        } else {
+            emptyMap<String, Int>() to emptyMap()
+        }
+
+        val dailyJson = prefs.getString(KEY_DAILY_ACTIVITY_JSON, null)
+        val dailyAct = if (!dailyJson.isNullOrBlank()) {
+            parseDailyActivity(dailyJson)
+        } else {
+            emptyMap()
+        }
+
         // العدّاد اليومي: تاريخ مخزّن مختلف عن اليوم يعني يومًا جديدًا — يُصفَّر.
         val storedTodayDate = prefs.getString(KEY_ANSWERED_TODAY_DATE, "") ?: ""
         val storedAnsweredToday = prefs.getInt(KEY_ANSWERED_TODAY, 0)
@@ -199,7 +243,10 @@ object OfflineStudyVault {
             wrongFlashcardIds = wrongFlashcards,
             savedMistakes = mistakesList,
             specialtyAnswered = specAns,
-            specialtyCorrect = specCor
+            specialtyCorrect = specCor,
+            subjectAnswered = subjAns,
+            subjectCorrect = subjCor,
+            dailyActivity = dailyAct
         )
         _statsFlow.value = baseStats.copy(examDaysRemaining = effectiveDays(baseStats))
         isInitialized = true
@@ -234,6 +281,28 @@ object OfflineStudyVault {
         persist(context, updated)
     }
 
+    /** Adopts the account's own subject-performance / daily-activity maps
+     * from the server (first sync on a fresh per-uid store only — the sync
+     * gates this on the local maps being empty, so newer local data is
+     * never overwritten). A null argument keeps the local value for that
+     * part; the daily map is trimmed to the last 35 days on adoption. */
+    fun adoptRemoteSubjectStats(
+        context: Context,
+        subjectAnswered: Map<String, Int>?,
+        subjectCorrect: Map<String, Int>?,
+        dailyActivity: Map<String, Int>?
+    ) {
+        ensureInitialized(context)
+        val current = _statsFlow.value
+        val updated = current.copy(
+            subjectAnswered = subjectAnswered ?: current.subjectAnswered,
+            subjectCorrect = subjectCorrect ?: current.subjectCorrect,
+            dailyActivity = dailyActivity?.let { trimDailyActivity(it) } ?: current.dailyActivity
+        )
+        _statsFlow.value = updated
+        persist(context, updated)
+    }
+
     /** Adopts the account's own saved-mistakes list from the server
      * (first sync on a fresh per-uid store only — the sync gates this on
      * the local list being empty, so newer local data is never overwritten). */
@@ -263,6 +332,14 @@ object OfflineStudyVault {
         val nextCorMap = current.specialtyCorrect.toMutableMap().apply {
             if (isCorrect) put(category, (get(category) ?: 0) + 1)
         }
+        // أداء المادة بعنوانها الخام (بلا تصنيف) — لتقارير البوابة الشهرية.
+        val rawTitle = subjectTitle.trim()
+        val nextSubjectAnsMap = current.subjectAnswered.toMutableMap().apply {
+            if (rawTitle.isNotEmpty()) put(rawTitle, (get(rawTitle) ?: 0) + 1)
+        }
+        val nextSubjectCorMap = current.subjectCorrect.toMutableMap().apply {
+            if (isCorrect && rawTitle.isNotEmpty()) put(rawTitle, (get(rawTitle) ?: 0) + 1)
+        }
 
         val nextMistakes = if (!isCorrect) {
             val item = SavedMistakeItem(
@@ -285,6 +362,9 @@ object OfflineStudyVault {
             savedMistakes = nextMistakes,
             specialtyAnswered = nextAnsMap,
             specialtyCorrect = nextCorMap,
+            subjectAnswered = nextSubjectAnsMap,
+            subjectCorrect = nextSubjectCorMap,
+            dailyActivity = bumpedDailyActivity(current),
             answeredToday = nextAnsweredToday,
             answeredTodayDate = nextAnsweredTodayDate
         )
@@ -299,6 +379,7 @@ object OfflineStudyVault {
         val updated = current.copy(
             totalAnswered = current.totalAnswered + 1,
             totalCorrect = current.totalCorrect + 1,
+            dailyActivity = bumpedDailyActivity(current),
             answeredToday = nextAnsweredToday,
             answeredTodayDate = nextAnsweredTodayDate
         )
@@ -494,6 +575,17 @@ object OfflineStudyVault {
         specObj.put("answered", ansObj)
         specObj.put("correct", corObj)
 
+        val subjectObj = JSONObject()
+        val subjAnsObj = JSONObject()
+        val subjCorObj = JSONObject()
+        stats.subjectAnswered.forEach { (k, v) -> subjAnsObj.put(k, v) }
+        stats.subjectCorrect.forEach { (k, v) -> subjCorObj.put(k, v) }
+        subjectObj.put("answered", subjAnsObj)
+        subjectObj.put("correct", subjCorObj)
+
+        val dailyObj = JSONObject()
+        stats.dailyActivity.forEach { (k, v) -> dailyObj.put(k, v) }
+
         val editor = prefs.edit()
             .putInt(KEY_TOTAL_ANSWERED, stats.totalAnswered)
             .putInt(KEY_TOTAL_CORRECT, stats.totalCorrect)
@@ -511,6 +603,8 @@ object OfflineStudyVault {
             .putStringSet(KEY_WRONG_FLASHCARDS, stats.wrongFlashcardIds.map { it.toString() }.toSet())
             .putString(KEY_SAVED_MISTAKES_JSON, mistakesArr.toString())
             .putString(KEY_SPECIALTY_STATS_JSON, specObj.toString())
+            .putString(KEY_SUBJECT_STATS_JSON, subjectObj.toString())
+            .putString(KEY_DAILY_ACTIVITY_JSON, dailyObj.toString())
             .putInt(KEY_ANSWERED_TODAY, stats.answeredToday)
             .putString(KEY_ANSWERED_TODAY_DATE, stats.answeredTodayDate)
             .apply()
@@ -537,6 +631,17 @@ object OfflineStudyVault {
             }
         } catch (_: Exception) {
             emptyList()
+        }
+    }
+
+    private fun parseDailyActivity(json: String): Map<String, Int> {
+        return try {
+            val root = JSONObject(json)
+            val map = mutableMapOf<String, Int>()
+            root.keys().forEach { k -> map[k] = root.optInt(k, 0) }
+            trimDailyActivity(map)
+        } catch (_: Exception) {
+            emptyMap()
         }
     }
 

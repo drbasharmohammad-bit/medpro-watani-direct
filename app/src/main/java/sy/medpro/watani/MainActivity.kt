@@ -535,6 +535,7 @@ class MainActivity : ComponentActivity() {
                                             // المراجعة الذكية، والتواصل — بلا حذف أي محتوى.
                                             val drawerItems = listOf(
                                                 "الملف الشخصي",
+                                                "ربط التليجرام",
                                                 "الاشتراك وتفعيل الحساب",
                                                 "المراجعة الذكية Anki",
                                                 "دليل الدراسة",
@@ -563,6 +564,7 @@ class MainActivity : ComponentActivity() {
                                                 val drawerIconRes = sy.medpro.watani.ui.DrawerIcons.forTitle(title)
                                                 val icon = when (title) {
                                                     "الملف الشخصي" -> Icons.Default.Person
+                                                    "ربط التليجرام" -> Icons.Default.Send
                                                     "الاشتراك وتفعيل الحساب" -> Icons.Default.VpnKey
                                                     "المراجعة الذكية Anki" -> Icons.Default.Style
                                                     "دليل الدراسة" -> Icons.Default.Book
@@ -850,6 +852,7 @@ class MainActivity : ComponentActivity() {
                                         if (activeDrawer != null) {
                                             when (activeDrawer) {
                                                 "الملف الشخصي" -> ProfileScreen(onBack = { drawerScreen = null })
+                                                "ربط التليجرام" -> TelegramLinkScreen(onBack = { drawerScreen = null })
                                                 "الاشتراك وتفعيل الحساب" -> ActivationScreen(
                                                     onBack = { drawerScreen = null },
                                                     onActivationChanged = { viewModel.refreshDownloadedSections() }

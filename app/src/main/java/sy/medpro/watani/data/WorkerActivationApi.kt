@@ -983,6 +983,22 @@ object WorkerActivationApi {
         }
     }
 
+    suspend fun deleteFromWorker(user: FirebaseUser, path: String): WorkerIdResult = withContext(Dispatchers.IO) {
+        val token = googleIdToken(user) ?: return@withContext WorkerIdResult(-1, null)
+        try {
+            val request = Request.Builder()
+                .url("$WORKER_BASE$path")
+                .header("Authorization", "Bearer $token")
+                .delete()
+                .build()
+            client.newCall(request).execute().use { response ->
+                WorkerIdResult(response.code, response.body?.string())
+            }
+        } catch (_: Exception) {
+            WorkerIdResult(-2, null)
+        }
+    }
+
     /**
      * Public exam date (migration phase 3): GET /v1/config/exam-date
      * needs no token (the Firestore doc it replaces was read with no

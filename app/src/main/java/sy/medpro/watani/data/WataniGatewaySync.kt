@@ -183,6 +183,48 @@ object WataniGatewaySync {
                 }
             }
 
+            // Subject performance / daily activity (monthly Telegram
+            // study reports): same first-sync restore rule as the detail
+            // lists above — the server copies are adopted only while the
+            // local maps are empty, so newer local data is never
+            // overwritten. Read fresh from the flow: the restores above
+            // may have changed the vault since `stats` was captured.
+            run {
+                val fresh = OfflineStudyVault.statsFlow.value
+                var adoptAns: Map<String, Int>? = null
+                var adoptCor: Map<String, Int>? = null
+                var adoptDaily: Map<String, Int>? = null
+                if (fresh.subjectAnswered.isEmpty() && fresh.subjectCorrect.isEmpty()) {
+                    val perf = remoteData.optJSONObject("subjectPerformance")
+                    if (perf != null) {
+                        val ansMap = mutableMapOf<String, Int>()
+                        val corMap = mutableMapOf<String, Int>()
+                        perf.optJSONObject("answered")?.let { o ->
+                            o.keys().forEach { k -> ansMap[k] = o.optInt(k, 0) }
+                        }
+                        perf.optJSONObject("correct")?.let { o ->
+                            o.keys().forEach { k -> corMap[k] = o.optInt(k, 0) }
+                        }
+                        if (ansMap.isNotEmpty() || corMap.isNotEmpty()) {
+                            adoptAns = ansMap
+                            adoptCor = corMap
+                        }
+                    }
+                }
+                if (fresh.dailyActivity.isEmpty()) {
+                    remoteData.optJSONObject("dailyActivity")?.let { dailyObj ->
+                        if (dailyObj.length() > 0) {
+                            val dailyMap = mutableMapOf<String, Int>()
+                            dailyObj.keys().forEach { k -> dailyMap[k] = dailyObj.optInt(k, 0) }
+                            if (dailyMap.isNotEmpty()) adoptDaily = dailyMap
+                        }
+                    }
+                }
+                if (adoptAns != null || adoptCor != null || adoptDaily != null) {
+                    OfflineStudyVault.adoptRemoteSubjectStats(context, adoptAns, adoptCor, adoptDaily)
+                }
+            }
+
             // Fresh flow read: the detail-pull above may have restored the
             // mistakes list into the vault — pushing the stale copy would
             // overwrite the cloud list with empty.
@@ -203,6 +245,23 @@ object WataniGatewaySync {
             val favsArr = JSONArray()
             favs.forEach { favsArr.put(it) }
 
+            // Subject performance + daily activity for the monthly
+            // Telegram study reports — read fresh from the flow (the
+            // restore above may have just adopted the server copies, and
+            // pushing stale empty maps would erase them server-side).
+            val freshStats = OfflineStudyVault.statsFlow.value
+            val subjectPerfJson = JSONObject().apply {
+                put("answered", JSONObject().apply {
+                    freshStats.subjectAnswered.forEach { (k, v) -> put(k, v) }
+                })
+                put("correct", JSONObject().apply {
+                    freshStats.subjectCorrect.forEach { (k, v) -> put(k, v) }
+                })
+            }
+            val dailyActivityJson = JSONObject().apply {
+                freshStats.dailyActivity.forEach { (k, v) -> put(k, v) }
+            }
+
             val syncJson = JSONObject().apply {
                 put("totalAnswered", stats.totalAnswered)
                 put("totalCorrect", stats.totalCorrect)
@@ -210,6 +269,8 @@ object WataniGatewaySync {
                 put("mistakes", mistakesArr)
                 put("favorites", favsArr)
                 put("notes", notesJson)
+                put("subjectPerformance", subjectPerfJson)
+                put("dailyActivity", dailyActivityJson)
                 put("lastSyncedAt", System.currentTimeMillis())
             }
 
