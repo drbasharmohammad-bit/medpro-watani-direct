@@ -658,6 +658,11 @@ fun QuestionCard(
                             Text("إظهار الشرح", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     } else {
+                    // Dr. Bashar's rule (13 Nov 2026): a question with NO
+                    // explanation shows NO explanation card at all — the
+                    // old generic fallback line («الإجابة المعتمدة موضحة…»)
+                    // is gone. The card renders only with real text.
+                    if (!question.explanation.isNullOrBlank()) {
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
                         shape = RoundedCornerShape(12.dp),
@@ -683,12 +688,13 @@ fun QuestionCard(
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = if (!question.explanation.isNullOrEmpty()) question.explanation else "الإجابة المعتمدة موضحة باللون الأخضر وفق مفتاح التصحيح الرسمي.",
+                                text = question.explanation ?: "",
                                 fontSize = 14.sp,
                                 lineHeight = 22.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
+                    }
                     }
                     if (showExplanation) {
                         structuredContent?.let { ExplanationSection(content = it) }
@@ -700,7 +706,10 @@ fun QuestionCard(
                         // «إظهار الشرح» button; only the load states
                         // remain here.
                         is ExplanationUiState.Present -> Unit
-                        ExplanationUiState.Loading -> Box(
+                        // Spinner only when this question actually HAS an
+                        // explanation (13 Nov rule): explanation-less
+                        // questions never show a loading arrow.
+                        ExplanationUiState.Loading -> if (hasExplanation) Box(
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -709,7 +718,7 @@ fun QuestionCard(
                                 strokeWidth = 2.dp,
                                 color = MaroonPrimary
                             )
-                        }
+                        } else Unit
                         is ExplanationUiState.Failed -> Column(
                             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
