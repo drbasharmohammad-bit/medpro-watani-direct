@@ -129,6 +129,13 @@ data class QuestionDto(
     @Json(name = "why_correct") val whyCorrect: String? = null,
     @Json(name = "why_wrong") val whyWrong: Map<String, String>? = null,
     @Json(name = "summary") val summary: String? = null,
+    // «الزبدة» (build 1.2.10, doctor's final order 13 Nov 2026): the
+    // question's existing تجميعة block, carried as its own field by the
+    // content builders (the merged explanation string no longer embeds
+    // it) so QuizScreen can offer «الشرح» | «الزبدة» tabs. Nullable with
+    // a default like the structured fields above: files published before
+    // the split parse exactly as before (absent -> null -> no tab row).
+    @Json(name = "zubda") val zubda: String? = null,
     @Json(name = "years") val years: List<Any>?,
     @Json(name = "source") val source: String?,
     @Json(name = "session") val session: String?,

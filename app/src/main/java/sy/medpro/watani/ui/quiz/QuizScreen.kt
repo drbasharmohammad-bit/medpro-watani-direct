@@ -390,6 +390,38 @@ fun QuizScreen(
     }
 }
 
+@Composable
+private fun ExplanationTabChip(
+    text: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) MaroonPrimary else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (selected) MaroonPrimary else MaroonPrimary.copy(alpha = 0.45f)
+        ),
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (selected) Color.White else MaroonPrimary
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuestionCard(
@@ -439,6 +471,17 @@ fun QuestionCard(
     // content) inline in this card's natural scroll column: no text
     // clipping, no capped height, no nested scroll.
     var showExplanation by remember(question.id) { mutableStateOf(false) }
+    // «الزبدة» tabs (build 1.2.10, doctor's final order 13 Nov 2026):
+    // when the question carries a zubda field — its existing تجميعة
+    // block, split out of the merged explanation string by the content
+    // builders with zero content change — the revealed explanation area
+    // opens with a «الشرح» | «الزبدة» tab row side by side. الشرح is
+    // the default and renders exactly what rendered before; الزبدة
+    // swaps the zubda text into the same card area. A question with no
+    // zubda shows NO tab row at all and behaves exactly as in 1.2.9
+    // (the same no-content-no-card rule, one level up).
+    var explanationTab by remember(question.id) { mutableStateOf(0) }
+    val hasZubda = !question.zubda.isNullOrBlank()
     val isFav = favList.contains(qId)
 
     Card(
@@ -658,6 +701,48 @@ fun QuestionCard(
                             Text("إظهار الشرح", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     } else {
+                    // «الشرح» | «الزبدة» tab row (1.2.10): rendered only
+                    // when this question actually carries a zubda text.
+                    // Both contents live in this same natural scroll
+                    // column — no capped heights, no nested scroll — so
+                    // swapping tabs can never clip or trap the text.
+                    if (hasZubda) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ExplanationTabChip(
+                                text = "الشرح",
+                                selected = explanationTab == 0,
+                                modifier = Modifier.weight(1f)
+                            ) { explanationTab = 0 }
+                            ExplanationTabChip(
+                                text = "الزبدة",
+                                selected = explanationTab == 1,
+                                modifier = Modifier.weight(1f)
+                            ) { explanationTab = 1 }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                    if (explanationTab == 1 && hasZubda) {
+                    // The zubda card: the question's تجميعة text verbatim
+                    // (it arrives in the zubda field), in the same card
+                    // chrome as the explanation card.
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.25f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = question.zubda ?: "",
+                            fontSize = 14.sp,
+                            lineHeight = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                    } else {
                     // Dr. Bashar's rule (13 Nov 2026): a question with NO
                     // explanation shows NO explanation card at all — the
                     // old generic fallback line («الإجابة المعتمدة موضحة…»)
@@ -699,6 +784,7 @@ fun QuestionCard(
                     if (showExplanation) {
                         structuredContent?.let { ExplanationSection(content = it) }
                         layerPresent?.let { ExplanationSection(content = it.content) }
+                    }
                     }
                     }
                     when (val ex = explanationState) {
