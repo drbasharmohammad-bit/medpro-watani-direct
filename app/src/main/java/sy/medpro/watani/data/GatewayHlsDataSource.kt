@@ -164,6 +164,12 @@ class GatewayHlsDataSource(
         }
     }
 
+    // Annotated directly (media3's own style — cf. DefaultDataSource
+    // .Factory): with the marker only on the outer class, lint's
+    // UnsafeOptInUsageError did not resolve the opt-in for usages of
+    // this nested class (the 4 lintRelease errors on the merged
+    // 1.2.8 tree); on the class itself it behaves like media3's.
+    @UnstableApi
     class Factory(
         private val context: Context,
         private val fallbackFactory: DataSource.Factory? = null

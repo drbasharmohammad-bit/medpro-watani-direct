@@ -103,8 +103,46 @@ fun VideoPlayerScreen(
     }
 
     val player = remember(videoUri, subtitleUri) {
-        buildWataniPlayer(context, videoUri, subtitleUri) { message ->
-            playerError = message
+        // Phase-3 (§4.2 + §6): THE DataSource chain for all playback —
+        // the single touch point in this screen, its external contract
+        // is unchanged:
+        //  - file:// (session playlist temps, SRT temps) is served by
+        //    DefaultDataSource itself;
+        //  - watani-enc:/// segments of a downloaded tree are decrypted
+        //    in memory by EncryptedHlsDataSource;
+        //  - http(s):// streaming (playlists, segments, subtitle URL)
+        //    goes through GatewayHlsDataSource, which rebuilds every
+        //    request via WorkerActivationApi.contentRequestForUrl with
+        //    the activation token — no direct fetch from the public
+        //    origin remains in any playback path.
+        val gatewayFactory = GatewayHlsDataSource.Factory(context)
+        val encFactory = EncryptedHlsDataSource.Factory(context, gatewayFactory)
+        val dataSourceFactory = DefaultDataSource.Factory(context, encFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(dataSourceFactory)
+        ExoPlayer.Builder(context).setMediaSourceFactory(mediaSourceFactory).build().apply {
+            if (videoUri != null) {
+                val itemBuilder = MediaItem.Builder().setUri(videoUri)
+                if (subtitleUri != null) {
+                    itemBuilder.setSubtitleConfigurations(
+                        listOf(
+                            MediaItem.SubtitleConfiguration.Builder(subtitleUri)
+                                .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+                                .setLanguage("ar")
+                                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                                .build()
+                        )
+                    )
+                }
+                setMediaItem(itemBuilder.build())
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        playerError = error.message ?: "تعذر تشغيل الفيديو"
+                    }
+                })
+                prepare()
+                playWhenReady = true
+            }
         }
     }
 
@@ -210,67 +248,6 @@ fun VideoPlayerScreen(
                     modifier = Modifier.padding(24.dp)
                 )
             }
-        }
-    }
-}
-
-/**
- * Builds the ExoPlayer with the phase-3 DataSource chain — extracted
- * from VideoPlayerScreen's remember block (merged 1.2.8 tree) so the
- * media3 @UnstableApi opt-in sits on a plain function: lint's
- * UnsafeOptInUsageError check does not honor the composable's @OptIn
- * for the GatewayHlsDataSource/EncryptedHlsDataSource usages inside
- * the remember lambda (the 4 errors that failed lintRelease), while a
- * function-level @OptIn is honored by both the compiler and lint.
- * Behaviour is byte-for-byte the construction the lambda performed.
- *
- * Phase-3 (§4.2 + §6): THE DataSource chain for all playback — the
- * single touch point in this screen, its external contract is
- * unchanged:
- *  - file:// (session playlist temps, SRT temps) is served by
- *    DefaultDataSource itself;
- *  - watani-enc:/// segments of a downloaded tree are decrypted
- *    in memory by EncryptedHlsDataSource;
- *  - http(s):// streaming (playlists, segments, subtitle URL)
- *    goes through GatewayHlsDataSource, which rebuilds every
- *    request via WorkerActivationApi.contentRequestForUrl with
- *    the activation token — no direct fetch from the public
- *    origin remains in any playback path.
- */
-@OptIn(UnstableApi::class)
-private fun buildWataniPlayer(
-    context: android.content.Context,
-    videoUri: Uri?,
-    subtitleUri: Uri?,
-    onPlayerError: (String) -> Unit,
-): ExoPlayer {
-    val gatewayFactory = GatewayHlsDataSource.Factory(context)
-    val encFactory = EncryptedHlsDataSource.Factory(context, gatewayFactory)
-    val dataSourceFactory = DefaultDataSource.Factory(context, encFactory)
-    val mediaSourceFactory = DefaultMediaSourceFactory(context)
-        .setDataSourceFactory(dataSourceFactory)
-    return ExoPlayer.Builder(context).setMediaSourceFactory(mediaSourceFactory).build().apply {
-        if (videoUri != null) {
-            val itemBuilder = MediaItem.Builder().setUri(videoUri)
-            if (subtitleUri != null) {
-                itemBuilder.setSubtitleConfigurations(
-                    listOf(
-                        MediaItem.SubtitleConfiguration.Builder(subtitleUri)
-                            .setMimeType(MimeTypes.APPLICATION_SUBRIP)
-                            .setLanguage("ar")
-                            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                            .build()
-                    )
-                )
-            }
-            setMediaItem(itemBuilder.build())
-            addListener(object : Player.Listener {
-                override fun onPlayerError(error: PlaybackException) {
-                    onPlayerError(error.message ?: "تعذر تشغيل الفيديو")
-                }
-            })
-            prepare()
-            playWhenReady = true
         }
     }
 }
