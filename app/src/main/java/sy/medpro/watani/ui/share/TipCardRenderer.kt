@@ -78,7 +78,7 @@ object TipCardRenderer {
             .setLineSpacing(0f, lineSpacing)
             .setIncludePad(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            builder.setBreakStrategy(Layout.BREAK_STRATEGY_HIGH_QUALITY)
+            builder.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY)
                 .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
         }
         return builder.build()
