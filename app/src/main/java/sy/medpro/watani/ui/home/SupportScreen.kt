@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.SupportFavorites
 import sy.medpro.watani.data.SupportMessages
+import sy.medpro.watani.ui.share.shareTipAsImage
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.RoseOutline
@@ -108,12 +110,21 @@ fun SupportScreen(onBack: () -> Unit) {
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
-                                IconButton(onClick = { SupportFavorites.toggle(context, message.id) }) {
-                                    Icon(
-                                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = if (isFavorite) "إزالة من المفضلة" else "إضافة إلى المفضلة",
-                                        tint = if (isFavorite) Color(0xFFB71C1C) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-                                    )
+                                Row {
+                                    IconButton(onClick = { shareTipAsImage(context, message) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Share,
+                                            contentDescription = "مشاركة الرسالة كصورة",
+                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                                        )
+                                    }
+                                    IconButton(onClick = { SupportFavorites.toggle(context, message.id) }) {
+                                        Icon(
+                                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                            contentDescription = if (isFavorite) "إزالة من المفضلة" else "إضافة إلى المفضلة",
+                                            tint = if (isFavorite) Color(0xFFB71C1C) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                                        )
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))

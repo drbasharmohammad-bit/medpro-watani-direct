@@ -33,6 +33,7 @@ import sy.medpro.watani.data.FocusTimerEngine
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.SupportFavorites
 import sy.medpro.watani.data.SupportMessages
+import sy.medpro.watani.ui.share.shareTipAsImage
 import sy.medpro.watani.ui.theme.*
 
 @Composable
@@ -120,6 +121,9 @@ fun HomeDashboardScreen(
                             )
                         }
                         Row {
+                            IconButton(onClick = { shareTipAsImage(context, supportMessage) }) {
+                                Icon(Icons.Default.Share, contentDescription = "مشاركة الرسالة كصورة", tint = MaroonPrimary)
+                            }
                             IconButton(onClick = { supportOffset++ }) {
                                 Icon(Icons.Default.Refresh, contentDescription = "رسالة أخرى", tint = MaroonPrimary)
                             }
