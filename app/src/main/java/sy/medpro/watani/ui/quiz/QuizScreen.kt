@@ -115,8 +115,11 @@ fun QuizScreen(
     // Points sync on quiz exit (Nov 2026 leaderboard fix): the old code
     // synced only when every question was answered, so a partial quiz
     // never moved the leaderboard until the next cold start or full
-    // quiz. Leaving a quiz with answers now pushes the current totals
-    // too (same idempotent absolute set, same swallowed errors).
+    // quiz. Leaving a quiz with answers now attempts a push of the
+    // current totals too (same idempotent absolute set, same swallowed
+    // errors) — since 1.2.15 the attempt passes through the batching
+    // gate in WataniGatewaySync, so it reaches the network only when
+    // progress changed and the minimum sync interval has passed.
     val latestAnswers by rememberUpdatedState(selectedAnswers)
     DisposableEffect(Unit) {
         onDispose {

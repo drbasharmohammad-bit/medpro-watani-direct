@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.data.SubjectEnvelope
@@ -99,6 +101,33 @@ class MainActivity : ComponentActivity() {
             } catch (_: Exception) { }
         }
         super.onDestroy()
+    }
+
+    // Progress-sync flush on backgrounding (build 1.2.15): leaving the
+    // app ends the study session, so attempt a flush here too (this is
+    // the only trigger that also fires when the user leaves from a
+    // non-quiz screen). The batching gate inside WataniGatewaySync
+    // makes the attempt a local-only no-op unless progress changed
+    // and the minimum interval since the last actual sync has passed,
+    // so extra firings (sign-in activity on top, config recreation)
+    // cost nothing. If the process is killed before the flush lands,
+    // nothing is lost: the vault on disk is the source of truth and
+    // the gate fingerprint keeps mismatching until an eligible
+    // trigger pushes. Fully guarded — a lifecycle callback must never
+    // crash (on the root-block path Firebase is not even initialised).
+    override fun onStop() {
+        super.onStop()
+        try {
+            val user = FirebaseAuth.getInstance().currentUser
+            if (user != null) {
+                val appContext = applicationContext
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        sy.medpro.watani.data.WataniGatewaySync.ensureAndSyncUser(appContext, user)
+                    } catch (_: Exception) { }
+                }
+            }
+        } catch (_: Exception) { }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

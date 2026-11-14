@@ -39,13 +39,56 @@ import kotlinx.coroutines.withContext
  * Error handling (documented choice, mirroring the old code): every
  * failure is swallowed silently — no retry is scheduled; the next
  * sync happens at the next existing trigger (sign-in / cold start,
- * quiz completion, quiz exit). A failed pull ABORTS the sync before
+ * quiz completion, quiz exit, and — since 1.2.15 — app
+ * backgrounding). A failed pull ABORTS the sync before
  * any push, so a fresh zeroed vault can never overwrite server
  * totals. There is NO automatic fallback write to Firestore: the
  * Firestore sync object was deleted from the tree in the shutdown
  * round — this gateway path is the only user/progress sync.
+ *
+ * Batching gate (build 1.2.15 — free-plan ceiling): the triggers
+ * invoke [ensureAndSyncUser] exactly as before, but the network sync
+ * itself runs only when the pushed content actually changed since
+ * the last successful push (content fingerprint, see
+ * [ProgressSyncGate]) AND at least
+ * [ProgressSyncGate.MIN_SYNC_INTERVAL_MS] has passed since that
+ * push; otherwise the call is a local-only no-op. The vault on disk
+ * stays the source of truth, so progress made between eligible
+ * syncs is never lost — it is pushed by the next eligible trigger
+ * (worst case the next cold start); only the leaderboard's
+ * freshness lags. When a sync does run, steps 1–6 above execute
+ * unchanged, and the gate state is recorded only after the push
+ * lands, for exactly the values that were pushed.
  */
 object WataniGatewaySync {
+
+    // Build 1.2.15: per-account sync-gate state (fingerprint of the
+    // last successful push + when it happened). Kept apart from the
+    // vault on purpose: the vault is the progress source of truth;
+    // this store only remembers what the server already has.
+    private const val GATE_PREFS_NAME = "watani_sync_gate"
+
+    private fun gatePrefs(context: Context) =
+        context.applicationContext.getSharedPreferences(GATE_PREFS_NAME, Context.MODE_PRIVATE)
+
+    private fun gateFpKey(uid: String) = "fp_$uid"
+
+    private fun gateTsKey(uid: String) = "ts_$uid"
+
+    private fun fingerprintOf(
+        stats: OfflineStudyStats,
+        favorites: List<String>,
+        notesJson: String
+    ): String = ProgressSyncGate.fingerprint(
+        totalAnswered = stats.totalAnswered,
+        totalCorrect = stats.totalCorrect,
+        mistakes = stats.savedMistakes,
+        favorites = favorites,
+        notesJson = notesJson,
+        subjectAnswered = stats.subjectAnswered,
+        subjectCorrect = stats.subjectCorrect,
+        dailyActivity = stats.dailyActivity
+    )
 
     /** One gateway pull. Null = any failure (network, non-200, bad
      * body): the caller must abort the sync without pushing. */
@@ -77,6 +120,40 @@ object WataniGatewaySync {
 
     suspend fun ensureAndSyncUser(context: Context, user: FirebaseUser) = withContext(Dispatchers.IO) {
         try {
+            // Build 1.2.15 gate: bind the vault and read the
+            // per-account detail stores FIRST (all local), then let
+            // [ProgressSyncGate] decide whether a network sync is due
+            // at all. Binding ahead of the first pull changes nothing
+            // in the steps below: the old order pulled the server doc
+            // first, but no stat was read or pushed before binding
+            // either way — and the pull still precedes any push.
+            OfflineStudyVault.switchAccount(context, user.uid)
+            OfflineStudyVault.ensureInitialized(context)
+
+            // Favorites/notes are per-account too (same leak class).
+            val favsPrefsName = if (user.uid.isBlank()) "watani_favorites" else "watani_favorites_${user.uid}"
+            val favsPrefs = context.getSharedPreferences(favsPrefsName, Context.MODE_PRIVATE)
+            var favs = favsPrefs.getStringSet("fav_list", emptySet())?.toList() ?: emptyList()
+
+            val notesPrefsName = if (user.uid.isBlank()) "watani_notes" else "watani_notes_${user.uid}"
+            val notesPrefs = context.getSharedPreferences(notesPrefsName, Context.MODE_PRIVATE)
+            var notesJson = notesPrefs.getString("notes_json", "[]") ?: "[]"
+
+            val gate = gatePrefs(context)
+            if (!ProgressSyncGate.shouldSync(
+                    fingerprintOf(OfflineStudyVault.statsFlow.value, favs, notesJson),
+                    gate.getString(gateFpKey(user.uid), null),
+                    gate.getLong(gateTsKey(user.uid), 0L),
+                    System.currentTimeMillis()
+                )
+            ) {
+                // Clean (nothing new since the last successful push)
+                // or dirty but inside the minimum interval: no network
+                // at all. Deferred progress stays in the vault and is
+                // pushed by the next eligible trigger.
+                return@withContext
+            }
+
             // 1) Ensure the doc exists (create with merge when absent).
             val firstPull = pull(user) ?: return@withContext
             if (!firstPull.exists) {
@@ -88,11 +165,10 @@ object WataniGatewaySync {
                 if (!put(user, initialData)) return@withContext
             }
 
-            // Account binding: the vault must belong to THIS user before
-            // any stat is read or pushed — otherwise the device's previous
-            // account progress would be pushed to the new account.
-            OfflineStudyVault.switchAccount(context, user.uid)
-            OfflineStudyVault.ensureInitialized(context)
+            // (The account binding already happened at the gate above:
+            // the vault belongs to THIS user before any stat is read
+            // or pushed — otherwise the device's previous account
+            // progress would be pushed to the new account.)
             val statsBeforePull = OfflineStudyVault.statsFlow.value
 
             // Pull remote FIRST: a fresh per-uid vault starts at zero, so
@@ -120,14 +196,9 @@ object WataniGatewaySync {
             }
             val stats = OfflineStudyVault.statsFlow.value
 
-            // Favorites/notes are per-account too (same leak class).
-            val favsPrefsName = if (user.uid.isBlank()) "watani_favorites" else "watani_favorites_${user.uid}"
-            val favsPrefs = context.getSharedPreferences(favsPrefsName, Context.MODE_PRIVATE)
-            var favs = favsPrefs.getStringSet("fav_list", emptySet())?.toList() ?: emptyList()
-
-            val notesPrefsName = if (user.uid.isBlank()) "watani_notes" else "watani_notes_${user.uid}"
-            val notesPrefs = context.getSharedPreferences(notesPrefsName, Context.MODE_PRIVATE)
-            var notesJson = notesPrefs.getString("notes_json", "[]") ?: "[]"
+            // (Favorites/notes were already read at the gate above —
+            // same per-account stores; the restores below may refill
+            // them from the server copies.)
 
             // Restore the account's own detail lists on first sync only:
             // the local stores are empty on a fresh per-uid vault, so the
@@ -228,8 +299,9 @@ object WataniGatewaySync {
             // Fresh flow read: the detail-pull above may have restored the
             // mistakes list into the vault — pushing the stale copy would
             // overwrite the cloud list with empty.
+            val pushedMistakes = OfflineStudyVault.statsFlow.value.savedMistakes
             val mistakesArr = JSONArray()
-            OfflineStudyVault.statsFlow.value.savedMistakes.forEach { m ->
+            pushedMistakes.forEach { m ->
                 mistakesArr.put(
                     JSONObject().apply {
                         put("id", m.id)
@@ -275,6 +347,31 @@ object WataniGatewaySync {
             }
 
             if (!put(user, syncJson)) return@withContext
+
+            // Build 1.2.15: record the gate state ONLY here — after
+            // the push actually landed — and for exactly the values
+            // that were pushed (the live flow may already hold newer
+            // progress; that must stay "dirty" for the next trigger).
+            // commit() on this IO thread: if the process is killed
+            // right after the push, a persisted gate state merely
+            // skips a duplicate sync, and a lost one costs only an
+            // idempotent re-push — never progress.
+            gate.edit()
+                .putString(
+                    gateFpKey(user.uid),
+                    ProgressSyncGate.fingerprint(
+                        totalAnswered = stats.totalAnswered,
+                        totalCorrect = stats.totalCorrect,
+                        mistakes = pushedMistakes,
+                        favorites = favs,
+                        notesJson = notesJson,
+                        subjectAnswered = freshStats.subjectAnswered,
+                        subjectCorrect = freshStats.subjectCorrect,
+                        dailyActivity = freshStats.dailyActivity
+                    )
+                )
+                .putLong(gateTsKey(user.uid), System.currentTimeMillis())
+                .commit()
 
             // تثبيت النقاط على الـWorker (بذر الصدارة الجديدة؛ فشلها صامت ولا يمس المزامنة)
             try {
