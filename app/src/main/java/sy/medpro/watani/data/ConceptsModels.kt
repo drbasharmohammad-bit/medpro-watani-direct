@@ -125,19 +125,35 @@ fun normalizeConceptText(raw: String?): String {
     return sb.toString().trim().lowercase()
 }
 
+/**
+ * Exam-bank ordering for concept units (build 1.2.14, doctor's
+ * order): the WATANI (national exam) bank leads — units sort by
+ * their watani question count descending, the damascus count breaks
+ * ties, and the combined pack weight comes last so the order stays
+ * deterministic when both banks tie completely.
+ */
+val conceptUnitExamOrder: Comparator<ConceptUnitDto> =
+    compareByDescending<ConceptUnitDto> { it.watani ?: 0 }
+        .thenByDescending { it.damascus ?: 0 }
+        .thenByDescending { it.weight ?: 0 }
+
 /** One subject group on the «ادرس مع ميد برو» subjects list. */
 data class ConceptSubjectGroup(
     val subject: String,
     val units: List<ConceptUnitDto>,
-    val totalWeight: Int
+    val totalWeight: Int,
+    val totalWatani: Int = 0,
+    val totalDamascus: Int = 0
 )
 
 /**
  * Subjects list contract: units grouped by their subject string,
- * each group's topics sorted by weight descending, and the groups
- * themselves sorted by TOTAL weight descending. Units with a blank
- * subject or topic cannot be listed or matched, so they are dropped
- * here (they also cannot inflate the visible counts).
+ * each group's topics sorted watani-first (see
+ * [conceptUnitExamOrder]), and the groups themselves sorted by
+ * TOTAL watani descending (damascus total, then combined weight,
+ * break ties). Units with a blank subject or topic cannot be listed
+ * or matched, so they are dropped here (they also cannot inflate
+ * the visible counts).
  */
 fun groupConceptsBySubject(units: List<ConceptUnitDto>): List<ConceptSubjectGroup> {
     val usable = units.filter {
@@ -146,14 +162,20 @@ fun groupConceptsBySubject(units: List<ConceptUnitDto>): List<ConceptSubjectGrou
     return usable
         .groupBy { it.subject!!.trim() }
         .map { (subject, groupUnits) ->
-            val sorted = groupUnits.sortedByDescending { it.weight ?: 0 }
+            val sorted = groupUnits.sortedWith(conceptUnitExamOrder)
             ConceptSubjectGroup(
                 subject = subject,
                 units = sorted,
-                totalWeight = sorted.sumOf { it.weight ?: 0 }
+                totalWeight = sorted.sumOf { it.weight ?: 0 },
+                totalWatani = sorted.sumOf { it.watani ?: 0 },
+                totalDamascus = sorted.sumOf { it.damascus ?: 0 }
             )
         }
-        .sortedByDescending { it.totalWeight }
+        .sortedWith(
+            compareByDescending<ConceptSubjectGroup> { it.totalWatani }
+                .thenByDescending { it.totalDamascus }
+                .thenByDescending { it.totalWeight }
+        )
 }
 
 /**

@@ -21,8 +21,8 @@ android {
     // Unified fixes build (Nov 2026): a real, ascending versionCode
     // (74273, the build number after 74272) so this build installs as
     // an update over every previous one, and a meaningful versionName.
-    versionCode = 74287
-    versionName = "1.2.13"
+    versionCode = 74288
+    versionName = "1.2.14"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

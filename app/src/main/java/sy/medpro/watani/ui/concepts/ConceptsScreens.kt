@@ -30,6 +30,7 @@ import sy.medpro.watani.data.ConceptDiffTableDto
 import sy.medpro.watani.data.ConceptSelfTestDto
 import sy.medpro.watani.data.ConceptUnitDto
 import sy.medpro.watani.data.WataniRepository
+import sy.medpro.watani.data.conceptUnitExamOrder
 import sy.medpro.watani.data.groupConceptsBySubject
 import sy.medpro.watani.data.resolveSelfTestCorrectIndex
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
@@ -38,7 +39,10 @@ import sy.medpro.watani.ui.theme.*
 /**
  * «ادرس مع ميد برو» (build 1.2.13, doctor's order 14 Nov 2026) —
  * a fixed concept curriculum INSIDE the Library tab: subjects ->
- * topics (by exam weight) -> one concept unit page. Content is the
+ * topics -> one concept unit page. Since build 1.2.14 the Library
+ * opens on parallel section entries and this section is one entry
+ * beside «الفيديوهات»; subjects and topics order watani-first
+ * (national-exam counts lead, damascus breaks ties). Content is the
  * server pack concepts.json, loaded exactly like dosing_drills.json
  * (downloaded section first, manifest + downloadSection on first
  * use, silent refresh when the manifest moved on) — but with NO
@@ -53,11 +57,22 @@ class ConceptUnitsState(
     val loaded: Boolean = false
 )
 
+/**
+ * Loads the downloaded concepts pack state. Build 1.2.14: the
+ * caller bumps [refreshKey] on EVERY entry to the host screen (and
+ * on every lifecycle resume while it is shown), so a pack published
+ * while the process lives is picked up without force-killing the
+ * app — the 1.2.13 one-shot LaunchedEffect(Unit) never re-checked.
+ * The load itself stays cache-first: the decrypted local pack is
+ * read first, the manifest is fetched only when no pack exists,
+ * and a present pack is re-downloaded only when the cheap manifest
+ * staleness check says it moved on.
+ */
 @Composable
-fun rememberConceptUnits(): ConceptUnitsState {
+fun rememberConceptUnits(refreshKey: Int = 0): ConceptUnitsState {
     val context = LocalContext.current
     var state by remember { mutableStateOf(ConceptUnitsState()) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshKey) {
         try {
             val repo = WataniRepository(context)
             var envelope = repo.getConcepts()
@@ -129,7 +144,7 @@ fun ConceptsEntryCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    "شرح المفاهيم الأهم في الدورات — ${units.size} موضوعًا في $subjectsCount مادة، مرتّبة بوزنها في الأسئلة",
+                    "شرح المفاهيم الأهم في الدورات — ${units.size} موضوعًا في $subjectsCount مادة، مرتّبة بأسئلة الوطني أولًا",
                     fontSize = 12.sp,
                     color = Color.White.copy(alpha = 0.85f),
                     lineHeight = 17.sp
@@ -165,7 +180,7 @@ fun ConceptsSubjectsScreen(
         ) {
             item {
                 Text(
-                    "المواد مرتّبة بمجموع أوزان مواضيعها في الدورات — الأعلى أولًا.",
+                    "المواد مرتّبة بمجموع أسئلة الوطني في مواضيعها — الأعلى أولًا.",
                     fontSize = 12.5.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                 )
@@ -195,7 +210,7 @@ fun ConceptsSubjectsScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                "${group.units.size} موضوعًا • مجموع الوزن ${group.totalWeight}",
+                                "${group.units.size} موضوعًا • وطني: ${group.totalWatani} • دمشق: ${group.totalDamascus}",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
@@ -223,7 +238,7 @@ fun ConceptsTopicsScreen(
     BackHandler { onBack() }
     val topics = remember(units, subject) {
         units.filter { it.subject?.trim() == subject }
-            .sortedByDescending { it.weight ?: 0 }
+            .sortedWith(conceptUnitExamOrder)
     }
     DrawerScreenScaffold(title = subject, onBack = onBack) { padding ->
         LazyColumn(
@@ -237,7 +252,7 @@ fun ConceptsTopicsScreen(
         ) {
             item {
                 Text(
-                    "المواضيع مرتّبة بالوزن في الدورات — الأعلى أولًا.",
+                    "المواضيع مرتّبة بعدد أسئلة الوطني — الأعلى أولًا.",
                     fontSize = 12.5.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                 )
