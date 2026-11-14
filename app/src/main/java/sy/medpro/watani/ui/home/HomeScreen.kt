@@ -38,7 +38,8 @@ val universitiesMap = mapOf(
     "aleppo" to "جامعة حلب",
     "lattakia" to "جامعة اللاذقية",
     "homs" to "جامعة حمص",
-    "hama" to "جامعة حماة"
+    "hama" to "جامعة حماة",
+    "idlib" to "جامعة إدلب"
 )
 
 enum class BankSection(val title: String) {
