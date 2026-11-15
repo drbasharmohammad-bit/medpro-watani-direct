@@ -46,13 +46,16 @@ import sy.medpro.watani.ui.theme.*
  * server pack concepts.json, loaded exactly like dosing_drills.json
  * (downloaded section first, manifest + downloadSection on first
  * use, silent refresh when the manifest moved on) — but with NO
- * bundled fallback: [rememberConceptUnits] stays empty until a real
- * downloaded pack exists, and every entry point renders nothing for
- * an empty pack, so the whole section is invisible before the
- * content is published.
+ * bundled fallback: the section's CONTENT exists only once a real
+ * pack is downloaded. Build 1.2.21 (root-cause fix): the Library
+ * card itself now renders in EVERY state (entry / download /
+ * «could not verify» — see conceptsCardKind in the data layer);
+ * the pre-1.2.21 rule «renders nothing for an empty pack» is what
+ * made the whole section vanish whenever the first download had
+ * not completed, and it is gone.
  */
 
-class ConceptUnitsState(
+data class ConceptUnitsState(
     val units: List<ConceptUnitDto> = emptyList(),
     val loaded: Boolean = false,
     // Build 1.2.17: what the server currently offers (manifest count)
@@ -61,63 +64,95 @@ class ConceptUnitsState(
     // from these, so additions are a content publish the student
     // pulls on demand (doctor's order), never a new APK.
     val serverCount: Int? = null,
-    val updateAvailable: Boolean = false
+    val updateAvailable: Boolean = false,
+    // Build 1.2.21: whether the last server check actually READ a
+    // manifest carrying a concepts entry. False means «the check
+    // itself failed» (offline, no cached manifest) — the Library
+    // shows the explicit «تعذّر التحقق» card then, never silence.
+    // A failed re-check must never clear a previously known value:
+    // [rememberConceptUnits] preserves the last known status.
+    val serverKnown: Boolean = false
 )
 
 /**
- * Loads the downloaded concepts pack state. Build 1.2.14: the
- * caller bumps [refreshKey] on EVERY entry to the host screen (and
- * on every lifecycle resume while it is shown), so a pack published
- * while the process lives is picked up without force-killing the
- * app — the 1.2.13 one-shot LaunchedEffect(Unit) never re-checked.
- * The load itself stays cache-first: the decrypted local pack is
- * read first, the manifest is fetched only when no pack exists,
- * and a present pack is re-downloaded only when the cheap manifest
- * staleness check says it moved on.
+ * Loads the downloaded concepts pack state (build 1.2.21 rework —
+ * root-cause fix, see invest_concepts.md):
+ *
+ * 1. The state is assigned IMMEDIATELY from the local cache
+ *    (getConcepts reads only the encrypted on-device pack — no
+ *    network), so an installed pack renders and browses fully
+ *    offline from the first frame.
+ * 2. The server status comes from the LIGHT manifest check alone
+ *    (conceptsServerStatusDetailed) and is merged in afterwards.
+ *    NO download is started here: the old effect downloaded the
+ *    whole 5.2MB pack silently before assigning ANY state, so the
+ *    download card's own visibility condition (serverCount != null)
+ *    could only become true after the download it was meant to
+ *    start had already finished — and any cancellation (leaving
+ *    the tab, ON_RESUME, process death) left the section invisible
+ *    forever. Downloads now start ONLY from the Library card
+ *    button, through ConceptsPackManager, which outlives the
+ *    screen exactly like the bank downloads outlive theirs.
+ * 3. A failed step preserves the last known values (units,
+ *    serverCount, serverKnown) instead of resetting them — the old
+ *    catch rebuilt the state WITHOUT serverCount and silently
+ *    un-rendered the download card.
+ *
+ * [refreshKey] bumps (pull-to-refresh, ON_RESUME) therefore only
+ * re-read the cache and re-check the manifest: they update the
+ * «new topics» badge/status and can never cancel or restart a
+ * running pack download.
  */
 @Composable
 fun rememberConceptUnits(refreshKey: Int = 0): ConceptUnitsState {
     val context = LocalContext.current
     var state by remember { mutableStateOf(ConceptUnitsState()) }
     LaunchedEffect(refreshKey) {
+        val repo = WataniRepository(context)
+        // (1) Cache first, assigned at once — offline browsing of an
+        // installed pack never waits for (or needs) the network.
         try {
-            val repo = WataniRepository(context)
-            var envelope = repo.getConcepts()
-            if (envelope?.units.isNullOrEmpty()) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val entry = manifestRes.getOrNull()?.files?.get("concepts.json")
-                    if (entry != null) {
-                        repo.downloadSection("concepts.json", entry)
-                        envelope = repo.getConcepts()
-                    }
-                }
-            }
-            // Build 1.2.17 (doctor's order): a republished pack is no
-            // longer swapped in silently — the state only REPORTS
-            // that an addition exists, and the Library entry card
-            // shows the «new topics» badge with an explicit update
-            // button («يجيهم إشعار: حمّلوا هاي الزيادة»). The
-            // on-device pack keeps working fully offline meanwhile.
-            val (serverCount, updateAvailable) = repo.conceptsServerStatus()
-            state = ConceptUnitsState(
-                units = envelope?.units.orEmpty().filter { !it.id.isNullOrBlank() },
-                loaded = true,
-                serverCount = serverCount,
-                updateAvailable = updateAvailable && !envelope?.units.isNullOrEmpty()
-            )
+            val cachedUnits = repo.getConcepts()?.units.orEmpty()
+                .filter { !it.id.isNullOrBlank() }
+            state = state.copy(units = cachedUnits, loaded = true)
         } catch (_: Exception) {
-            state = ConceptUnitsState(units = state.units, loaded = true)
+            state = state.copy(loaded = true)
+        }
+        // (2) Light manifest check only; merge, never reset. Build
+        // 1.2.17 (doctor's order): a republished pack is NOT swapped
+        // in silently — the state only REPORTS that an addition
+        // exists, and the Library entry card shows the «new topics»
+        // badge with an explicit update button («يجيهم إشعار: حمّلوا
+        // هاي الزيادة»). The on-device pack keeps working fully
+        // offline meanwhile.
+        try {
+            val status = repo.conceptsServerStatusDetailed()
+            state = if (status.known) {
+                state.copy(
+                    serverCount = status.serverCount,
+                    serverKnown = true,
+                    updateAvailable = status.updateAvailable &&
+                        state.units.isNotEmpty()
+                )
+            } else {
+                // Check failed: keep the last known serverCount /
+                // serverKnown exactly as they were.
+                state.copy(loaded = true)
+            }
+        } catch (_: Exception) {
+            // Same rule: a failed re-check erases nothing.
+            state = state.copy(loaded = true)
         }
     }
     return state
 }
 
 /**
- * The Library entry card for «ادرس مع ميد برو». The caller renders
- * it ONLY when the downloaded pack has units (units.isNotEmpty()) —
- * with no pack it is never composed at all, so the Library looks
- * exactly as it did in 1.2.12.
+ * The Library entry card for «ادرس مع ميد برو» — rendered when a
+ * downloaded pack with units exists on the device (the ENTRY branch
+ * of conceptsCardKind). Since build 1.2.21 the caller always renders
+ * ONE of the three concepts cards; this one is the installed-pack
+ * branch.
  */
 @Composable
 fun ConceptsEntryCard(
@@ -293,6 +328,68 @@ fun ConceptsDownloadCard(
                     fontSize = 12.sp,
                     color = Color.White.copy(alpha = 0.85f)
                 )
+            }
+        }
+    }
+}
+
+/**
+ * The «ادرس مع ميد برو» unverified card (build 1.2.21): rendered
+ * when no pack is on the device AND the light server check could
+ * not be completed (offline with no cached manifest, fetch error).
+ * Before this card existed, that state rendered NOTHING — the
+ * section silently did not exist in the Library, which is exactly
+ * the doctor's complaint. The button re-runs the check; once the
+ * server is reachable this card is replaced by the download card.
+ */
+@Composable
+fun ConceptsUnverifiedCard(
+    onRetryClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaroonDeep),
+        elevation = CardDefaults.cardElevation(2.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.School,
+                    contentDescription = null,
+                    tint = GoldAccent,
+                    modifier = Modifier.size(30.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "ادرس مع ميد برو",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        "شرح المفاهيم الأهم في الدورات — تعذّر التحقق من توفر المواضيع حاليًا. تحقق من الاتصال وأعد المحاولة.",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.85f),
+                        lineHeight = 17.sp
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onRetryClick,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = GoldAccent,
+                    contentColor = MaroonDeep
+                ),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("إعادة التحقق", fontSize = 14.sp)
             }
         }
     }

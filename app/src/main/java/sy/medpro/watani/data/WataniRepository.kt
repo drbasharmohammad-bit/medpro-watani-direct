@@ -592,17 +592,39 @@ class WataniRepository(private val context: Context) {
      * entry) returns (null, false) and the UI falls back to the
      * on-device pack alone.
      */
-    suspend fun conceptsServerStatus(): Pair<Int?, Boolean> = withContext(Dispatchers.IO) {
-        try {
-            val manifest = fetchManifest().getOrNull() ?: return@withContext (null to false)
-            val entry = manifest.files?.get("concepts.json") ?: return@withContext (null to false)
-            val entity = _downloadedSectionsFlow.value
-                .firstOrNull { it.sectionPath == "concepts.json" }
-            (entry.count to sectionNeedsRefresh(entity, entry))
-        } catch (e: Exception) {
-            (null to false)
+    suspend fun conceptsServerStatus(): Pair<Int?, Boolean> =
+        conceptsServerStatusDetailed().let { it.serverCount to it.updateAvailable }
+
+    /**
+     * Detailed variant of [conceptsServerStatus] (concepts fix,
+     * build 1.2.21): the old Pair could not distinguish «the server
+     * was checked and offers a pack» from «the check itself failed»
+     * (offline with no cached manifest, fetch error) — both came
+     * back (null, false), and the Library hid the whole section in
+     * the second case. [ConceptsServerStatus.known] is true ONLY
+     * when a manifest (live or the cached fallback inside
+     * [fetchManifest]) was actually read AND carries a concepts.json
+     * entry; the UI shows the explicit «تعذّر التحقق» card whenever
+     * it is false, so the section never disappears silently again.
+     */
+    suspend fun conceptsServerStatusDetailed(): ConceptsServerStatus =
+        withContext(Dispatchers.IO) {
+            try {
+                val manifest = fetchManifest().getOrNull()
+                    ?: return@withContext ConceptsServerStatus(known = false)
+                val entry = manifest.files?.get("concepts.json")
+                    ?: return@withContext ConceptsServerStatus(known = false)
+                val entity = _downloadedSectionsFlow.value
+                    .firstOrNull { it.sectionPath == "concepts.json" }
+                ConceptsServerStatus(
+                    known = true,
+                    serverCount = entry.count,
+                    updateAvailable = sectionNeedsRefresh(entity, entry)
+                )
+            } catch (e: Exception) {
+                ConceptsServerStatus(known = false)
+            }
         }
-    }
 
     /**
      * Explicit concepts-pack download/update for the Library card

@@ -30,14 +30,17 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
+import sy.medpro.watani.data.ConceptsCardKind
+import sy.medpro.watani.data.ConceptsPackManager
 import sy.medpro.watani.data.LibraryItem
 import sy.medpro.watani.data.LibrarySubject
-import sy.medpro.watani.data.WataniRepository
+import sy.medpro.watani.data.conceptsCardKind
 import sy.medpro.watani.ui.concepts.ConceptUnitScreen
 import sy.medpro.watani.ui.concepts.ConceptsDownloadCard
 import sy.medpro.watani.ui.concepts.ConceptsEntryCard
 import sy.medpro.watani.ui.concepts.ConceptsSubjectsScreen
 import sy.medpro.watani.ui.concepts.ConceptsTopicsScreen
+import sy.medpro.watani.ui.concepts.ConceptsUnverifiedCard
 import sy.medpro.watani.ui.concepts.rememberConceptUnits
 import sy.medpro.watani.ui.icons.LibrarySubjectIcon
 import sy.medpro.watani.ui.icons.librarySubjectIconRes
@@ -56,8 +59,10 @@ data class LibraryReaderState(
 /** Library tab navigation (1.2.14, doctor's order): the tab opens
  * on ENTRIES — parallel section entries like the old books entry:
  * «الفيديوهات» opens the video list, «ادرس مع ميد برو» opens the
- * concepts subjects/topics/unit chain. Each entry renders only
- * when its content exists on the device. */
+ * concepts subjects/topics/unit chain. (Build 1.2.21: the videos
+ * entry still renders only when videos exist, but the concepts
+ * entry ALWAYS renders one of its three cards — see
+ * conceptsCardKind.) */
 private sealed interface LibraryRoute {
     object Entries : LibraryRoute
     object Videos : LibraryRoute
@@ -90,6 +95,12 @@ fun LibraryScreen(
     // resume while this screen is composed and on every
     // pull-to-refresh, and rememberConceptUnits re-runs its
     // cache-first check for each bump.
+    // Build 1.2.21: a bump now re-reads the local cache and re-runs
+    // ONLY the light manifest status check (badge/server status) —
+    // it starts, restarts and cancels NOTHING. The pack download
+    // itself lives in ConceptsPackManager (process scope), so an
+    // ON_RESUME during a download can no longer kill it the way the
+    // pre-1.2.21 effect cancellation did.
     var conceptsRefreshKey by remember { mutableIntStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -106,33 +117,33 @@ fun LibraryScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    // The pack loads exactly like dosing_drills.json; while no
-    // downloaded pack with units exists the units stay empty and
-    // the section's entry is not rendered at all (doctor's
-    // conditional-display rule).
+    // The pack state loads cache-first (rememberConceptUnits): an
+    // installed pack is usable fully offline, and the entries list
+    // ALWAYS renders one concepts card (entry / download /
+    // unverified — conceptsCardKind), never silence (1.2.21 fix;
+    // the pre-1.2.21 «entry renders only when a pack exists» rule
+    // is what hid the section whenever the first download had not
+    // completed).
     val conceptState = rememberConceptUnits(conceptsRefreshKey)
-    // «ادرس مع ميد برو» explicit pack download/update (1.2.17): the
-    // entry card's «حدّث الآن» button and the download card share
-    // this one in-flight state; a finished download bumps the
+    // «ادرس مع ميد برو» explicit pack download/update: since
+    // 1.2.21 the download runs in ConceptsPackManager (process
+    // scope, shared StateFlow) — the same «outlives the screen»
+    // pattern the bank section downloads use via MainViewModel.
+    // Leaving the Library tab no longer cancels it; coming back
+    // shows its progress/completion as it is. The entry card's
+    // «حدّث الآن» button and the download card both just start /
+    // observe this one download. A finished download bumps the
     // refresh key so the pack state reloads from disk.
     val context = LocalContext.current
-    val conceptsScope = rememberCoroutineScope()
-    var conceptsDownloading by remember { mutableStateOf(false) }
-    var conceptsProgress by remember { mutableFloatStateOf(0f) }
-    var conceptsDownloadFailed by remember { mutableStateOf(false) }
+    val conceptsDownloadState by ConceptsPackManager.state.collectAsState()
+    val conceptsDownloading = conceptsDownloadState.downloading
+    val conceptsProgress = conceptsDownloadState.progress
+    val conceptsDownloadFailed = conceptsDownloadState.failed && !conceptsDownloadState.downloading
     val onConceptsDownloadClick: () -> Unit = {
-        if (!conceptsDownloading) {
-            conceptsDownloading = true
-            conceptsDownloadFailed = false
-            conceptsProgress = 0f
-            conceptsScope.launch {
-                val ok = WataniRepository(context).downloadConceptsPack { p ->
-                    conceptsProgress = p
-                }
-                conceptsDownloading = false
-                if (ok) conceptsRefreshKey++ else conceptsDownloadFailed = true
-            }
-        }
+        ConceptsPackManager.startDownload(context)
+    }
+    LaunchedEffect(conceptsDownloadState.completedRuns) {
+        if (conceptsDownloadState.completedRuns > 0) conceptsRefreshKey++
     }
     var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(state.isLoading) {
@@ -153,35 +164,15 @@ fun LibraryScreen(
         libraryRoute = LibraryRoute.Entries
     }
 
-    if (state.isLoading && state.library == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                CircularProgressIndicator(color = MaroonPrimary)
-                Text("جاري تحميل المكتبة...", fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-            }
-        }
-        return
-    }
-
-    if (state.error != null && state.library == null) {
-        Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Icon(Icons.Default.Error, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.error)
-                Text(state.error ?: "خطأ", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.error)
-                Button(shape = MaterialTheme.shapes.medium, onClick = { viewModel.loadLibrary() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
-                    Icon(Icons.Default.Refresh, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("إعادة المحاولة")
-                }
-            }
-        }
-        return
-    }
-
-    // «ادرس مع ميد برو» sub-screens: rendered instead of the entries
-    // and the video list while open (reachable only when a pack
-    // with units exists, because the entry renders only then). Back
-    // from the subjects list lands on the Library entries (1.2.14).
+    // «ادرس مع ميد برو» sub-screens FIRST (build 1.2.21): they depend
+    // ONLY on the locally installed pack (conceptState), never on
+    // the library envelope — so they are resolved before the
+    // library loading/error early returns below. Before this fix a
+    // failed library fetch held the whole tab hostage: the error
+    // screen replaced everything, including a concepts section
+    // whose pack was already on the device and fully offline.
+    // Back from the subjects list lands on the Library entries
+    // (1.2.14).
     when (val route = libraryRoute) {
         is LibraryRoute.ConceptsSubjects -> {
             ConceptsSubjectsScreen(
@@ -219,6 +210,67 @@ fun LibraryScreen(
         LibraryRoute.Entries, LibraryRoute.Videos -> Unit
     }
 
+    if (state.isLoading && state.library == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                CircularProgressIndicator(color = MaroonPrimary)
+                Text("جاري تحميل المكتبة...", fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+            }
+        }
+        return
+    }
+
+    if (state.error != null && state.library == null) {
+        // Hostage fix (1.2.21): the library envelope failed to load,
+        // but an installed concepts pack is local and free — its
+        // entry card stays reachable in a minimal view, alongside
+        // the library error and its retry (the rest of the tab's
+        // content keeps the full error screen below, unchanged).
+        if (conceptState.units.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxSize().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ConceptsEntryCard(
+                    units = conceptState.units,
+                    onClick = { libraryRoute = LibraryRoute.ConceptsSubjects },
+                    updateAvailable = conceptState.updateAvailable,
+                    serverCount = conceptState.serverCount,
+                    updating = conceptsDownloading,
+                    updateProgress = conceptsProgress,
+                    onUpdateClick = onConceptsDownloadClick
+                )
+                Text(
+                    state.error ?: "تعذر تحميل المكتبة",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Button(
+                    shape = MaterialTheme.shapes.medium,
+                    onClick = { viewModel.loadLibrary() },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
+                ) {
+                    Icon(Icons.Default.Refresh, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("إعادة محاولة تحميل المكتبة")
+                }
+            }
+            return
+        }
+        Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Icon(Icons.Default.Error, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.error)
+                Text(state.error ?: "خطأ", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.error)
+                Button(shape = MaterialTheme.shapes.medium, onClick = { viewModel.loadLibrary() }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
+                    Icon(Icons.Default.Refresh, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("إعادة المحاولة")
+                }
+            }
+        }
+        return
+    }
+
     val library = state.library
     val subjectsWithVideos = library?.subjects.orEmpty()
         .filter { !it.videos.isNullOrEmpty() }
@@ -250,10 +302,15 @@ fun LibraryScreen(
         return
     }
 
-    // Section entries (1.2.14): parallel entries, each rendered only
-    // when its content exists — «الفيديوهات» when the library has
-    // videos, «ادرس مع ميد برو» when a concepts pack with units is
-    // downloaded. With neither, the tab shows the empty state.
+    // Section entries (1.2.14): parallel entries — «الفيديوهات» when
+    // the library has videos, and «ادرس مع ميد برو» ALWAYS (build
+    // 1.2.21, doctor's order): exactly one concepts card renders in
+    // every state — entry (pack installed), download (no pack, the
+    // server check succeeded), or «تعذّر التحقق» (no pack, the
+    // check itself failed) — decided by conceptsCardKind. The
+    // pre-1.2.21 rule (no card at all until a pack existed AND the
+    // check had completed) is what made the section invisible on
+    // slow connections.
     if (libraryRoute == LibraryRoute.Entries) {
         PullToRefreshBox(
             isRefreshing = isRefreshing,
@@ -264,28 +321,27 @@ fun LibraryScreen(
             },
             modifier = Modifier.fillMaxSize()
         ) {
-            if (!hasVideos && conceptState.units.isEmpty() && conceptState.serverCount == null) {
-                LibraryEmptyState(
-                    onReload = { viewModel.loadLibrary(); conceptsRefreshKey++ }
-                )
-            } else {
-                LazyColumn(
-                    Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (hasVideos) {
-                        item {
-                            VideosEntryCard(
-                                totalVideos = subjectsWithVideos.sumOf { it.videos?.size ?: 0 },
-                                subjectsCount = subjectsWithVideos.size,
-                                onClick = { libraryRoute = LibraryRoute.Videos }
-                            )
-                        }
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (hasVideos) {
+                    item {
+                        VideosEntryCard(
+                            totalVideos = subjectsWithVideos.sumOf { it.videos?.size ?: 0 },
+                            subjectsCount = subjectsWithVideos.size,
+                            onClick = { libraryRoute = LibraryRoute.Videos }
+                        )
                     }
-                    if (conceptState.units.isNotEmpty()) {
-                        item {
-                            ConceptsEntryCard(
+                }
+                if (conceptState.loaded) {
+                    item {
+                        when (conceptsCardKind(
+                            hasPack = conceptState.units.isNotEmpty(),
+                            serverKnown = conceptState.serverKnown
+                        )) {
+                            ConceptsCardKind.ENTRY -> ConceptsEntryCard(
                                 units = conceptState.units,
                                 onClick = { libraryRoute = LibraryRoute.ConceptsSubjects },
                                 updateAvailable = conceptState.updateAvailable,
@@ -294,20 +350,33 @@ fun LibraryScreen(
                                 updateProgress = conceptsProgress,
                                 onUpdateClick = onConceptsDownloadClick
                             )
-                        }
-                    }
-                    // لا حزمة على الجهاز بعد لكن الخادم يعرضها (1.2.17):
-                    // بطاقة تحميل صريحة — التحميل مرة واحدة ثم يعمل
-                    // القسم بلا إنترنت.
-                    if (conceptState.units.isEmpty() && conceptState.serverCount != null) {
-                        item {
-                            ConceptsDownloadCard(
+                            // لا حزمة على الجهاز بعد لكن الخادم يعرضها:
+                            // بطاقة تحميل صريحة — التحميل مرة واحدة ثم
+                            // يعمل القسم بلا إنترنت.
+                            ConceptsCardKind.DOWNLOAD -> ConceptsDownloadCard(
                                 serverCount = conceptState.serverCount ?: 0,
                                 downloading = conceptsDownloading,
                                 progress = conceptsProgress,
                                 failed = conceptsDownloadFailed,
                                 onDownloadClick = onConceptsDownloadClick
                             )
+                            // لا حزمة وتعذّر فحص الخادم نفسه: بطاقة
+                            // صريحة بإعادة الفحص — لا اختفاء صامت.
+                            ConceptsCardKind.UNVERIFIED -> ConceptsUnverifiedCard(
+                                onRetryClick = { conceptsRefreshKey++ }
+                            )
+                        }
+                    }
+                } else if (!hasVideos) {
+                    // The local cache read has not landed yet (a
+                    // moment at most): a plain spinner, so the tab
+                    // never flashes the wrong card.
+                    item {
+                        Box(
+                            Modifier.fillMaxWidth().padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = MaroonPrimary)
                         }
                     }
                 }
