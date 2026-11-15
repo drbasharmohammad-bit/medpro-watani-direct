@@ -10,9 +10,11 @@ import com.squareup.moshi.JsonClass
  * loaded exactly like dosing_drills.json (manifest -> downloadSection
  * -> encrypted sections_cache; see WataniRepository.getConcepts and
  * the concepts branch of SectionVerification). Unlike the drills
- * there is NO bundled sample: the section stays completely hidden
- * until a downloaded pack with at least one unit exists on the
- * device (the content is published later, by its own pipeline).
+ * there is NO bundled sample. (Build 1.2.21 supersedes the original
+ * «hidden until a pack exists» display rule: the Library card now
+ * ALWAYS shows — entry, download, or «could not verify» — see
+ * [conceptsCardKind]; only the section's CONTENT still requires a
+ * downloaded pack.)
  *
  * Contract (one object, units array):
  * {"version":1,"units":[{"id","subject","topic","weight","watani",
@@ -229,4 +231,47 @@ fun resolveSelfTestCorrectIndex(correctIndex: Int?, optionsCount: Int): Int? {
     if (correctIndex in 0 until optionsCount) return correctIndex
     if (correctIndex in 1..optionsCount) return correctIndex - 1
     return null
+}
+
+/**
+ * Result of the light manifest check for the concepts pack
+ * (concepts fix, build 1.2.21 — see
+ * WataniRepository.conceptsServerStatusDetailed). [known] separates
+ * «checked: the server offers a pack of [serverCount] units» from
+ * «the check itself could not be completed» — the distinction the
+ * old (count, update) Pair erased, which is what let the Library
+ * hide the section silently whenever the check failed.
+ */
+data class ConceptsServerStatus(
+    val known: Boolean,
+    val serverCount: Int? = null,
+    val updateAvailable: Boolean = false
+)
+
+/** Which «ادرس مع ميد برو» card the Library entries show. */
+enum class ConceptsCardKind {
+    /** Pack installed on the device: entry card (opens the section). */
+    ENTRY,
+
+    /** No pack, but the server check succeeded: download card. */
+    DOWNLOAD,
+
+    /** No pack and the server check could not be completed:
+     * «تعذّر التحقق» card with a re-check button — never silence. */
+    UNVERIFIED
+}
+
+/**
+ * The Library card decision (concepts fix, build 1.2.21, doctor's
+ * order: the card ALWAYS shows in the entries state). Pure so the
+ * contract is unit-tested: an installed pack always wins (the
+ * section then works fully offline, whatever the server check
+ * says); without a pack, a completed check yields the download
+ * card and a failed check yields the unverified card — there is no
+ * fourth «render nothing» outcome anymore.
+ */
+fun conceptsCardKind(hasPack: Boolean, serverKnown: Boolean): ConceptsCardKind = when {
+    hasPack -> ConceptsCardKind.ENTRY
+    serverKnown -> ConceptsCardKind.DOWNLOAD
+    else -> ConceptsCardKind.UNVERIFIED
 }

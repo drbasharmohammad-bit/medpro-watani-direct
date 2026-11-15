@@ -191,6 +191,33 @@ class ConceptsLogicTest {
     }
 
     @Test
+    fun cardKindAlwaysRendersExactlyOneCard() {
+        // Build 1.2.21 (root-cause fix): the Library ALWAYS renders
+        // one concepts card in the entries state — the pre-fix
+        // «render nothing» outcomes are what made the section vanish
+        // on slow connections. An installed pack wins over every
+        // server-check outcome (the section then works offline);
+        // without a pack, a completed check yields the download
+        // card and a failed check yields the unverified card.
+        assertEquals(
+            ConceptsCardKind.ENTRY,
+            conceptsCardKind(hasPack = true, serverKnown = true)
+        )
+        assertEquals(
+            ConceptsCardKind.ENTRY,
+            conceptsCardKind(hasPack = true, serverKnown = false)
+        )
+        assertEquals(
+            ConceptsCardKind.DOWNLOAD,
+            conceptsCardKind(hasPack = false, serverKnown = true)
+        )
+        assertEquals(
+            ConceptsCardKind.UNVERIFIED,
+            conceptsCardKind(hasPack = false, serverKnown = false)
+        )
+    }
+
+    @Test
     fun sectionVerificationCountsConceptsUnits() {
         val moshi = com.squareup.moshi.Moshi.Builder()
             .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
