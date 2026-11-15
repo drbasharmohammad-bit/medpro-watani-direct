@@ -58,6 +58,21 @@ import kotlin.text.Charsets
  * sections_cache download temp. It is deleted the moment the full
  * shard is persisted encrypted, and the whole directory (temps
  * included) is wiped on activation revocation.
+ *
+ * G1 fix (build 1.2.21 — shard cache never invalidated): a cached shard
+ * used to be served forever once it parsed, because the index entry's
+ * hash/size were never read. Now the fingerprint the CURRENT index
+ * declares for a shard (`files[shard].hash` + `.size`) is stored next
+ * to its cache (a small `<hash>.fp` sidecar, metadata only — no
+ * content) at persist time, and a cached shard — in memory or on
+ * disk — is served ONLY when its stored fingerprint still matches
+ * the current index entry. A mismatch, or a legacy cache with no
+ * stored fingerprint while the index declares one, drops the cache
+ * and re-downloads through the same resumable path. When the index
+ * entry itself carries no hash/size there is nothing to match
+ * against, so the previous serve-from-cache behaviour is kept for
+ * that shard. The absent-layer contract is untouched: a 404 index
+ * still reads as silent "no explanation".
  */
 /**
  * F-09: carries the HTTP status of a failed explanation-index fetch so
@@ -94,6 +109,11 @@ class ExplanationRepository(
 
     /** In-memory cache of shard contents for the current process lifetime, keyed by shard path. */
     private val shardCache = mutableMapOf<String, List<ExplanationRecordDto>>()
+
+    /** G1: the index fingerprint each in-memory cached shard was loaded
+     * under (see [indexFingerprintOf]); a shard whose current index
+     * fingerprint no longer matches is evicted instead of served. */
+    private val shardCacheFingerprints = mutableMapOf<String, String?>()
 
     /** In-memory index: fetched once per process, never per question. */
     private var cachedIndex: ExplanationIndex? = null
@@ -276,26 +296,92 @@ class ExplanationRepository(
         }
     }
 
+    /**
+     * G1: the fingerprint the current layer index declares for
+     * [shardName] — its entry's `hash` and `size` in
+     * `explanations/index.json` — or null when there is no index in
+     * memory yet, no entry for the shard, or the entry carries neither
+     * field (nothing to match a cache against). Callers always fetch
+     * the index before loading shards, so the in-memory index is the
+     * current one.
+     */
+    private fun indexFingerprintOf(shardName: String): String? {
+        val entry = cachedIndex?.files?.get(shardName) ?: return null
+        val hash = entry.hash?.trim()?.takeIf { it.isNotEmpty() }
+        val size = entry.size
+        if (hash == null && size == null) return null
+        return "${hash.orEmpty()}|${size ?: -1L}"
+    }
+
+    private fun shardFingerprintFile(shardName: String): File =
+        File(explanationDir(), "${shardHash(shardName)}.fp")
+
+    /** The fingerprint stored next to a shard's disk cache at persist
+     * time; null for a legacy cache written before the G1 fix. */
+    private fun readStoredShardFingerprint(shardName: String): String? =
+        try {
+            val file = shardFingerprintFile(shardName)
+            if (!file.exists()) null
+            else file.readText(Charsets.UTF_8).trim().takeIf { it.isNotEmpty() }
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun storeShardFingerprint(shardName: String, fingerprint: String?) {
+        try {
+            val file = shardFingerprintFile(shardName)
+            if (fingerprint == null) {
+                if (file.exists()) file.delete()
+            } else {
+                file.writeText(fingerprint, Charsets.UTF_8)
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     private suspend fun loadShard(shardName: String): Result<List<ExplanationRecordDto>> {
-        shardCache[shardName]?.let { return Result.success(it) }
+        // G1: every cached copy of this shard — memory or disk — is
+        // served only while its stored fingerprint matches the one the
+        // current index declares; otherwise it is dropped and the
+        // shard is re-downloaded below.
+        val expectedFingerprint = indexFingerprintOf(shardName)
+        shardCache[shardName]?.let { cached ->
+            if (expectedFingerprint == null ||
+                shardCacheFingerprints[shardName] == expectedFingerprint
+            ) {
+                return Result.success(cached)
+            }
+            shardCache.remove(shardName)
+            shardCacheFingerprints.remove(shardName)
+        }
         cleanupLegacyCache()
 
         val cacheFile = shardCacheFile(shardName)
         if (cacheFile.exists()) {
-            try {
-                // Phase-2b: central decrypting read — a legacy plaintext
-                // shard is migrated to encrypted form on this read.
-                val cachedText = SectionCacheCrypto.readText(context, cacheFile)
-                val records = if (cachedText == null) emptyList() else parseShard(cachedText)
-                if (records.isNotEmpty()) {
-                    shardCache[shardName] = records
-                    return Result.success(records)
+            val storedFingerprint = readStoredShardFingerprint(shardName)
+            if (expectedFingerprint != null && storedFingerprint != expectedFingerprint) {
+                // Stale shard (republished under the same name) or a
+                // legacy cache with no fingerprint on record: never
+                // serve it — drop it and fall through to the download.
+                cacheFile.delete()
+                storeShardFingerprint(shardName, null)
+            } else {
+                try {
+                    // Phase-2b: central decrypting read — a legacy plaintext
+                    // shard is migrated to encrypted form on this read.
+                    val cachedText = SectionCacheCrypto.readText(context, cacheFile)
+                    val records = if (cachedText == null) emptyList() else parseShard(cachedText)
+                    if (records.isNotEmpty()) {
+                        shardCache[shardName] = records
+                        shardCacheFingerprints[shardName] = storedFingerprint ?: expectedFingerprint
+                        return Result.success(records)
+                    }
+                    // Empty parse of a non-empty file = corrupt cache: drop it
+                    // and re-download instead of serving a false empty shard.
+                    cacheFile.delete()
+                } catch (_: Exception) {
+                    cacheFile.delete()
                 }
-                // Empty parse of a non-empty file = corrupt cache: drop it
-                // and re-download instead of serving a false empty shard.
-                cacheFile.delete()
-            } catch (_: Exception) {
-                cacheFile.delete()
             }
         }
 
@@ -311,6 +397,7 @@ class ExplanationRepository(
         }
         persistShardCache(shardName, text)
         shardCache[shardName] = records
+        shardCacheFingerprints[shardName] = expectedFingerprint
         return Result.success(records)
     }
 
@@ -410,6 +497,10 @@ class ExplanationRepository(
             // to a non-empty record list — so only verified plaintext
             // is ever encrypted, exactly like sections_cache.
             SectionCacheCrypto.writeText(context, file, text)
+            // G1: record the fingerprint this copy was downloaded
+            // under, next to the cache — loadShard serves the cache
+            // only while the current index still declares it.
+            storeShardFingerprint(shardName, indexFingerprintOf(shardName))
             // The resume temp is no longer needed once the full shard is cached.
             val temp = shardTempFile(shardName)
             if (temp.exists()) temp.delete()
@@ -448,7 +539,9 @@ class ExplanationRepository(
         legacyCleaned = true
         try {
             val dir = explanationDir()
-            val keep = Regex("^[0-9a-f]{16}\\.(json|tmp)$")
+            // G1: the ".fp" fingerprint sidecars are part of the cache
+            // and survive the sweep alongside the shard files.
+            val keep = Regex("^[0-9a-f]{16}\\.(json|tmp|fp)$")
             // Phase-2b: the encrypted store writes atomically via a
             // "<name>.enc.tmp" sibling (ContentEncryption) — never let
             // this sweep delete an in-flight encrypted write.

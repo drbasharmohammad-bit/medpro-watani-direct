@@ -212,6 +212,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.refreshDownloadedSections()
     }
 
+    private var bankRefreshRunning = false
+
+    /**
+     * Bank auto-update trigger (build 1.2.21): the bank section/subject
+     * screens call this when they are shown, and the installed question
+     * banks then refresh silently in the background through
+     * [WataniRepository.refreshInstalledBankSections] — the same
+     * stale-check the self-loading packs use — without blocking the
+     * screen. Sections being downloaded manually right now are
+     * excluded so the sweep never races a manual download on the same
+     * file; a second trigger while a sweep is running is a no-op.
+     */
+    fun refreshInstalledBanksInBackground() {
+        if (bankRefreshRunning) return
+        bankRefreshRunning = true
+        viewModelScope.launch {
+            try {
+                repository.refreshInstalledBankSections(
+                    excludePaths = _uiState.value.downloadingPaths
+                )
+            } catch (_: Exception) {
+                // Silent by contract: a failed sweep keeps every
+                // working copy and surfaces nothing.
+            } finally {
+                bankRefreshRunning = false
+            }
+        }
+    }
+
     /** Prefetches the explanation shards for a downloaded section's questions.
      * Returns null when explanations are complete (or the section has no
      * questions / no layer), else the Arabic incomplete message for the banner. */
