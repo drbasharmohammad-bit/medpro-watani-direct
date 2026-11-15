@@ -12,6 +12,10 @@ fun featuredCardBackground(): Color =
     if (isSystemInDarkTheme()) DarkFeaturedContainer else FeaturedContainer
 
 // Brand Primary Maroon Family
+// Launcher/logo ink: the official app icon's own background (#2D1015 in
+// ic_launcher_background) — the dark family the video splash and the
+// luxury sign-in gate are built on, so cold start reads as one surface.
+val MaroonInk = Color(0xFF2D1015)
 val MaroonPrimary = Color(0xFF7A1F2B)
 val MaroonDark = Color(0xFF52131C)
 val MaroonDeep = Color(0xFF3A0C13)
