@@ -614,6 +614,7 @@ class MainActivity : ComponentActivity() {
                                                 "القلب والإصغاء",
                                                 "غرفة الطوارئ",
                                                 "المختبرات والحاسبات",
+                                                "سياسة الخصوصية والشروط",
                                                 "تسجيل الخروج"
                                             )
                                             items(drawerItems) { title ->
@@ -643,6 +644,7 @@ class MainActivity : ComponentActivity() {
                                                     "القلب والإصغاء" -> Icons.Default.MonitorHeart
                                                     "غرفة الطوارئ" -> Icons.Default.LocalHospital
                                                     "المختبرات والحاسبات" -> Icons.Default.Science
+                                                    "سياسة الخصوصية والشروط" -> Icons.Default.Policy
                                                     else -> Icons.Default.Logout
                                                 }
                                                 NavigationDrawerItem(
@@ -934,6 +936,7 @@ class MainActivity : ComponentActivity() {
                                                 "سجلّ حالاتي" -> LogbookScreen(onBack = { drawerScreen = null })
                                                 "الحالات الألمانية" -> GermanCasesScreen(onBack = { drawerScreen = null })
                                                 "الدعم النفسي" -> SupportScreen(onBack = { drawerScreen = null })
+                                                "سياسة الخصوصية والشروط" -> PrivacyPolicyScreen(onBack = { drawerScreen = null })
                                                 "التواصل" -> ContactScreen(onBack = { drawerScreen = null })
                                                 "التواصل مع الإدارة" -> ContactScreen(onBack = { drawerScreen = null })
                                                 "روابط التواصل" -> ContactScreen(onBack = { drawerScreen = null })

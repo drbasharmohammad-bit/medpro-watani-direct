@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -33,14 +34,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.ProfileNameStore
+import sy.medpro.watani.ui.drawer.PrivacyPolicyScreen
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
 /**
@@ -72,6 +79,16 @@ fun SignInGate(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // Privacy/terms screen (build 1.2.19): opened from the consent
+    // links under the sign-in button, scrolled to the tapped part
+    // (0 privacy / 1 terms / 2 medical disclaimer); a local swap
+    // because the gate lives outside the main navigation, and back
+    // returns here.
+    var policyAnchor by remember { mutableStateOf<Int?>(null) }
+    policyAnchor?.let { anchor ->
+        PrivacyPolicyScreen(onBack = { policyAnchor = null }, anchorPart = anchor)
+        return
+    }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var nameInput by remember(existingUser?.uid) {
@@ -224,6 +241,8 @@ fun SignInGate(
                     ) {
                         Text("متابعة", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    PrivacyConsentLine(onOpenPolicy = { policyAnchor = it })
                 } else {
                     Button(
                         onClick = { signInWithGoogle() },
@@ -240,8 +259,69 @@ fun SignInGate(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    PrivacyConsentLine(onOpenPolicy = { policyAnchor = it })
                 }
             }
         }
     }
+}
+/**
+ * صيغة الموافقة أسفل زرّ تسجيل الدخول (بناء 1.2.19) — نصّها حرفيًا
+ * من القسم الرابع من وثيقة السياسة المعتمدة (POLICY_TEXT.md):
+ * «بالمتابعة وتسجيل الدخول، أنت توافق على سياسة الخصوصية وشروط
+ * الاستخدام وإخلاء المسؤولية الطبية الخاصة بتطبيق «وطني» — Med Pro.»
+ * عبارات الأقسام الثلاثة روابط تفتح شاشة السياسة عند قسمها،
+ * والمتابعة بالدخول نفسه إقرار بها (بلا خطوة تأكيد إضافية).
+ */
+@Composable
+private fun PrivacyConsentLine(onOpenPolicy: (Int) -> Unit) {
+    val annotated = remember {
+        buildAnnotatedString {
+            append("بالمتابعة وتسجيل الدخول، أنت توافق على ")
+            pushStringAnnotation(tag = "policyPart", annotation = "0")
+            withStyle(
+                SpanStyle(
+                    color = MaroonPrimary,
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = TextDecoration.Underline
+                )
+            ) { append("سياسة الخصوصية") }
+            pop()
+            append(" و")
+            pushStringAnnotation(tag = "policyPart", annotation = "1")
+            withStyle(
+                SpanStyle(
+                    color = MaroonPrimary,
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = TextDecoration.Underline
+                )
+            ) { append("شروط الاستخدام") }
+            pop()
+            append(" و")
+            pushStringAnnotation(tag = "policyPart", annotation = "2")
+            withStyle(
+                SpanStyle(
+                    color = MaroonPrimary,
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = TextDecoration.Underline
+                )
+            ) { append("إخلاء المسؤولية الطبية") }
+            pop()
+            append(" الخاصة بتطبيق «وطني» — Med Pro.")
+        }
+    }
+    ClickableText(
+        text = annotated,
+        style = TextStyle(
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        ),
+        onClick = { offset ->
+            annotated.getStringAnnotations("policyPart", offset, offset)
+                .firstOrNull()?.item?.toIntOrNull()?.let { onOpenPolicy(it) }
+        },
+        modifier = Modifier.fillMaxWidth()
+    )
 }

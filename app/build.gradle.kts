@@ -18,12 +18,14 @@ android {
     applicationId = "sy.medpro.watani"
     minSdk = 24
     targetSdk = 36
-    // 1.2.18 (Nov 2026): critical Android 7 (API 24/25) crash fix —
-    // core library desugaring for java.time (see compileOptions below)
-    // + removal of the unused firebase-ai SDK. Ascending versionCode so
-    // this build installs as an update over every previous one.
-    versionCode = 74292
-    versionName = "1.2.18"
+    // 1.2.19 (Nov 2026): everything in 1.2.18 (Android 7 crash fix via
+    // core library desugaring + firebase-ai removal) PLUS the in-app
+    // Privacy Policy / Terms / Medical Disclaimer screen (approved
+    // POLICY_TEXT.md bundled as an asset; consent links under the
+    // sign-in button open it at their section; permanent drawer item).
+    // Ascending versionCode so it installs as an update over 1.2.18.
+    versionCode = 74293
+    versionName = "1.2.19"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
