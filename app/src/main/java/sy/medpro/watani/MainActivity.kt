@@ -56,7 +56,7 @@ import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.ui.SlimMainBar
 import sy.medpro.watani.ui.activation.ActivationPromptDialog
-import sy.medpro.watani.ui.welcome.VideoSplashScreen
+import sy.medpro.watani.ui.welcome.BrandIntroScreen
 import sy.medpro.watani.ui.cases.CasePlayerScreen
 import sy.medpro.watani.ui.cases.CasesScreen
 import sy.medpro.watani.ui.cases.GermanCasesScreen
@@ -241,10 +241,11 @@ class MainActivity : ComponentActivity() {
                     FirebaseAuth.getInstance().addAuthStateListener(listener)
                     onDispose { FirebaseAuth.getInstance().removeAuthStateListener(listener) }
                 }
-                // Video splash on every cold start (Nov 2026, doctor's
-                // order): the old first-run welcome screen is abolished —
-                // no buttons, no sign-in prompt; the video plays, tap
-                // skips, and it advances to the main interface on end.
+                // Brand intro on every cold start (Nov 2026, doctor's
+                // order; video deleted in build 1.2.21): the old
+                // first-run welcome screen is abolished — no buttons,
+                // no sign-in prompt; the code-drawn intro shows, tap
+                // skips, and it advances on its own when done.
                 // Phase-2 min-version gate: initialised SYNCHRONOUSLY
                 // from the persisted last-known minVersion (offline
                 // semantics in data/AppVersionGate), then refreshed
@@ -333,7 +334,7 @@ class MainActivity : ComponentActivity() {
                     }
                 } else if (showSplash) {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                        VideoSplashScreen(onDone = { showSplash = false })
+                        BrandIntroScreen(onDone = { showSplash = false })
                     }
                 } else if (currentUser == null) {
                     // Sign-in gate (doctor's order, build 1.2.3): opening
