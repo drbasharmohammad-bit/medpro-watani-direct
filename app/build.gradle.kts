@@ -24,8 +24,8 @@ android {
     // POLICY_TEXT.md bundled as an asset; consent links under the
     // sign-in button open it at their section; permanent drawer item).
     // Ascending versionCode so it installs as an update over 1.2.19.
-    versionCode = 74294
-    versionName = "1.2.20"
+    versionCode = 74295
+    versionName = "1.2.21"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
