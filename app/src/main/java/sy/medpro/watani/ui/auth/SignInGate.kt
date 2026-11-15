@@ -1,29 +1,45 @@
 package sy.medpro.watani.ui.auth
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,8 +48,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -46,9 +67,22 @@ import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.launch
+import sy.medpro.watani.R
 import sy.medpro.watani.data.ProfileNameStore
 import sy.medpro.watani.ui.drawer.PrivacyPolicyScreen
+import sy.medpro.watani.ui.theme.CairoFontFamily
+import sy.medpro.watani.ui.theme.DarkMaroonOutline
+import sy.medpro.watani.ui.theme.ErrorRed
+import sy.medpro.watani.ui.theme.GoldAccent
+import sy.medpro.watani.ui.theme.MaroonDark
+import sy.medpro.watani.ui.theme.MaroonInk
+import sy.medpro.watani.ui.theme.MaroonLight
 import sy.medpro.watani.ui.theme.MaroonPrimary
+import sy.medpro.watani.ui.theme.RoseBackground
+import sy.medpro.watani.ui.theme.RoseOutline
+import sy.medpro.watani.ui.theme.TajawalFontFamily
+import sy.medpro.watani.ui.theme.TextOnDark
+import sy.medpro.watani.ui.theme.ThmanyahFontFamily
 
 /**
  * Entry gate (gate logic from build 1.2.3, presentation + name
@@ -71,6 +105,21 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
  *
  * The Google flow delegates to [GoogleSignInHelper], the same helper
  * used by the profile screen and the activation prompt.
+ *
+ * Luxury redesign (doctor's order, Nov 2026 — «فخمة مثل التطبيقات
+ * العالمية»): the gate logic above is byte-for-byte the old one;
+ * only the presentation changed. A deep-maroon immersive hero in the
+ * splash's own dark family (#2D1015 ← #52131C ← #7A1F2B, with a
+ * muted-copper glow behind the logo) carries the official app icon
+ * as the hero, the «وطني» wordmark and the official slogan; an ivory
+ * sheet with 32dp top corners holds the form. The Google button now
+ * follows Google's branding guidelines literally (white surface,
+ * neutral border, the official multicolour "G" at the start side,
+ * «تسجيل الدخول عبر Google» centred) and owns the loading state;
+ * errors arrive as a soft banner inside the sheet, never raw text.
+ * Entrance is a short staggered fade/rise (alpha + translation
+ * only, cheap on weak devices). The 1.2.19 privacy consent line is
+ * preserved verbatim below the button in both modes.
  */
 @Composable
 fun SignInGate(
@@ -79,6 +128,7 @@ fun SignInGate(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val dark = isSystemInDarkTheme()
     // Privacy/terms screen (build 1.2.19): opened from the consent
     // links under the sign-in button, scrolled to the tapped part
     // (0 privacy / 1 terms / 2 medical disclaimer); a local swap
@@ -123,144 +173,382 @@ fun SignInGate(
         }
     }
 
-    Column(
+    // Entrance choreography: one trigger, staggered fades/rises.
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    fun entrance(delayMs: Int, riseFraction: Float) = fadeIn(
+        animationSpec = tween(durationMillis = 550, delayMillis = delayMs)
+    ) + slideInVertically(
+        animationSpec = tween(durationMillis = 550, delayMillis = delayMs)
+    ) { (it * riseFraction).toInt() }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // The official app logo (the launcher icon itself — the fixed
-        // white M + gold plus on maroon). Rasterized from the installed
-        // application icon so adaptive-icon resources render correctly;
-        // painterResource on a mipmap can resolve to the anydpi XML.
-        val appIconBitmap = remember(context) {
-            try {
-                val drawable = context.packageManager.getApplicationIcon(context.packageName)
-                val bmp = android.graphics.Bitmap.createBitmap(
-                    240, 240, android.graphics.Bitmap.Config.ARGB_8888
+            .background(
+                Brush.verticalGradient(
+                    0.0f to MaroonInk,
+                    0.48f to MaroonDark,
+                    1.0f to MaroonPrimary
                 )
-                val canvas = android.graphics.Canvas(bmp)
-                drawable.setBounds(0, 0, 240, 240)
-                drawable.draw(canvas)
-                bmp.asImageBitmap()
-            } catch (e: Exception) {
-                null
-            }
-        }
-        if (appIconBitmap != null) {
-            Image(
-                bitmap = appIconBitmap,
-                contentDescription = "شعار وطني",
-                modifier = Modifier
-                    .size(96.dp)
-                    .clip(RoundedCornerShape(24.dp))
             )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(96.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(MaroonPrimary),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("M", color = androidx.compose.ui.graphics.Color.White, fontSize = 44.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            "وطني",
-            fontWeight = FontWeight.Bold,
-            fontSize = 26.sp,
-            color = MaroonPrimary
-        )
-        Text(
-            "Med Pro",
-            fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            "نجاحك في الوطني يبدأ من هنا",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(28.dp))
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-            modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                OutlinedTextField(
-                    value = nameInput,
-                    onValueChange = { if (it.length <= 80) nameInput = it },
-                    label = { Text("اسمك يا دكتور/ة") },
-                    placeholder = { Text("الاسم الكامل") },
-                    supportingText = {
-                        Text("هيك رح نناديك جوّا التطبيق — وفيك تعدّله بأي وقت من ملفك الشخصي.")
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.medium
-                )
-                if (existingUser != null) {
-                    Spacer(modifier = Modifier.height(6.dp))
+            // ---------- Hero: logo, wordmark, slogan ----------
+            AnimatedVisibility(visible = shown, enter = entrance(0, 0.22f)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(modifier = Modifier.height(48.dp))
+                    // The official app logo (the launcher icon itself —
+                    // the fixed white M + gold plus on maroon).
+                    // Rasterized from the installed application icon so
+                    // adaptive-icon resources render correctly;
+                    // painterResource on a mipmap can resolve to the
+                    // anydpi XML.
+                    val appIconBitmap = remember(context) {
+                        try {
+                            val drawable = context.packageManager.getApplicationIcon(context.packageName)
+                            val bmp = android.graphics.Bitmap.createBitmap(
+                                240, 240, android.graphics.Bitmap.Config.ARGB_8888
+                            )
+                            val canvas = android.graphics.Canvas(bmp)
+                            drawable.setBounds(0, 0, 240, 240)
+                            drawable.draw(canvas)
+                            bmp.asImageBitmap()
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    Box(contentAlignment = Alignment.Center) {
+                        // Muted-copper halo behind the logo (brand
+                        // accent only — never a yellow UI surface).
+                        Box(
+                            modifier = Modifier
+                                .size(300.dp)
+                                .background(
+                                    Brush.radialGradient(
+                                        listOf(
+                                            GoldAccent.copy(alpha = 0.20f),
+                                            Color.Transparent
+                                        )
+                                    ),
+                                    CircleShape
+                                )
+                        )
+                        if (appIconBitmap != null) {
+                            Image(
+                                bitmap = appIconBitmap,
+                                contentDescription = "شعار وطني",
+                                modifier = Modifier
+                                    .size(112.dp)
+                                    .shadow(18.dp, RoundedCornerShape(28.dp))
+                                    .clip(RoundedCornerShape(28.dp))
+                                    .border(
+                                        1.dp,
+                                        GoldAccent.copy(alpha = 0.55f),
+                                        RoundedCornerShape(28.dp)
+                                    )
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(112.dp)
+                                    .shadow(18.dp, RoundedCornerShape(28.dp))
+                                    .clip(RoundedCornerShape(28.dp))
+                                    .background(MaroonInk)
+                                    .border(
+                                        1.dp,
+                                        GoldAccent.copy(alpha = 0.55f),
+                                        RoundedCornerShape(28.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "M",
+                                    color = Color.White,
+                                    fontSize = 52.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
                     Text(
-                        "مسجّل الدخول: ${existingUser.email ?: ""}",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
+                        "وطني",
+                        fontFamily = ThmanyahFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 40.sp,
+                        color = TextOnDark
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        "MED PRO",
+                        style = TextStyle(
+                            fontFamily = CairoFontFamily,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            letterSpacing = 4.5.sp,
+                            color = GoldAccent
+                        )
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                if (errorMessage != null) {
+            }
+            AnimatedVisibility(visible = shown, enter = entrance(140, 0.22f)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        errorMessage!!,
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 13.sp,
+                        "نجاحك في الوطني يبدأ من هنا",
+                        fontFamily = TajawalFontFamily,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 17.sp,
+                        color = TextOnDark.copy(alpha = 0.92f),
                         textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
+                    // Hairline divider with a centre diamond.
+                    Box(contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = Modifier
+                                .width(74.dp)
+                                .height(1.5.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(
+                                            Color.Transparent,
+                                            GoldAccent,
+                                            Color.Transparent
+                                        )
+                                    )
+                                )
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .rotate(45f)
+                                .background(GoldAccent)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(26.dp))
                 }
-                if (isLoading) {
-                    CircularProgressIndicator(color = MaroonPrimary)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("جاري تسجيل الدخول...", fontSize = 13.sp)
-                } else if (existingUser != null) {
-                    Button(
-                        onClick = { finishWithUser(existingUser) },
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                        shape = MaterialTheme.shapes.medium
+            }
+
+            // ---------- Sheet: the form ----------
+            AnimatedVisibility(visible = shown, enter = entrance(220, 0.10f)) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 452.dp),
+                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 16.dp
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.TopCenter
                     ) {
-                        Text("متابعة", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Column(
+                            modifier = Modifier
+                                .widthIn(max = 560.dp)
+                                .fillMaxWidth()
+                                .padding(horizontal = 28.dp, vertical = 26.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "أهلاً بك",
+                                fontFamily = CairoFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Start
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "سجّل دخولك بحساب Google لفتح التطبيق ومتابعة دراستك",
+                                fontFamily = TajawalFontFamily,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Start
+                            )
+                            Spacer(modifier = Modifier.height(22.dp))
+                            Text(
+                                "اسمك يا دكتور/ة",
+                                fontFamily = CairoFontFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = if (dark) MaroonLight else MaroonPrimary,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Start
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = nameInput,
+                                onValueChange = { if (it.length <= 80) nameInput = it },
+                                placeholder = { Text("الاسم الكامل") },
+                                supportingText = {
+                                    Text("هيك رح نناديك جوّا التطبيق — وفيك تعدّله بأي وقت من ملفك الشخصي.")
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaroonPrimary,
+                                    unfocusedBorderColor = if (dark) DarkMaroonOutline else RoseOutline,
+                                    focusedContainerColor = if (dark) {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    } else {
+                                        RoseBackground
+                                    },
+                                    unfocusedContainerColor = if (dark) {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    } else {
+                                        RoseBackground
+                                    }
+                                )
+                            )
+                            if (existingUser != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    "مسجّل الدخول: ${existingUser.email ?: ""}",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            AnimatedVisibility(visible = errorMessage != null) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(ErrorRed.copy(alpha = 0.08f))
+                                        .border(
+                                            1.dp,
+                                            ErrorRed.copy(alpha = 0.28f),
+                                            RoundedCornerShape(14.dp)
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = ErrorRed,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        errorMessage
+                                            ?: "تعذّر تسجيل الدخول — تحقق من الاتصال وحاول مجددًا.",
+                                        color = ErrorRed,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                            if (errorMessage != null) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                            if (existingUser != null) {
+                                Button(
+                                    onClick = { finishWithUser(existingUser) },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaroonPrimary
+                                    ),
+                                    shape = RoundedCornerShape(percent = 50)
+                                ) {
+                                    Text(
+                                        "متابعة",
+                                        fontFamily = CairoFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = Color.White
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                PrivacyConsentLine(onOpenPolicy = { policyAnchor = it })
+                            } else {
+                                // Google's branding guidelines, literally:
+                                // white surface, neutral border, official
+                                // multicolour "G" at the start side, label
+                                // centred. The button owns the loading
+                                // state so its shell never changes shape.
+                                Button(
+                                    onClick = { signInWithGoogle() },
+                                    enabled = !isLoading,
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color.White,
+                                        contentColor = Color(0xFF1F1F1F),
+                                        disabledContainerColor = Color.White,
+                                        disabledContentColor = Color(0xFF1F1F1F)
+                                    ),
+                                    border = BorderStroke(1.dp, Color(0xFFDADCE0)),
+                                    elevation = ButtonDefaults.buttonElevation(
+                                        defaultElevation = 0.dp,
+                                        pressedElevation = 0.dp,
+                                        disabledElevation = 0.dp
+                                    ),
+                                    shape = RoundedCornerShape(percent = 50),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isLoading) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(20.dp),
+                                                    color = MaroonPrimary,
+                                                    strokeWidth = 2.5.dp
+                                                )
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text(
+                                                    "جاري تسجيل الدخول...",
+                                                    fontFamily = TajawalFontFamily,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontSize = 14.sp,
+                                                    color = Color(0xFF1F1F1F)
+                                                )
+                                            }
+                                        } else {
+                                            Text(
+                                                "تسجيل الدخول عبر Google",
+                                                fontFamily = TajawalFontFamily,
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 16.sp,
+                                                color = Color(0xFF1F1F1F)
+                                            )
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_google_g),
+                                                contentDescription = null,
+                                                tint = Color.Unspecified,
+                                                modifier = Modifier
+                                                    .align(Alignment.CenterStart)
+                                                    .padding(start = 18.dp)
+                                                    .size(21.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Text(
+                                    "الدخول بحساب Google مطلوب لفتح التطبيق — وجلستك المحفوظة بتضل تدخّلك أوفلاين كل يوم بلا ما تنقفل.",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                PrivacyConsentLine(onOpenPolicy = { policyAnchor = it })
+                            }
+                        }
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    PrivacyConsentLine(onOpenPolicy = { policyAnchor = it })
-                } else {
-                    Button(
-                        onClick = { signInWithGoogle() },
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Text("المتابعة عبر Google", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        "الدخول بحساب Google مطلوب لفتح التطبيق — وجلستك المحفوظة بتضل تدخّلك أوفلاين كل يوم بلا ما تنقفل.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    PrivacyConsentLine(onOpenPolicy = { policyAnchor = it })
                 }
             }
         }
