@@ -18,11 +18,12 @@ android {
     applicationId = "sy.medpro.watani"
     minSdk = 24
     targetSdk = 36
-    // Unified fixes build (Nov 2026): a real, ascending versionCode
-    // (74273, the build number after 74272) so this build installs as
-    // an update over every previous one, and a meaningful versionName.
-    versionCode = 74291
-    versionName = "1.2.17"
+    // 1.2.18 (Nov 2026): critical Android 7 (API 24/25) crash fix —
+    // core library desugaring for java.time (see compileOptions below)
+    // + removal of the unused firebase-ai SDK. Ascending versionCode so
+    // this build installs as an update over every previous one.
+    versionCode = 74292
+    versionName = "1.2.18"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -81,14 +82,24 @@ android {
     }
   }
   lint {
-    // Unified fixes package (Nov 2026): the 54 pre-existing lint
-    // ERRORS (48 NewApi java.time-on-minSdk-24, 5 media3 UnsafeOptIn,
-    // 1 WrongConstant — all in code that predates this build) are
-    // frozen in lint-baseline.xml. Any NEW lint error fails the CI
+    // 1.2.18 (Nov 2026): the 48 NewApi java.time-on-minSdk-24 errors
+    // are FIXED AT THE ROOT by core library desugaring (below), so
+    // their entries were removed from lint-baseline.xml — lint now
+    // verifies the desugared java.time paths for real. The baseline
+    // still freezes only the remaining pre-existing errors (9 media3
+    // UnsafeOptIn, 1 WrongConstant). Any NEW lint error fails the CI
     // lint step; warnings never fail it.
     baseline = file("lint-baseline.xml")
   }
   compileOptions {
+    // Core library desugaring (1.2.18): java.time & friends are used
+    // on core paths (FocusTimerEngine, OfflineStudyVault,
+    // WorkerActivationApi, home dashboard...) while minSdk is 24 —
+    // without desugaring those classes do not exist on Android 7
+    // (API 24/25) and the app dies with NoClassDefFoundError.
+    // Desugaring rewrites them to the bundled j$.* backport, so
+    // API 24/25 run the same code as newer devices. minSdk stays 24.
+    isCoreLibraryDesugaringEnabled = true
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
   }
@@ -130,7 +141,13 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.navigation.compose)
   implementation(libs.converter.moshi)
-  implementation(libs.firebase.ai)
+  // Core library desugaring runtime (1.2.18) — pairs with
+  // isCoreLibraryDesugaringEnabled above; ships the j$.* backport of
+  // java.time etc. inside the APK for API 24/25 devices.
+  coreLibraryDesugaring(libs.desugar.jdk.libs)
+  // firebase-ai was removed in 1.2.18: the in-app assistant is frozen
+  // and the SDK had zero call sites in the source (verified by search)
+  // — it only added APK weight and surface.
   implementation(libs.firebase.appcheck.recaptcha)
   // App Check debug provider is a DEBUG-only aid: it must never ship
   // in a release build (unified fixes package, Nov 2026).
