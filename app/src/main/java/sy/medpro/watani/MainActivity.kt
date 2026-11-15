@@ -1075,7 +1075,8 @@ class MainActivity : ComponentActivity() {
                                                                     }
                                                                 },
                                                                 onOpenUniversity = { key, name -> viewModel.openUniversity(key, name) },
-                                                                onCaseClick = { caseItem -> viewModel.openCasePlayer(caseItem) }
+                                                                onCaseClick = { caseItem -> viewModel.openCasePlayer(caseItem) },
+                                                                onBankSectionsShown = { viewModel.refreshInstalledBanksInBackground() }
                                                                 )
                                                             }
                                                         }
@@ -1290,7 +1291,8 @@ class MainActivity : ComponentActivity() {
                                                                 viewModel.openSubject(path, name, AppTab.UNIVERSITIES)
                                                             }
                                                         },
-                                                        onBack = { viewModel.goBack() }
+                                                        onBack = { viewModel.goBack() },
+                                                        onBankSectionsShown = { viewModel.refreshInstalledBanksInBackground() }
                                                     )
                                                 }
                                                 is ScreenState.Quiz -> {

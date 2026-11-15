@@ -39,7 +39,8 @@ val universitiesMap = mapOf(
     "lattakia" to "جامعة اللاذقية",
     "homs" to "جامعة حمص",
     "hama" to "جامعة حماة",
-    "idlib" to "جامعة إدلب"
+    "idlib" to "جامعة إدلب",
+    "tartus" to "جامعة طرطوس"
 )
 
 enum class BankSection(val title: String) {
@@ -68,7 +69,8 @@ fun HomeScreen(
     onDownloadSection: (String, ManifestFileEntry) -> Unit,
     onOpenSubject: (String, String, AppTab) -> Unit,
     onOpenUniversity: (String, String) -> Unit,
-    onCaseClick: (sy.medpro.watani.data.ClinicalCaseDto) -> Unit
+    onCaseClick: (sy.medpro.watani.data.ClinicalCaseDto) -> Unit,
+    onBankSectionsShown: () -> Unit = {}
 ) {
     var selectedBankSection by remember { mutableStateOf(BankSection.WATANI) }
     var isRefreshing by remember { mutableStateOf(false) }
@@ -81,6 +83,14 @@ fun HomeScreen(
             AppTab.UWORLD -> BankSection.UWORLD
             else -> BankSection.WATANI
         }
+    }
+    // Bank auto-update (build 1.2.21): showing a question-bank tab runs
+    // the same silent stale-check the self-loading pack screens use —
+    // installed banks refresh in the background (MainViewModel ->
+    // WataniRepository.refreshInstalledBankSections) without blocking
+    // the list. The cases tab is a self-loading pack flow, not a bank.
+    LaunchedEffect(selectedBankSection) {
+        if (selectedBankSection != BankSection.CASES) onBankSectionsShown()
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -654,8 +664,13 @@ fun UniversitySubjectsScreen(
     downloadingProgress: Map<String, Float> = emptyMap(),
     onDownloadSection: (String, ManifestFileEntry) -> Unit,
     onOpenSubject: (String, String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onBankSectionsShown: () -> Unit = {}
 ) {
+    // Bank auto-update (build 1.2.21): same background stale-check as
+    // the bank tabs — this university's installed subjects refresh
+    // silently while the list is browsed.
+    LaunchedEffect(universityKey) { onBankSectionsShown() }
     val prefix = "dawrat_jami3at/$universityKey/"
     val univFiles = files.filterKeys { it.startsWith(prefix) && it.endsWith(".json") }
     val downloadedMap = downloadedSections.associateBy { it.sectionPath }

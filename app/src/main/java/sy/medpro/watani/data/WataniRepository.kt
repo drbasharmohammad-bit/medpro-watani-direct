@@ -114,6 +114,13 @@ class WataniRepository(private val context: Context) {
          * proven revocation: a stale copy would keep listing restricted
          * sections after the activation ended. */
         const val MANIFEST_CACHE_FILENAME = "manifest_cache.json"
+
+        /** The four question-bank families swept by
+         * [refreshInstalledBankSections] (build 1.2.21). Single-file
+         * packs (concepts.json and friends) are NOT bank sections and
+         * keep their own refresh paths. */
+        private val BANK_SECTION_PREFIXES =
+            listOf("questions/", "questions_en/", "dawrat_jami3at/", "uworld/")
     }
 
     private fun saveManifestCache(manifest: ManifestResponse) {
@@ -191,6 +198,50 @@ class WataniRepository(private val context: Context) {
                 .firstOrNull { it.sectionPath == path }
             if (!sectionNeedsRefresh(entity, entry)) return false
             downloadSection(path, entry).isSuccess
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Bank auto-update (build 1.2.21): the self-loading packs refresh
+     * themselves on open via [refreshSectionIfStale], but the question
+     * banks never called it from any screen — an installed bank only
+     * updated when the student noticed the «تحميل» button return in
+     * the section list and pressed it. This applies the SAME stale
+     * check ([sectionNeedsRefresh] against a freshly fetched manifest)
+     * to every ALREADY-INSTALLED section of the four bank families
+     * (questions/, questions_en/, dawrat_jami3at/, uworld/) and
+     * re-downloads the stale ones through the standard [downloadSection]
+     * path — atomic as always: size + family hash + real count are
+     * verified before install, and any failure keeps the working copy.
+     *
+     * Contract mirrors [refreshSectionIfStale]: best-effort and silent.
+     * Sections that were never installed are NEVER downloaded here
+     * (no entity -> skipped), the concepts pack is deliberately not
+     * part of this sweep (it has its own explicit Library download
+     * card), paths in [excludePaths] (a manual download in flight on
+     * the same file) are skipped, and any failure leaves the local
+     * copies untouched. Returns true when at least one section was
+     * actually updated.
+     */
+    suspend fun refreshInstalledBankSections(excludePaths: Set<String> = emptySet()): Boolean {
+        return try {
+            val manifest = fetchManifest().getOrNull() ?: return false
+            val files = manifest.files ?: return false
+            var updated = false
+            // Snapshot first: downloadSection rewrites the downloaded
+            // registry as each section lands.
+            val installed = _downloadedSectionsFlow.value.filter { entity ->
+                entity.sectionPath !in excludePaths &&
+                    BANK_SECTION_PREFIXES.any { entity.sectionPath.startsWith(it) }
+            }
+            for (entity in installed) {
+                val entry = files[entity.sectionPath] ?: continue
+                if (!sectionNeedsRefresh(entity, entry)) continue
+                if (downloadSection(entity.sectionPath, entry).isSuccess) updated = true
+            }
+            updated
         } catch (e: Exception) {
             false
         }
