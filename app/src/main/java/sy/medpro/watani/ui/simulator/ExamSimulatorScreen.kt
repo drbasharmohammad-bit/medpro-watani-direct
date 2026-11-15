@@ -119,7 +119,6 @@ private val sampleExamQuestions = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExamSimulatorScreen(onBack: () -> Unit) {
-    BackHandler(onBack = onBack)
     val context = LocalContext.current
     var mode by remember { mutableStateOf("SETUP") } // SETUP, RUNNING, REPORT
     var selectedSpecialty by remember { mutableStateOf("شامل - جميع الاختصاصات") }
@@ -131,6 +130,12 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
     var flaggedQuestions by remember { mutableStateOf(setOf<Int>()) }
     var showLabModal by remember { mutableStateOf(false) }
     var activeQuestions by remember { mutableStateOf(sampleExamQuestions) }
+
+    // Back-navigation fix (1.2.22): the system back button steps
+    // exactly like the top-bar back — from RUNNING/REPORT it returns
+    // to SETUP, and only from SETUP does it leave the section. The
+    // old handler exited immediately, even mid-exam.
+    BackHandler { if (mode == "SETUP") onBack() else mode = "SETUP" }
 
     LaunchedEffect(mode) {
         if (mode == "RUNNING") {

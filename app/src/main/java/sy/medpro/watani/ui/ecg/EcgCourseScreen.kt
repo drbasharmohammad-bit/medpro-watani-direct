@@ -78,6 +78,15 @@ private enum class EcgDest {
     DRILL, LEAD_MAP, CALIPERS, AUSCULTATION, AUSC_QUIZ
 }
 
+/** One entry of the course's internal back stack (1.2.22): the
+ * destination plus the selections it was opened with, so popping
+ * restores the exact previous screen. */
+private data class EcgNavEntry(
+    val dest: EcgDest,
+    val patternId: String? = null,
+    val stripId: String? = null
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EcgSubScaffold(
@@ -154,11 +163,29 @@ fun EcgCourseScreen(onBack: () -> Unit) {
     var envelope by remember { mutableStateOf<EcgEnvelope?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var usedSample by remember { mutableStateOf(false) }
-    var dest by remember { mutableStateOf(EcgDest.HOME) }
-    var selectedPatternId by remember { mutableStateOf<String?>(null) }
-    var selectedStripId by remember { mutableStateOf<String?>(null) }
+    // Back-navigation fix (1.2.22): the course navigates on an
+    // internal STACK of (dest, patternId, stripId) snapshots instead
+    // of three flat vars. Before this, every sub-screen's top-bar
+    // back jumped straight to the course HOME — skipping the screen
+    // the student came from (compare → pattern detail, guided strip
+    // → its list) — and the system back button exited the whole
+    // course in one press (no handler at all). Now both buttons pop
+    // exactly one step; at HOME the pop exits via onBack.
+    var navStack by remember { mutableStateOf(listOf(EcgNavEntry(EcgDest.HOME))) }
+    val navTop = navStack.last()
+    val dest = navTop.dest
+    val selectedPatternId = navTop.patternId
+    val selectedStripId = navTop.stripId
     // Recompose progress figures after returning from a unit.
     var progressTick by remember { mutableStateOf(0) }
+
+    fun pushDest(
+        d: EcgDest,
+        patternId: String? = selectedPatternId,
+        stripId: String? = selectedStripId
+    ) {
+        navStack = navStack + EcgNavEntry(d, patternId, stripId)
+    }
 
     LaunchedEffect(Unit) {
         var env = repo.getEcgEnvelope()
@@ -184,25 +211,32 @@ fun EcgCourseScreen(onBack: () -> Unit) {
         isLoading = false
     }
 
-    val backToHome: () -> Unit = {
-        dest = EcgDest.HOME
+    // One step back (1.2.22): shared by every sub-screen's top-bar
+    // back and the system back button; exits the course only from
+    // the course HOME.
+    val stepBack: () -> Unit = {
+        if (navStack.size > 1) {
+            navStack = navStack.dropLast(1)
+        } else {
+            onBack()
+        }
         progressTick++
     }
+    androidx.activity.compose.BackHandler { stepBack() }
 
     when (dest) {
         EcgDest.HOME -> Unit
         EcgDest.METHOD -> {
-            EcgMethodScreen(envelope, store, onBack = backToHome)
+            EcgMethodScreen(envelope, store, onBack = stepBack)
             return
         }
         EcgDest.METHOD_COURSE -> {
             MethodCourseScreen(
                 envelope = envelope,
                 onOpenStrip = { stripId ->
-                    selectedStripId = stripId
-                    dest = EcgDest.GUIDED
+                    pushDest(EcgDest.GUIDED, stripId = stripId)
                 },
-                onBack = backToHome
+                onBack = stepBack
             )
             return
         }
@@ -210,10 +244,9 @@ fun EcgCourseScreen(onBack: () -> Unit) {
             EcgPatternsScreen(
                 envelope,
                 onOpenPattern = { id ->
-                    selectedPatternId = id
-                    dest = EcgDest.PATTERN_DETAIL
+                    pushDest(EcgDest.PATTERN_DETAIL, patternId = id)
                 },
-                onBack = backToHome
+                onBack = stepBack
             )
             return
         }
@@ -224,12 +257,11 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                     envelope = envelope,
                     pattern = pattern,
                     store = store,
-                    onCompare = { dest = EcgDest.COMPARE },
+                    onCompare = { pushDest(EcgDest.COMPARE) },
                     onGuidedStrip = { stripId ->
-                        selectedStripId = stripId
-                        dest = EcgDest.GUIDED
+                        pushDest(EcgDest.GUIDED, stripId = stripId)
                     },
-                    onBack = backToHome
+                    onBack = stepBack
                 )
                 return
             }
@@ -238,7 +270,7 @@ fun EcgCourseScreen(onBack: () -> Unit) {
             val env = envelope
             val pattern = env?.patterns?.firstOrNull { it.id == selectedPatternId }
             if (env != null && pattern != null) {
-                CompareScreen(envelope = env, pattern = pattern, onBack = backToHome)
+                CompareScreen(envelope = env, pattern = pattern, onBack = stepBack)
                 return
             }
         }
@@ -247,10 +279,9 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                 envelope = envelope,
                 store = store,
                 onOpenStrip = { stripId ->
-                    selectedStripId = stripId
-                    dest = EcgDest.GUIDED
+                    pushDest(EcgDest.GUIDED, stripId = stripId)
                 },
-                onBack = backToHome
+                onBack = stepBack
             )
             return
         }
@@ -262,7 +293,7 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                     envelope = env,
                     strip = strip,
                     store = store,
-                    onBack = backToHome
+                    onBack = stepBack
                 )
                 return
             }
@@ -274,10 +305,9 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                     envelope = env,
                     store = store,
                     onOpenPattern = { id ->
-                        selectedPatternId = id
-                        dest = EcgDest.PATTERN_DETAIL
+                        pushDest(EcgDest.PATTERN_DETAIL, patternId = id)
                     },
-                    onBack = backToHome
+                    onBack = stepBack
                 )
                 return
             }
@@ -285,23 +315,23 @@ fun EcgCourseScreen(onBack: () -> Unit) {
         EcgDest.LEAD_MAP -> {
             val env = envelope
             if (env != null) {
-                LeadMapScreen(envelope = env, store = store, onBack = backToHome)
+                LeadMapScreen(envelope = env, store = store, onBack = stepBack)
                 return
             }
         }
         EcgDest.CALIPERS -> {
             val env = envelope
             if (env != null) {
-                CaliperScreen(envelope = env, onBack = backToHome)
+                CaliperScreen(envelope = env, onBack = stepBack)
                 return
             }
         }
         EcgDest.AUSCULTATION -> {
-            AuscultationTrainerScreen(onBack = backToHome)
+            AuscultationTrainerScreen(onBack = stepBack)
             return
         }
         EcgDest.AUSC_QUIZ -> {
-            AuscultationQuizScreen(store = store, onBack = backToHome)
+            AuscultationQuizScreen(store = store, onBack = stepBack)
             return
         }
     }
@@ -357,7 +387,7 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                         if ((env.methodLessons ?: emptyList()).isNotEmpty()) {
                             item {
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().clickable { dest = EcgDest.METHOD_COURSE },
+                                    modifier = Modifier.fillMaxWidth().clickable { pushDest(EcgDest.METHOD_COURSE) },
                                     shape = RoundedCornerShape(14.dp),
                                     colors = CardDefaults.cardColors(containerColor = MaroonPrimary),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
@@ -452,7 +482,7 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                                                 subtitle = unit.subtitle,
                                                 icon = unit.icon,
                                                 done = unit.done,
-                                                onClick = { dest = unit.dest }
+                                                onClick = { pushDest(unit.dest) }
                                             )
                                         }
                                     }
@@ -468,7 +498,7 @@ fun EcgCourseScreen(onBack: () -> Unit) {
                                     subtitle = unit.subtitle,
                                     icon = unit.icon,
                                     done = unit.done,
-                                    onClick = { dest = unit.dest }
+                                    onClick = { pushDest(unit.dest) }
                                 )
                             }
                         }

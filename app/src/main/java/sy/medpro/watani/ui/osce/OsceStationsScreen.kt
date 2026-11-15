@@ -38,7 +38,6 @@ import sy.medpro.watani.data.WataniRepository
 
 @Composable
 fun OsceStationsScreen(onBack: () -> Unit) {
-    BackHandler { onBack() }
     val context = LocalContext.current
 
     var stations by remember { mutableStateOf<List<OsceStation>>(emptyList()) }
@@ -91,6 +90,23 @@ fun OsceStationsScreen(onBack: () -> Unit) {
         loadOsce()
     }
 
+    // Back-navigation fix (1.2.22): ONE stepping lambda for both
+    // back paths. The scaffold's top-bar back already stepped
+    // (exam mode → station detail → list → exit), but the system
+    // BackHandler exited the whole section in one press — the two
+    // buttons disagreed. The procedures wing composes its own
+    // BackHandler later and keeps precedence while it is shown.
+    val stepBack: () -> Unit = {
+        if (activeExamMode) {
+            activeExamMode = false
+        } else if (selectedStation != null) {
+            selectedStation = null
+        } else {
+            onBack()
+        }
+    }
+    BackHandler { stepBack() }
+
     if (showProcedures) {
         ProceduresWingScreen(onBack = { showProcedures = false })
         return
@@ -98,15 +114,7 @@ fun OsceStationsScreen(onBack: () -> Unit) {
 
     DrawerScreenScaffold(
         title = "محطات الامتحان السريري المنهجي (OSCE Stations)",
-        onBack = {
-            if (activeExamMode) {
-                activeExamMode = false
-            } else if (selectedStation != null) {
-                selectedStation = null
-            } else {
-                onBack()
-            }
-        }
+        onBack = stepBack
     ) { padding ->
         Box(
             modifier = Modifier

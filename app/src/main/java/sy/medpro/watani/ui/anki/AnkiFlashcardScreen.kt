@@ -140,6 +140,11 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
         finished = false
     }
 
+    // Back-navigation fix (1.2.22): during a review session, the
+    // system back button returns to the subject picker (backToPicker)
+    // instead of leaving the whole section mid-session.
+    androidx.activity.compose.BackHandler(enabled = sessionStarted) { backToPicker() }
+
     // Wrong-only entry (e.g. from the mistakes screen) starts directly; otherwise
     // the subject picker is the default state — never a mixed all-subjects session.
     LaunchedEffect(loadedSet) {
@@ -175,7 +180,9 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
     Scaffold(
         topBar = {
             // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
-            SlimSubBar(onBack = onBack) {
+            // Back-navigation fix (1.2.22): the top-bar back steps
+            // like the system button — session → picker → exit.
+            SlimSubBar(onBack = { if (sessionStarted) backToPicker() else onBack() }) {
                 Text("البطاقات الذكية - Anki", fontWeight = FontWeight.Bold, fontSize = 17.sp)
             }
         }

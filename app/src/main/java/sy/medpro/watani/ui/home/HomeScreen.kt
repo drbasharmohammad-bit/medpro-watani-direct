@@ -70,19 +70,24 @@ fun HomeScreen(
     onOpenSubject: (String, String, AppTab) -> Unit,
     onOpenUniversity: (String, String) -> Unit,
     onCaseClick: (sy.medpro.watani.data.ClinicalCaseDto) -> Unit,
-    onBankSectionsShown: () -> Unit = {}
+    onBankSectionsShown: () -> Unit = {},
+    // Back-navigation fix (1.2.22): the bank section is HOISTED to
+    // MainActivity (rememberSaveable). It used to be a local
+    // `remember` reset by a LaunchedEffect(currentTab) on every
+    // recomposition — so drilling بنك → الجامعات → جامعة → مادة →
+    // كويز and stepping back through the (healthy) view-model stack
+    // landed the student on the Watani list (the section start)
+    // instead of the universities list they came from. Hoisted +
+    // saveable, the section survives detail-screen detours exactly
+    // as the student left it; requestTab still presets it on an
+    // explicit UNIVERSITIES/UWORLD tab entry.
+    bankSection: BankSection,
+    onBankSectionChange: (BankSection) -> Unit
 ) {
-    var selectedBankSection by remember { mutableStateOf(BankSection.WATANI) }
+    val selectedBankSection = bankSection
     var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(isLoadingManifest) {
         if (!isLoadingManifest) isRefreshing = false
-    }
-    LaunchedEffect(currentTab) {
-        selectedBankSection = when (currentTab) {
-            AppTab.UNIVERSITIES -> BankSection.UNIVERSITIES
-            AppTab.UWORLD -> BankSection.UWORLD
-            else -> BankSection.WATANI
-        }
     }
     // Bank auto-update (build 1.2.21): showing a question-bank tab runs
     // the same silent stale-check the self-loading pack screens use —
@@ -109,7 +114,7 @@ fun HomeScreen(
                 BankSection.entries.forEach { section ->
                     Tab(
                         selected = selectedBankSection == section,
-                        onClick = { selectedBankSection = section },
+                        onClick = { onBankSectionChange(section) },
                         text = {
                             Text(
                                 text = section.title,
@@ -442,7 +447,11 @@ fun TopicSelectionScreen(
     // بالشاردة المنزّلة تعرض مبدّلًا بين عرض المواضيع (الأصلي، لا يتغير)
     // وعرض الجلسات. مادة بلا جلسات لا ترى المبدّل إطلاقًا — صفر انحدار.
     val sessions = subjectEnvelope?.sessions ?: emptyList()
-    var byYears by remember(subjectName) { mutableStateOf(false) }
+    // Back-navigation fix (1.2.22): rememberSaveable — a plain
+    // `remember` reset the toggle on return from a session quiz, so
+    // the student who came from «حسب السنوات» landed back on the
+    // topics view (a lost step state).
+    var byYears by androidx.compose.runtime.saveable.rememberSaveable(subjectName) { mutableStateOf(false) }
     val showYears = byYears && sessions.isNotEmpty()
     Scaffold(
         topBar = {

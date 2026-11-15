@@ -94,7 +94,18 @@ fun MistakesBankScreen(onBack: () -> Unit) {
         sessionAnswers = emptyMap()
     }
 
-    DrawerScreenScaffold(title = "بنك أخطائي", onBack = onBack) { padding ->
+    // Back-navigation fix (1.2.22): back steps ONE level — an open
+    // review session ends back to the bank list (the same state the
+    // in-session «إنهاء الجلسة» button produces); only from the list
+    // does back leave the section. Both the system button and the
+    // scaffold's top-bar back use this; previously both exited the
+    // whole section mid-session.
+    val stepBack: () -> Unit = {
+        if (sessionItems != null) sessionItems = null else onBack()
+    }
+    androidx.activity.compose.BackHandler { stepBack() }
+
+    DrawerScreenScaffold(title = "بنك أخطائي", onBack = stepBack) { padding ->
         val items = sessionItems
         if (items != null) {
             // ------------------------- Review session -------------------------

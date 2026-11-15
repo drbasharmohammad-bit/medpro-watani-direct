@@ -137,6 +137,13 @@ fun ReverseTrainerScreen(onBack: () -> Unit) {
         }
     }
 
+    // Back-navigation fix (1.2.22): the system back button steps
+    // exactly like the top-bar back (open round → round list →
+    // exit); it used to exit the whole trainer in one press.
+    androidx.activity.compose.BackHandler {
+        if (currentRound != null) currentRound = null else onBack()
+    }
+
     Scaffold(
         topBar = {
             // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.

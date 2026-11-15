@@ -265,6 +265,16 @@ class MainActivity : ComponentActivity() {
                 var pendingDrawer by remember { mutableStateOf<String?>(null) }
                 var showActivationPrompt by remember { mutableStateOf(false) }
                 var gateDialogMessage by remember { mutableStateOf<String?>(null) }
+                // Back-navigation fix (1.2.22): the bank section lives
+                // here (rememberSaveable) instead of inside HomeScreen,
+                // whose local copy was reset to WATANI every time the
+                // screen recomposed after a detail-screen detour —
+                // stepping back from a university subject landed on
+                // the Watani list (the section start) instead of the
+                // universities list the student came from.
+                var bankSection by androidx.compose.runtime.saveable.rememberSaveable {
+                    mutableStateOf(sy.medpro.watani.ui.home.BankSection.WATANI)
+                }
 
                 // min_version floor (build 1.2.3, protection phase 2):
                 // SUPERSEDED as the enforcement point by the phase-2
@@ -323,6 +333,15 @@ class MainActivity : ComponentActivity() {
                             showActivationPrompt = true
                             return false
                         }
+                    }
+                    // Explicit tab entries preset the bank section
+                    // (1.2.22 hoisting): a UNIVERSITIES/UWORLD entry
+                    // opens the bank on that section; any other entry
+                    // keeps the section the student left it on.
+                    when (tab) {
+                        AppTab.UNIVERSITIES -> bankSection = sy.medpro.watani.ui.home.BankSection.UNIVERSITIES
+                        AppTab.UWORLD -> bankSection = sy.medpro.watani.ui.home.BankSection.UWORLD
+                        else -> Unit
                     }
                     viewModel.setTab(tab)
                     return true
@@ -1077,7 +1096,9 @@ class MainActivity : ComponentActivity() {
                                                                 },
                                                                 onOpenUniversity = { key, name -> viewModel.openUniversity(key, name) },
                                                                 onCaseClick = { caseItem -> viewModel.openCasePlayer(caseItem) },
-                                                                onBankSectionsShown = { viewModel.refreshInstalledBanksInBackground() }
+                                                                onBankSectionsShown = { viewModel.refreshInstalledBanksInBackground() },
+                                                                bankSection = bankSection,
+                                                                onBankSectionChange = { bankSection = it }
                                                                 )
                                                             }
                                                         }

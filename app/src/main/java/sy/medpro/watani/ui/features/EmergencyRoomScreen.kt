@@ -646,7 +646,6 @@ private data class ErMistake(val caseTitle: String, val actionLabel: String, val
 
 @Composable
 fun EmergencyRoomScreen(onBack: () -> Unit) {
-    BackHandler { onBack() }
     var caseIndex by remember { mutableIntStateOf(-1) }
     var nodeId by remember { mutableStateOf<String?>(null) }
     var totalScore by remember { mutableIntStateOf(0) }
@@ -679,7 +678,32 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
         caseEnded = false
     }
 
-    DrawerScreenScaffold(title = "غرفة الطوارئ (مناوبة فردية)", onBack = onBack) { padding ->
+    // Back-navigation fix (1.2.22): back steps ONE level — shift
+    // report / open case → case list → exit — for both the system
+    // button and the scaffold's top-bar back; previously both left
+    // the whole section mid-case or mid-report.
+    fun goBack() {
+        when {
+            shiftDone -> {
+                shiftDone = false
+                caseIndex = -1
+                nodeId = null
+                caseEnded = false
+            }
+            caseIndex >= 0 -> {
+                caseIndex = -1
+                nodeId = null
+                pendingFeedback = null
+                pendingNextNode = null
+                pendingOutcome = null
+                caseEnded = false
+            }
+            else -> onBack()
+        }
+    }
+    BackHandler { goBack() }
+
+    DrawerScreenScaffold(title = "غرفة الطوارئ (مناوبة فردية)", onBack = { goBack() }) { padding ->
         val scroll = rememberScrollState()
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scroll),

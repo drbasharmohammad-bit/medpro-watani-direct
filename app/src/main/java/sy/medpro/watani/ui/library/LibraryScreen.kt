@@ -71,6 +71,33 @@ private sealed interface LibraryRoute {
     data class ConceptsUnit(val unitId: String) : LibraryRoute
 }
 
+/** Back-navigation fix (1.2.22): the library route is saveable, so
+ * leaving the tab's composition (a bank question opened from a
+ * concept unit, a tab switch) no longer dumps the student back on
+ * the Entries start — the route they left is restored as-is. The
+ * payload separator is a control character that cannot appear in
+ * subject names or unit ids. */
+private val LibraryRouteSaver = androidx.compose.runtime.saveable.Saver<LibraryRoute, String>(
+    save = { route ->
+        when (route) {
+            LibraryRoute.Entries -> "entries"
+            LibraryRoute.Videos -> "videos"
+            LibraryRoute.ConceptsSubjects -> "subjects"
+            is LibraryRoute.ConceptsTopics -> "topics\u0001" + route.subject
+            is LibraryRoute.ConceptsUnit -> "unit\u0001" + route.unitId
+        }
+    },
+    restore = { value ->
+        when {
+            value == "videos" -> LibraryRoute.Videos
+            value == "subjects" -> LibraryRoute.ConceptsSubjects
+            value.startsWith("topics\u0001") -> LibraryRoute.ConceptsTopics(value.removePrefix("topics\u0001"))
+            value.startsWith("unit\u0001") -> LibraryRoute.ConceptsUnit(value.removePrefix("unit\u0001"))
+            else -> LibraryRoute.Entries
+        }
+    }
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
@@ -86,7 +113,9 @@ fun LibraryScreen(
     // this screen itself renders whatever the repository returns.
     // (The 28 Oct "library is free" note above is superseded.)
     val state by viewModel.state.collectAsState()
-    var libraryRoute by remember { mutableStateOf<LibraryRoute>(LibraryRoute.Entries) }
+    var libraryRoute by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = LibraryRouteSaver) {
+        mutableStateOf<LibraryRoute>(LibraryRoute.Entries)
+    }
     // «ادرس مع ميد برو» pack check (1.2.14 fix): the check used to
     // run ONCE per process (LaunchedEffect(Unit) inside
     // rememberConceptUnits), so a pack published after the app had
@@ -151,8 +180,8 @@ fun LibraryScreen(
     }
     // Video-list state, declared up-front so it survives moving
     // between the entries screen and the video list.
-    var expandedSubjectId by remember { mutableStateOf<String?>(null) }
-    var showDownloadedOnly by remember { mutableStateOf(false) }
+    var expandedSubjectId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    var showDownloadedOnly by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var currentReader by remember { mutableStateOf<LibraryReaderState?>(null) }
     var openError by remember { mutableStateOf<String?>(null) }
     var loadingOpen by remember { mutableStateOf(false) }
@@ -162,6 +191,24 @@ fun LibraryScreen(
     // handlers while composed and take precedence then).
     BackHandler(enabled = libraryRoute == LibraryRoute.Videos) {
         libraryRoute = LibraryRoute.Entries
+    }
+
+    // Back-navigation fix (1.2.22): system back while a video is
+    // playing closes the READER first (one step — the same as the
+    // player's own top-bar back). Before this, the press was eaten
+    // silently by the Videos handler above (the route changed under
+    // the still-open reader) and the next press jumped to the Home
+    // tab with the player never closed. Composed after the Videos
+    // handler so it takes precedence while a reader is open; the
+    // player's own fullscreen handler is composed later still and
+    // keeps winning in fullscreen.
+    BackHandler(enabled = currentReader != null) {
+        val reader = currentReader
+        if (reader != null) {
+            viewModel.closeItem(reader.item)
+            currentReader = null
+            onReaderFullscreenChange?.invoke(false)
+        }
     }
 
     // «ادرس مع ميد برو» sub-screens FIRST (build 1.2.21): they depend
