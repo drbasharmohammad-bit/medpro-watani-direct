@@ -32,7 +32,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.LibraryItem
 import sy.medpro.watani.data.LibrarySubject
+import sy.medpro.watani.data.WataniRepository
 import sy.medpro.watani.ui.concepts.ConceptUnitScreen
+import sy.medpro.watani.ui.concepts.ConceptsDownloadCard
 import sy.medpro.watani.ui.concepts.ConceptsEntryCard
 import sy.medpro.watani.ui.concepts.ConceptsSubjectsScreen
 import sy.medpro.watani.ui.concepts.ConceptsTopicsScreen
@@ -109,6 +111,29 @@ fun LibraryScreen(
     // the section's entry is not rendered at all (doctor's
     // conditional-display rule).
     val conceptState = rememberConceptUnits(conceptsRefreshKey)
+    // «ادرس مع ميد برو» explicit pack download/update (1.2.17): the
+    // entry card's «حدّث الآن» button and the download card share
+    // this one in-flight state; a finished download bumps the
+    // refresh key so the pack state reloads from disk.
+    val context = LocalContext.current
+    val conceptsScope = rememberCoroutineScope()
+    var conceptsDownloading by remember { mutableStateOf(false) }
+    var conceptsProgress by remember { mutableFloatStateOf(0f) }
+    var conceptsDownloadFailed by remember { mutableStateOf(false) }
+    val onConceptsDownloadClick: () -> Unit = {
+        if (!conceptsDownloading) {
+            conceptsDownloading = true
+            conceptsDownloadFailed = false
+            conceptsProgress = 0f
+            conceptsScope.launch {
+                val ok = WataniRepository(context).downloadConceptsPack { p ->
+                    conceptsProgress = p
+                }
+                conceptsDownloading = false
+                if (ok) conceptsRefreshKey++ else conceptsDownloadFailed = true
+            }
+        }
+    }
     var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(state.isLoading) {
         if (!state.isLoading) isRefreshing = false
@@ -239,7 +264,7 @@ fun LibraryScreen(
             },
             modifier = Modifier.fillMaxSize()
         ) {
-            if (!hasVideos && conceptState.units.isEmpty()) {
+            if (!hasVideos && conceptState.units.isEmpty() && conceptState.serverCount == null) {
                 LibraryEmptyState(
                     onReload = { viewModel.loadLibrary(); conceptsRefreshKey++ }
                 )
@@ -262,7 +287,26 @@ fun LibraryScreen(
                         item {
                             ConceptsEntryCard(
                                 units = conceptState.units,
-                                onClick = { libraryRoute = LibraryRoute.ConceptsSubjects }
+                                onClick = { libraryRoute = LibraryRoute.ConceptsSubjects },
+                                updateAvailable = conceptState.updateAvailable,
+                                serverCount = conceptState.serverCount,
+                                updating = conceptsDownloading,
+                                updateProgress = conceptsProgress,
+                                onUpdateClick = onConceptsDownloadClick
+                            )
+                        }
+                    }
+                    // لا حزمة على الجهاز بعد لكن الخادم يعرضها (1.2.17):
+                    // بطاقة تحميل صريحة — التحميل مرة واحدة ثم يعمل
+                    // القسم بلا إنترنت.
+                    if (conceptState.units.isEmpty() && conceptState.serverCount != null) {
+                        item {
+                            ConceptsDownloadCard(
+                                serverCount = conceptState.serverCount ?: 0,
+                                downloading = conceptsDownloading,
+                                progress = conceptsProgress,
+                                failed = conceptsDownloadFailed,
+                                onDownloadClick = onConceptsDownloadClick
                             )
                         }
                     }
@@ -398,19 +442,41 @@ fun LibraryScreen(
                             if (isExpanded) {
                                 HorizontalDivider()
                                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    filteredItems.forEach { item ->
-                                        val itemId = item.id ?: item.fileUrl ?: ""
-                                        LibraryItemRow(item, viewModel, state.downloadingIds, downloadProgress = state.downloadingProgress[itemId], downloadError = state.downloadErrors[itemId], onOpenReader = { file, url ->
-                                            currentReader = LibraryReaderState(
-                                                item, file, url,
-                                                // Local SRT side-car only for downloaded videos;
-                                                // streamed videos use the item's subtitleUrl.
-                                                subtitleFile = if (file != null) viewModel.getSubtitleFile(item) else null,
-                                                subtitleUrl = item.subtitleUrl
+                                    // تجميع حسب موضوع الوطني (1.2.17، بأمر
+                                    // الدكتور): الفيديوهات ذات حقل topic
+                                    // بالكتالوج تُعرض تحت ترويسة موضوعها
+                                    // بترتيب أول ظهور بالكتالوج، وبلا
+                                    // موضوع تبقى بآخر القائمة بلا ترويسة
+                                    // كما كانت تمامًا — فالكتالوج القديم
+                                    // (بلا topic) يرسم القائمة المسطّحة
+                                    // نفسها بلا أي تغيير.
+                                    val topicGroups = filteredItems.groupBy { it.topic?.trim()?.takeIf { t -> t.isNotEmpty() } }
+                                    val orderedGroups = topicGroups.entries
+                                        .filter { it.key != null } + topicGroups.entries.filter { it.key == null }
+                                    orderedGroups.forEach { (topic, groupItems) ->
+                                        if (topic != null) {
+                                            Text(
+                                                topic,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.5.sp,
+                                                color = MaroonPrimary,
+                                                modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
                                             )
-                                        }, onOpenError = { err ->
-                                            openError = err
-                                        })
+                                        }
+                                        groupItems.forEach { item ->
+                                            val itemId = item.id ?: item.fileUrl ?: ""
+                                            LibraryItemRow(item, viewModel, state.downloadingIds, downloadProgress = state.downloadingProgress[itemId], downloadError = state.downloadErrors[itemId], onOpenReader = { file, url ->
+                                                currentReader = LibraryReaderState(
+                                                    item, file, url,
+                                                    // Local SRT side-car only for downloaded videos;
+                                                    // streamed videos use the item's subtitleUrl.
+                                                    subtitleFile = if (file != null) viewModel.getSubtitleFile(item) else null,
+                                                    subtitleUrl = item.subtitleUrl
+                                                )
+                                            }, onOpenError = { err ->
+                                                openError = err
+                                            })
+                                        }
                                     }
                                 }
                             }

@@ -34,7 +34,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
@@ -533,12 +535,41 @@ class MainActivity : ComponentActivity() {
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.padding(vertical = 12.dp)
                                         ) {
-                                            Icon(
-                                                Icons.Default.MedicalServices,
-                                                contentDescription = null,
-                                                tint = MaroonPrimary,
-                                                modifier = Modifier.size(36.dp)
-                                            )
+                                            // شعار المنصة الرسمي مكان أيقونة الشنطة
+                                            // (أمر الدكتور، بناء 1.2.17): أيقونة
+                                            // التطبيق نفسها (M أبيض وذهبي على
+                                            // عنابي) مرسّمة بنفس نمط SignInGate
+                                            // المثبت — بلا رسم بديل.
+                                            val drawerLogoBitmap = remember(context) {
+                                                try {
+                                                    val drawable = context.packageManager.getApplicationIcon(context.packageName)
+                                                    val bmp = android.graphics.Bitmap.createBitmap(
+                                                        240, 240, android.graphics.Bitmap.Config.ARGB_8888
+                                                    )
+                                                    val canvas = android.graphics.Canvas(bmp)
+                                                    drawable.setBounds(0, 0, 240, 240)
+                                                    drawable.draw(canvas)
+                                                    bmp.asImageBitmap()
+                                                } catch (e: Exception) {
+                                                    null
+                                                }
+                                            }
+                                            if (drawerLogoBitmap != null) {
+                                                Image(
+                                                    bitmap = drawerLogoBitmap,
+                                                    contentDescription = "شعار وطني",
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                )
+                                            } else {
+                                                Icon(
+                                                    Icons.Default.MedicalServices,
+                                                    contentDescription = null,
+                                                    tint = MaroonPrimary,
+                                                    modifier = Modifier.size(36.dp)
+                                                )
+                                            }
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Column {
                                                 Text(

@@ -404,5 +404,13 @@ data class LibraryItem(
     @Json(name = "description") val description: String?,
     // Side-car Arabic SRT for videos. Default null keeps old library.json
     // files (without this field) parsing exactly as before.
-    @Json(name = "subtitleUrl") val subtitleUrl: String? = null
+    @Json(name = "subtitleUrl") val subtitleUrl: String? = null,
+    // Watani topic of this video (build 1.2.17, doctor's order): the
+    // Library groups a subject's videos under their Watani topics so
+    // students can find a lecture by topic. Purely catalog-driven —
+    // the server adds/updates "topic" per video in library.json and
+    // the grouping follows with no app change. Default null keeps old
+    // catalogs parsing exactly as before; a null/blank topic renders
+    // the video ungrouped at the end of its subject, as before.
+    @Json(name = "topic") val topic: String? = null
 )

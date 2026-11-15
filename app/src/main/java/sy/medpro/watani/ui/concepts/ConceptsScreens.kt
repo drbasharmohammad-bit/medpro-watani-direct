@@ -54,7 +54,14 @@ import sy.medpro.watani.ui.theme.*
 
 class ConceptUnitsState(
     val units: List<ConceptUnitDto> = emptyList(),
-    val loaded: Boolean = false
+    val loaded: Boolean = false,
+    // Build 1.2.17: what the server currently offers (manifest count)
+    // and whether a newer pack than the on-device one exists — the
+    // Library renders the explicit download card / «new topics» badge
+    // from these, so additions are a content publish the student
+    // pulls on demand (doctor's order), never a new APK.
+    val serverCount: Int? = null,
+    val updateAvailable: Boolean = false
 )
 
 /**
@@ -86,16 +93,18 @@ fun rememberConceptUnits(refreshKey: Int = 0): ConceptUnitsState {
                     }
                 }
             }
-            // Same silent refresh as the dosing drills (1.2.6): a
-            // republished pack reaches the device on the next open.
-            if (!envelope?.units.isNullOrEmpty() &&
-                repo.refreshSectionIfStale("concepts.json")
-            ) {
-                envelope = repo.getConcepts() ?: envelope
-            }
+            // Build 1.2.17 (doctor's order): a republished pack is no
+            // longer swapped in silently — the state only REPORTS
+            // that an addition exists, and the Library entry card
+            // shows the «new topics» badge with an explicit update
+            // button («يجيهم إشعار: حمّلوا هاي الزيادة»). The
+            // on-device pack keeps working fully offline meanwhile.
+            val (serverCount, updateAvailable) = repo.conceptsServerStatus()
             state = ConceptUnitsState(
                 units = envelope?.units.orEmpty().filter { !it.id.isNullOrBlank() },
-                loaded = true
+                loaded = true,
+                serverCount = serverCount,
+                updateAvailable = updateAvailable && !envelope?.units.isNullOrEmpty()
             )
         } catch (_: Exception) {
             state = ConceptUnitsState(units = state.units, loaded = true)
@@ -113,7 +122,15 @@ fun rememberConceptUnits(refreshKey: Int = 0): ConceptUnitsState {
 @Composable
 fun ConceptsEntryCard(
     units: List<ConceptUnitDto>,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    // Build 1.2.17: «new topics» notice (doctor's order) — rendered
+    // only when the server pack is newer than the on-device one; the
+    // button pulls the addition on demand (content only, no APK).
+    updateAvailable: Boolean = false,
+    serverCount: Int? = null,
+    updating: Boolean = false,
+    updateProgress: Float = 0f,
+    onUpdateClick: (() -> Unit)? = null
 ) {
     val subjectsCount = remember(units) { groupConceptsBySubject(units).size }
     Card(
@@ -124,38 +141,159 @@ fun ConceptsEntryCard(
         elevation = CardDefaults.cardElevation(2.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.School,
-                contentDescription = null,
-                tint = GoldAccent,
-                modifier = Modifier.size(30.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "ادرس مع ميد برو",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = Color.White
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.School,
+                    contentDescription = null,
+                    tint = GoldAccent,
+                    modifier = Modifier.size(30.dp)
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    "شرح المفاهيم الأهم في الدورات — ${units.size} موضوعًا في $subjectsCount مادة، مرتّبة بأسئلة الوطني أولًا",
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.85f),
-                    lineHeight = 17.sp
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "ادرس مع ميد برو",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        "شرح المفاهيم الأهم في الدورات — ${units.size} موضوعًا في $subjectsCount مادة، مرتّبة بأسئلة الوطني أولًا",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.85f),
+                        lineHeight = 17.sp
+                    )
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = GoldAccent,
+                    modifier = Modifier.size(22.dp)
                 )
             }
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = GoldAccent,
-                modifier = Modifier.size(22.dp)
-            )
+            if (updateAvailable && onUpdateClick != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.NewReleases,
+                        contentDescription = null,
+                        tint = GoldAccent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        if (serverCount != null && serverCount > units.size)
+                            "أُضيفت مواضيع جديدة — صار المحتوى $serverCount موضوعًا"
+                        else
+                            "توجد إضافة جديدة للمحتوى",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = onUpdateClick,
+                        enabled = !updating,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GoldAccent,
+                            contentColor = MaroonDeep
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(if (updating) "جارٍ التحديث..." else "حدّث الآن", fontSize = 13.sp)
+                    }
+                }
+                if (updating) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { updateProgress },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = GoldAccent
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The «ادرس مع ميد برو» download card (build 1.2.17, doctor's
+ * order): rendered in the Library entries when the server offers a
+ * concepts pack but nothing is on the device yet (e.g. the first
+ * automatic fetch failed on a weak connection). One tap downloads
+ * the whole pack once; afterwards the section works fully offline.
+ */
+@Composable
+fun ConceptsDownloadCard(
+    serverCount: Int,
+    downloading: Boolean,
+    progress: Float,
+    failed: Boolean,
+    onDownloadClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaroonDeep),
+        elevation = CardDefaults.cardElevation(2.dp),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.School,
+                    contentDescription = null,
+                    tint = GoldAccent,
+                    modifier = Modifier.size(30.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "ادرس مع ميد برو",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        "شرح المفاهيم الأهم في الدورات — $serverCount موضوعًا. حمّلها مرة واحدة وادرسها بعدها بلا إنترنت.",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.85f),
+                        lineHeight = 17.sp
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onDownloadClick,
+                enabled = !downloading,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = GoldAccent,
+                    contentColor = MaroonDeep
+                ),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (downloading) "جارٍ تحميل المواضيع..." else "تحميل المواضيع ($serverCount)", fontSize = 14.sp)
+            }
+            if (downloading) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = GoldAccent
+                )
+            }
+            if (failed && !downloading) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "تعذّر التحميل — تحقق من الاتصال وحاول مجددًا.",
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+            }
         }
     }
 }

@@ -378,7 +378,7 @@ fun UniversityTabContent(onOpenUniversity: (String, String) -> Unit) {
     ) {
         item {
             Text(
-                text = "جامعات الوطن العربي / سورية",
+                text = "جامعات",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold

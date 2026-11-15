@@ -582,6 +582,46 @@ class WataniRepository(private val context: Context) {
     }
 
     /**
+     * «ادرس مع ميد برو» server status (build 1.2.17, doctor's order):
+     * what the manifest currently offers for concepts.json vs what is
+     * on the device — (server unit count, updateAvailable). Downloads
+     * NOTHING; the Library uses it to show the explicit download card
+     * (pack absent) and the «new topics» badge (pack stale) so content
+     * additions stay a server-only publish the student pulls on
+     * demand, never a new APK. Any failure (offline, no manifest
+     * entry) returns (null, false) and the UI falls back to the
+     * on-device pack alone.
+     */
+    suspend fun conceptsServerStatus(): Pair<Int?, Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val manifest = fetchManifest().getOrNull() ?: return@withContext (null to false)
+            val entry = manifest.files?.get("concepts.json") ?: return@withContext (null to false)
+            val entity = _downloadedSectionsFlow.value
+                .firstOrNull { it.sectionPath == "concepts.json" }
+            (entry.count to sectionNeedsRefresh(entity, entry))
+        } catch (e: Exception) {
+            (null to false)
+        }
+    }
+
+    /**
+     * Explicit concepts-pack download/update for the Library card
+     * button (build 1.2.17): resolves the current manifest entry and
+     * runs the standard section download (verification included).
+     * Returns true only when the new pack is installed.
+     */
+    suspend fun downloadConceptsPack(onProgress: (Float) -> Unit = {}): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val manifest = fetchManifest().getOrNull() ?: return@withContext false
+                val entry = manifest.files?.get("concepts.json") ?: return@withContext false
+                downloadSection("concepts.json", entry, onProgress).isSuccess
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+    /**
      * Finds a bank question by its id across the DOWNLOADED subject
      * envelopes (topics and sessions), for the concepts self-test
      * «افتح السؤال في البنك» button. Returns the question plus a
