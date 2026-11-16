@@ -156,6 +156,65 @@ object WidgetBackgroundMath {
     }
 }
 
+/**
+ * هندسة إطار الويدجت — منطق نقي (إصلاح 1.2.27 لبلاغ الدكتور:
+ * زاوية الصورة خارجة عن قوس الإطار الذهبي).
+ *
+ * مسار الزاوية واحد لكل الطبقات: نصف قطر [CORNER_RADIUS_DP] ‏(24dp)
+ * — وهو الرقم نفسه بـdrawables ‏(widget_bg/widget_frame/
+ * widget_photo_frame). منذ 1.2.27 تُقصّ الصورة والتراكب فعليًا
+ * بهذا المسار على مستوى الـBitmap قبل الإرسال للمشغّل، فلا يبقى
+ * أي بكسل خارج القوس مهما كان المشغّل.
+ */
+object WidgetShapeMath {
+
+    /** نصف قطر زاوية الويدجت بالـdp — يطابق drawables الإطار. */
+    const val CORNER_RADIUS_DP = 24
+
+    /** نصف القطر بالبكسل لمقاس فعلي بالـdp عند كثافة الشاشة. */
+    fun radiusPx(widthDp: Int, heightDp: Int, density: Float): Float {
+        val shortest = minOf(widthDp, heightDp).coerceAtLeast(1)
+        // A round-rect radius can never exceed half the shortest side.
+        return minOf(CORNER_RADIUS_DP * density, shortest * density / 2f)
+    }
+
+    /** مقاس الـBitmap بالبكسل لمقاس ويدجت بالـdp (بسقف أمان للذاكرة
+     * وحدّ الـBinder): تُحفَظ النسبة ويُقصّ الأطول عند الحاجة. */
+    fun bitmapSizePx(widthDp: Int, heightDp: Int, density: Float): Pair<Int, Int> {
+        val w = (widthDp.coerceAtLeast(1) * density).toInt().coerceAtLeast(1)
+        val h = (heightDp.coerceAtLeast(1) * density).toInt().coerceAtLeast(1)
+        if (w <= MAX_BITMAP_SIDE_PX && h <= MAX_BITMAP_SIDE_PX) return w to h
+        val scale = MAX_BITMAP_SIDE_PX.toFloat() / maxOf(w, h)
+        return (w * scale).toInt().coerceAtLeast(1) to (h * scale).toInt().coerceAtLeast(1)
+    }
+
+    /** مستطيل القصّ المركزي (centerCrop): أكبر مستطيل بنسبة
+     * [targetAspect] داخل مصدر [srcW]×[srcH]، متمركزًا — يُرجع
+     * (left, top, width, height) بوحدات المصدر. */
+    fun centerCropRect(srcW: Int, srcH: Int, targetAspect: Float): FloatArray {
+        val safeSrcW = srcW.coerceAtLeast(1).toFloat()
+        val safeSrcH = srcH.coerceAtLeast(1).toFloat()
+        val srcAspect = safeSrcW / safeSrcH
+        return if (srcAspect > targetAspect) {
+            val w = safeSrcH * targetAspect
+            floatArrayOf((safeSrcW - w) / 2f, 0f, w, safeSrcH)
+        } else {
+            val h = safeSrcW / targetAspect
+            floatArrayOf(0f, (safeSrcH - h) / 2f, safeSrcW, h)
+        }
+    }
+
+    /** المقاس الافتراضي بالـdp لكل حجم عند غياب AppWidgetOptions
+     * (يطابق minWidth/minHeight بملفات تعريف الويدجتات). */
+    fun fallbackSizeDp(kind: Int): Pair<Int, Int> = when (kind) {
+        0 -> 110 to 110   // KIND_COUNTDOWN — widget_countdown_info.xml
+        1 -> 250 to 140   // KIND_DAY — widget_day_info.xml
+        else -> 250 to 180 // KIND_LARGE — widget_day_large_info.xml
+    }
+
+    const val MAX_BITMAP_SIDE_PX = 1200
+}
+
 // ---------------------------------------------------------------------
 // Store — device-level SharedPreferences.
 // ---------------------------------------------------------------------

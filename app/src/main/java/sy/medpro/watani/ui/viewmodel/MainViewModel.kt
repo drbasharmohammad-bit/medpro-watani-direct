@@ -12,7 +12,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import sy.medpro.watani.data.*
 
 enum class AppTab(val title: String) {
@@ -465,6 +470,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var fullDawraLoadRunning = false
 
+    /** Fingerprint (path→registry hash) of the downloaded set the
+     * current fullDawraInputs were built from (1.2.27). */
+    private var fullDawraInputsSignature: Map<String, String> = emptyMap()
+
+    /** Bounded parallelism for shard sweeps (1.2.27): four parses
+     * at a time — fast on multi-core phones, gentle on memory. */
+    private val shardSweepSemaphore = Semaphore(4)
+
+    /**
+     * Fetches the envelopes of [paths] with bounded parallelism,
+     * preserving the input order in the result (nulls dropped).
+     * Every fetch goes through the repository's hash-stamped
+     * envelope cache, so a repeat sweep is map hits, not re-parses.
+     */
+    private suspend fun fetchEnvelopesParallel(
+        paths: List<String>
+    ): List<Pair<String, SubjectEnvelope>> = coroutineScope {
+        paths.map { path ->
+            async {
+                shardSweepSemaphore.withPermit {
+                    repository.getSubjectEnvelope(path)?.let { path to it }
+                }
+            }
+        }.awaitAll().filterNotNull()
+    }
+
     /**
      * «دورة كاملة» (1.2.26): (re)builds the light session tables of
      * the downloaded questions/ shards. Called when the dawra list /
@@ -472,38 +503,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * they are shown, so a subject downloaded from the coverage list
      * joins the assembly immediately. A second call while a load is
      * running is a no-op.
+     *
+     * 1.2.27: when the downloaded set is unchanged since the last
+     * build (same paths, same registry hashes) the rebuild is
+     * skipped outright — opening the detail right after the list
+     * costs nothing. A real rebuild reads through the envelope
+     * cache with bounded parallelism.
      */
     fun loadFullDawraData() {
         if (fullDawraLoadRunning) return
+        val signature = downloadedSections.value
+            .filter { it.sectionPath.startsWith("questions/") && it.sectionPath.endsWith(".json") }
+            .associate { it.sectionPath to it.hash }
+        if (signature == fullDawraInputsSignature && _uiState.value.fullDawraInputs.isNotEmpty()) {
+            return
+        }
         fullDawraLoadRunning = true
         viewModelScope.launch {
             _uiState.update { it.copy(fullDawraLoading = true) }
             try {
-                val downloadedPaths = downloadedSections.value
-                    .map { it.sectionPath }
-                    .filter { it.startsWith("questions/") && it.endsWith(".json") }
-                val inputs = mutableListOf<DawraSubjectSessions>()
-                for (path in downloadedPaths) {
-                    val envelope = repository.getSubjectEnvelope(path) ?: continue
-                    val subjectName = envelope.subjectName
-                        ?: path.removePrefix("questions/").removeSuffix(".json")
-                    val counts = LinkedHashMap<String, Int>()
-                    envelope.sessions.orEmpty().forEach { session ->
-                        val name = session.name?.trim().orEmpty()
-                        if (name.isNotEmpty()) {
-                            counts[name] = (counts[name] ?: 0) +
-                                (session.questions?.size ?: session.questionCount ?: 0)
-                        }
-                    }
-                    inputs += DawraSubjectSessions(
-                        subjectName = subjectName,
+                val inputs = fetchEnvelopesParallel(signature.keys.toList()).map { (path, envelope) ->
+                    DawraSubjectSessions(
+                        subjectName = envelope.subjectName
+                            ?: path.removePrefix("questions/").removeSuffix(".json"),
                         path = path,
-                        sessionCounts = counts
+                        sessionCounts = SectionIndex.sessionCounts(envelope)
                     )
-                }
+                }.toMutableList()
                 inputs.sortWith(
                     compareBy({ officialSubjectRank(it.subjectName) }, { it.subjectName })
                 )
+                fullDawraInputsSignature = signature
                 _uiState.update { it.copy(fullDawraInputs = inputs) }
             } finally {
                 fullDawraLoadRunning = false
@@ -542,19 +572,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
             }
-            val subjectQuestions = mutableListOf<Pair<String, List<QuestionDto>>>()
             val downloadedPaths = downloadedSections.value
                 .map { it.sectionPath }
                 .filter { it.startsWith("questions/") && it.endsWith(".json") }
-            for (path in downloadedPaths) {
-                val envelope = repository.getSubjectEnvelope(path) ?: continue
-                val subjectName = envelope.subjectName
-                    ?: path.removePrefix("questions/").removeSuffix(".json")
-                val questions = envelope.sessions.orEmpty()
-                    .filter { it.name?.trim() == dawraName }
-                    .flatMap { it.questions.orEmpty() }
-                if (questions.isNotEmpty()) {
-                    subjectQuestions += subjectName to questions
+            // 1.2.27: bounded-parallel fetch through the envelope
+            // cache — after the list build this is cache hits only,
+            // so the start press assembles near-instantly. The
+            // assembly itself (official order, spans) is unchanged.
+            val subjectQuestions = fetchEnvelopesParallel(downloadedPaths).mapNotNull { (path, envelope) ->
+                val questions = SectionIndex.sessionQuestions(envelope, dawraName)
+                if (questions.isEmpty()) {
+                    null
+                } else {
+                    (envelope.subjectName
+                        ?: path.removePrefix("questions/").removeSuffix(".json")) to questions
                 }
             }
             val assembled = buildDawraQuiz(subjectQuestions)

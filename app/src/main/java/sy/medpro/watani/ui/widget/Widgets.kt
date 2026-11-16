@@ -6,9 +6,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
 import android.widget.RemoteViews
@@ -25,6 +29,7 @@ import sy.medpro.watani.data.WidgetCountdownStyle
 import sy.medpro.watani.data.WidgetQuickAction
 import sy.medpro.watani.data.WidgetSettings
 import sy.medpro.watani.data.WidgetSettingsMath
+import sy.medpro.watani.data.WidgetShapeMath
 import sy.medpro.watani.data.WidgetSettingsStore
 import java.time.LocalDate
 
@@ -102,12 +107,20 @@ object Widgets {
                 val component = ComponentName(appContext, providerClass)
                 val ids = manager.getAppWidgetIds(component)
                 if (ids.isEmpty()) return@forEach
-                val views = when (providerClass) {
-                    CountdownWidgetProvider::class.java -> buildCountdownViews(appContext, data)
-                    DayWidgetProvider::class.java -> buildDayViews(appContext, data)
-                    else -> buildLargeViews(appContext, data)
+                val kind = when (providerClass) {
+                    CountdownWidgetProvider::class.java -> KIND_COUNTDOWN
+                    DayWidgetProvider::class.java -> KIND_DAY
+                    else -> KIND_LARGE
                 }
-                ids.forEach { manager.updateAppWidget(it, views) }
+                // Per-instance views (1.2.27): the background
+                // bitmaps are clipped at the instance's real size,
+                // so each placed widget gets its own build.
+                ids.forEach { id ->
+                    val views = buildViewsForKind(
+                        appContext, data, kind, widgetSizeDp(manager, id, kind)
+                    )
+                    manager.updateAppWidget(id, views)
+                }
             }
         } catch (_: Exception) {
             // Guarded: boot / midnight / edit callbacks must survive.
@@ -124,16 +137,48 @@ object Widgets {
         try {
             val appContext = context.applicationContext
             val data = loadData(appContext)
-            val views = when (layoutKind) {
-                KIND_COUNTDOWN -> buildCountdownViews(appContext, data)
-                KIND_DAY -> buildDayViews(appContext, data)
-                else -> buildLargeViews(appContext, data)
+            appWidgetIds.forEach { id ->
+                val views = buildViewsForKind(
+                    appContext, data, layoutKind, widgetSizeDp(appWidgetManager, id, layoutKind)
+                )
+                appWidgetManager.updateAppWidget(id, views)
             }
-            appWidgetIds.forEach { appWidgetManager.updateAppWidget(it, views) }
         } catch (_: Exception) {
             // A system-driven widget update must never crash the
             // host process; the next scheduled refresh retries.
         }
+    }
+
+    private fun buildViewsForKind(
+        context: Context,
+        data: WidgetData,
+        kind: Int,
+        sizeDp: Pair<Int, Int>
+    ): RemoteViews = when (kind) {
+        KIND_COUNTDOWN -> buildCountdownViews(context, data, sizeDp)
+        KIND_DAY -> buildDayViews(context, data, sizeDp)
+        else -> buildLargeViews(context, data, sizeDp)
+    }
+
+    /** The placed instance's real size in dp from its widget
+     * options; the provider-info minimums when the host reports
+     * nothing usable (1.2.27 — the background clip is built at
+     * exactly this size). */
+    private fun widgetSizeDp(
+        manager: AppWidgetManager,
+        appWidgetId: Int,
+        kind: Int
+    ): Pair<Int, Int> {
+        val options: Bundle? = try {
+            manager.getAppWidgetOptions(appWidgetId)
+        } catch (_: Exception) {
+            null
+        }
+        val fallback = WidgetShapeMath.fallbackSizeDp(kind)
+        val width = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
+        val height = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0) ?: 0
+        return (if (width > 0) width else fallback.first) to
+            (if (height > 0) height else fallback.second)
     }
 
     internal const val KIND_COUNTDOWN = 0
@@ -170,9 +215,13 @@ object Widgets {
 
     // ------------------------- builders -------------------------
 
-    internal fun buildCountdownViews(context: Context, data: WidgetData): RemoteViews {
+    internal fun buildCountdownViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int> = WidgetShapeMath.fallbackSizeDp(KIND_COUNTDOWN)
+    ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_countdown)
-        bindBackground(views, data)
+        bindBackground(views, context, data, sizeDp)
         if (data.settings.showCountdown) {
             views.setViewVisibility(R.id.widget_days_row, View.VISIBLE)
             bindChronometer(views, data)
@@ -186,9 +235,13 @@ object Widgets {
         return views
     }
 
-    internal fun buildDayViews(context: Context, data: WidgetData): RemoteViews {
+    internal fun buildDayViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int> = WidgetShapeMath.fallbackSizeDp(KIND_DAY)
+    ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_day)
-        bindBackground(views, data)
+        bindBackground(views, context, data, sizeDp)
         if (data.settings.showCountdown) {
             views.setViewVisibility(R.id.widget_countdown_block, View.VISIBLE)
             bindChronometer(views, data)
@@ -209,9 +262,13 @@ object Widgets {
         return views
     }
 
-    internal fun buildLargeViews(context: Context, data: WidgetData): RemoteViews {
+    internal fun buildLargeViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int> = WidgetShapeMath.fallbackSizeDp(KIND_LARGE)
+    ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_day_large)
-        bindBackground(views, data)
+        bindBackground(views, context, data, sizeDp)
         if (data.settings.showCountdown) {
             views.setViewVisibility(R.id.widget_countdown_block, View.VISIBLE)
             bindChronometer(views, data)
@@ -253,24 +310,50 @@ object Widgets {
 
     // ------------------------- bindings -------------------------
 
-    /** Photo (resource reference — never a parceled bitmap) plus
-     * the generated blend overlay. Plain mode hides both and the
-     * root's burgundy gradient drawable shows instead. */
-    private fun bindBackground(views: RemoteViews, data: WidgetData) {
+    /** Photo plus the generated blend overlay. Plain mode hides
+     * both and the root's burgundy gradient drawable shows instead.
+     *
+     * 1.2.27 (doctor's device report — photo corner outside the
+     * gold frame's arc): BOTH layers are now sent as bitmaps
+     * pre-clipped in code to the frame's own round-rect path
+     * (radius [WidgetShapeMath.CORNER_RADIUS_DP] at the instance's
+     * real size), so no pixel can land outside the arc on any
+     * launcher. Before, the photo relied on clipToOutline in the
+     * host process (not applied to the ImageView content on the
+     * doctor's launcher) and the overlay had no clipping at all.
+     * Any bitmap failure falls back to the pre-1.2.27 resource
+     * path rather than breaking the widget. */
+    private fun bindBackground(
+        views: RemoteViews,
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int>
+    ) {
         val index = data.landmarkIndex
         if (index == null) {
             views.setViewVisibility(R.id.widget_photo, View.GONE)
             views.setViewVisibility(R.id.widget_overlay, View.GONE)
+            return
+        }
+        val density = context.resources.displayMetrics.density
+        val (widthPx, heightPx) = WidgetShapeMath.bitmapSizePx(sizeDp.first, sizeDp.second, density)
+        val radiusPx = WidgetShapeMath.radiusPx(sizeDp.first, sizeDp.second, density)
+        val photo = WidgetPhotos.rounded(
+            context, LandmarkLibrary.all[index].drawableRes, widthPx, heightPx, radiusPx
+        )
+        if (photo != null) {
+            views.setImageViewBitmap(R.id.widget_photo, photo)
         } else {
             views.setImageViewResource(
                 R.id.widget_photo, LandmarkLibrary.all[index].drawableRes
             )
-            views.setViewVisibility(R.id.widget_photo, View.VISIBLE)
-            views.setImageViewBitmap(
-                R.id.widget_overlay, WidgetOverlay.bitmap(data.settings.dimPercent)
-            )
-            views.setViewVisibility(R.id.widget_overlay, View.VISIBLE)
         }
+        views.setViewVisibility(R.id.widget_photo, View.VISIBLE)
+        views.setImageViewBitmap(
+            R.id.widget_overlay,
+            WidgetOverlay.bitmap(data.settings.dimPercent, widthPx, heightPx, radiusPx)
+        )
+        views.setViewVisibility(R.id.widget_overlay, View.VISIBLE)
     }
 
     private fun bindLandmarkLine(views: RemoteViews, data: WidgetData, force: Boolean) {
@@ -474,16 +557,79 @@ object Widgets {
     }
 }
 
+/** The one corner path every widget layer follows (1.2.27):
+ * a round-rect of the frame's own radius over the full bitmap. */
+private fun widgetClipPath(widthPx: Int, heightPx: Int, radiusPx: Float): Path =
+    Path().apply {
+        addRoundRect(
+            RectF(0f, 0f, widthPx.toFloat(), heightPx.toFloat()),
+            radiusPx, radiusPx, Path.Direction.CW
+        )
+    }
+
 /**
- * طبقة دمج الصورة: Bitmap صغير (32×256) يُولّد برمجيًا — صبغة
- * عنابية ثابتة 13% ثم تدرّج داكن #22050B بألفا نقاطه من
- * [WidgetSettingsMath.overlayStops] لمنزلق الطالب. يُخزّن
- * مؤقتًا لكل قيمة تعتيم (توليد واحد عند التغيّر فقط).
+ * صورة المعلم مقصوصة فعليًا على مسار الإطار (1.2.27): تُفكّ من
+ * المورد (مربّعات 1200×1200)، تُقصّ مركزيًا لنسبة مقاس الويدجت
+ * الحقيقي، وتُرسم عبر مسار دائري نصف قطره نصف قطر الإطار نفسه —
+ * فلا يصل المشغّل أي بكسل خارج القوس. تُخزّن مؤقتًا لكل
+ * (مورد، مقاس). عند أي فشل تُرجع null ويعود الربط لمسار المورد.
+ */
+internal object WidgetPhotos {
+
+    private data class Key(val resId: Int, val widthPx: Int, val heightPx: Int)
+
+    private var cachedKey: Key? = null
+    private var cached: Bitmap? = null
+
+    @Synchronized
+    fun rounded(
+        context: Context,
+        resId: Int,
+        widthPx: Int,
+        heightPx: Int,
+        radiusPx: Float
+    ): Bitmap? {
+        val key = Key(resId, widthPx, heightPx)
+        cached?.let { if (cachedKey == key) return it }
+        val result = try {
+            val source = BitmapFactory.decodeResource(context.resources, resId)
+                ?: return null
+            val crop = WidgetShapeMath.centerCropRect(
+                source.width, source.height, widthPx.toFloat() / heightPx.toFloat()
+            )
+            val out = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(out)
+            canvas.clipPath(widgetClipPath(widthPx, heightPx, radiusPx))
+            val srcRect = android.graphics.Rect(
+                crop[0].toInt(), crop[1].toInt(),
+                (crop[0] + crop[2]).toInt(), (crop[1] + crop[3]).toInt()
+            )
+            val dstRect = RectF(0f, 0f, widthPx.toFloat(), heightPx.toFloat())
+            canvas.drawBitmap(source, srcRect, dstRect, Paint(Paint.FILTER_BITMAP_FLAG))
+            out
+        } catch (_: Exception) {
+            null
+        } catch (_: OutOfMemoryError) {
+            null
+        }
+        if (result != null) {
+            cached = result
+            cachedKey = key
+        }
+        return result
+    }
+}
+
+/**
+ * طبقة دمج الصورة: Bitmap يُولّد برمجيًا بمقاس الويدجت الحقيقي —
+ * صبغة عنابية ثابتة 13% ثم تدرّج داكن #22050B بألفا نقاطه من
+ * [WidgetSettingsMath.overlayStops] لمنزلق الطالب، وكلّه مرسوم
+ * عبر مسار قصّ الإطار الدائري (1.2.27 — قبلها كانت الطبقة بلا
+ * أي قصّ فتخرج زواياها المربّعة عن قوس الإطار). يُخزّن مؤقتًا
+ * لكل (تعتيم، مقاس).
  */
 internal object WidgetOverlay {
 
-    private const val WIDTH = 32
-    private const val HEIGHT = 256
     private const val DARK_R = 0x22
     private const val DARK_G = 0x05
     private const val DARK_B = 0x0B
@@ -491,34 +637,38 @@ internal object WidgetOverlay {
     private const val TINT_G = 0x12
     private const val TINT_B = 0x20
 
-    private var cachedDim: Int = -1
+    private data class Key(val dim: Int, val widthPx: Int, val heightPx: Int)
+
+    private var cachedKey: Key? = null
     private var cached: Bitmap? = null
 
     @Synchronized
-    fun bitmap(dimPercent: Int): Bitmap {
+    fun bitmap(dimPercent: Int, widthPx: Int, heightPx: Int, radiusPx: Float): Bitmap {
         val dim = WidgetSettingsMath.clampDim(dimPercent)
-        cached?.let { if (cachedDim == dim) return it }
+        val key = Key(dim, widthPx, heightPx)
+        cached?.let { if (cachedKey == key) return it }
         val (top, mid, bottom) = WidgetSettingsMath.overlayStops(dim)
-        val bmp = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
+        val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
+        canvas.clipPath(widgetClipPath(widthPx, heightPx, radiusPx))
         canvas.drawColor(
             Color.argb(
                 (WidgetSettingsMath.TINT_ALPHA * 255).toInt(), TINT_R, TINT_G, TINT_B
             )
         )
         val paint = Paint()
-        for (y in 0 until HEIGHT) {
-            val t = y / (HEIGHT - 1).toFloat()
+        for (y in 0 until heightPx) {
+            val t = y / (heightPx - 1).coerceAtLeast(1).toFloat()
             val alpha = if (t < 0.5f) {
                 top + (mid - top) * (t * 2f)
             } else {
                 mid + (bottom - mid) * ((t - 0.5f) * 2f)
             }
             paint.color = Color.argb((alpha * 255).toInt(), DARK_R, DARK_G, DARK_B)
-            canvas.drawRect(0f, y.toFloat(), WIDTH.toFloat(), y + 1f, paint)
+            canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, paint)
         }
         cached = bmp
-        cachedDim = dim
+        cachedKey = key
         return bmp
     }
 }

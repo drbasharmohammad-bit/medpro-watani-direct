@@ -46,6 +46,15 @@ class WataniRepository(private val context: Context) {
     private val _downloadedSectionsFlow = MutableStateFlow<List<DownloadedSectionEntity>>(loadDownloadedSections())
     val downloadedSectionsFlow: Flow<List<DownloadedSectionEntity>> = _downloadedSectionsFlow.asStateFlow()
 
+    // Parsed-envelope cache (1.2.27): getSubjectEnvelope used to
+    // re-read, re-decrypt and re-parse the whole shard on EVERY
+    // call — entering «دورة كاملة» swept all 27 shards twice
+    // (~110MB of JSON) before the quiz could start. Entries are
+    // stamped with the registry hash of the bytes they were parsed
+    // from, so a re-download (new hash) invalidates automatically;
+    // saveDownloadedSection also evicts explicitly.
+    private val subjectEnvelopeCache = EnvelopeCache<SubjectEnvelope>()
+
     private fun loadDownloadedSections(): List<DownloadedSectionEntity> {
         val allEntries = prefs.all
         val list = mutableListOf<DownloadedSectionEntity>()
@@ -72,12 +81,19 @@ class WataniRepository(private val context: Context) {
         val value = "${entity.version}|${entity.hash}|${entity.count}|${entity.downloadedAt}"
         prefs.edit().putString(entity.sectionPath, value).apply()
         _downloadedSectionsFlow.value = loadDownloadedSections()
+        // Fresh bytes on disk: any envelope parsed from the previous
+        // download of this section is stale (1.2.27 cache).
+        subjectEnvelopeCache.evict(entity.sectionPath)
     }
 
     /** Reloads the downloaded-sections flow from prefs (after an
      * external wipe, e.g. sign-out or deactivation from another screen). */
     fun refreshDownloadedSections() {
         _downloadedSectionsFlow.value = loadDownloadedSections()
+        // An external wipe may have removed section files behind
+        // the registry's back — never serve a parsed envelope for
+        // content whose on-disk state was just reset (1.2.27).
+        subjectEnvelopeCache.clear()
     }
 
     /**
@@ -447,12 +463,26 @@ class WataniRepository(private val context: Context) {
         try {
             // Gentle lease: an expired lease makes downloaded
             // restricted sections behave as unavailable (free paths
-            // are never gated here).
+            // are never gated here). The lease check stays FIRST —
+            // a cached envelope is never served past it (1.2.27).
             if (WorkerActivationApi.isRestrictedPath(path) &&
                 WorkerActivationApi.isRestrictedLeaseExpired(context)
             ) return@withContext null
+            // Cache (1.2.27): served only when the registry holds
+            // this path AND the entry was parsed from bytes with
+            // the registry's current hash — a re-download swaps
+            // the hash and the stale parse is dropped inside get().
+            val registryHash = _downloadedSectionsFlow.value
+                .firstOrNull { it.sectionPath == path }?.hash
+            if (registryHash != null) {
+                subjectEnvelopeCache.get(path, registryHash)?.let { return@withContext it }
+            }
             val jsonString = readSectionText(path) ?: return@withContext null
-            moshi.adapter(SubjectEnvelope::class.java).fromJson(jsonString)
+            val parsed = moshi.adapter(SubjectEnvelope::class.java).fromJson(jsonString)
+            if (parsed != null && registryHash != null) {
+                subjectEnvelopeCache.put(path, registryHash, jsonString.length, parsed)
+            }
+            parsed
         } catch (e: Exception) {
             null
         }
