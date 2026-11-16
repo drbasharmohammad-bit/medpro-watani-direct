@@ -33,7 +33,7 @@
             android:textSize="11sp" />
     </LinearLayout>
 
-    <View
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginTop="9dp"
@@ -69,7 +69,7 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <View
+        <TextView
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1" />
@@ -174,12 +174,12 @@
 
     <!-- فاصل مرن: عند تكبير الويدجت (تابلت/شبكة أكبر) تتمدد هذه
          المساحة فيبقى سطر التركيز أسفل البطاقة بدل فراغ مشوّه. -->
-    <View
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <View
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginTop="11dp"

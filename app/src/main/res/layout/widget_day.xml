@@ -41,7 +41,7 @@
             android:textSize="11sp" />
     </LinearLayout>
 
-    <View
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginTop="8dp"
@@ -139,7 +139,7 @@
         android:textSize="12sp" />
 
     <!-- فاصل مرن يمتص أي ارتفاع إضافي عند تكبير الويدجت. -->
-    <View
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
