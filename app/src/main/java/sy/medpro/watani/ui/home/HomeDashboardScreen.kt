@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
@@ -32,6 +33,8 @@ import java.time.ZoneOffset
 import sy.medpro.watani.data.DailyGoalEngine
 import sy.medpro.watani.data.DailyGoalMath
 import sy.medpro.watani.data.DailyGoalStore
+import sy.medpro.watani.data.DayGoalsMath
+import sy.medpro.watani.data.DayGoalsStore
 import sy.medpro.watani.data.FocusTimerEngine
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.SupportFavorites
@@ -58,7 +61,7 @@ fun HomeDashboardScreen(
         FocusTimerEngine.init(context)
         SupportFavorites.init(context)
         // نشاط التطبيق يحدّث الويدجت بأرقام اليوم (1.2.23).
-        sy.medpro.watani.ui.widget.StudyWidgetProvider.updateAll(context)
+        sy.medpro.watani.ui.widget.Widgets.updateAll(context)
         animateIn = true
     }
 
@@ -93,11 +96,11 @@ fun HomeDashboardScreen(
             ExamCountdownCard()
         }
 
-        // بطاقة الهدف اليومي الذكي (1.2.23): المتبقي من البنوك المنزّلة
-        // مقسومًا على الأيام حتى الامتحان، مع تثبيت يدوي اختياري،
-        // وسطر تركيز اليوم من محرك المؤقت نفسه (لا قسم مكرر).
+        // بطاقة «أهدافي اليوم» (1.2.24): هدف الأسئلة برقم يختاره
+        // الطالب بنفسه + أهدافه النصية لليوم، وسطر تركيز اليوم من
+        // محرك المؤقت نفسه (لا قسم مكرر). تنعكس على الويدجت مباشرة.
         item {
-            DailyGoalCard()
+            MyDayGoalsCard()
         }
 
         // بطاقة الدعم النفسي — أول عنصر بعد عدّاد الامتحان: رسالة اليوم
@@ -556,39 +559,62 @@ private fun ExamCountdownCard() {
 }
 
 /**
- * بطاقة الهدف اليومي الذكي (1.2.23).
+ * بطاقة «أهدافي اليوم» (1.2.24 — تحل محل بطاقة الهدف الذكي من
+ * 1.2.23 بأمر الدكتور بعد تجربته على جهازه).
  *
- * الهدف يُحسب من مخازن التقدم القائمة: أسئلة البنوك المنزّلة التي لم
- * تُجَب بعد ÷ الأيام المتبقية حتى الامتحان (DailyGoalEngine — نفس
- * اللقطة التي يقرأها الويدجت وتذكير الدراسة، فلا أرقام متضاربة).
- * الطالب يقدر يثبّت هدفه بنفسه من حوار التعديل فيلغي التلقائي حتى
- * يزيل التثبيت. أسفل البطاقة سطر تركيز اليوم من محرك المؤقت — يظهر
- * بجانب الهدف دون قسم مكرر بالرئيسية.
+ * الهدف هنا قرار الطالب وحده:
+ * - هدف الأسئلة رقم يضبطه بنفسه (DailyGoalStore)؛ الرقم التلقائي
+ *   (المتبقي ÷ الأيام) يظهر فقط كاقتراح اختياري داخل حوار الضبط
+ *   ولا يُفرض ولا يُعرض كهدف بلا اختياره.
+ * - أهداف نصية حرة لليوم (DayGoalsStore): يكتب مادة يدرسها أو أي
+ *   نص، يضيف ويحذف ويعلّم منجزًا — وتخصّ اليوم الحالي فقط.
+ * كل تعديل يبثّ تحديثًا فوريًا لعائلة الويدجتات فتنعكس أهدافه
+ * على شاشة هاتفه الرئيسية مباشرة. أسفل البطاقة سطر تركيز اليوم
+ * من محرك المؤقت — بجانب الأهداف دون قسم مكرر بالرئيسية.
+ * العرض محصور بسقف 640dp ومتوسّط أفقيًا: على التابلت لا تتمدد
+ * البطاقة بعرض الشاشة كله فتبقى مقروءة بلا فراغات مشوّهة.
  */
 @Composable
-private fun DailyGoalCard() {
+private fun MyDayGoalsCard() {
     val context = LocalContext.current
     val stats by OfflineStudyVault.statsFlow.collectAsState()
     val focusState by FocusTimerEngine.state.collectAsState()
-    var goalRefresh by remember { mutableStateOf(0) }
-    val snapshot = remember(stats.totalAnswered, stats.answeredToday, goalRefresh) {
+    var refresh by remember { mutableStateOf(0) }
+    val snapshot = remember(stats.totalAnswered, stats.answeredToday, refresh) {
         DailyGoalEngine.snapshot(context)
     }
-    var showEditDialog by remember { mutableStateOf(false) }
+    val items = remember(refresh) { DayGoalsStore.todayItems(context) }
+    var showTargetDialog by remember { mutableStateOf(false) }
+    var newGoalText by remember { mutableStateOf("") }
 
-    if (showEditDialog) {
-        var input by remember { mutableStateOf((snapshot.manualGoal ?: snapshot.autoGoal).toString()) }
+    fun afterChange() {
+        refresh++
+        sy.medpro.watani.ui.widget.Widgets.updateAll(context)
+    }
+
+    if (showTargetDialog) {
+        var input by remember { mutableStateOf((snapshot.manualGoal ?: "").toString()) }
         AlertDialog(
-            onDismissRequest = { showEditDialog = false },
-            title = { Text("هدف اليوم") },
+            onDismissRequest = { showTargetDialog = false },
+            title = { Text("هدف الأسئلة اليومي") },
             text = {
                 Column {
                     Text(
-                        "الهدف التلقائي اليوم: ${snapshot.autoGoal} سؤالًا (المتبقي ${snapshot.remaining} على ${snapshot.daysLeft} يومًا). " +
-                            "ثبّت رقمك الخاص إن أردت — يبقى ساريًا حتى تعود للتلقائي.",
+                        "اختر بنفسك عدد الأسئلة الذي تريد إنجازه كل يوم. الهدف قرارك — لن يفرض التطبيق عليك أي رقم.",
                         fontSize = 13.sp
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    if (snapshot.hasBank && snapshot.autoGoal > 0) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            "اقتراح اختياري من التطبيق: ${snapshot.autoGoal} سؤالًا في اليوم (المتبقي ${snapshot.remaining} سؤالًا على ${snapshot.daysLeft} يومًا حتى الامتحان).",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        )
+                        TextButton(onClick = { input = snapshot.autoGoal.toString() }) {
+                            Text("استخدام الاقتراح")
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = input,
                         onValueChange = { input = it.filter { ch -> ch.isDigit() }.take(4) },
@@ -601,84 +627,186 @@ private fun DailyGoalCard() {
             confirmButton = {
                 TextButton(onClick = {
                     input.toIntOrNull()?.let { DailyGoalStore.setManualGoal(context, it) }
-                    goalRefresh++
-                    showEditDialog = false
-                    sy.medpro.watani.ui.widget.StudyWidgetProvider.updateAll(context)
-                }) { Text("حفظ التثبيت") }
+                    afterChange()
+                    showTargetDialog = false
+                }) { Text("حفظ الهدف") }
             },
             dismissButton = {
                 Row {
                     if (snapshot.isManual) {
                         TextButton(onClick = {
                             DailyGoalStore.setManualGoal(context, null)
-                            goalRefresh++
-                            showEditDialog = false
-                            sy.medpro.watani.ui.widget.StudyWidgetProvider.updateAll(context)
-                        }) { Text("العودة للتلقائي") }
+                            afterChange()
+                            showTargetDialog = false
+                        }) { Text("إزالة الهدف") }
                     }
-                    TextButton(onClick = { showEditDialog = false }) { Text("إلغاء") }
+                    TextButton(onClick = { showTargetDialog = false }) { Text("إلغاء") }
                 }
             }
         )
     }
 
-    Card(
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, RoseOutline),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth()
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.TopCenter
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Card(
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, RoseOutline),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            modifier = Modifier.fillMaxWidth().widthIn(max = 640.dp)
         ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(76.dp)) {
-                val fraction = DailyGoalMath.progressFraction(snapshot.doneToday, snapshot.goal)
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawArc(
-                        color = MaroonPrimary.copy(alpha = 0.15f),
-                        startAngle = -90f,
-                        sweepAngle = 360f,
-                        useCenter = false,
-                        style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(76.dp)) {
+                        val fraction = if (snapshot.hasStudentGoal) {
+                            DailyGoalMath.progressFraction(snapshot.doneToday, snapshot.goal)
+                        } else 0f
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawArc(
+                                color = MaroonPrimary.copy(alpha = 0.15f),
+                                startAngle = -90f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
+                            )
+                            drawArc(
+                                color = MaroonPrimary,
+                                startAngle = -90f,
+                                sweepAngle = 360f * fraction,
+                                useCenter = false,
+                                style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                "${snapshot.doneToday}",
+                                fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaroonPrimary
+                            )
+                            Text(
+                                if (snapshot.hasStudentGoal) "من ${snapshot.goal}" else "اليوم",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("أهدافي اليوم", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = when {
+                                !snapshot.hasStudentGoal ->
+                                    "لم تضبط هدف أسئلة بعد. اضبط رقمك بنفسك — عدد الأسئلة الذي تنجزه كل يوم قرارك أنت."
+                                snapshot.doneToday >= snapshot.goal ->
+                                    "هدف الأسئلة: ${snapshot.goal} — أنجزته كاملًا اليوم، أحسنت."
+                                else ->
+                                    "هدف الأسئلة: ${snapshot.goal} سؤالًا في اليوم — أنجزت ${snapshot.doneToday} حتى الآن."
+                            },
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { showTargetDialog = true },
+                            shape = MaterialTheme.shapes.medium,
+                            modifier = Modifier.height(38.dp)
+                        ) {
+                            Text(if (snapshot.hasStudentGoal) "تعديل هدف الأسئلة" else "ضبط هدف الأسئلة", fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "أهداف اليوم المكتوبة",
+                        fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaroonPrimary,
+                        modifier = Modifier.weight(1f)
                     )
-                    drawArc(
-                        color = MaroonPrimary,
-                        startAngle = -90f,
-                        sweepAngle = 360f * fraction,
-                        useCenter = false,
-                        style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
+                    if (items.isNotEmpty()) {
+                        Text(
+                            "أنجزت ${DayGoalsMath.doneCount(items)} من ${items.size}",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+                if (items.isEmpty()) {
+                    Text(
+                        "لا أهداف مكتوبة لليوم — اكتب مادة تدرسها اليوم أو أي هدف تريد إنجازه.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 6.dp)
                     )
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                items.forEach { item ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Checkbox(
+                            checked = item.done,
+                            onCheckedChange = {
+                                DayGoalsStore.saveItems(context, DayGoalsMath.toggleItem(items, item.id))
+                                afterChange()
+                            }
+                        )
+                        Text(
+                            item.text,
+                            fontSize = 13.sp,
+                            modifier = Modifier.weight(1f),
+                            textDecoration = if (item.done) TextDecoration.LineThrough else TextDecoration.None,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (item.done) 0.55f else 0.9f)
+                        )
+                        IconButton(onClick = {
+                            DayGoalsStore.saveItems(context, DayGoalsMath.removeItem(items, item.id))
+                            afterChange()
+                        }) {
+                            Icon(Icons.Default.Delete, contentDescription = "حذف الهدف", tint = MaroonPrimary)
+                        }
+                    }
+                }
+                if (items.size < DayGoalsMath.MAX_ITEMS) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = newGoalText,
+                            onValueChange = { newGoalText = it.take(90) },
+                            label = { Text("هدف جديد — مادة أو مهمة اليوم") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                val updated = DayGoalsMath.addItem(items, newGoalText, DayGoalsStore.nextId(context))
+                                if (updated.size > items.size) {
+                                    DayGoalsStore.saveItems(context, updated)
+                                    newGoalText = ""
+                                    afterChange()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Text("إضافة", fontSize = 13.sp)
+                        }
+                    }
+                } else {
                     Text(
-                        "${snapshot.doneToday}",
-                        fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaroonPrimary
-                    )
-                    Text(
-                        if (snapshot.goal > 0) "من ${snapshot.goal}" else "اليوم",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        "وصلت للحد الأقصى لأهداف اليوم (${DayGoalsMath.MAX_ITEMS}).",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 6.dp)
                     )
                 }
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("هدف اليوم الذكي", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = when {
-                        !snapshot.hasBank -> "نزّل بنوك الأسئلة من تبويب البنوك ليُحسب هدفك اليومي تلقائيًا."
-                        snapshot.remaining <= 0 -> "أنهيت كل أسئلة البنوك المنزّلة — أحسنت. الهدف القادم: المراجعة."
-                        snapshot.isManual -> "هدف مثبّت يدويًا: ${snapshot.goal} سؤالًا (التلقائي كان ${snapshot.autoGoal}). بقي ${snapshot.remaining} سؤالًا على ${snapshot.daysLeft} يومًا."
-                        else -> "هدف اليوم ${snapshot.goal} سؤالًا — بقي ${snapshot.remaining} سؤالًا على ${snapshot.daysLeft} يومًا حتى الامتحان."
-                    },
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
+
+                Spacer(modifier = Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Timer, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(15.dp))
                     Spacer(modifier = Modifier.width(4.dp))
@@ -687,16 +815,6 @@ private fun DailyGoalCard() {
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
-                }
-                if (snapshot.hasBank) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = { showEditDialog = true },
-                        shape = MaterialTheme.shapes.medium,
-                        modifier = Modifier.height(38.dp)
-                    ) {
-                        Text("تعديل الهدف", fontSize = 12.sp)
-                    }
                 }
             }
         }

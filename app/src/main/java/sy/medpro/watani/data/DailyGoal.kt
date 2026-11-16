@@ -5,13 +5,14 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlin.math.ceil
 
 /**
- * الهدف اليومي الذكي (بناء 1.2.23).
+ * الهدف اليومي (بناء 1.2.23، أُعيدت صياغته في 1.2.24 بأمر الدكتور).
  *
- * الهدف = أسئلة البنوك المنزّلة المتبقية ÷ الأيام حتى الامتحان، يُعاد
- * حسابه كل يوم من مخازن التقدم القائمة نفسها (OfflineStudyVault لسجل
- * الإجابات وتاريخ الامتحان، وسجل الأقسام المنزّلة لإجمالي البنوك) —
- * لا تتبّع موازٍ جديد. الطالب يقدر يثبّت هدفه يدويًا فيلغي الحساب
- * التلقائي حتى يزيل التثبيت.
+ * من 1.2.24: الهدف المعروض على الطالب هو الرقم الذي اختاره بنفسه
+ * فقط ([DailyGoalStore.manualGoal]) — لا هدف مفروضًا عليه أبدًا.
+ * الحساب التلقائي (أسئلة البنوك المنزّلة المتبقية ÷ الأيام حتى
+ * الامتحان، من مخازن التقدم القائمة نفسها — لا تتبّع موازٍ) بقي
+ * بوصفه **اقتراحًا اختياريًا** يُعرض داخل حوار ضبط الهدف وحده،
+ * ولا يُطبَّق إلا بضغطة صريحة من الطالب.
  */
 
 // ---------------------------------------------------------------------
@@ -66,7 +67,8 @@ object DailyGoalStore {
             Context.MODE_PRIVATE
         )
 
-    /** The student's pinned goal, or null while the auto goal rules. */
+    /** The student's own chosen daily target, or null when he has
+     * not set one (1.2.24: nothing is imposed in that case). */
     fun manualGoal(context: Context): Int? {
         val raw = prefs(context).getInt(KEY_MANUAL_GOAL, -1)
         return if (raw >= 1) raw else null
@@ -94,15 +96,20 @@ data class DailyGoalSnapshot(
     val daysLeft: Int,
     /** Effective exam target (epoch millis, local midnight). */
     val examTargetMillis: Long?,
+    /** The auto computation — a suggestion only since 1.2.24,
+     * shown inside the goal-setting dialog, never applied alone. */
     val autoGoal: Int,
+    /** The daily question target the student chose himself. */
     val manualGoal: Int?,
-    /** Today's goal (manual pin when set, else the auto goal). */
+    /** The displayed goal: the student's own target, or 0 when he
+     * has not set one (surfaces then prompt him to set it). */
     val goal: Int,
     /** Questions answered today (the vault's own daily counter). */
     val doneToday: Int
 ) {
     val hasBank: Boolean get() = bankTotal > 0
     val isManual: Boolean get() = manualGoal != null
+    val hasStudentGoal: Boolean get() = manualGoal != null
 }
 
 object DailyGoalEngine {
@@ -153,7 +160,9 @@ object DailyGoalEngine {
             examTargetMillis = target,
             autoGoal = auto,
             manualGoal = manual,
-            goal = DailyGoalMath.effectiveGoal(auto, manual),
+            // 1.2.24: only the student's own target is ever shown
+            // as his goal; the auto value stays a dialog suggestion.
+            goal = manual ?: 0,
             doneToday = stats.answeredToday
         )
     }

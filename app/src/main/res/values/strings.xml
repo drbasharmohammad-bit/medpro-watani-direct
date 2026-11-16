@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">Med Pro - Watani</string>
-    <string name="study_widget_description">عدّاد الامتحان وهدف الدراسة اليومي وتركيز اليوم</string>
+    <string name="widget_countdown_description">عدّاد الامتحان — أيام وساعات ودقائق وثوانٍ حية</string>
+    <string name="widget_day_description">عدّاد الامتحان وأهداف اليوم وتقدم الأسئلة</string>
+    <string name="widget_day_large_description">عدّاد الامتحان وأهداف اليوم والتركيز — حجم كبير</string>
 </resources>

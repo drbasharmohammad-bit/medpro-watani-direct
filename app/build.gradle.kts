@@ -29,8 +29,15 @@ android {
     // home-screen widget (exam countdown + daily goal + focus minutes),
     // smart daily goal card, and the upgraded immersive focus timer
     // (modes, subject tagging, light stats).
-    versionCode = 74297
-    versionName = "1.2.23"
+    // 1.2.24 (Nov 2026): widget family redesign (doctor's ruling after
+    // testing 1.2.23 on his phone) — three sizes (countdown-only /
+    // day / large resizable), live per-second countdown via a
+    // self-ticking Chronometer, and student-set daily goals only:
+    // his own question target plus free-text day goals edited in the
+    // «أهدافي اليوم» home card and mirrored to the widgets instantly;
+    // the auto goal survives only as an optional dialog suggestion.
+    versionCode = 74298
+    versionName = "1.2.24"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

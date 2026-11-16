@@ -6,7 +6,7 @@ import android.content.Intent
 import sy.medpro.watani.data.DailyGoalEngine
 import sy.medpro.watani.data.MistakesBank
 import sy.medpro.watani.data.ReminderSettings
-import sy.medpro.watani.ui.widget.StudyWidgetProvider
+import sy.medpro.watani.ui.widget.Widgets
 
 /**
  * مستقبِل منبّهات الدراسة (بناء 1.2.23).
@@ -40,7 +40,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 ReminderScheduler.rescheduleAll(appContext)
             }
             ReminderScheduler.ACTION_MIDNIGHT -> {
-                StudyWidgetProvider.updateAll(appContext)
+                Widgets.updateAll(appContext)
                 ReminderScheduler.rescheduleAll(appContext)
             }
         }
@@ -58,7 +58,7 @@ class BootRescheduleReceiver : BroadcastReceiver() {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
                 ReminderScheduler.rescheduleAll(context.applicationContext)
-                StudyWidgetProvider.updateAll(context.applicationContext)
+                Widgets.updateAll(context.applicationContext)
             }
         }
     }

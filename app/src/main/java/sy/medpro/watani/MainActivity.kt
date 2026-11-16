@@ -170,7 +170,7 @@ class MainActivity : ComponentActivity() {
         // and refresh the home-screen widget with today's numbers.
         try {
             sy.medpro.watani.notify.ReminderScheduler.rescheduleAll(applicationContext)
-            sy.medpro.watani.ui.widget.StudyWidgetProvider.updateAll(applicationContext)
+            sy.medpro.watani.ui.widget.Widgets.updateAll(applicationContext)
         } catch (_: Exception) { }
         // Offline-activation fix (Nov 2026, doctor's order): when
         // connectivity returns while the app is open, verify the

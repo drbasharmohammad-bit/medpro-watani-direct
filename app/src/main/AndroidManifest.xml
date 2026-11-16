@@ -89,16 +89,41 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+        <!-- عائلة ويدجتات 1.2.24: صغير (العدّاد فقط) / متوسط
+             (العدّاد + أهداف اليوم) / كبير (كل شيء، قابل للتكبير).
+             الويدجت الأحادي من 1.2.23 أُزيل نهائيًا. -->
         <receiver
-            android:name="sy.medpro.watani.ui.widget.StudyWidgetProvider"
+            android:name="sy.medpro.watani.ui.widget.CountdownWidgetProvider"
             android:exported="true"
-            android:label="@string/study_widget_description">
+            android:label="@string/widget_countdown_description">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/study_widget_info" />
+                android:resource="@xml/widget_countdown_info" />
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.DayWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_day_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_day_info" />
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.DayWidgetLargeProvider"
+            android:exported="true"
+            android:label="@string/widget_day_large_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_day_large_info" />
         </receiver>
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
