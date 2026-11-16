@@ -164,6 +164,14 @@ class MainActivity : ComponentActivity() {
             return
         }
         enableEdgeToEdge()
+        // 1.2.23: re-seed the local reminder alarms (they survive via
+        // the boot receiver too, but a settings change made while the
+        // process was dead, or an alarm dropped by the OS, heals here)
+        // and refresh the home-screen widget with today's numbers.
+        try {
+            sy.medpro.watani.notify.ReminderScheduler.rescheduleAll(applicationContext)
+            sy.medpro.watani.ui.widget.StudyWidgetProvider.updateAll(applicationContext)
+        } catch (_: Exception) { }
         // Offline-activation fix (Nov 2026, doctor's order): when
         // connectivity returns while the app is open, verify the
         // activation with the Worker — a cancelled activation is
@@ -628,6 +636,7 @@ class MainActivity : ComponentActivity() {
                                                 "المفضلة",
                                                 "ملاحظاتي",
                                                 "سجلّ حالاتي",
+                                                "الإشعارات والتذكير",
                                                 "الوضع الليلي",
                                                 "التواصل",
                                                 "محطات OSCE",
@@ -658,6 +667,7 @@ class MainActivity : ComponentActivity() {
                                                     "المفضلة" -> Icons.Default.Favorite
                                                     "ملاحظاتي" -> Icons.Default.NoteAlt
                                                     "سجلّ حالاتي" -> Icons.Default.Assignment
+                                                    "الإشعارات والتذكير" -> Icons.Default.Notifications
                                                     "الوضع الليلي" -> Icons.Default.DarkMode
                                                     "التواصل" -> Icons.Default.SupportAgent
                                                     "محطات OSCE" -> Icons.Default.MedicalServices
@@ -954,6 +964,7 @@ class MainActivity : ComponentActivity() {
                                                 "المفضلة" -> FavoritesScreen(onBack = { drawerScreen = null })
                                                 "ملاحظاتي" -> MyNotesScreen(onBack = { drawerScreen = null })
                                                 "سجلّ حالاتي" -> LogbookScreen(onBack = { drawerScreen = null })
+                                                "الإشعارات والتذكير" -> sy.medpro.watani.ui.notify.NotificationSettingsScreen(onBack = { drawerScreen = null })
                                                 "الحالات الألمانية" -> GermanCasesScreen(onBack = { drawerScreen = null })
                                                 "الدعم النفسي" -> SupportScreen(onBack = { drawerScreen = null })
                                                 "سياسة الخصوصية والشروط" -> PrivacyPolicyScreen(onBack = { drawerScreen = null })

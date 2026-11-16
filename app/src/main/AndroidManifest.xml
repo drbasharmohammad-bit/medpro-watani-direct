@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 1.2.23: re-seed the local study-reminder alarms after reboot
+         (alarms do not survive a restart on their own). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Root-manager package visibility for the whole-app root block
          (build 1.2.8, RootBlock): on Android 11+ an app can only see
@@ -65,6 +68,38 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- 1.2.23 local study reminders: the daily alarm receiver
+             (own-app PendingIntents only, hence exported=false), the
+             boot/package-replaced re-seeder, and the home-screen
+             study widget. -->
+        <receiver
+            android:name="sy.medpro.watani.notify.ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="sy.medpro.watani.action.REMINDER_FIRE" />
+                <action android:name="sy.medpro.watani.action.MIDNIGHT_TICK" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.notify.BootRescheduleReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.StudyWidgetProvider"
+            android:exported="true"
+            android:label="@string/study_widget_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/study_widget_info" />
+        </receiver>
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />

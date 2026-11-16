@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Med Pro - Watani</string>
+    <string name="study_widget_description">عدّاد الامتحان وهدف الدراسة اليومي وتركيز اليوم</string>
 </resources>

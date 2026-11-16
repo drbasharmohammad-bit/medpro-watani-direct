@@ -23,9 +23,14 @@ android {
     // Privacy Policy / Terms / Medical Disclaimer screen (approved
     // POLICY_TEXT.md bundled as an asset; consent links under the
     // sign-in button open it at their section; permanent drawer item).
-    // Ascending versionCode so it installs as an update over 1.2.19.
-    versionCode = 74296
-    versionName = "1.2.22"
+    // Ascending versionCode so it installs as an update over 1.2.22.
+    // 1.2.23 (Nov 2026): real phone notifications (explicit permission,
+    // daily study reminder + mistakes-due alert, boot-resilient),
+    // home-screen widget (exam countdown + daily goal + focus minutes),
+    // smart daily goal card, and the upgraded immersive focus timer
+    // (modes, subject tagging, light stats).
+    versionCode = 74297
+    versionName = "1.2.23"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

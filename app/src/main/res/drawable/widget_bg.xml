@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- خلفية الويدجت: تدرّج عنابي بهوية التطبيق مع زوايا مستديرة. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="135"
+        android:startColor="#7A1F2B"
+        android:endColor="#3A0C13"
+        android:type="linear" />
+    <corners android:radius="16dp" />
+</shape>

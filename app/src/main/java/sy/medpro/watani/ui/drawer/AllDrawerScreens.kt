@@ -781,30 +781,11 @@ fun WeakPointsScreen(onBack: () -> Unit) {
 // هذه الشاشة قارئ/متحكم فقط، بلا أي حالة عدّ محلية.
 @Composable
 fun FocusTimerScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
-    LaunchedEffect(Unit) { FocusTimerEngine.init(context) }
-    val timerState by FocusTimerEngine.state.collectAsState()
-    val timeLeft = timerState.timeLeftSec
-    val isRunning = timerState.isRunning
-
-    DrawerScreenScaffold(title = "مؤقت التركيز (Pomodoro)", onBack = onBack) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("جلسة تركيز دراسية طبية", fontSize = 18.sp, color = MaroonPrimary, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(24.dp))
-            val m = timeLeft / 60
-            val s = timeLeft % 60
-            Text(text = String.format("%02d:%02d", m, s), fontSize = 64.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("جلسات التركيز اليوم: ${timerState.sessionsToday}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-            Spacer(modifier = Modifier.height(24.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Button(shape = MaterialTheme.shapes.medium, onClick = { FocusTimerEngine.toggle(context) }, colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)) {
-                    Text(if (isRunning) "إيقاف مؤقت" else "بدء التركيز")
-                }
-                OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = { FocusTimerEngine.reset() }) {
-                    Text("إعادة ضبط")
-                }
-            }
+    // ترقية 1.2.23: الشاشة الغامرة الكاملة (أنماط، وسم مادة، إحصاءات)
+    // تعيش في ui/focus/FocusScreen — هذا المدخل يبقى عنوان الدرج نفسه.
+    DrawerScreenScaffold(title = "مؤقت التركيز", onBack = onBack) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            sy.medpro.watani.ui.focus.FocusScreen()
         }
     }
 }

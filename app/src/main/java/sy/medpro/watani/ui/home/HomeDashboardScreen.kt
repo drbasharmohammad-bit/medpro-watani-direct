@@ -29,6 +29,9 @@ import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import sy.medpro.watani.data.DailyGoalEngine
+import sy.medpro.watani.data.DailyGoalMath
+import sy.medpro.watani.data.DailyGoalStore
 import sy.medpro.watani.data.FocusTimerEngine
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.SupportFavorites
@@ -54,6 +57,8 @@ fun HomeDashboardScreen(
         OfflineStudyVault.ensureInitialized(context)
         FocusTimerEngine.init(context)
         SupportFavorites.init(context)
+        // نشاط التطبيق يحدّث الويدجت بأرقام اليوم (1.2.23).
+        sy.medpro.watani.ui.widget.StudyWidgetProvider.updateAll(context)
         animateIn = true
     }
 
@@ -86,6 +91,13 @@ fun HomeDashboardScreen(
         // locally (days / hours / minutes / seconds) with no network.
         item {
             ExamCountdownCard()
+        }
+
+        // بطاقة الهدف اليومي الذكي (1.2.23): المتبقي من البنوك المنزّلة
+        // مقسومًا على الأيام حتى الامتحان، مع تثبيت يدوي اختياري،
+        // وسطر تركيز اليوم من محرك المؤقت نفسه (لا قسم مكرر).
+        item {
+            DailyGoalCard()
         }
 
         // بطاقة الدعم النفسي — أول عنصر بعد عدّاد الامتحان: رسالة اليوم
@@ -268,8 +280,8 @@ fun HomeDashboardScreen(
         item {
             val focusAccent = Color(0xFF4527A0)
             val focusState by FocusTimerEngine.state.collectAsState()
-            val focusTimeText = if (!focusState.isRunning && focusState.timeLeftSec == FocusTimerEngine.FULL_SESSION_SEC) {
-                "25:00 — جاهز"
+            val focusTimeText = if (focusState.isIdle) {
+                String.format("%02d:%02d", focusState.timeLeftSec / 60, focusState.timeLeftSec % 60) + " — جاهز"
             } else {
                 String.format("%02d:%02d", focusState.timeLeftSec / 60, focusState.timeLeftSec % 60)
             }
@@ -298,7 +310,7 @@ fun HomeDashboardScreen(
                         Text("مؤقت التركيز", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Text(focusTimeText, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = focusAccent)
                         Text(
-                            "جلسات اليوم: ${focusState.sessionsToday}",
+                            "جلسات اليوم: ${focusState.sessionsToday} · تركيز اليوم: ${focusState.minutesToday} دقيقة",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                         )
@@ -536,6 +548,154 @@ private fun ExamCountdownCard() {
                         shape = MaterialTheme.shapes.medium
                     ) {
                         Text("تغيير التاريخ", fontSize = 14.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * بطاقة الهدف اليومي الذكي (1.2.23).
+ *
+ * الهدف يُحسب من مخازن التقدم القائمة: أسئلة البنوك المنزّلة التي لم
+ * تُجَب بعد ÷ الأيام المتبقية حتى الامتحان (DailyGoalEngine — نفس
+ * اللقطة التي يقرأها الويدجت وتذكير الدراسة، فلا أرقام متضاربة).
+ * الطالب يقدر يثبّت هدفه بنفسه من حوار التعديل فيلغي التلقائي حتى
+ * يزيل التثبيت. أسفل البطاقة سطر تركيز اليوم من محرك المؤقت — يظهر
+ * بجانب الهدف دون قسم مكرر بالرئيسية.
+ */
+@Composable
+private fun DailyGoalCard() {
+    val context = LocalContext.current
+    val stats by OfflineStudyVault.statsFlow.collectAsState()
+    val focusState by FocusTimerEngine.state.collectAsState()
+    var goalRefresh by remember { mutableStateOf(0) }
+    val snapshot = remember(stats.totalAnswered, stats.answeredToday, goalRefresh) {
+        DailyGoalEngine.snapshot(context)
+    }
+    var showEditDialog by remember { mutableStateOf(false) }
+
+    if (showEditDialog) {
+        var input by remember { mutableStateOf((snapshot.manualGoal ?: snapshot.autoGoal).toString()) }
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text("هدف اليوم") },
+            text = {
+                Column {
+                    Text(
+                        "الهدف التلقائي اليوم: ${snapshot.autoGoal} سؤالًا (المتبقي ${snapshot.remaining} على ${snapshot.daysLeft} يومًا). " +
+                            "ثبّت رقمك الخاص إن أردت — يبقى ساريًا حتى تعود للتلقائي.",
+                        fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it.filter { ch -> ch.isDigit() }.take(4) },
+                        label = { Text("هدفي اليومي (سؤال)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    input.toIntOrNull()?.let { DailyGoalStore.setManualGoal(context, it) }
+                    goalRefresh++
+                    showEditDialog = false
+                    sy.medpro.watani.ui.widget.StudyWidgetProvider.updateAll(context)
+                }) { Text("حفظ التثبيت") }
+            },
+            dismissButton = {
+                Row {
+                    if (snapshot.isManual) {
+                        TextButton(onClick = {
+                            DailyGoalStore.setManualGoal(context, null)
+                            goalRefresh++
+                            showEditDialog = false
+                            sy.medpro.watani.ui.widget.StudyWidgetProvider.updateAll(context)
+                        }) { Text("العودة للتلقائي") }
+                    }
+                    TextButton(onClick = { showEditDialog = false }) { Text("إلغاء") }
+                }
+            }
+        )
+    }
+
+    Card(
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, RoseOutline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(76.dp)) {
+                val fraction = DailyGoalMath.progressFraction(snapshot.doneToday, snapshot.goal)
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawArc(
+                        color = MaroonPrimary.copy(alpha = 0.15f),
+                        startAngle = -90f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                    drawArc(
+                        color = MaroonPrimary,
+                        startAngle = -90f,
+                        sweepAngle = 360f * fraction,
+                        useCenter = false,
+                        style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "${snapshot.doneToday}",
+                        fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaroonPrimary
+                    )
+                    Text(
+                        if (snapshot.goal > 0) "من ${snapshot.goal}" else "اليوم",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("هدف اليوم الذكي", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = when {
+                        !snapshot.hasBank -> "نزّل بنوك الأسئلة من تبويب البنوك ليُحسب هدفك اليومي تلقائيًا."
+                        snapshot.remaining <= 0 -> "أنهيت كل أسئلة البنوك المنزّلة — أحسنت. الهدف القادم: المراجعة."
+                        snapshot.isManual -> "هدف مثبّت يدويًا: ${snapshot.goal} سؤالًا (التلقائي كان ${snapshot.autoGoal}). بقي ${snapshot.remaining} سؤالًا على ${snapshot.daysLeft} يومًا."
+                        else -> "هدف اليوم ${snapshot.goal} سؤالًا — بقي ${snapshot.remaining} سؤالًا على ${snapshot.daysLeft} يومًا حتى الامتحان."
+                    },
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Timer, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        "تركيز اليوم: ${focusState.minutesToday} دقيقة · ${focusState.sessionsToday} جلسة",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+                if (snapshot.hasBank) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { showEditDialog = true },
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.height(38.dp)
+                    ) {
+                        Text("تعديل الهدف", fontSize = 12.sp)
                     }
                 }
             }

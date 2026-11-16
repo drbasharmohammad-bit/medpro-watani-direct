@@ -121,6 +121,32 @@ class WataniRepository(private val context: Context) {
          * keep their own refresh paths. */
         private val BANK_SECTION_PREFIXES =
             listOf("questions/", "questions_en/", "dawrat_jami3at/", "uworld/")
+
+        /**
+         * Total questions across the downloaded question-bank sections
+         * (build 1.2.23, smart daily goal + widget). Reads the same
+         * `watani_downloaded_sections` registry [loadDownloadedSections]
+         * parses (value format `version|hash|count|downloadedAt`) —
+         * usable from processes/components that hold no repository
+         * instance (widget, reminder receiver). Zero when no bank
+         * section is downloaded.
+         */
+        fun downloadedBankQuestionTotal(context: Context): Int {
+            return try {
+                val registry = context.applicationContext
+                    .getSharedPreferences("watani_downloaded_sections", Context.MODE_PRIVATE)
+                var total = 0
+                for ((path, value) in registry.all) {
+                    if (value !is String) continue
+                    if (BANK_SECTION_PREFIXES.none { path.startsWith(it) }) continue
+                    val parts = value.split("|")
+                    if (parts.size >= 4) total += parts[2].toIntOrNull() ?: 0
+                }
+                total
+            } catch (_: Exception) {
+                0
+            }
+        }
     }
 
     private fun saveManifestCache(manifest: ManifestResponse) {
