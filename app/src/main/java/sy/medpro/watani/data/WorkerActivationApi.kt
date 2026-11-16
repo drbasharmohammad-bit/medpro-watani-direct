@@ -96,6 +96,7 @@ object WorkerActivationApi {
     // is per-account; the known min-version is device-level (global file).
     private const val KEY_LAST_VERIFIED_AT = "last_server_verified_at"
     private const val KEY_KNOWN_MIN_VERSION = "known_min_version"
+    private const val KEY_KNOWN_APK_URL = "known_apk_url"
 
     /** Gentle-lease window: 30 days without a successful server
      * verification locks DOWNLOADED restricted sections (free content
@@ -461,6 +462,22 @@ object WorkerActivationApi {
         if (minVersion <= 0) return
         activationPrefs(context, null).edit()
             .putInt(KEY_KNOWN_MIN_VERSION, minVersion)
+            .apply()
+    }
+
+    /** Last update-APK URL learned from GET /v1/config (`apkUrl`,
+     * build 1.2.28), resolved through [AppUpdate]'s host allow-list:
+     * anything untrustworthy — and the never-learned case — resolves
+     * to the one fixed content-site URL. */
+    fun knownApkUrl(context: Context): String =
+        AppUpdate.resolveApkUrl(
+            activationPrefs(context, null).getString(KEY_KNOWN_APK_URL, null)
+        )
+
+    fun saveKnownApkUrl(context: Context, apkUrl: String) {
+        if (!AppUpdate.isApkUrlAllowed(apkUrl)) return
+        activationPrefs(context, null).edit()
+            .putString(KEY_KNOWN_APK_URL, apkUrl.trim())
             .apply()
     }
 

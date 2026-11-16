@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Build 1.2.28: the update-required screen downloads the new
+         APK and hands it to the system installer (data/AppUpdate). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- 1.2.23: re-seed the local study-reminder alarms after reboot
          (alarms do not survive a restart on their own). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

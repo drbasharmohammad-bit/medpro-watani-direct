@@ -292,6 +292,16 @@ class MainActivity : ComponentActivity() {
                         updateRequired = sy.medpro.watani.data.AppVersionGate.refreshFromServer(context)
                     } catch (_: Exception) { }
                 }
+                // Forced policy consent (build 1.2.28, doctor's order):
+                // a blocking consent screen stands before sign-in —
+                // and before every other screen — whenever this device
+                // has not accepted the CURRENT policy version yet
+                // (data/PrivacyConsent). Fully offline (the text is
+                // bundled), one acceptance per policy version, and a
+                // saved Google session is never touched by it.
+                var policyConsented by remember {
+                    mutableStateOf(!sy.medpro.watani.data.PrivacyConsent.isConsentRequired(context))
+                }
                 var showSplash by remember { mutableStateOf(true) }
                 var pendingTab by remember { mutableStateOf<AppTab?>(null) }
                 var pendingDrawer by remember { mutableStateOf<String?>(null) }
@@ -382,6 +392,12 @@ class MainActivity : ComponentActivity() {
                 if (updateRequired) {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         sy.medpro.watani.ui.security.UpdateRequiredScreen()
+                    }
+                } else if (!policyConsented) {
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        sy.medpro.watani.ui.auth.PrivacyConsentScreen(
+                            onConsented = { policyConsented = true }
+                        )
                     }
                 } else if (showSplash) {
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {

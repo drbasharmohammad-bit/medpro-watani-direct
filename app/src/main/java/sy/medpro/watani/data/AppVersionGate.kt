@@ -66,6 +66,11 @@ object AppVersionGate {
         val config = WorkerActivationApi.fetchAppConfig()
         val min = config?.optInt("minVersion", 0) ?: 0
         if (min > 0) WorkerActivationApi.saveKnownMinVersion(context, min)
+        // Build 1.2.28: the same fetch also learns the update-APK
+        // URL (`apkUrl`) so the block screen can download the new
+        // build itself; the value is allow-listed before storage.
+        val apkUrl = config?.optString("apkUrl", "") ?: ""
+        if (apkUrl.isNotBlank()) WorkerActivationApi.saveKnownApkUrl(context, apkUrl)
         return isUpdateRequired(context)
     }
 }

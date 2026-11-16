@@ -2,4 +2,7 @@
 <paths>
     <!-- Question share-card images (cacheDir/share_images) shared via FileProvider. -->
     <cache-path name="share_images" path="share_images/" />
+    <!-- Build 1.2.28: the downloaded update APK (cacheDir/updates)
+         handed to the system installer via FileProvider. -->
+    <cache-path name="updates" path="updates/" />
 </paths>

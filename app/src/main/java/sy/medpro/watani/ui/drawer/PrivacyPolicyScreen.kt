@@ -80,51 +80,61 @@ fun PrivacyPolicyScreen(onBack: () -> Unit, anchorPart: Int = -1) {
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)
             ) {
                 items(blocks) { block ->
-                    when (block) {
-                        is PolicyBlock.Title -> {
-                            Text(
-                                block.text,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaroonPrimary,
-                                lineHeight = 28.sp
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                        }
-                        is PolicyBlock.Heading -> {
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Text(
-                                block.text,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaroonPrimary,
-                                lineHeight = 24.sp
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                        }
-                        is PolicyBlock.SubHeading -> {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                block.text,
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                lineHeight = 22.sp
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                        }
-                        is PolicyBlock.Paragraph -> {
-                            ConceptRichText(text = block.text)
-                            Spacer(modifier = Modifier.height(6.dp))
-                        }
-                        PolicyBlock.Divider -> {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                    }
+                    PolicyBlockView(block)
                 }
             }
+        }
+    }
+}
+
+/**
+ * عرض كتلة واحدة من نص السياسة — مشترك بين شاشة السياسة بالدرج
+ * وشاشة الموافقة القسرية قبل الدخول (بناء 1.2.28)، فالهوية واحدة
+ * والنص واحد.
+ */
+@Composable
+fun PolicyBlockView(block: PolicyBlock) {
+    when (block) {
+        is PolicyBlock.Title -> {
+            Text(
+                block.text,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaroonPrimary,
+                lineHeight = 28.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+        is PolicyBlock.Heading -> {
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                block.text,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaroonPrimary,
+                lineHeight = 24.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+        is PolicyBlock.SubHeading -> {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                block.text,
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                lineHeight = 22.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+        is PolicyBlock.Paragraph -> {
+            ConceptRichText(text = block.text)
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+        PolicyBlock.Divider -> {
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
