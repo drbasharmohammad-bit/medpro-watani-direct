@@ -11,6 +11,15 @@
     <!-- 1.2.23: re-seed the local study-reminder alarms after reboot
          (alarms do not survive a restart on their own). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 1.2.30 lock-screen features: the live focus-session bar runs
+         as a foreground service (specialUse type — a student-started
+         study timer), and the strong study alarm may present a
+         full-screen page over the lock screen (on Android 14+ the
+         student grants this in system settings; the app falls back
+         to a plain notification without it). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- Root-manager package visibility for the whole-app root block
          (build 1.2.8, RootBlock): on Android 11+ an app can only see
@@ -82,8 +91,40 @@
             <intent-filter>
                 <action android:name="sy.medpro.watani.action.REMINDER_FIRE" />
                 <action android:name="sy.medpro.watani.action.MIDNIGHT_TICK" />
+                <action android:name="sy.medpro.watani.action.MISTAKES_FIRE" />
+                <action android:name="sy.medpro.watani.action.QUESTION_FIRE" />
+                <action android:name="sy.medpro.watani.action.REMINDER_SNOOZE" />
             </intent-filter>
         </receiver>
+        <!-- 1.2.30: live focus-session bar — foreground service
+             (specialUse: a pomodoro study timer the student starts
+             himself) plus its lock-screen action receiver. -->
+        <service
+            android:name="sy.medpro.watani.notify.FocusSessionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="مؤقت تركيز للدراسة (بومودورو) يبدؤه الطالب بنفسه، بعدّاد حي وأزرار تحكم على شاشة القفل" />
+        </service>
+        <receiver
+            android:name="sy.medpro.watani.notify.FocusActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="sy.medpro.watani.action.FOCUS_TOGGLE" />
+                <action android:name="sy.medpro.watani.action.FOCUS_FINISH" />
+            </intent-filter>
+        </receiver>
+        <!-- 1.2.30: the strong study alarm's full-screen page over
+             the lock screen (opened only by the notification's
+             full-screen intent). -->
+        <activity
+            android:name="sy.medpro.watani.ui.notify.StudyAlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/Theme.MyApplication" />
         <receiver
             android:name="sy.medpro.watani.notify.BootRescheduleReceiver"
             android:exported="true">

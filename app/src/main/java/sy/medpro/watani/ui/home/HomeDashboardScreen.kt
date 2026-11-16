@@ -62,6 +62,8 @@ fun HomeDashboardScreen(
         SupportFavorites.init(context)
         // نشاط التطبيق يحدّث الويدجت بأرقام اليوم (1.2.23).
         sy.medpro.watani.ui.widget.Widgets.updateAll(context)
+        // وبطاقة العدّاد الدائمة على القفل معها (1.2.30).
+        sy.medpro.watani.notify.StudyNotifications.refreshCountdownCard(context)
         animateIn = true
     }
 
@@ -590,6 +592,7 @@ private fun MyDayGoalsCard() {
     fun afterChange() {
         refresh++
         sy.medpro.watani.ui.widget.Widgets.updateAll(context)
+        sy.medpro.watani.notify.StudyNotifications.refreshCountdownCard(context)
     }
 
     if (showTargetDialog) {

@@ -22,6 +22,8 @@ import sy.medpro.watani.ui.viewmodel.AppTab
  * | questions | تبويب «بنك الأسئلة» عبر requestTab ببوابتيه |
  * | library | تبويب «المكتبة» عبر requestTab ببوابتيه |
  * | widget_settings | شاشة «إعدادات الويدجت» |
+ * | daily_challenge | شاشة «التحدي اليومي» (1.2.30 — إشعار سؤال اليوم) |
+ * | mistakes_review | «بنك أخطائي» مع بدء جلسة المراجعة (1.2.30) |
  * | (فارغ/مجهول) | الرئيسية — فتح عادي بلا تنقّل |
  *
  * جسم الويدجت نفسه بلا توجيه: يفتح التطبيق على الرئيسية كما
@@ -38,6 +40,10 @@ sealed interface WidgetDestination {
 
     /** فتح عادي على الرئيسية بلا أي تنقّل. */
     data object Home : WidgetDestination
+
+    /** «بنك أخطائي» مع بدء جلسة المراجعة تلقائيًا (بناء 1.2.30 —
+     * وجهة زر «ابدأ المراجعة» في تنبيه الأخطاء المستحقة). */
+    data object MistakesReview : WidgetDestination
 }
 
 object WidgetRouter {
@@ -46,10 +52,17 @@ object WidgetRouter {
 
     const val ROUTE_SETTINGS: String = "widget_settings"
 
+    /** إشعار «سؤال اليوم صباحًا» (1.2.30) — يفتح شاشة التحدي اليومي. */
+    const val ROUTE_CHALLENGE: String = "daily_challenge"
+
+    /** زر «ابدأ المراجعة» بتنبيه الأخطاء المستحقة (1.2.30). */
+    const val ROUTE_MISTAKES_REVIEW: String = "mistakes_review"
+
     // أسماء شاشات الدرج الحرفية كما بمفاتيح خريطة التنقّل.
     const val DRAWER_FOCUS: String = "مؤقت التركيز"
     const val DRAWER_MISTAKES: String = "بنك أخطائي"
     const val DRAWER_SETTINGS: String = "إعدادات الويدجت"
+    const val DRAWER_CHALLENGE: String = "التحدي اليومي"
 
     private val _pending = MutableStateFlow<String?>(null)
 
@@ -75,6 +88,8 @@ object WidgetRouter {
         WidgetQuickAction.QUESTIONS.route -> WidgetDestination.Tab(AppTab.BANK)
         WidgetQuickAction.LIBRARY.route -> WidgetDestination.Tab(AppTab.LIBRARY)
         ROUTE_SETTINGS -> WidgetDestination.Drawer(DRAWER_SETTINGS)
+        ROUTE_CHALLENGE -> WidgetDestination.Drawer(DRAWER_CHALLENGE)
+        ROUTE_MISTAKES_REVIEW -> WidgetDestination.MistakesReview
         else -> WidgetDestination.Home
     }
 }

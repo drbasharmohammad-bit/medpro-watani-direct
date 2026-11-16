@@ -61,7 +61,7 @@ private fun dueLabel(entry: MistakeEntry, now: Long): String {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MistakesBankScreen(onBack: () -> Unit) {
+fun MistakesBankScreen(onBack: () -> Unit, autoStartReview: Boolean = false) {
     val context = LocalContext.current
     val changes by MistakesBank.changes.collectAsState()
     var entries by remember { mutableStateOf(MistakesBank.entries(context)) }
@@ -92,6 +92,17 @@ fun MistakesBankScreen(onBack: () -> Unit) {
         if (items.isEmpty()) return
         sessionItems = items
         sessionAnswers = emptyMap()
+    }
+
+    // وصول عميق من زر «ابدأ المراجعة» بتنبيه الأخطاء المستحقة
+    // (بناء 1.2.30): جلسة المراجعة تبدأ تلقائيًا مرة واحدة عند
+    // وجود مستحقّات فعلًا — نفس طابور زر «درّبني الآن» تمامًا.
+    var autoReviewConsumed by remember { mutableStateOf(false) }
+    LaunchedEffect(autoStartReview, entries) {
+        if (autoStartReview && !autoReviewConsumed && sessionItems == null && dueCount > 0) {
+            autoReviewConsumed = true
+            startSession(MistakesBank.sessionQueue(context = context, subject = null))
+        }
     }
 
     // Back-navigation fix (1.2.22): back steps ONE level — an open

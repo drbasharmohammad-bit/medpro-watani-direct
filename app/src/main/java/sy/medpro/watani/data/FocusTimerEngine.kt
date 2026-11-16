@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import sy.medpro.watani.notify.FocusSessionService
 import sy.medpro.watani.notify.StudyNotifications
 import java.time.LocalDate
 
@@ -314,6 +315,8 @@ object FocusTimerEngine {
         )
         persistSettings()
         startTickLoop()
+        // شريط القفل الحي (1.2.30): جلسة بدأت ⇒ الخدمة الأمامية تلحقها إن فعّلها الطالب.
+        FocusSessionService.sync(context)
     }
 
     /** بدء/إيقاف مؤقت — نقطة الدخول الوحيدة لتشغيل العدّ وإيقافه. */
@@ -335,6 +338,7 @@ object FocusTimerEngine {
             _state.value = _state.value.copy(isRunning = true)
             startTickLoop()
         }
+        FocusSessionService.sync(context)
     }
 
     /**
@@ -359,6 +363,7 @@ object FocusTimerEngine {
             phaseTotalSec = total,
             isRunning = false
         )
+        FocusSessionService.sync(context)
     }
 
     /** تخطي الاستراحة الجارية والعودة لخامل. */
@@ -376,6 +381,7 @@ object FocusTimerEngine {
             phaseTotalSec = total,
             isRunning = false
         )
+        FocusSessionService.sync(context)
     }
 
     /** إعادة ضبط: إيقاف والرجوع إلى جلسة كاملة، بلا تسجيل وبلا مساس
@@ -392,6 +398,7 @@ object FocusTimerEngine {
             phaseTotalSec = total,
             isRunning = false
         )
+        appContext?.let { FocusSessionService.sync(it) }
     }
 
     private fun startTickLoop() {
@@ -436,7 +443,12 @@ object FocusTimerEngine {
                     lastEventAt = now
                 )
                 persistStats()
-                if (ctx != null) StudyNotifications.postFocusDone(ctx, current.subject)
+                if (ctx != null) {
+                    StudyNotifications.postFocusDone(ctx, current.subject)
+                    // جلسة اكتملت ⇒ أرقام الهدف/العدّاد تغيّرت: حدّث بطاقة القفل الدائمة.
+                    StudyNotifications.refreshCountdownCard(ctx)
+                    FocusSessionService.sync(ctx)
+                }
             }
             FocusPhase.BREAK -> {
                 val total = focusSec(current.mode, current.customFocusMin)
@@ -448,7 +460,10 @@ object FocusTimerEngine {
                     lastEvent = FocusEvent.BREAK_DONE,
                     lastEventAt = now
                 )
-                if (ctx != null) StudyNotifications.postBreakDone(ctx)
+                if (ctx != null) {
+                    StudyNotifications.postBreakDone(ctx)
+                    FocusSessionService.sync(ctx)
+                }
             }
         }
     }

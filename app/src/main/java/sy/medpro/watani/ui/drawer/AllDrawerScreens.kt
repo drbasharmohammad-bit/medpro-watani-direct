@@ -349,39 +349,13 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
     var dailyShowExplanation by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val dir = File(context.filesDir, "sections_cache")
-        val list = mutableListOf<Pair<String, QuestionDto>>()
-        if (dir.exists() && dir.isDirectory) {
-            dir.listFiles()?.forEach { file ->
-                if (file.name.endsWith(".json") && !file.name.contains("cases") && !file.name.contains("guide") && !file.name.contains("osce")) {
-                    try {
-                        val text = sy.medpro.watani.data.SectionCacheCrypto.readText(context, file) ?: throw IllegalStateException("section cache unreadable")
-                        val moshi = com.squareup.moshi.Moshi.Builder().add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory()).build()
-                        val env = moshi.adapter(SubjectEnvelope::class.java).fromJson(text)
-                        val subjName = env?.subjectName ?: file.name.substringBefore(".json")
-                        env?.topics?.forEach { topic ->
-                            topic.questions?.forEach { q ->
-                                if (!q.text.isNullOrBlank() && !q.options.isNullOrEmpty()) {
-                                    list.add(Pair(subjName, q))
-                                }
-                            }
-                        }
-                        env?.sessions?.forEach { session ->
-                            session.questions?.forEach { q ->
-                                if (!q.text.isNullOrBlank() && !q.options.isNullOrEmpty()) {
-                                    list.add(Pair(subjName, q))
-                                }
-                            }
-                        }
-                    } catch (_: Exception) {}
-                }
-            }
-        }
+        // 1.2.30: التحميل واختيار سؤال اليوم صارا بالمصدر الموحّد
+        // DailyChallengeSource — فيطابق سؤال الشاشة سؤالَ إشعار
+        // «سؤال اليوم صباحًا» في اليوم نفسه دائمًا.
+        val list = sy.medpro.watani.data.DailyChallengeSource.loadPool(context)
         allQuestions = list
-        if (list.isNotEmpty()) {
-            val dayIndex = (System.currentTimeMillis() / (1000 * 60 * 60 * 24)).toInt() % list.size
-            selectedQuestion = list[dayIndex]
-        }
+        selectedQuestion = sy.medpro.watani.data.DailyChallengeSource
+            .pickForDay(list, System.currentTimeMillis())
     }
 
     DrawerScreenScaffold(title = "التحدي اليومي الوطني", onBack = onBack) { padding ->

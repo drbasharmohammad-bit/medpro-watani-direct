@@ -55,8 +55,24 @@ android {
     // sitting runs on the existing quiz engine — same card,
     // explanation/الزبدة, mistakes bank and vault recording — with
     // an end card showing the total plus the per-subject split.
-    versionCode = 74303
-    versionName = "1.2.29"
+    // 1.2.30 (Nov 2026): the five lock-screen features the doctor
+    // approved from the prepared mocks — (1) a permanent silent
+    // countdown card (exam countdown + daily-goal progress) on the
+    // lock screen, (2) the question of the day as a morning
+    // lock-screen notification whose tap opens the daily-challenge
+    // screen (wired into navigation at last), (3) a live focus
+    // session bar (foreground service + countdown chronometer +
+    // pause/finish actions) so a pomodoro survives app closure,
+    // (4) the mistakes-due alert on its own independent time with
+    // a «ابدأ المراجعة» action that opens the review session
+    // directly, and (5) a strong full-screen study alarm page over
+    // the lock screen with start/snooze, falling back to the plain
+    // reminder when the full-screen permission is absent. All five
+    // are opt-in and OFF by default, managed from the existing
+    // «الإشعارات والتذكير» screen; sign-in/consent (1.2.29) and
+    // every other existing behavior are untouched.
+    versionCode = 74304
+    versionName = "1.2.30"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

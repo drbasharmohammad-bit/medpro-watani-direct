@@ -195,6 +195,9 @@ class MainActivity : ComponentActivity() {
         try {
             sy.medpro.watani.notify.ReminderScheduler.rescheduleAll(applicationContext)
             sy.medpro.watani.ui.widget.Widgets.updateAll(applicationContext)
+            // 1.2.30: بطاقة العدّاد الدائمة على القفل تُحدَّث عند فتح
+            // التطبيق أيضًا (تنشر نفسها إن كانت مفعّلة، وتُلغى إن عُطّلت).
+            sy.medpro.watani.notify.StudyNotifications.refreshCountdownCard(applicationContext)
         } catch (_: Exception) { }
         // Offline-activation fix (Nov 2026, doctor's order): when
         // connectivity returns while the app is open, verify the
@@ -498,6 +501,10 @@ class MainActivity : ComponentActivity() {
                     var casesList by remember { mutableStateOf<List<ClinicalCaseDto>>(emptyList()) }
                     var activeSubjectEnvelope by remember { mutableStateOf<SubjectEnvelope?>(null) }
                     var drawerScreen by remember { mutableStateOf<String?>(null) }
+                    // 1.2.30: توجيه «ابدأ المراجعة» من تنبيه الأخطاء
+                    // المستحقة — يفتح «بنك أخطائي» ويبدأ جلسته تلقائيًا
+                    // مرة واحدة، ويُصفَّر عند مغادرة الشاشة.
+                    var mistakesAutoReview by remember { mutableStateOf(false) }
 
                     // Shared guarded entry for restricted drawer screens,
                     // used by drawer taps AND home shortcuts alike:
@@ -533,6 +540,10 @@ class MainActivity : ComponentActivity() {
                         when (val destination = sy.medpro.watani.ui.widget.WidgetRouter.destinationFor(route)) {
                             is sy.medpro.watani.ui.widget.WidgetDestination.Drawer -> drawerScreen = destination.title
                             is sy.medpro.watani.ui.widget.WidgetDestination.Tab -> requestTab(destination.tab)
+                            sy.medpro.watani.ui.widget.WidgetDestination.MistakesReview -> {
+                                mistakesAutoReview = true
+                                drawerScreen = "بنك أخطائي"
+                            }
                             sy.medpro.watani.ui.widget.WidgetDestination.Home -> Unit
                         }
                         sy.medpro.watani.ui.widget.WidgetRouter.consume()
@@ -1009,7 +1020,14 @@ class MainActivity : ComponentActivity() {
                                                 )
                                                 "المراجعة الذكية Anki" -> FlashcardsReviewScreen(initialTab = 1, onBack = { drawerScreen = null })
                                                 "المراجعة الذكية Anki - الخاطئة" -> FlashcardsReviewScreen(initialTab = 1, ankiWrongOnly = true, onBack = { drawerScreen = null })
-                                                "بنك أخطائي" -> MistakesBankScreen(onBack = { drawerScreen = null })
+                                                "بنك أخطائي" -> MistakesBankScreen(
+                                                    autoStartReview = mistakesAutoReview,
+                                                    onBack = {
+                                                        drawerScreen = null
+                                                        mistakesAutoReview = false
+                                                    }
+                                                )
+                                                "التحدي اليومي" -> DailyChallengeScreen(onBack = { drawerScreen = null })
                                                 "نقاط الضعف" -> WeakPointsScreen(onBack = { drawerScreen = null })
                                                 "مؤقت التركيز" -> FocusTimerScreen(onBack = { drawerScreen = null })
                                                 "الإنجازات والأوسمة" -> BadgesScreen(onBack = { drawerScreen = null })
