@@ -1,6 +1,7 @@
 package sy.medpro.watani.notify
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -108,6 +109,25 @@ object StudyNotifications {
         )
     }
 
+    /**
+     * نقطة النشر الوحيدة لكل إشعارات هذا الكائن: فحص الإذن الصريح
+     * بنفس الدالة قبل notify() مباشرة (نمط 1.2.23 الذي كان يجتاز
+     * فحص Lint — الفحص داخل دالة منفصلة مثل canPostNow لا يراه
+     * كاشف MissingPermission). كل نداءات notify تمر من هنا حصرًا.
+     */
+    private fun notifyChecked(context: Context, notificationId: Int, notification: Notification) {
+        if (!canPost(context)) return
+        // Explicit runtime-permission check before notify() (Android 13+):
+        // areNotificationsEnabled() alone does not satisfy the platform's
+        // permission contract if the grant state changes between the two.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context.applicationContext, Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) return
+        NotificationManagerCompat.from(context.applicationContext).notify(notificationId, notification)
+    }
+
     private fun openAppIntent(context: Context): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -148,7 +168,7 @@ object StudyNotifications {
             .setContentIntent(openAppIntent(context))
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context.applicationContext).notify(notificationId, notification)
+        notifyChecked(context, notificationId, notification)
     }
 
     private fun studyReminderBody(goal: Int, doneToday: Int, hasBank: Boolean): String = when {
@@ -204,7 +224,7 @@ object StudyNotifications {
             .setContentIntent(fullScreenPending)
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context.applicationContext).notify(ID_STUDY, notification)
+        notifyChecked(context, ID_STUDY, notification)
     }
 
     /**
@@ -227,7 +247,7 @@ object StudyNotifications {
             .addAction(0, "ابدأ المراجعة", reviewIntent)
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context.applicationContext).notify(ID_MISTAKES, notification)
+        notifyChecked(context, ID_MISTAKES, notification)
     }
 
     /** سؤال اليوم صباحًا (1.2.30): نص السؤال ومادته، والنقر يفتح شاشة التحدي اليومي نفسها. */
@@ -242,7 +262,7 @@ object StudyNotifications {
             .setContentIntent(routedActivityIntent(context, WidgetRouter.ROUTE_CHALLENGE, REQ_CHALLENGE))
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context.applicationContext).notify(ID_QUESTION, notification)
+        notifyChecked(context, ID_QUESTION, notification)
     }
 
     /**
@@ -275,8 +295,7 @@ object StudyNotifications {
         if (snapshot.goal > 0) {
             builder.setProgress(snapshot.goal, snapshot.doneToday.coerceIn(0, snapshot.goal), false)
         }
-        NotificationManagerCompat.from(context.applicationContext)
-            .notify(ID_COUNTDOWN, builder.build())
+        notifyChecked(context, ID_COUNTDOWN, builder.build())
     }
 
     fun cancelCountdownCard(context: Context) {
