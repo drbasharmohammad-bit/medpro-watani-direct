@@ -58,7 +58,6 @@ data class WidgetSettings(
     val showGoals: Boolean = true,
     val showFocus: Boolean = true,
     val showButtons: Boolean = true,
-    val showLandmarkName: Boolean = false,
     val countdownStyle: WidgetCountdownStyle = WidgetCountdownStyle.DAYS_AND_TIME,
     val quickActions: List<WidgetQuickAction> = WidgetQuickAction.entries
 )
@@ -157,18 +156,19 @@ object WidgetBackgroundMath {
 }
 
 /**
- * هندسة إطار الويدجت — منطق نقي (إصلاح 1.2.27 لبلاغ الدكتور:
- * زاوية الصورة خارجة عن قوس الإطار الذهبي).
+ * هندسة زاوية الويدجت — منطق نقي (إصلاح 1.2.27 لبلاغ الدكتور:
+ * زاوية الصورة خارجة عن قوس الزاوية).
  *
  * مسار الزاوية واحد لكل الطبقات: نصف قطر [CORNER_RADIUS_DP] ‏(24dp)
- * — وهو الرقم نفسه بـdrawables ‏(widget_bg/widget_frame/
- * widget_photo_frame). منذ 1.2.27 تُقصّ الصورة والتراكب فعليًا
- * بهذا المسار على مستوى الـBitmap قبل الإرسال للمشغّل، فلا يبقى
- * أي بكسل خارج القوس مهما كان المشغّل.
+ * — وهو الرقم نفسه بـdrawables ‏(widget_bg/widget_photo_frame).
+ * منذ 1.2.27 تُقصّ الصورة والتراكب فعليًا بهذا المسار على مستوى
+ * الـBitmap قبل الإرسال للمشغّل، فلا يبقى أي بكسل خارج القوس
+ * مهما كان المشغّل. لا خط إطار حول الويدجت (حُذف بأمر الدكتور
+ * 16 نوفمبر 18:32) — الصورة تنتهي عند القوس وحسب.
  */
 object WidgetShapeMath {
 
-    /** نصف قطر زاوية الويدجت بالـdp — يطابق drawables الإطار. */
+    /** نصف قطر زاوية الويدجت بالـdp — يطابق drawables الزاوية. */
     const val CORNER_RADIUS_DP = 24
 
     /** نصف القطر بالبكسل لمقاس فعلي بالـdp عند كثافة الشاشة. */
@@ -230,7 +230,6 @@ object WidgetSettingsStore {
     private const val KEY_SHOW_GOALS = "show_goals"
     private const val KEY_SHOW_FOCUS = "show_focus"
     private const val KEY_SHOW_BUTTONS = "show_buttons"
-    private const val KEY_SHOW_LANDMARK = "show_landmark_name"
     private const val KEY_STYLE = "countdown_style"
     private const val KEY_ACTIONS = "quick_actions"
 
@@ -248,7 +247,6 @@ object WidgetSettingsStore {
             showGoals = prefs.getBoolean(KEY_SHOW_GOALS, defaults.showGoals),
             showFocus = prefs.getBoolean(KEY_SHOW_FOCUS, defaults.showFocus),
             showButtons = prefs.getBoolean(KEY_SHOW_BUTTONS, defaults.showButtons),
-            showLandmarkName = prefs.getBoolean(KEY_SHOW_LANDMARK, defaults.showLandmarkName),
             countdownStyle = runCatching {
                 WidgetCountdownStyle.valueOf(prefs.getString(KEY_STYLE, defaults.countdownStyle.name)!!)
             }.getOrDefault(defaults.countdownStyle),
@@ -268,7 +266,6 @@ object WidgetSettingsStore {
             .putBoolean(KEY_SHOW_GOALS, settings.showGoals)
             .putBoolean(KEY_SHOW_FOCUS, settings.showFocus)
             .putBoolean(KEY_SHOW_BUTTONS, settings.showButtons)
-            .putBoolean(KEY_SHOW_LANDMARK, settings.showLandmarkName)
             .putString(KEY_STYLE, settings.countdownStyle.name)
             .putString(KEY_ACTIONS, WidgetSettingsMath.encodeQuickActions(settings.quickActions))
             .apply()

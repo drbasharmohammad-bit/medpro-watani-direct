@@ -123,8 +123,10 @@ class PerfFix1227LogicTest {
 
     @Test
     fun widgetCornerRadiusMatchesTheFrameDrawables() {
-        // widget_bg / widget_frame / widget_photo_frame all declare
-        // 24dp — the in-code bitmap clip must use the same radius.
+        // widget_bg / widget_photo_frame both declare 24dp — the
+        // in-code bitmap clip must use the same radius. (The old
+        // widget_frame border drawable is gone: no frame line at
+        // all since the doctor's 16 Nov 18:32 order.)
         assertEquals(24, WidgetShapeMath.CORNER_RADIUS_DP)
     }
 

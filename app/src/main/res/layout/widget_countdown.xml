@@ -2,7 +2,9 @@
 <!-- الويدجت الصغير v3 (1.2.25): عدّاد فقط فوق صورة معلم سوري
      مدموجة بتدرّج عنابي — كما بالنموذج المعتمد (2×2).
      الطبقات: صورة (مورد drawable) ← تدرّج الدمج (Bitmap صغير)
-     ← المحتوى ← إطار ذهبي. جسم الويدجت يفتح الرئيسية. -->
+     ← المحتوى. جسم الويدجت يفتح الرئيسية.
+     1.2.27: لا خط إطار حول الويدجت ولا اسم معلم مكتوب عليها
+     (بأمر الدكتور 16 نوفمبر 18:32) — الصورة تنتهي عند القوس. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -134,23 +136,8 @@
             android:visibility="gone" />
 
         <TextView
-            android:id="@+id/widget_landmark"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="8dp"
-            android:textColor="#D8CDB8"
-            android:textSize="10sp"
-            android:visibility="gone" />
-
-        <TextView
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1" />
     </LinearLayout>
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@drawable/widget_frame" />
 </FrameLayout>

@@ -126,14 +126,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1" />
-
-            <TextView
-                android:id="@+id/widget_landmark"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#D8CDB8"
-                android:textSize="9sp"
-                android:visibility="gone" />
         </LinearLayout>
 
         <TextView
@@ -274,9 +266,4 @@
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@drawable/widget_frame" />
 </FrameLayout>

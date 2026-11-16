@@ -239,9 +239,6 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
                 SwitchRow("الأزرار السريعة", settings.showButtons) {
                     apply(settings.copy(showButtons = it))
                 }
-                SwitchRow("اسم المعلم", settings.showLandmarkName) {
-                    apply(settings.copy(showLandmarkName = it))
-                }
             }
 
             SettingsCard(title = "نمط العدّاد") {

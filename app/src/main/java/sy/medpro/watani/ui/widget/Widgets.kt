@@ -81,9 +81,10 @@ internal data class WidgetData(
     val focusSessions: Int,
     val focusWeekMinutes: Int,
     val settings: WidgetSettings,
-    /** Chosen landmark index for today, or null in plain mode. */
-    val landmarkIndex: Int?,
-    val landmarkName: String?
+    /** Chosen landmark index for today, or null in plain mode.
+     * The landmark's NAME is never written on the widget at any
+     * size (doctor's order 16 Nov 18:32) — the photo stands alone. */
+    val landmarkIndex: Int?
 )
 
 object Widgets {
@@ -208,8 +209,7 @@ object Widgets {
             focusSessions = focus.sessionsToday,
             focusWeekMinutes = focus.minutesWeek,
             settings = settings,
-            landmarkIndex = landmarkIndex,
-            landmarkName = landmarkIndex?.let { LandmarkLibrary.all[it].name }
+            landmarkIndex = landmarkIndex
         )
     }
 
@@ -230,7 +230,6 @@ object Widgets {
             views.setViewVisibility(R.id.widget_chip, View.GONE)
             views.setViewVisibility(R.id.widget_expired, View.GONE)
         }
-        bindLandmarkLine(views, data, force = !data.settings.showCountdown)
         bindOpenApp(context, views, R.id.widget_root)
         return views
     }
@@ -249,7 +248,6 @@ object Widgets {
         } else {
             views.setViewVisibility(R.id.widget_countdown_block, View.GONE)
         }
-        bindLandmarkLine(views, data, force = false)
         bindQuestionProgress(views, data)
         bindButtons(
             context, views, data, KIND_DAY,
@@ -294,7 +292,6 @@ object Widgets {
             R.id.widget_focus_row,
             if (data.settings.showFocus) View.VISIBLE else View.GONE
         )
-        bindLandmarkLine(views, data, force = false)
         bindButtons(
             context, views, data, KIND_LARGE,
             listOf(
@@ -314,8 +311,8 @@ object Widgets {
      * both and the root's burgundy gradient drawable shows instead.
      *
      * 1.2.27 (doctor's device report — photo corner outside the
-     * gold frame's arc): BOTH layers are now sent as bitmaps
-     * pre-clipped in code to the frame's own round-rect path
+     * corner arc): BOTH layers are now sent as bitmaps
+     * pre-clipped in code to the widget's own round-rect path
      * (radius [WidgetShapeMath.CORNER_RADIUS_DP] at the instance's
      * real size), so no pixel can land outside the arc on any
      * launcher. Before, the photo relied on clipToOutline in the
@@ -354,16 +351,6 @@ object Widgets {
             WidgetOverlay.bitmap(data.settings.dimPercent, widthPx, heightPx, radiusPx)
         )
         views.setViewVisibility(R.id.widget_overlay, View.VISIBLE)
-    }
-
-    private fun bindLandmarkLine(views: RemoteViews, data: WidgetData, force: Boolean) {
-        val name = data.landmarkName
-        if (name != null && (force || data.settings.showLandmarkName)) {
-            views.setTextViewText(R.id.widget_landmark, name)
-            views.setViewVisibility(R.id.widget_landmark, View.VISIBLE)
-        } else {
-            views.setViewVisibility(R.id.widget_landmark, View.GONE)
-        }
     }
 
     /**
@@ -558,7 +545,7 @@ object Widgets {
 }
 
 /** The one corner path every widget layer follows (1.2.27):
- * a round-rect of the frame's own radius over the full bitmap. */
+ * a round-rect of the widget's corner radius over the full bitmap. */
 private fun widgetClipPath(widthPx: Int, heightPx: Int, radiusPx: Float): Path =
     Path().apply {
         addRoundRect(
@@ -568,9 +555,9 @@ private fun widgetClipPath(widthPx: Int, heightPx: Int, radiusPx: Float): Path =
     }
 
 /**
- * صورة المعلم مقصوصة فعليًا على مسار الإطار (1.2.27): تُفكّ من
+ * صورة المعلم مقصوصة فعليًا على مسار الزاوية (1.2.27): تُفكّ من
  * المورد (مربّعات 1200×1200)، تُقصّ مركزيًا لنسبة مقاس الويدجت
- * الحقيقي، وتُرسم عبر مسار دائري نصف قطره نصف قطر الإطار نفسه —
+ * الحقيقي، وتُرسم عبر مسار دائري نصف قطره نصف قطر الزاوية نفسه —
  * فلا يصل المشغّل أي بكسل خارج القوس. تُخزّن مؤقتًا لكل
  * (مورد، مقاس). عند أي فشل تُرجع null ويعود الربط لمسار المورد.
  */
@@ -624,8 +611,8 @@ internal object WidgetPhotos {
  * طبقة دمج الصورة: Bitmap يُولّد برمجيًا بمقاس الويدجت الحقيقي —
  * صبغة عنابية ثابتة 13% ثم تدرّج داكن #22050B بألفا نقاطه من
  * [WidgetSettingsMath.overlayStops] لمنزلق الطالب، وكلّه مرسوم
- * عبر مسار قصّ الإطار الدائري (1.2.27 — قبلها كانت الطبقة بلا
- * أي قصّ فتخرج زواياها المربّعة عن قوس الإطار). يُخزّن مؤقتًا
+ * عبر مسار قصّ الزاوية الدائري (1.2.27 — قبلها كانت الطبقة بلا
+ * أي قصّ فتخرج زواياها المربّعة عن قوس الزاوية). يُخزّن مؤقتًا
  * لكل (تعتيم، مقاس).
  */
 internal object WidgetOverlay {
