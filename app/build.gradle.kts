@@ -45,8 +45,18 @@ android {
     // screen, and quick-action buttons that each open their OWN
     // intended screen in the app (focus / mistakes bank / questions
     // tab / library) via per-button routed PendingIntents.
-    versionCode = 74299
-    versionName = "1.2.25"
+    // 1.2.26 (Nov 2026): «دورة كاملة» — a third path at the top of
+    // بنك الوطني (beside the per-subject paths, whose own
+    // «حسب المواضيع | حسب السنوات» toggle is untouched): one named
+    // dawra assembled at runtime from every downloaded subject
+    // shard, in the official 27-subject order with in-session
+    // subject separators, explicit coverage (missing subjects are
+    // listed with the same download action, never hidden), and the
+    // sitting runs on the existing quiz engine — same card,
+    // explanation/الزبدة, mistakes bank and vault recording — with
+    // an end card showing the total plus the per-subject split.
+    versionCode = 74300
+    versionName = "1.2.26"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

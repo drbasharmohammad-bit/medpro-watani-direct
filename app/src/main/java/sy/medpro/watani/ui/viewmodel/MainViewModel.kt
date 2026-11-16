@@ -40,8 +40,18 @@ sealed class ScreenState {
         val subjectName: String? = null,
         /** English-bank quizzes (questions_en/): stems/options render
          * LTR while chrome and explanations stay RTL (Nov 2026). */
-        val ltr: Boolean = false
+        val ltr: Boolean = false,
+        /** «دورة كاملة» (1.2.26): per-subject spans over the flat
+         * question list of an assembled full-dawra quiz. Empty for
+         * every ordinary quiz — QuizScreen then renders exactly as
+         * before (no separators, no per-subject results card). */
+        val sections: List<QuizSectionSpan> = emptyList()
     ) : ScreenState()
+    /** «دورة كاملة» (1.2.26): the named-dawra list, assembled from
+     * the downloaded questions/ shards. */
+    object FullDawraList : ScreenState()
+    /** «دورة كاملة» (1.2.26): one dawra's assembly/coverage detail. */
+    data class FullDawraDetail(val dawraName: String) : ScreenState()
     data class CasePlayer(val caseItem: ClinicalCaseDto) : ScreenState()
     /** «ادرس مع ميد برو» unit page opened from a quiz question's
      * «شرح فكرة هالسؤال» link (build 1.2.13) — the Library entry
@@ -73,6 +83,12 @@ data class UiState(
     val backStack: List<ScreenState> = emptyList(),
     /** Device-gate block message (M8), shown as a dialog by MainActivity. */
     val gateMessage: String? = null,
+    /** «دورة كاملة» (1.2.26): light per-subject session tables of the
+     * downloaded questions/ shards (session name -> question count,
+     * in official subject order). Question objects are never held
+     * here — a dawra's questions load only when it is opened. */
+    val fullDawraInputs: List<DawraSubjectSessions> = emptyList(),
+    val fullDawraLoading: Boolean = false,
     val screenState: ScreenState = ScreenState.Home
 )
 
@@ -432,6 +448,124 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     sourcePath = path,
                     subjectName = envelope?.subjectName,
                     ltr = path.startsWith("questions_en/")
+                )
+            )
+        }
+    }
+
+    fun openFullDawraList() {
+        navigateTo(ScreenState.FullDawraList)
+        loadFullDawraData()
+    }
+
+    fun openFullDawraDetail(dawraName: String) {
+        navigateTo(ScreenState.FullDawraDetail(dawraName))
+        loadFullDawraData()
+    }
+
+    private var fullDawraLoadRunning = false
+
+    /**
+     * «دورة كاملة» (1.2.26): (re)builds the light session tables of
+     * the downloaded questions/ shards. Called when the dawra list /
+     * detail opens and whenever the downloaded set changes while
+     * they are shown, so a subject downloaded from the coverage list
+     * joins the assembly immediately. A second call while a load is
+     * running is a no-op.
+     */
+    fun loadFullDawraData() {
+        if (fullDawraLoadRunning) return
+        fullDawraLoadRunning = true
+        viewModelScope.launch {
+            _uiState.update { it.copy(fullDawraLoading = true) }
+            try {
+                val downloadedPaths = downloadedSections.value
+                    .map { it.sectionPath }
+                    .filter { it.startsWith("questions/") && it.endsWith(".json") }
+                val inputs = mutableListOf<DawraSubjectSessions>()
+                for (path in downloadedPaths) {
+                    val envelope = repository.getSubjectEnvelope(path) ?: continue
+                    val subjectName = envelope.subjectName
+                        ?: path.removePrefix("questions/").removeSuffix(".json")
+                    val counts = LinkedHashMap<String, Int>()
+                    envelope.sessions.orEmpty().forEach { session ->
+                        val name = session.name?.trim().orEmpty()
+                        if (name.isNotEmpty()) {
+                            counts[name] = (counts[name] ?: 0) +
+                                (session.questions?.size ?: session.questionCount ?: 0)
+                        }
+                    }
+                    inputs += DawraSubjectSessions(
+                        subjectName = subjectName,
+                        path = path,
+                        sessionCounts = counts
+                    )
+                }
+                inputs.sortWith(
+                    compareBy({ officialSubjectRank(it.subjectName) }, { it.subjectName })
+                )
+                _uiState.update { it.copy(fullDawraInputs = inputs) }
+            } finally {
+                fullDawraLoadRunning = false
+                _uiState.update { it.copy(fullDawraLoading = false) }
+            }
+        }
+    }
+
+    /**
+     * «دورة كاملة» (1.2.26): opens one named dawra assembled from
+     * EVERY downloaded subject shard, in the official subject
+     * order, on the same QuizScreen as every other quiz. The gates
+     * mirror [openSessionQuiz] exactly (device gate, activation,
+     * gentle lease), checked against a representative questions/
+     * path — the whole bank shares the one restriction class.
+     */
+    fun openFullDawra(dawraName: String) {
+        viewModelScope.launch {
+            val context = getApplication<Application>().applicationContext
+            val representativePath = downloadedSections.value
+                .firstOrNull {
+                    it.sectionPath.startsWith("questions/") && it.sectionPath.endsWith(".json")
+                }?.sectionPath
+            if (representativePath != null && WorkerActivationApi.isRestrictedPath(representativePath)) {
+                val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
+                if (!gate.allowed) {
+                    _uiState.update { it.copy(gateMessage = gate.userMessage) }
+                    return@launch
+                }
+                if (!WorkerActivationApi.isActivated(context)) {
+                    _activationPromptRequests.tryEmit(Unit)
+                    return@launch
+                }
+                if (WorkerActivationApi.isRestrictedLeaseExpired(context)) {
+                    _uiState.update { it.copy(gateMessage = WorkerActivationApi.LEASE_EXPIRED_MESSAGE) }
+                    return@launch
+                }
+            }
+            val subjectQuestions = mutableListOf<Pair<String, List<QuestionDto>>>()
+            val downloadedPaths = downloadedSections.value
+                .map { it.sectionPath }
+                .filter { it.startsWith("questions/") && it.endsWith(".json") }
+            for (path in downloadedPaths) {
+                val envelope = repository.getSubjectEnvelope(path) ?: continue
+                val subjectName = envelope.subjectName
+                    ?: path.removePrefix("questions/").removeSuffix(".json")
+                val questions = envelope.sessions.orEmpty()
+                    .filter { it.name?.trim() == dawraName }
+                    .flatMap { it.questions.orEmpty() }
+                if (questions.isNotEmpty()) {
+                    subjectQuestions += subjectName to questions
+                }
+            }
+            val assembled = buildDawraQuiz(subjectQuestions)
+            if (assembled.questions.isEmpty()) return@launch
+            navigateTo(
+                ScreenState.Quiz(
+                    title = "دورة $dawraName",
+                    questions = assembled.questions,
+                    sourcePath = null,
+                    subjectName = null,
+                    sections = assembled.sections
                 )
             )
         }

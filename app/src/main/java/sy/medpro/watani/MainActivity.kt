@@ -1152,6 +1152,7 @@ class MainActivity : ComponentActivity() {
                                                                         viewModel.openSubject(path, name, tab)
                                                                     }
                                                                 },
+                                                                onOpenFullDawra = { viewModel.openFullDawraList() },
                                                                 onOpenUniversity = { key, name -> viewModel.openUniversity(key, name) },
                                                                 onCaseClick = { caseItem -> viewModel.openCasePlayer(caseItem) },
                                                                 onBankSectionsShown = { viewModel.refreshInstalledBanksInBackground() },
@@ -1375,6 +1376,37 @@ class MainActivity : ComponentActivity() {
                                                         onBankSectionsShown = { viewModel.refreshInstalledBanksInBackground() }
                                                     )
                                                 }
+                                                is ScreenState.FullDawraList -> {
+                                                    // «دورة كاملة» (1.2.26): keep the
+                                                    // light session tables in step
+                                                    // with the downloaded set while
+                                                    // the screen is shown.
+                                                    LaunchedEffect(downloadedSections) {
+                                                        viewModel.loadFullDawraData()
+                                                    }
+                                                    sy.medpro.watani.ui.home.FullDawraListScreen(
+                                                        inputs = uiState.fullDawraInputs,
+                                                        loading = uiState.fullDawraLoading,
+                                                        onDawraClick = { name -> viewModel.openFullDawraDetail(name) },
+                                                        onBack = { viewModel.goBack() }
+                                                    )
+                                                }
+                                                is ScreenState.FullDawraDetail -> {
+                                                    LaunchedEffect(downloadedSections) {
+                                                        viewModel.loadFullDawraData()
+                                                    }
+                                                    sy.medpro.watani.ui.home.FullDawraDetailScreen(
+                                                        dawraName = screen.dawraName,
+                                                        inputs = uiState.fullDawraInputs,
+                                                        files = uiState.files,
+                                                        downloadedSections = downloadedSections,
+                                                        downloadingPaths = uiState.downloadingPaths,
+                                                        downloadingProgress = uiState.downloadingProgress,
+                                                        onDownloadSection = { path, entry -> viewModel.downloadSection(path, entry) },
+                                                        onStart = { viewModel.openFullDawra(screen.dawraName) },
+                                                        onBack = { viewModel.goBack() }
+                                                    )
+                                                }
                                                 is ScreenState.Quiz -> {
                                                     QuizScreen(
                                                         title = screen.title,
@@ -1383,6 +1415,7 @@ class MainActivity : ComponentActivity() {
                                                         sourcePath = screen.sourcePath,
                                                         subjectName = screen.subjectName,
                                                         ltr = screen.ltr,
+                                                        sections = screen.sections,
                                                         onOpenConceptUnit = { unitId ->
                                                             viewModel.openConceptUnit(unitId)
                                                         }

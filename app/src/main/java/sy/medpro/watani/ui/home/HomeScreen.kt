@@ -68,6 +68,10 @@ fun HomeScreen(
     onRefreshManifest: () -> Unit,
     onDownloadSection: (String, ManifestFileEntry) -> Unit,
     onOpenSubject: (String, String, AppTab) -> Unit,
+    // «دورة كاملة» (1.2.26): the third path at the top of بنك
+    // الوطني, beside the per-subject paths — a whole named dawra
+    // assembled across subjects into one sitting.
+    onOpenFullDawra: () -> Unit = {},
     onOpenUniversity: (String, String) -> Unit,
     onCaseClick: (sy.medpro.watani.data.ClinicalCaseDto) -> Unit,
     onBankSectionsShown: () -> Unit = {},
@@ -233,6 +237,15 @@ fun HomeScreen(
                                         .padding(horizontal = 16.dp, vertical = 12.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
+                                    // «دورة كاملة» (1.2.26): entry at the
+                                    // section level, before any subject
+                                    // is chosen — وطني only, the UWORLD
+                                    // list is unchanged.
+                                    if (selectedBankSection == BankSection.WATANI) {
+                                        item {
+                                            FullDawraEntryCard(onClick = onOpenFullDawra)
+                                        }
+                                    }
                                     item {
                                         Text(
                                             text = "${selectedBankSection.title} (${tabFiles.size} قسم)",

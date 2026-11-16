@@ -45,6 +45,7 @@ import sy.medpro.watani.data.MistakeKeys
 import sy.medpro.watani.data.MistakesBank
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.QuestionDto
+import sy.medpro.watani.data.QuizSectionSpan
 import sy.medpro.watani.data.WataniGatewaySync
 import sy.medpro.watani.data.findConceptUnit
 import sy.medpro.watani.data.getCorrectIndices
@@ -68,6 +69,10 @@ fun QuizScreen(
     sourcePath: String? = null,
     subjectName: String? = null,
     ltr: Boolean = false,
+    // «دورة كاملة» (1.2.26): per-subject spans of an assembled
+    // full-dawra quiz. Empty (the default) for every ordinary quiz —
+    // the screen then renders and records exactly as before.
+    sections: List<QuizSectionSpan> = emptyList(),
     onOpenConceptUnit: (String) -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
@@ -306,9 +311,21 @@ fun QuizScreen(
                             val correctIndices = getCorrectIndices(question, options)
                             val ruledOutSet = ruledOutMap[index] ?: emptySet()
                             val timeTaken = questionTimes[index]
-                            val cardSubjectLabel = sy.medpro.watani.data.ShareLinks.subjectLabel(
-                                subjectName, sourcePath, title
-                            )
+                            // «دورة كاملة» (1.2.26): in an assembled
+                            // full-dawra quiz each question keeps its
+                            // OWN subject — for the share-card label,
+                            // the vault record and the mistakes bank —
+                            // instead of the sitting's title. Ordinary
+                            // quizzes carry no sections and keep the
+                            // legacy values unchanged.
+                            val spanStart = sections.firstOrNull { it.startIndex == index }
+                            val sectionSubject = if (sections.isNotEmpty()) {
+                                sections.firstOrNull { index in it }?.subjectName
+                            } else null
+                            val cardSubjectLabel = sectionSubject
+                                ?: sy.medpro.watani.data.ShareLinks.subjectLabel(
+                                    subjectName, sourcePath, title
+                                )
                             // «شرح فكرة هالسؤال» (1.2.13): match this
                             // question's topic — the quiz title (the
                             // topic it was opened from) plus any topic
@@ -332,6 +349,14 @@ fun QuizScreen(
                                 }
                             }
 
+                            Column {
+                                if (spanStart != null) {
+                                    DawraSectionHeader(
+                                        subjectName = spanStart.subjectName,
+                                        count = spanStart.count
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                }
                             QuestionCard(
                                 questionNumber = index + 1,
                                 question = question,
@@ -374,7 +399,7 @@ fun QuizScreen(
                                             val selectedText = options.getOrNull(optionIndex) ?: ""
                                             OfflineStudyVault.recordQuestionAttempt(
                                                 context = context,
-                                                subjectTitle = title,
+                                                subjectTitle = sectionSubject ?: title,
                                                 questionId = question.id ?: "${title}_${index + 1}",
                                                 questionText = question.text ?: "",
                                                 selectedOptionText = selectedText,
@@ -401,7 +426,7 @@ fun QuizScreen(
                                                     file = mbFile,
                                                     questionId = question.id,
                                                     indexInFile = index,
-                                                    subject = subjectName ?: title,
+                                                    subject = sectionSubject ?: subjectName ?: title,
                                                     stem = question.text ?: "",
                                                     options = options,
                                                     correctIndex = correctIndices.first(),
@@ -416,10 +441,129 @@ fun QuizScreen(
                                     }
                                 }
                             )
+                            }
+                        }
+
+                        // «دورة كاملة» (1.2.26): the sitting's end
+                        // card — total + per-subject distribution.
+                        // Ordinary quizzes never reach this item.
+                        if (sections.isNotEmpty()) {
+                            item {
+                                DawraResultsCard(
+                                    sections = sections,
+                                    questions = questions,
+                                    selectedAnswers = selectedAnswers
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * «دورة كاملة» (1.2.26): subject separator inside an assembled
+ * full-dawra sitting — a plain burgundy band (no thick frames).
+ */
+@Composable
+private fun DawraSectionHeader(subjectName: String, count: Int) {
+    Surface(
+        color = MaroonPrimary,
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = subjectName,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = Color.White
+            )
+            Text(
+                text = "$count سؤال",
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.85f)
+            )
+        }
+    }
+}
+
+/**
+ * «دورة كاملة» (1.2.26): the sitting's end card — the total result
+ * plus the per-subject distribution, computed live from the same
+ * answers and the same grading rule as the rest of the screen
+ * (F-08: a question whose key does not resolve is never graded, so
+ * it counts in neither the correct nor the graded total).
+ */
+@Composable
+private fun DawraResultsCard(
+    sections: List<QuizSectionSpan>,
+    questions: List<QuestionDto>,
+    selectedAnswers: Map<Int, Int>
+) {
+    val rows = remember(sections, questions, selectedAnswers) {
+        sections.map { span ->
+            var answered = 0
+            var correct = 0
+            for (index in span.startIndex until (span.startIndex + span.count)) {
+                val question = questions.getOrNull(index) ?: continue
+                val selected = selectedAnswers[index] ?: continue
+                val correctIndices = getCorrectIndices(question, question.options ?: emptyList())
+                if (correctIndices.isEmpty()) continue
+                answered++
+                if (correctIndices.contains(selected)) correct++
+            }
+            Triple(span.subjectName, answered, correct)
+        }
+    }
+    val totalAnswered = rows.sumOf { it.second }
+    val totalCorrect = rows.sumOf { it.third }
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.2f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                "نتيجة الدورة حسب المادة",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = MaroonPrimary
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            rows.forEach { (subjectName, answered, correct) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 3.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(subjectName, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    val pct = if (answered > 0) (correct * 100) / answered else 0
+                    Text(
+                        "$correct صحيحة من $answered مُجابة ($pct%)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "المجموع: $totalCorrect صحيحة من $totalAnswered مُجابة",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = MaroonPrimary
+            )
         }
     }
 }
