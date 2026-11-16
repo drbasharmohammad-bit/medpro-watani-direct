@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- الويدجت المتوسط v3 (1.2.25): عمودان فوق صورة معلم مدموجة —
-     يمين: العدّ التنازلي (أيام + كرونومتر موسوم + التاريخ)،
+     يمين: العدّ التنازلي (أيام + كرونومتر بلا وسوم + التاريخ)،
      يسار: أسئلة اليوم (تقدم + هدف) + زرّان سريعان يفتح كلٌّ
-     منهما شاشته المقصودة داخل التطبيق. كما بالنموذج المعتمد. -->
+     منهما شاشته المقصودة داخل التطبيق. كما بالنموذج المعتمد.
+     إصلاح قصّ (16 نوفمبر 14:43): أزرار عمودية (أيقونة فوق
+     نص سطر واحد) وعمود أزرار أعرض — النص لا يُقصّ أبدًا. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -29,13 +31,13 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="horizontal"
-        android:padding="12dp">
+        android:padding="10dp">
 
         <LinearLayout
             android:id="@+id/widget_countdown_block"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="1.15"
+            android:layout_weight="0.95"
             android:orientation="vertical">
 
             <TextView
@@ -81,63 +83,21 @@
                 android:gravity="center_horizontal"
                 android:layoutDirection="ltr"
                 android:orientation="vertical"
-                android:paddingStart="10dp"
+                android:paddingStart="8dp"
                 android:paddingTop="4dp"
-                android:paddingEnd="10dp"
+                android:paddingEnd="8dp"
                 android:paddingBottom="4dp">
 
+                <!-- رقم زمني وحده بلا وسوم وحدات — بأمر الدكتور
+                     16 نوفمبر 14:43. -->
                 <Chronometer
                     android:id="@+id/widget_chrono"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:fontFamily="monospace"
                     android:textColor="#FAF4E6"
-                    android:textSize="17sp"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
-
-                <LinearLayout
-                    android:id="@+id/widget_chrono_labels"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="2"
-                        android:gravity="center"
-                        android:text="ساعة"
-                        android:textColor="#F8E08A"
-                        android:textSize="8sp" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="2"
-                        android:gravity="center"
-                        android:text="دقيقة"
-                        android:textColor="#F8E08A"
-                        android:textSize="8sp" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="2"
-                        android:gravity="center"
-                        android:text="ثانية"
-                        android:textColor="#F8E08A"
-                        android:textSize="8sp" />
-                </LinearLayout>
             </LinearLayout>
 
             <TextView
@@ -176,14 +136,14 @@
         <TextView
             android:layout_width="1dp"
             android:layout_height="match_parent"
-            android:layout_marginStart="10dp"
-            android:layout_marginEnd="10dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
             android:background="#59D4AF37" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="1"
+            android:layout_weight="1.2"
             android:orientation="vertical">
 
             <LinearLayout
@@ -204,9 +164,9 @@
                     android:id="@+id/widget_goal_text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
+                    android:layout_marginTop="2dp"
                     android:textColor="#FAF4E6"
-                    android:textSize="17sp"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
 
                 <ProgressBar
@@ -214,7 +174,7 @@
                     style="?android:attr/progressBarStyleHorizontal"
                     android:layout_width="match_parent"
                     android:layout_height="7dp"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="5dp"
                     android:max="100"
                     android:progress="0"
                     android:progressDrawable="@drawable/widget_progress" />
@@ -223,7 +183,9 @@
                     android:id="@+id/widget_goal_caption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="5dp"
+                    android:layout_marginTop="4dp"
+                    android:ellipsize="end"
+                    android:maxLines="2"
                     android:textColor="#D8CDB8"
                     android:textSize="11sp" />
             </LinearLayout>
@@ -239,6 +201,10 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal">
 
+                <!-- أزرار عمودية (أيقونة فوق النص) بسطر واحد
+                     دائمًا: بعرض العمود الضيق كان النص الأفقي
+                     بجانب الأيقونة يُقصّ على أجهزة MIUI
+                     (حكم جهاز الدكتور 16 نوفمبر 14:43). -->
                 <LinearLayout
                     android:id="@+id/widget_btn_1"
                     android:layout_width="0dp"
@@ -246,30 +212,31 @@
                     android:layout_weight="1"
                     android:background="@drawable/widget_chip_bg"
                     android:gravity="center"
-                    android:orientation="horizontal"
-                    android:paddingStart="6dp"
-                    android:paddingTop="7dp"
-                    android:paddingEnd="6dp"
-                    android:paddingBottom="7dp">
+                    android:orientation="vertical"
+                    android:paddingStart="4dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="4dp"
+                    android:paddingBottom="6dp">
 
                     <ImageView
                         android:id="@+id/widget_btn_1_icon"
-                        android:layout_width="16dp"
-                        android:layout_height="16dp"
+                        android:layout_width="17dp"
+                        android:layout_height="17dp"
                         android:contentDescription="@null" />
 
                     <TextView
                         android:id="@+id/widget_btn_1_text"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="5dp"
+                        android:layout_marginTop="3dp"
+                        android:singleLine="true"
                         android:textColor="#FAF4E6"
-                        android:textSize="12sp"
+                        android:textSize="11sp"
                         android:textStyle="bold" />
                 </LinearLayout>
 
                 <TextView
-                    android:layout_width="8dp"
+                    android:layout_width="6dp"
                     android:layout_height="1dp" />
 
                 <LinearLayout
@@ -279,25 +246,26 @@
                     android:layout_weight="1"
                     android:background="@drawable/widget_chip_bg"
                     android:gravity="center"
-                    android:orientation="horizontal"
-                    android:paddingStart="6dp"
-                    android:paddingTop="7dp"
-                    android:paddingEnd="6dp"
-                    android:paddingBottom="7dp">
+                    android:orientation="vertical"
+                    android:paddingStart="4dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="4dp"
+                    android:paddingBottom="6dp">
 
                     <ImageView
                         android:id="@+id/widget_btn_2_icon"
-                        android:layout_width="16dp"
-                        android:layout_height="16dp"
+                        android:layout_width="17dp"
+                        android:layout_height="17dp"
                         android:contentDescription="@null" />
 
                     <TextView
                         android:id="@+id/widget_btn_2_text"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="5dp"
+                        android:layout_marginTop="3dp"
+                        android:singleLine="true"
                         android:textColor="#FAF4E6"
-                        android:textSize="12sp"
+                        android:textSize="11sp"
                         android:textStyle="bold" />
                 </LinearLayout>
             </LinearLayout>

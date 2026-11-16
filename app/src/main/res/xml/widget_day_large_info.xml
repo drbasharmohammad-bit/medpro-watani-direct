@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- الويدجت الكبير (1.2.24): كل شيء — وقابل لتكبير الحجم. -->
+<!-- الويدجت الكبير v3: كل شيء — وقابل لتكبير الحجم.
+     حدود التصغير رُفعت بإصلاح القصّ (16 نوفمبر 14:43). -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_day_large_description"
     android:initialLayout="@layout/widget_day_large"
     android:minWidth="250dp"
     android:minHeight="180dp"
-    android:minResizeWidth="180dp"
-    android:minResizeHeight="120dp"
+    android:minResizeWidth="240dp"
+    android:minResizeHeight="150dp"
     android:previewLayout="@layout/widget_day_large"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="4"

@@ -5,6 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import sy.medpro.watani.ui.viewmodel.AppTab
+import sy.medpro.watani.ui.widget.LandmarkLibrary
 import sy.medpro.watani.ui.widget.WidgetDestination
 import sy.medpro.watani.ui.widget.WidgetRouter
 import java.time.LocalDate
@@ -58,6 +59,25 @@ class WidgetV3LogicTest {
         val plain = WidgetSettings(bgMode = WidgetBgMode.PLAIN)
         assertNull(WidgetBackgroundMath.pickIndex(plain, day, 30))
         assertNull(WidgetBackgroundMath.pickIndex(rotating, day, 0))
+    }
+
+    @Test
+    fun landmarkLibraryHasThirtyNonReligiousEntries() {
+        // Doctor's absolute rule (16 Nov 14:43, after his device
+        // trial): NO religious landmarks in the rotation — no
+        // mosque, no church, no monastery. Syrian heritage only.
+        val all = LandmarkLibrary.all
+        assertEquals(30, all.size)
+        assertEquals(30, all.map { it.drawableRes }.toSet().size)
+        val banned = listOf("جامع", "مسجد", "كنيسة", "كاتدرائية", "التكية", "مئذنة", "الأموي", "سمعان", "صيدنايا")
+        for (landmark in all) {
+            for (word in banned) {
+                assertTrue(
+                    "religious landmark leaked into rotation: ${landmark.name}",
+                    !landmark.name.contains(word)
+                )
+            }
+        }
     }
 
     // ---------------- dimming overlay ----------------

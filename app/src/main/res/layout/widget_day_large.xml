@@ -50,9 +50,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
+                android:singleLine="true"
                 android:text="— العدّ التنازلي للإمتحان الوطني"
                 android:textColor="#FAF4E6"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -82,7 +83,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textColor="#E9C767"
-                    android:textSize="52sp"
+                    android:textSize="48sp"
                     android:textStyle="bold" />
 
                 <TextView
@@ -91,7 +92,7 @@
                     android:layout_marginStart="6dp"
                     android:text="يومًا"
                     android:textColor="#FAF4E6"
-                    android:textSize="18sp"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
@@ -114,63 +115,21 @@
                     android:gravity="center_horizontal"
                     android:layoutDirection="ltr"
                     android:orientation="vertical"
-                    android:paddingStart="12dp"
+                    android:paddingStart="10dp"
                     android:paddingTop="5dp"
-                    android:paddingEnd="12dp"
+                    android:paddingEnd="10dp"
                     android:paddingBottom="5dp">
 
+                    <!-- رقم زمني وحده بلا وسوم وحدات — بأمر الدكتور
+                         16 نوفمبر 14:43. -->
                     <Chronometer
                         android:id="@+id/widget_chrono"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:fontFamily="monospace"
                         android:textColor="#FAF4E6"
-                        android:textSize="21sp"
+                        android:textSize="20sp"
                         android:textStyle="bold" />
-
-                    <LinearLayout
-                        android:id="@+id/widget_chrono_labels"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="2"
-                            android:gravity="center"
-                            android:text="ساعة"
-                            android:textColor="#F8E08A"
-                            android:textSize="8sp" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="2"
-                            android:gravity="center"
-                            android:text="دقيقة"
-                            android:textColor="#F8E08A"
-                            android:textSize="8sp" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1" />
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="2"
-                            android:gravity="center"
-                            android:text="ثانية"
-                            android:textColor="#F8E08A"
-                            android:textSize="8sp" />
-                    </LinearLayout>
                 </LinearLayout>
 
                 <TextView
@@ -312,9 +271,12 @@
 
             <TextView
                 android:id="@+id/widget_focus_text"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="2"
                 android:textColor="#FAF4E6"
                 android:textSize="12sp" />
         </LinearLayout>
@@ -348,9 +310,9 @@
                 android:background="@drawable/widget_chip_bg"
                 android:gravity="center"
                 android:orientation="vertical"
-                android:paddingStart="4dp"
+                android:paddingStart="2dp"
                 android:paddingTop="8dp"
-                android:paddingEnd="4dp"
+                android:paddingEnd="2dp"
                 android:paddingBottom="8dp">
 
                 <ImageView
@@ -364,13 +326,14 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
+                    android:singleLine="true"
                     android:textColor="#FAF4E6"
-                    android:textSize="11sp"
+                    android:textSize="10sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
-                android:layout_width="8dp"
+                android:layout_width="6dp"
                 android:layout_height="1dp" />
 
             <LinearLayout
@@ -381,9 +344,9 @@
                 android:background="@drawable/widget_chip_bg"
                 android:gravity="center"
                 android:orientation="vertical"
-                android:paddingStart="4dp"
+                android:paddingStart="2dp"
                 android:paddingTop="8dp"
-                android:paddingEnd="4dp"
+                android:paddingEnd="2dp"
                 android:paddingBottom="8dp">
 
                 <ImageView
@@ -397,13 +360,14 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
+                    android:singleLine="true"
                     android:textColor="#FAF4E6"
-                    android:textSize="11sp"
+                    android:textSize="10sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
-                android:layout_width="8dp"
+                android:layout_width="6dp"
                 android:layout_height="1dp" />
 
             <LinearLayout
@@ -414,9 +378,9 @@
                 android:background="@drawable/widget_chip_bg"
                 android:gravity="center"
                 android:orientation="vertical"
-                android:paddingStart="4dp"
+                android:paddingStart="2dp"
                 android:paddingTop="8dp"
-                android:paddingEnd="4dp"
+                android:paddingEnd="2dp"
                 android:paddingBottom="8dp">
 
                 <ImageView
@@ -430,13 +394,14 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
+                    android:singleLine="true"
                     android:textColor="#FAF4E6"
-                    android:textSize="11sp"
+                    android:textSize="10sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
-                android:layout_width="8dp"
+                android:layout_width="6dp"
                 android:layout_height="1dp" />
 
             <LinearLayout
@@ -447,9 +412,9 @@
                 android:background="@drawable/widget_chip_bg"
                 android:gravity="center"
                 android:orientation="vertical"
-                android:paddingStart="4dp"
+                android:paddingStart="2dp"
                 android:paddingTop="8dp"
-                android:paddingEnd="4dp"
+                android:paddingEnd="2dp"
                 android:paddingBottom="8dp">
 
                 <ImageView
@@ -463,8 +428,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
+                    android:singleLine="true"
                     android:textColor="#FAF4E6"
-                    android:textSize="11sp"
+                    android:textSize="10sp"
                     android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>

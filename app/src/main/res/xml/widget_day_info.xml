@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- الويدجت المتوسط (1.2.24): العدّاد + أسئلة اليوم + الأهداف. -->
+<!-- الويدجت المتوسط v3: العدّاد + أسئلة اليوم + زرّان.
+     حدود التصغير رُفعت بإصلاح القصّ (16 نوفمبر 14:43):
+     دون 230×120dp تُعصر الأزرار والنصوص على المشغّلات. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_day_description"
     android:initialLayout="@layout/widget_day"
     android:minWidth="250dp"
-    android:minHeight="110dp"
-    android:minResizeWidth="180dp"
-    android:minResizeHeight="80dp"
+    android:minHeight="140dp"
+    android:minResizeWidth="230dp"
+    android:minResizeHeight="120dp"
     android:previewLayout="@layout/widget_day"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="4"

@@ -43,8 +43,10 @@ import java.time.LocalDate
  * الأحجام بمحتوى مختلف فعلًا: صغير = عدّاد فقط · متوسط =
  * عدّاد + تاريخ + تقدم أسئلة اليوم + زرّان سريعان · كبير =
  * كل ذلك + أهداف اليوم + تركيز اليوم/الأسبوع + 4 أزرار.
- * الكرونومتر موسوم الوحدات (ساعة/دقيقة/ثانية تحت أجزائه —
- * بملاحظة الدكتور 13:38) ويعدّ ذاتيًا داخل عملية المشغّل.
+ * الكرونومتر رقم زمني وحده (HH:MM:SS) بلا وسوم وحدات —
+ * الدكتور أمر بحذف كلمات «ساعة/دقيقة/ثانية» نهائيًا بعد
+ * تجربة جهازه (16 نوفمبر 14:43، كلمته الأخيرة تنسخ اعتماد
+ * الوسم 13:38) — ويعدّ ذاتيًا داخل عملية المشغّل.
  *
  * ⛔ الأزرار السريعة (شرط الدكتور الصريح): كل زر يفتح شاشته
  * المقصودة داخل التطبيق مباشرة عبر [WidgetRouter] — تركيز ←
@@ -284,10 +286,10 @@ object Widgets {
     /**
      * The live countdown chip. Styles (student's choice):
      * - DAYS_AND_TIME: within-day remainder on a count-down
-     *   Chronometer with unit labels under its parts.
+     *   Chronometer (bare HH:MM:SS — no unit labels, by the
+     *   doctor's device ruling 16 Nov 14:43).
      * - FULL_DIGITAL: one Chronometer over the TOTAL remaining
-     *   time; the days row hides (its value is inside the total)
-     *   and labels hide (total hours exceed two digits).
+     *   time; the days row hides (its value is inside the total).
      * - DAYS_ONLY: no chip at all.
      * Past the exam moment the chip hides and the arrival line
      * shows instead (a count-down Chronometer past its base
@@ -310,13 +312,11 @@ object Widgets {
             WidgetCountdownStyle.FULL_DIGITAL -> {
                 views.setViewVisibility(R.id.widget_days_row, View.GONE)
                 views.setViewVisibility(R.id.widget_chip, View.VISIBLE)
-                views.setViewVisibility(R.id.widget_chrono_labels, View.GONE)
                 seedChrono(views, SystemClock.elapsedRealtime() + data.remainingMillis)
             }
             WidgetCountdownStyle.DAYS_AND_TIME -> {
                 views.setViewVisibility(R.id.widget_days_row, View.VISIBLE)
                 views.setViewVisibility(R.id.widget_chip, View.VISIBLE)
-                views.setViewVisibility(R.id.widget_chrono_labels, View.VISIBLE)
                 seedChrono(
                     views,
                     CountdownMath.chronometerBase(
@@ -408,7 +408,7 @@ object Widgets {
             } else {
                 views.setViewVisibility(boxId, View.VISIBLE)
                 views.setImageViewResource(iconId, iconFor(action, kind))
-                views.setTextViewText(textId, labelFor(action, kind))
+                views.setTextViewText(textId, labelFor(action))
                 views.setOnClickPendingIntent(boxId, routePendingIntent(context, action, kind))
             }
         }
@@ -421,10 +421,18 @@ object Widgets {
         WidgetQuickAction.LIBRARY -> R.drawable.ic_w_book
     }
 
-    private fun labelFor(action: WidgetQuickAction, kind: Int): String = when (action) {
-        WidgetQuickAction.FOCUS -> if (kind == KIND_LARGE) "ابدأ تركيز" else "تركيز"
-        WidgetQuickAction.MISTAKES -> if (kind == KIND_LARGE) "بنك أخطائي" else "أخطائي"
-        WidgetQuickAction.QUESTIONS -> if (kind == KIND_LARGE) "أسئلة اليوم" else "أسئلة"
+    /**
+     * Short labels on every size — the long large-widget forms
+     * («بنك أخطائي», «أسئلة اليوم», «ابدأ تركيز») clipped on the
+     * doctor's real device (MIUI squeezed the buttons until the
+     * text cut off, 16 Nov 14:43). Short forms + singleLine in
+     * the layouts guarantee no button text can ever clip; the
+     * routing destination is unchanged.
+     */
+    private fun labelFor(action: WidgetQuickAction): String = when (action) {
+        WidgetQuickAction.FOCUS -> "تركيز"
+        WidgetQuickAction.MISTAKES -> "أخطائي"
+        WidgetQuickAction.QUESTIONS -> "أسئلة"
         WidgetQuickAction.LIBRARY -> "المكتبة"
     }
 
