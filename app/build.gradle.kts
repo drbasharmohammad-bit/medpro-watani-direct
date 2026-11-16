@@ -55,8 +55,8 @@ android {
     // sitting runs on the existing quiz engine — same card,
     // explanation/الزبدة, mistakes bank and vault recording — with
     // an end card showing the total plus the per-subject split.
-    versionCode = 74302
-    versionName = "1.2.28"
+    versionCode = 74303
+    versionName = "1.2.29"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

@@ -31,6 +31,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
@@ -68,6 +71,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.launch
 import sy.medpro.watani.R
+import sy.medpro.watani.data.PrivacyConsent
 import sy.medpro.watani.data.ProfileNameStore
 import sy.medpro.watani.ui.drawer.PrivacyPolicyScreen
 import sy.medpro.watani.ui.theme.CairoFontFamily
@@ -118,8 +122,18 @@ import sy.medpro.watani.ui.theme.ThmanyahFontFamily
  * «تسجيل الدخول عبر Google» centred) and owns the loading state;
  * errors arrive as a soft banner inside the sheet, never raw text.
  * Entrance is a short staggered fade/rise (alpha + translation
- * only, cheap on weak devices). The 1.2.19 privacy consent line is
- * preserved verbatim below the button in both modes.
+ * only, cheap on weak devices).
+ *
+ * Privacy consent (build 1.2.29, doctor's correction — the global
+ * apps' pattern): NO separate consent screen. In full mode a
+ * consent row sits directly under the Google button — a checkbox
+ * plus «أوافق على سياسة الخصوصية», the policy phrase itself a link
+ * opening the full document — and the Google button stays disabled
+ * until the box is ticked. The tick is stored per policy version
+ * (data/PrivacyConsent): already accepted → pre-ticked; a material
+ * policy update → unticked again. Name-only mode keeps the 1.2.19
+ * consent line: its user already holds a session, and a saved
+ * session is never gated or touched.
  */
 @Composable
 fun SignInGate(
@@ -147,6 +161,13 @@ fun SignInGate(
                 ProfileNameStore.savedName(context, it.uid) ?: (it.displayName ?: "")
             } ?: ""
         )
+    }
+    // Consent checkbox (build 1.2.29): starts ticked when this
+    // device already accepted the current policy version, unticked
+    // otherwise; ticking records the acceptance immediately, keyed
+    // by the document version (data/PrivacyConsent).
+    var consentChecked by remember {
+        mutableStateOf(PrivacyConsent.initialCheckboxChecked(PrivacyConsent.acceptedVersion(context)))
     }
 
     fun finishWithUser(user: FirebaseUser?) {
@@ -480,8 +501,16 @@ fun SignInGate(
                                 // state so its shell never changes shape.
                                 Button(
                                     onClick = { signInWithGoogle() },
-                                    enabled = !isLoading,
-                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    // Consent gate (1.2.29): the button
+                                    // cannot start sign-in until the
+                                    // policy checkbox under it is ticked;
+                                    // it dims while unticked and works
+                                    // the moment the box is checked.
+                                    enabled = PrivacyConsent.isSignInEnabled(consentChecked, isLoading),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(56.dp)
+                                        .alpha(if (consentChecked) 1f else 0.55f),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = Color.White,
                                         contentColor = Color(0xFF1F1F1F),
@@ -537,15 +566,22 @@ fun SignInGate(
                                         }
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(14.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                ConsentCheckboxRow(
+                                    checked = consentChecked,
+                                    onCheckedChange = { ticked ->
+                                        consentChecked = ticked
+                                        if (ticked) PrivacyConsent.recordConsent(context)
+                                    },
+                                    onOpenPolicy = { policyAnchor = 0 }
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     "الدخول بحساب Google مطلوب لفتح التطبيق — وجلستك المحفوظة بتضل تدخّلك أوفلاين كل يوم بلا ما تنقفل.",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                PrivacyConsentLine(onOpenPolicy = { policyAnchor = it })
                             }
                         }
                     }
@@ -554,6 +590,57 @@ fun SignInGate(
         }
     }
 }
+/**
+ * سطر الموافقة بمربّع الصحّ تحت زرّ Google (بناء 1.2.29، تصحيح
+ * الدكتور — نمط التطبيقات العالمية): مربّع صحّ + «أوافق على» +
+ * «سياسة الخصوصية» رابطًا يفتح النص الكامل بشاشة السياسة الداخلية.
+ * التأشير يُحفظ فورًا برقم نسخة السياسة (data/PrivacyConsent)،
+ * وزرّ Google لا يعمل قبل التأشير (انظر isSignInEnabled).
+ */
+@Composable
+private fun ConsentCheckboxRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onOpenPolicy: () -> Unit
+) {
+    val annotated = remember {
+        buildAnnotatedString {
+            append("أوافق على ")
+            pushStringAnnotation(tag = "policyLink", annotation = "open")
+            withStyle(
+                SpanStyle(
+                    color = MaroonPrimary,
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = TextDecoration.Underline
+                )
+            ) { append("سياسة الخصوصية") }
+            pop()
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = CheckboxDefaults.colors(checkedColor = MaroonPrimary)
+        )
+        ClickableText(
+            text = annotated,
+            style = TextStyle(
+                fontFamily = TajawalFontFamily,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            ),
+            onClick = { offset ->
+                annotated.getStringAnnotations("policyLink", offset, offset)
+                    .firstOrNull()?.let { onOpenPolicy() }
+            }
+        )
+    }
+}
+
 /**
  * صيغة الموافقة أسفل زرّ تسجيل الدخول (بناء 1.2.19) — نصّها حرفيًا
  * من القسم الرابع من وثيقة السياسة المعتمدة (POLICY_TEXT.md):
