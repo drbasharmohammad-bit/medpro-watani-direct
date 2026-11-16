@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- أيقونة زر «أخطائي»: حلقة + علامة تعجّب. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path
+        android:fillColor="#D4AF37"
+        android:fillType="evenOdd"
+        android:pathData="M12,2 C6.48,2 2,6.48 2,12 C2,17.52 6.48,22 12,22 C17.52,22 22,17.52 22,12 C22,6.48 17.52,2 12,2 Z M12,4.2 C16.31,4.2 19.8,7.69 19.8,12 C19.8,16.31 16.31,19.8 12,19.8 C7.69,19.8 4.2,16.31 4.2,12 C4.2,7.69 7.69,4.2 12,4.2 Z" />
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M11.1,6.8 L12.9,6.8 L12.9,13.4 L11.1,13.4 Z M11.1,15.2 L12.9,15.2 L12.9,17 L11.1,17 Z" />
+</vector>

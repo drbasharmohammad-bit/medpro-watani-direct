@@ -132,8 +132,32 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) { }
     }
 
+    // Widget quick-action routing (build 1.2.25): the activity is
+    // singleTop, so a widget-button tap while the app is running
+    // arrives here instead of onCreate. The route extra is handed
+    // to WidgetRouter and consumed once by the signed-in UI, which
+    // opens the button's intended screen (focus / mistakes bank /
+    // questions tab / library) — never a generic home landing.
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        try {
+            sy.medpro.watani.ui.widget.WidgetRouter.request(
+                intent.getStringExtra(sy.medpro.watani.ui.widget.WidgetRouter.EXTRA_ROUTE)
+            )
+        } catch (_: Exception) { }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Widget quick-action routing (cold start): same handoff as
+        // onNewIntent — stored in WidgetRouter until the signed-in
+        // UI composes and consumes it exactly once.
+        try {
+            sy.medpro.watani.ui.widget.WidgetRouter.request(
+                intent?.getStringExtra(sy.medpro.watani.ui.widget.WidgetRouter.EXTRA_ROUTE)
+            )
+        } catch (_: Exception) { }
         // Crashlytics test path (phase-2 hardening, DEBUG BUILDS ONLY):
         // `adb shell am start -n sy.medpro.watani/.MainActivity
         // --ez watani_test_crash true` crashes the app on launch so the
@@ -487,6 +511,26 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // Widget quick-action routing (build 1.2.25,
+                    // doctor's explicit order): a route delivered
+                    // by a widget button is consumed exactly once,
+                    // here inside the signed-in UI, and opens the
+                    // button's OWN screen — a drawer screen by its
+                    // real title, or a main tab through requestTab
+                    // with its gates intact. A route that arrives
+                    // before sign-in simply waits in WidgetRouter
+                    // until this UI composes.
+                    val pendingWidgetRoute by sy.medpro.watani.ui.widget.WidgetRouter.pending.collectAsState()
+                    LaunchedEffect(pendingWidgetRoute) {
+                        val route = pendingWidgetRoute ?: return@LaunchedEffect
+                        when (val destination = sy.medpro.watani.ui.widget.WidgetRouter.destinationFor(route)) {
+                            is sy.medpro.watani.ui.widget.WidgetDestination.Drawer -> drawerScreen = destination.title
+                            is sy.medpro.watani.ui.widget.WidgetDestination.Tab -> requestTab(destination.tab)
+                            sy.medpro.watani.ui.widget.WidgetDestination.Home -> Unit
+                        }
+                        sy.medpro.watani.ui.widget.WidgetRouter.consume()
+                    }
+
                     // M4: on activation loss, close restricted UI state
                     // too — an open quiz keeps its questions in memory,
                     // and the wipe only deletes files. (The outer
@@ -637,6 +681,7 @@ class MainActivity : ComponentActivity() {
                                                 "ملاحظاتي",
                                                 "سجلّ حالاتي",
                                                 "الإشعارات والتذكير",
+                                                "إعدادات الويدجت",
                                                 "الوضع الليلي",
                                                 "التواصل",
                                                 "محطات OSCE",
@@ -668,6 +713,7 @@ class MainActivity : ComponentActivity() {
                                                     "ملاحظاتي" -> Icons.Default.NoteAlt
                                                     "سجلّ حالاتي" -> Icons.Default.Assignment
                                                     "الإشعارات والتذكير" -> Icons.Default.Notifications
+                                                    "إعدادات الويدجت" -> Icons.Default.Widgets
                                                     "الوضع الليلي" -> Icons.Default.DarkMode
                                                     "التواصل" -> Icons.Default.SupportAgent
                                                     "محطات OSCE" -> Icons.Default.MedicalServices
@@ -965,6 +1011,7 @@ class MainActivity : ComponentActivity() {
                                                 "ملاحظاتي" -> MyNotesScreen(onBack = { drawerScreen = null })
                                                 "سجلّ حالاتي" -> LogbookScreen(onBack = { drawerScreen = null })
                                                 "الإشعارات والتذكير" -> sy.medpro.watani.ui.notify.NotificationSettingsScreen(onBack = { drawerScreen = null })
+                                                "إعدادات الويدجت" -> sy.medpro.watani.ui.widget.WidgetSettingsScreen(onBack = { drawerScreen = null })
                                                 "الحالات الألمانية" -> GermanCasesScreen(onBack = { drawerScreen = null })
                                                 "الدعم النفسي" -> SupportScreen(onBack = { drawerScreen = null })
                                                 "سياسة الخصوصية والشروط" -> PrivacyPolicyScreen(onBack = { drawerScreen = null })

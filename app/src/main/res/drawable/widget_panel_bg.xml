@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- لوح الأهداف الداكن بالحجم الكبير: عنابي ~46% + حدّ ذهبي خافت. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#7522050B" />
+    <stroke android:width="1dp" android:color="#59D4AF37" />
+    <corners android:radius="14dp" />
+</shape>

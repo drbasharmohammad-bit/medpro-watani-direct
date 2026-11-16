@@ -36,8 +36,17 @@ android {
     // his own question target plus free-text day goals edited in the
     // «أهدافي اليوم» home card and mirrored to the widgets instantly;
     // the auto goal survives only as an optional dialog suggestion.
-    versionCode = 74298
-    versionName = "1.2.24"
+    // 1.2.25 (Nov 2026): widget v3 built exactly on the doctor's
+    // approved visual mockups — Syrian-landmark photo backgrounds
+    // (30 landmarks, deterministic daily rotation or the student's
+    // fixed pick, blended under the approved burgundy gradient),
+    // unit-labeled chronometer (ساعة/دقيقة/ثانية), genuinely
+    // different content per size, a rich in-app widget-settings
+    // screen, and quick-action buttons that each open their OWN
+    // intended screen in the app (focus / mistakes bank / questions
+    // tab / library) via per-button routed PendingIntents.
+    versionCode = 74299
+    versionName = "1.2.25"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

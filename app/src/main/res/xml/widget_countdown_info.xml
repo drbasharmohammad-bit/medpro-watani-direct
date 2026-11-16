@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- الويدجت الصغير (1.2.24): العدّاد فقط — خليتان × خلية. -->
+<!-- الويدجت الصغير v3 (1.2.25): العدّاد فقط — مربع 2×2 كما بالنموذج المعتمد. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_countdown_description"
     android:initialLayout="@layout/widget_countdown"
     android:minWidth="110dp"
-    android:minHeight="50dp"
+    android:minHeight="110dp"
     android:minResizeWidth="80dp"
-    android:minResizeHeight="40dp"
+    android:minResizeHeight="80dp"
     android:previewLayout="@layout/widget_countdown"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="2"
-    android:targetCellHeight="1"
+    android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen" />

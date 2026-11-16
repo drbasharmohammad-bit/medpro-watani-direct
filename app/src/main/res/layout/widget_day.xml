@@ -1,146 +1,311 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- الويدجت المتوسط (1.2.24): عدّاد الامتحان الحي + تقدم أسئلة
-     اليوم مقابل هدف الطالب نفسه + أهدافه النصية لليوم. -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- الويدجت المتوسط v3 (1.2.25): عمودان فوق صورة معلم مدموجة —
+     يمين: العدّ التنازلي (أيام + كرونومتر موسوم + التاريخ)،
+     يسار: أسئلة اليوم (تقدم + هدف) + زرّان سريعان يفتح كلٌّ
+     منهما شاشته المقصودة داخل التطبيق. كما بالنموذج المعتمد. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_bg"
-    android:orientation="vertical"
-    android:padding="12dp">
+    android:background="@drawable/widget_bg">
+
+    <ImageView
+        android:id="@+id/widget_photo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_photo_frame"
+        android:clipToOutline="true"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop" />
+
+    <ImageView
+        android:id="@+id/widget_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY" />
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:padding="12dp">
 
-        <TextView
+        <LinearLayout
+            android:id="@+id/widget_countdown_block"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_weight="1.15"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="العدّ التنازلي للإمتحان"
+                android:textColor="#D8CDB8"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:id="@+id/widget_days_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_days"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#E9C767"
+                    android:textSize="40sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:text="يومًا"
+                    android:textColor="#FAF4E6"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/widget_chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/widget_chip_bg"
+                android:gravity="center_horizontal"
+                android:layoutDirection="ltr"
+                android:orientation="vertical"
+                android:paddingStart="10dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="4dp">
+
+                <Chronometer
+                    android:id="@+id/widget_chrono"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:textColor="#FAF4E6"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/widget_chrono_labels"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:gravity="center"
+                        android:text="ساعة"
+                        android:textColor="#F8E08A"
+                        android:textSize="8sp" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:gravity="center"
+                        android:text="دقيقة"
+                        android:textColor="#F8E08A"
+                        android:textSize="8sp" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:gravity="center"
+                        android:text="ثانية"
+                        android:textColor="#F8E08A"
+                        android:textSize="8sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="#D8CDB8"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/widget_expired"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="حان موعد الامتحان — بالتوفيق"
+                android:textColor="#FAF4E6"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/widget_landmark"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#D8CDB8"
+                android:textSize="9sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="10dp"
+            android:background="#59D4AF37" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:text="Med Pro - وطني"
-            android:textColor="#F7E6E8"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/widget_days"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#B08D57"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            <LinearLayout
+                android:id="@+id/widget_questions_block"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
-            android:text="يومًا للامتحان"
-            android:textColor="#F7E6E8"
-            android:textSize="11sp" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="أسئلة اليوم"
+                    android:textColor="#FAF4E6"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_goal_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:textColor="#FAF4E6"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+
+                <ProgressBar
+                    android:id="@+id/widget_goal_progress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="7dp"
+                    android:layout_marginTop="6dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/widget_progress" />
+
+                <TextView
+                    android:id="@+id/widget_goal_caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:textColor="#D8CDB8"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:id="@+id/widget_buttons_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:id="@+id/widget_btn_1"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/widget_chip_bg"
+                    android:gravity="center"
+                    android:orientation="horizontal"
+                    android:paddingStart="6dp"
+                    android:paddingTop="7dp"
+                    android:paddingEnd="6dp"
+                    android:paddingBottom="7dp">
+
+                    <ImageView
+                        android:id="@+id/widget_btn_1_icon"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:contentDescription="@null" />
+
+                    <TextView
+                        android:id="@+id/widget_btn_1_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:textColor="#FAF4E6"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="8dp"
+                    android:layout_height="1dp" />
+
+                <LinearLayout
+                    android:id="@+id/widget_btn_2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/widget_chip_bg"
+                    android:gravity="center"
+                    android:orientation="horizontal"
+                    android:paddingStart="6dp"
+                    android:paddingTop="7dp"
+                    android:paddingEnd="6dp"
+                    android:paddingBottom="7dp">
+
+                    <ImageView
+                        android:id="@+id/widget_btn_2_icon"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:contentDescription="@null" />
+
+                    <TextView
+                        android:id="@+id/widget_btn_2_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:textColor="#FAF4E6"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 
     <TextView
         android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="8dp"
-        android:background="#40B08D57" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="7dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="المتبقّي اليوم: "
-            android:textColor="#D8B4B9"
-            android:textSize="11sp" />
-
-        <Chronometer
-            android:id="@+id/widget_chrono"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/widget_expired"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="حان موعد الامتحان — بالتوفيق"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-    </LinearLayout>
-
-    <TextView
-        android:id="@+id/widget_goal_text"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="9dp"
-        android:textColor="#FFFFFF"
-        android:textSize="13sp"
-        android:textStyle="bold" />
-
-    <ProgressBar
-        android:id="@+id/widget_goal_progress"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="7dp"
-        android:layout_marginTop="5dp"
-        android:max="100"
-        android:progress="0"
-        android:progressDrawable="@drawable/widget_progress" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:text="أهداف اليوم"
-        android:textColor="#B08D57"
-        android:textSize="11sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/widget_goal_line_1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp" />
-
-    <TextView
-        android:id="@+id/widget_goal_line_2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp" />
-
-    <TextView
-        android:id="@+id/widget_goal_line_3"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp" />
-
-    <!-- فاصل مرن يمتص أي ارتفاع إضافي عند تكبير الويدجت. -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-</LinearLayout>
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_frame" />
+</FrameLayout>
