@@ -17,6 +17,33 @@ import java.io.File
  */
 object DailyChallengeSource {
 
+    // One Moshi for every file (1.2.31): the pool sweep used to
+    // build a fresh Moshi instance PER FILE — pure waste on top of
+    // the decrypt+parse it exists to do.
+    private val moshi: Moshi by lazy {
+        Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    }
+    private val envelopeAdapter by lazy { moshi.adapter(SubjectEnvelope::class.java) }
+
+    /**
+     * Top-level pack files in sections_cache that are NOT subject
+     * envelopes and can never contribute a bank question (1.2.31).
+     * Before this skip, the sweep read, decrypted and parse-attempted
+     * every one of them — the ~5MB concepts pack included — on every
+     * pool load, for zero questions. Names are the section paths;
+     * on disk they appear sanitized via WataniRepository's
+     * getSectionFile ("concepts.json" -> "concepts.json.json").
+     * The older contains-filters (cases/guide/osce) stay as a
+     * second net for any pack not listed here.
+     */
+    private val NON_ENVELOPE_PACKS = setOf(
+        "auscultation.json", "auscultation_ar.json", "cases.json",
+        "cases_de.json", "concepts.json", "ddx.json",
+        "dosing_drills.json", "ecg.json", "guide.json",
+        "library.json", "osce.json", "osce_procedures.json",
+        "reverse.json"
+    )
+
     /** كل أسئلة البنوك المنزّلة الصالحة (مادة ← سؤال) بترتيب الملفات. */
     fun loadPool(context: Context): List<Pair<String, QuestionDto>> {
         val dir = File(context.applicationContext.filesDir, "sections_cache")
@@ -24,14 +51,13 @@ object DailyChallengeSource {
         if (dir.exists() && dir.isDirectory) {
             dir.listFiles()?.forEach { file ->
                 if (file.name.endsWith(".json") && !file.name.contains("cases") &&
-                    !file.name.contains("guide") && !file.name.contains("osce")
+                    !file.name.contains("guide") && !file.name.contains("osce") &&
+                    file.name.removeSuffix(".json") !in NON_ENVELOPE_PACKS
                 ) {
                     try {
                         val text = SectionCacheCrypto.readText(context, file)
                             ?: throw IllegalStateException("section cache unreadable")
-                        val moshi = Moshi.Builder()
-                            .add(KotlinJsonAdapterFactory()).build()
-                        val env = moshi.adapter(SubjectEnvelope::class.java).fromJson(text)
+                        val env = envelopeAdapter.fromJson(text)
                         val subjName = env?.subjectName ?: file.name.substringBefore(".json")
                         env?.topics?.forEach { topic ->
                             topic.questions?.forEach { q ->

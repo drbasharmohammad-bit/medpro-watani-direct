@@ -52,6 +52,24 @@ class FocusSessionService : Service() {
         super.onCreate()
         running = true
         StudyNotifications.ensureChannels(this)
+        // 1.2.31 crash hardening: a service started via
+        // startForegroundService MUST call startForeground — and on
+        // Android 12+ failing to do so inside the system's window
+        // crashes the whole app (ForegroundServiceDidNotStartInTime).
+        // The first call used to happen inside the state collector
+        // below (async, after a dispatcher hop) and never happened
+        // at all when the engine was already idle. It is now
+        // synchronous here, for whatever the current state is; an
+        // idle start (a finish raced the start) foregrounds and
+        // removes itself immediately, contract satisfied.
+        val initial = FocusTimerEngine.state.value
+        lastRenderKey = renderKey(initial)
+        startForegroundCompat(buildNotification(initial))
+        if (initial.isIdle) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
         scope.launch {
             FocusTimerEngine.state.collect { state ->
                 if (state.isIdle) {

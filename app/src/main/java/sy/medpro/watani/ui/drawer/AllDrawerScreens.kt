@@ -26,7 +26,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import sy.medpro.watani.data.*
@@ -352,7 +354,12 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
         // 1.2.30: التحميل واختيار سؤال اليوم صارا بالمصدر الموحّد
         // DailyChallengeSource — فيطابق سؤال الشاشة سؤالَ إشعار
         // «سؤال اليوم صباحًا» في اليوم نفسه دائمًا.
-        val list = sy.medpro.watani.data.DailyChallengeSource.loadPool(context)
+        // 1.2.31: the sweep (decrypt + parse of every downloaded
+        // bank) ran on the main thread here — opening this screen
+        // froze the UI for seconds on a big install. IO now.
+        val list = withContext(Dispatchers.IO) {
+            sy.medpro.watani.data.DailyChallengeSource.loadPool(context)
+        }
         allQuestions = list
         selectedQuestion = sy.medpro.watani.data.DailyChallengeSource
             .pickForDay(list, System.currentTimeMillis())

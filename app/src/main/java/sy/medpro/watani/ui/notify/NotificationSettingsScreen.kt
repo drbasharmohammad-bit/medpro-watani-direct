@@ -41,6 +41,10 @@ import sy.medpro.watani.ui.theme.RoseOutline
  * اليوم الصباحي بوقته المستقل، وقت مستقل لتنبيه الأخطاء، شريط
  * التركيز الحي، والمنبّه القوي بملء الشاشة مع إرشاد إذنه — كلها
  * بنفس النمط: مفتاح مستقل معطّل افتراضيًا ونفس بوابة الإذن.
+ *
+ * تنظيم 1.2.31: الشاشة صارت بقسمين معنونين — «التذكير اليومي»
+ * (المفتاح + وقته) ثم «الظهور على شاشة القفل» (الميزات الخمس
+ * مجموعة تحت اسمها) — بعد شكوى الدكتور أنه لم يجد الميزات أصلًا.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -193,12 +197,54 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // ---------------- قسم: التذكير اليومي ----------------
+            // 1.2.31: قسمان بعناوين صريحة — قبل هذا كانت ميزات شاشة
+            // القفل مبعثرة بين التذكيرات بلا عنوان يجمعها، فلم يجدها
+            // الدكتور أصلًا («وين أشوفها بالتطبيق»).
+            SectionHeader(
+                title = "التذكير اليومي",
+                subtitle = "الإشعار الأساسي الذي يصلك كل يوم في وقت الدراسة."
+            )
+
             // ---------------- تذكير الدراسة اليومي ----------------
             ToggleCard(
                 title = "تذكير الدراسة اليومي",
                 description = "إشعار يصلك على هاتفك كل يوم في الوقت الذي تختاره — حتى والتطبيق مغلق ودون إنترنت.",
                 enabled = config.studyEnabled,
                 onToggle = { onToggle("study", it) }
+            )
+
+            // ---------------- وقت تذكير الدراسة ----------------
+            Card(
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, RoseOutline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("وقت تذكير الدراسة", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaroonPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "الساعة ${fmtTime(config.hour, config.minute)} — وقت تذكير الدراسة اليومي (والمنبّه القوي معه). لتنبيه الأخطاء وسؤال اليوم وقتاهما داخل بطاقتيهما بقسم «الظهور على شاشة القفل».",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = { pickerTarget = "study" },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text("تغيير الوقت", fontSize = 14.sp)
+                    }
+                }
+            }
+
+            // ---------------- قسم: الظهور على شاشة القفل ----------------
+            SectionHeader(
+                title = "الظهور على شاشة القفل",
+                subtitle = "ميزات تجعل التطبيق حاضرًا على شاشة قفل هاتفك — كل واحدة بمفتاحها ووقتها، وكلها معطّلة حتى تفعّلها بنفسك."
             )
 
             // ---------------- المنبّه القوي بملء الشاشة ----------------
@@ -358,33 +404,6 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 onToggle = { onToggle("focusbar", it) }
             )
 
-            // ---------------- وقت تذكير الدراسة ----------------
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, RoseOutline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("وقت تذكير الدراسة", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaroonPrimary)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "الساعة ${fmtTime(config.hour, config.minute)} — وقت تذكير الدراسة اليومي (والمنبّه القوي معه). لتنبيه الأخطاء وسؤال اليوم وقتاهما داخل بطاقتيهما أعلاه.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedButton(
-                        onClick = { pickerTarget = "study" },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Text("تغيير الوقت", fontSize = 14.sp)
-                    }
-                }
-            }
-
             if (deniedNote) {
                 Text(
                     "إشعارات التطبيق غير مفعّلة من النظام بعد — فعّلها من إعدادات هاتفك (التطبيقات ← وطني ← الإشعارات) ثم أعد تشغيل المفتاح هنا.",
@@ -393,6 +412,24 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+/**
+ * عنوان قسم صريح داخل الشاشة (بناء 1.2.31): «التذكير اليومي» ثم
+ * «الظهور على شاشة القفل» — حتى يجد الطالب ميزات القفل مجموعةً
+ * تحت اسمها بدل بعثرتها بين بطاقات التذكير.
+ */
+@Composable
+private fun SectionHeader(title: String, subtitle: String) {
+    Column {
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            subtitle,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
     }
 }
 

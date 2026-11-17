@@ -7,8 +7,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -403,8 +405,14 @@ fun ConceptsSubjectsScreen(
 ) {
     BackHandler { onBack() }
     val groups = remember(units) { groupConceptsBySubject(units) }
+    // 1.2.31: saveable list state — leaving for a bank question and
+    // coming back restores this list's exact scroll spot instead of
+    // restarting it at the top (the route itself was already
+    // saveable in the Library; the scroll was not).
+    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     DrawerScreenScaffold(title = "ادرس مع ميد برو", onBack = onBack) { padding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
@@ -475,8 +483,11 @@ fun ConceptsTopicsScreen(
         units.filter { it.subject?.trim() == subject }
             .sortedWith(conceptUnitExamOrder)
     }
+    // 1.2.31: saveable scroll, same rule as the subjects list.
+    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     DrawerScreenScaffold(title = subject, onBack = onBack) { padding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
@@ -568,14 +579,15 @@ fun ConceptUnitScreen(
         if (selfTests.isEmpty()) return@LaunchedEffect
         try {
             val repo = WataniRepository(context)
-            val found = mutableSetOf<String>()
-            for (test in selfTests) {
-                val qid = test.qid?.trim().orEmpty()
-                if (qid.isNotEmpty() && repo.findQuestionById(qid) != null) {
-                    found.add(qid)
-                }
+            // 1.2.31: ONE batch lookup through the repository's
+            // question-id index. The old loop called findQuestionById
+            // per self-test, and each call rescanned every downloaded
+            // shard from the top — the unit page's buttons took
+            // seconds to appear on a big install.
+            val qids = selfTests.mapNotNull {
+                it.qid?.trim()?.takeIf { qid -> qid.isNotEmpty() }
             }
-            bankQids = found
+            bankQids = repo.findQuestionsByIds(qids).keys
         } catch (_: Exception) {
             // Lookup failure hides the buttons — never a dead button.
         }
@@ -621,7 +633,12 @@ private fun ConceptUnitContent(
     bankQids: Set<String>,
     onOpenQuestionById: (String) -> Unit
 ) {
+    // 1.2.31: the unit page's scroll is saveable — the doctor's
+    // exact complaint: open the source question, come back, and
+    // land where you were on THIS page, not at its top.
+    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -840,7 +857,10 @@ private fun ConceptSelfTestCard(
     val correctIndex = remember(test.correctIndex, options.size) {
         resolveSelfTestCorrectIndex(test.correctIndex, options.size)
     }
-    var revealed by remember(test.qid, test.text) { mutableStateOf(false) }
+    // 1.2.31: saveable — a revealed answer stays revealed across
+    // the trip to the bank question and back (was plain remember,
+    // so the whole card reset on return).
+    var revealed by rememberSaveable(test.qid ?: "", test.text ?: "") { mutableStateOf(false) }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),

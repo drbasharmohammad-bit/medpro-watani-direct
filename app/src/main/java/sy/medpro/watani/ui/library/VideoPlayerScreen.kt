@@ -8,12 +8,16 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -26,9 +30,12 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.delay
 import sy.medpro.watani.data.EncryptedHlsDataSource
 import sy.medpro.watani.data.GatewayHlsDataSource
+import sy.medpro.watani.data.playbackErrorMessage
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import java.io.File
 
@@ -44,6 +51,16 @@ import java.io.File
  * Offline: a downloaded video plays from its local file and its local SRT
  * file, with no network call during playback. The toggle only enables or
  * disables the text track; it never restarts the video.
+ *
+ * Hardening (build 1.2.31, doctor's device report): a playback error
+ * shows a friendly Arabic sentence with «إعادة المحاولة» (re-prepare
+ * from the saved position) and «رجوع» — never a raw exception text
+ * on a dead black screen; buffering shows a spinner instead of
+ * reading as a hang; the watch position is snapshotted (saveable,
+ * per video) and resumed on return instead of restarting from
+ * zero; leaving the app pauses playback and returning resumes it
+ * only if it was playing; transient IO load errors get extra
+ * retries before surfacing.
  */
 @OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -74,7 +91,21 @@ fun VideoPlayerScreen(
     var subtitlesEnabled by remember { mutableStateOf(hasSubtitles) }
     // A playback failure must surface as a message, never as a silent
     // black screen or an unexplained exit (the HLS pilot failure mode).
-    var playerError by remember { mutableStateOf<String?>(null) }
+    // 1.2.31: the error is kept as its media3 CODE and rendered as a
+    // friendly Arabic sentence (playbackErrorMessage) with a retry
+    // action — the raw exception text never reaches the student.
+    var playerErrorCode by remember { mutableStateOf<Int?>(null) }
+    // Buffering visibility (1.2.31): while the player is loading or
+    // re-buffering, a spinner says so — a black frame alone reads
+    // as a hang («عم يعلق»).
+    var isBuffering by remember { mutableStateOf(false) }
+    // Resume state (1.2.31): the last watched position and whether
+    // playback was running, kept in saveable state per video. The
+    // player is recreated whenever this screen is re-entered (and
+    // after process death) — before this, every return restarted
+    // the video from zero.
+    var savedPositionMs by rememberSaveable(videoUri) { mutableLongStateOf(0L) }
+    var savedPlayWhenReady by rememberSaveable(videoUri) { mutableStateOf(true) }
     // Fullscreen (tablets + landscape watching): hides the system bars and
     // the app bars; a floating exit button + Back are the way back, and
     // leaving the player always restores the system bars.
@@ -120,6 +151,10 @@ fun VideoPlayerScreen(
         val dataSourceFactory = DefaultDataSource.Factory(context, encFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory(dataSourceFactory)
+            // 1.2.31: transient IO failures (a dropped connection
+            // mid-segment on a weak network) get more load retries
+            // before the player gives up and reports an error.
+            .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(5))
         ExoPlayer.Builder(context).setMediaSourceFactory(mediaSourceFactory).build().apply {
             if (videoUri != null) {
                 val itemBuilder = MediaItem.Builder().setUri(videoUri)
@@ -137,13 +172,73 @@ fun VideoPlayerScreen(
                 setMediaItem(itemBuilder.build())
                 addListener(object : Player.Listener {
                     override fun onPlayerError(error: PlaybackException) {
-                        playerError = error.message ?: "تعذر تشغيل الفيديو"
+                        playerErrorCode = error.errorCode
+                    }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        isBuffering = playbackState == Player.STATE_BUFFERING ||
+                            playbackState == Player.STATE_IDLE
+                        if (playbackState == Player.STATE_READY) {
+                            // A successful (re)load clears any error
+                            // the retry path recovered from.
+                            playerErrorCode = null
+                        }
+                        if (playbackState == Player.STATE_ENDED) {
+                            // A finished video restarts from the top
+                            // next time — never "resume" into the end.
+                            savedPositionMs = 0L
+                        }
                     }
                 })
+                // Resume (1.2.31): return to where the student left
+                // this video instead of restarting from zero.
+                if (savedPositionMs > 0L) seekTo(savedPositionMs)
                 prepare()
-                playWhenReady = true
+                playWhenReady = savedPlayWhenReady
             }
         }
+    }
+
+    // Position snapshot (1.2.31): while this player lives, refresh
+    // the saved position every couple of seconds so a later return
+    // (or a process death the saveable state survives) resumes
+    // within seconds of where playback actually stopped.
+    LaunchedEffect(player) {
+        while (true) {
+            delay(2_000)
+            if (player.playbackState != Player.STATE_ENDED) {
+                val pos = player.currentPosition
+                if (pos > 0L) savedPositionMs = pos
+            }
+            savedPlayWhenReady = player.playWhenReady
+        }
+    }
+
+    // Background behaviour (1.2.31): leaving the app pauses the
+    // video (it used to keep playing audio in the background);
+    // coming back resumes only if it was playing when left.
+    var autoResume by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, player) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    if (player.playWhenReady) {
+                        autoResume = true
+                        player.playWhenReady = false
+                    }
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    if (autoResume) {
+                        autoResume = false
+                        player.playWhenReady = true
+                    }
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Toggling subtitles only flips the text track; playback continues.
@@ -157,7 +252,16 @@ fun VideoPlayerScreen(
     }
 
     DisposableEffect(player) {
-        onDispose { player.release() }
+        onDispose {
+            // Last-chance snapshot before release (1.2.31): leaving
+            // the player keeps the exact stop point for the return.
+            if (player.playbackState != Player.STATE_ENDED) {
+                val pos = player.currentPosition
+                if (pos > 0L) savedPositionMs = pos
+            }
+            savedPlayWhenReady = player.playWhenReady || autoResume
+            player.release()
+        }
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -237,16 +341,57 @@ fun VideoPlayerScreen(
                 }
             }
         }
-        if (playerError != null) {
+        // Buffering indicator (1.2.31): loading/re-buffering is
+        // shown, never mistaken for a hang.
+        if (isBuffering && playerErrorCode == null && videoUri != null) {
             Box(
-                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
+                Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    "تعذر تشغيل الفيديو\n$playerError",
-                    color = Color.White,
+                CircularProgressIndicator(color = Color.White)
+            }
+        }
+        // Error surface (1.2.31): a friendly sentence, a RETRY that
+        // re-prepares from the saved position, and a way back —
+        // before this, an error was a dead text on a black screen
+        // (and with the controls hidden, not even a visible exit).
+        val errorCode = playerErrorCode
+        if (errorCode != null || videoUri == null) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(24.dp)
-                )
+                ) {
+                    Text(
+                        if (videoUri == null) "تعذّر العثور على ملف الفيديو."
+                        else playbackErrorMessage(errorCode ?: 0),
+                        color = Color.White
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.Center) {
+                        if (videoUri != null) {
+                            Button(
+                                onClick = {
+                                    playerErrorCode = null
+                                    val resumeAt = maxOf(savedPositionMs, player.currentPosition)
+                                    if (resumeAt > 0L) player.seekTo(resumeAt)
+                                    player.prepare()
+                                    player.playWhenReady = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
+                            ) {
+                                Text("إعادة المحاولة", color = Color.White)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                        }
+                        OutlinedButton(onClick = onBack) {
+                            Text("رجوع", color = Color.White)
+                        }
+                    }
+                }
             }
         }
     }

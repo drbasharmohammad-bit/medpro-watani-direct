@@ -55,6 +55,30 @@ class WataniRepository(private val context: Context) {
     // saveDownloadedSection also evicts explicitly.
     private val subjectEnvelopeCache = EnvelopeCache<SubjectEnvelope>()
 
+    // Parsed-concepts cache (1.2.31): getConcepts used to re-read,
+    // re-decrypt and re-parse the whole pack on EVERY call, and the
+    // concept-unit screen calls it on every entry — returning from
+    // a bank question re-parsed ~5MB before the page could render.
+    // Same registry-hash guard as the envelope cache.
+    private val conceptsEnvelopeCache = EnvelopeCache<ConceptsEnvelope>()
+
+    // Question-id index (1.2.31): qid -> section path of its FIRST
+    // occurrence in registry order (topics before sessions inside
+    // an envelope — the exact scan order the old findQuestionById
+    // used). Built lazily from the parsed envelopes (which the
+    // build itself caches), then guarded by a fingerprint of the
+    // downloaded-sections registry: any download/wipe changes the
+    // fingerprint and the index rebuilds. Before this index, every
+    // lookup rescanned — and on a cold envelope cache re-parsed —
+    // every downloaded shard from the top, once per self-test
+    // question on the unit screen and again on the open click:
+    // the «اذهب إلى مصدر السؤال يطول» freeze.
+    @Volatile
+    private var questionIdIndex: Map<String, String>? = null
+
+    @Volatile
+    private var questionIdIndexFingerprint: String? = null
+
     private fun loadDownloadedSections(): List<DownloadedSectionEntity> {
         val allEntries = prefs.all
         val list = mutableListOf<DownloadedSectionEntity>()
@@ -84,6 +108,12 @@ class WataniRepository(private val context: Context) {
         // Fresh bytes on disk: any envelope parsed from the previous
         // download of this section is stale (1.2.27 cache).
         subjectEnvelopeCache.evict(entity.sectionPath)
+        conceptsEnvelopeCache.evict(entity.sectionPath)
+        // The registry fingerprint guard would catch this anyway;
+        // dropping eagerly keeps a stale id->path map from ever
+        // being served between the save and the next lookup.
+        questionIdIndex = null
+        questionIdIndexFingerprint = null
     }
 
     /** Reloads the downloaded-sections flow from prefs (after an
@@ -94,6 +124,9 @@ class WataniRepository(private val context: Context) {
         // the registry's back — never serve a parsed envelope for
         // content whose on-disk state was just reset (1.2.27).
         subjectEnvelopeCache.clear()
+        conceptsEnvelopeCache.clear()
+        questionIdIndex = null
+        questionIdIndexFingerprint = null
     }
 
     /**
@@ -679,10 +712,26 @@ class WataniRepository(private val context: Context) {
      */
     suspend fun getConcepts(): ConceptsEnvelope? = withContext(Dispatchers.IO) {
         try {
+            // Cache (1.2.31): served only when the entry was parsed
+            // from bytes with the registry's current hash for
+            // concepts.json — a republished pack swaps the hash and
+            // the stale parse is dropped inside get(). Without a
+            // registry entry there is nothing to guard against, so
+            // the pack is read fresh exactly as before.
+            val registryHash = _downloadedSectionsFlow.value
+                .firstOrNull { it.sectionPath == "concepts.json" }?.hash
+            if (registryHash != null) {
+                conceptsEnvelopeCache.get("concepts.json", registryHash)
+                    ?.let { return@withContext it }
+            }
             // Encrypted sections_cache (phase-2 hardening): read through
             // the central crypto point like every other section getter.
             val jsonString = readSectionText("concepts.json") ?: return@withContext null
-            moshi.adapter(ConceptsEnvelope::class.java).fromJson(jsonString)
+            val parsed = moshi.adapter(ConceptsEnvelope::class.java).fromJson(jsonString)
+            if (parsed != null && registryHash != null) {
+                conceptsEnvelopeCache.put("concepts.json", registryHash, jsonString.length, parsed)
+            }
+            parsed
         } catch (e: Exception) {
             null
         }
@@ -750,43 +799,97 @@ class WataniRepository(private val context: Context) {
             }
         }
 
-    /**
-     * Finds a bank question by its id across the DOWNLOADED subject
-     * envelopes (topics and sessions), for the concepts self-test
-     * «افتح السؤال في البنك» button. Returns the question plus a
-     * display title (its topic/session name, else the envelope's
-     * subject name), or null when the question is not on the device —
-     * the caller then hides the button entirely. Restricted-envelope
-     * lease rules apply through [getSubjectEnvelope] itself.
-     */
-    suspend fun findQuestionById(qid: String): Pair<QuestionDto, String>? =
-        withContext(Dispatchers.IO) {
-            val wanted = qid.trim()
-            if (wanted.isEmpty()) return@withContext null
-            val paths = _downloadedSectionsFlow.value.map { it.sectionPath }
-            for (path in paths) {
-                // Only subject-envelope families can hold bank
-                // questions; the pack files (cases.json, ecg.json, …)
-                // parse to empty envelopes and are skipped by shape.
-                if (!path.contains('/')) continue
-                val envelope = getSubjectEnvelope(path) ?: continue
-                for (topic in envelope.topics.orEmpty()) {
-                    val hit = topic.questions.orEmpty()
-                        .firstOrNull { it.id?.trim() == wanted }
-                    if (hit != null) {
-                        return@withContext hit to (topic.name ?: envelope.subjectName ?: "")
-                    }
+    /** The question-id index for the CURRENT downloaded set,
+     * rebuilt only when the registry fingerprint moved (1.2.31).
+     * Ids are collected topics-first then sessions, per envelope in
+     * registry order — the old linear scan's exact first-hit order,
+     * so an id living in two places resolves to the same record it
+     * always did. Building parses each envelope once through
+     * [getSubjectEnvelope], which caches the parse for later. */
+    private suspend fun questionIndex(): Map<String, String> {
+        val fingerprint = _downloadedSectionsFlow.value
+            .joinToString(";") { "${it.sectionPath}|${it.hash}" }
+        val cached = questionIdIndex
+        if (cached != null && questionIdIndexFingerprint == fingerprint) return cached
+        val entries = mutableListOf<Pair<String, List<String>>>()
+        for (entity in _downloadedSectionsFlow.value) {
+            val path = entity.sectionPath
+            // Only subject-envelope families can hold bank
+            // questions; the pack files (cases.json, ecg.json, …)
+            // parse to empty envelopes and are skipped by shape.
+            if (!path.contains('/')) continue
+            val envelope = getSubjectEnvelope(path) ?: continue
+            val ids = mutableListOf<String>()
+            for (topic in envelope.topics.orEmpty()) {
+                for (q in topic.questions.orEmpty()) {
+                    q.id?.trim()?.takeIf { it.isNotEmpty() }?.let { ids.add(it) }
                 }
-                for (session in envelope.sessions.orEmpty()) {
-                    val hit = session.questions.orEmpty()
-                        .firstOrNull { it.id?.trim() == wanted }
-                    if (hit != null) {
-                        return@withContext hit to (session.name ?: envelope.subjectName ?: "")
+            }
+            for (session in envelope.sessions.orEmpty()) {
+                for (q in session.questions.orEmpty()) {
+                    q.id?.trim()?.takeIf { it.isNotEmpty() }?.let { ids.add(it) }
+                }
+            }
+            entries.add(path to ids)
+        }
+        val built = buildQuestionIdIndex(entries)
+        questionIdIndex = built
+        questionIdIndexFingerprint = fingerprint
+        return built
+    }
+
+    /**
+     * Finds bank questions by their ids across the DOWNLOADED
+     * subject envelopes (topics and sessions), for the concepts
+     * self-test «افتح السؤال في البنك» button. Returns, per found
+     * id, the question plus a display title (its topic/session
+     * name, else the envelope's subject name); ids not on the
+     * device are simply absent — the caller then hides the button
+     * entirely. Restricted-envelope lease rules apply through
+     * [getSubjectEnvelope] itself.
+     *
+     * Build 1.2.31: resolution goes through the question-id index —
+     * after its one build, a lookup loads only the envelope(s)
+     * actually holding the wanted ids (normally already cached),
+     * instead of rescanning every shard per question.
+     */
+    suspend fun findQuestionsByIds(
+        qids: Collection<String>
+    ): Map<String, Pair<QuestionDto, String>> = withContext(Dispatchers.IO) {
+        val wanted = qids.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        if (wanted.isEmpty()) return@withContext emptyMap()
+        val index = questionIndex()
+        val result = mutableMapOf<String, Pair<QuestionDto, String>>()
+        val byPath = wanted.groupBy { index[it] }
+        for ((path, ids) in byPath) {
+            if (path == null) continue
+            val envelope = getSubjectEnvelope(path) ?: continue
+            val idSet = ids.toSet()
+            for (topic in envelope.topics.orEmpty()) {
+                for (q in topic.questions.orEmpty()) {
+                    val id = q.id?.trim()
+                    if (id != null && id in idSet && id !in result) {
+                        result[id] = q to (topic.name ?: envelope.subjectName ?: "")
                     }
                 }
             }
-            null
+            for (session in envelope.sessions.orEmpty()) {
+                for (q in session.questions.orEmpty()) {
+                    val id = q.id?.trim()
+                    if (id != null && id in idSet && id !in result) {
+                        result[id] = q to (session.name ?: envelope.subjectName ?: "")
+                    }
+                }
+            }
         }
+        result
+    }
+
+    /** Single-id convenience over [findQuestionsByIds] — same
+     * record, same title, same null-when-absent contract as the
+     * pre-1.2.31 linear scan. */
+    suspend fun findQuestionById(qid: String): Pair<QuestionDto, String>? =
+        findQuestionsByIds(listOf(qid))[qid.trim()]
 
     suspend fun getAuscultationArEnvelope(): AuscultationArEnvelope? = withContext(Dispatchers.IO) {
         try {
@@ -1889,4 +1992,23 @@ class WataniRepository(private val context: Context) {
             if (srtTemp.exists()) srtTemp.delete()
         }
     }
+}
+
+/**
+ * Pure first-wins fold for the question-id index (build 1.2.31):
+ * [entries] are (section path -> its question ids in scan order)
+ * in registry order; an id keeps the FIRST path that claims it —
+ * exactly where the old per-lookup linear scan would have found
+ * it. Pure so the rule is unit-testable off-device.
+ */
+internal fun buildQuestionIdIndex(
+    entries: List<Pair<String, List<String>>>
+): Map<String, String> {
+    val index = LinkedHashMap<String, String>()
+    for ((path, ids) in entries) {
+        for (id in ids) {
+            if (!index.containsKey(id)) index[id] = path
+        }
+    }
+    return index
 }
