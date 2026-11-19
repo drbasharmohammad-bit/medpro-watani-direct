@@ -1,6 +1,5 @@
 package sy.medpro.watani.ui.library
 
-import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -28,7 +27,6 @@ import androidx.activity.compose.BackHandler
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -135,33 +133,28 @@ fun VideoPlayerScreen(
         onFullscreenChange?.invoke(isFullscreen)
     }
 
-    // Phase-3 (§4.2 + §6): THE DataSource chain for all playback —
-    // the single touch point in this screen, its external contract
-    // is unchanged:
-    //  - file:// (session playlist temps, SRT temps) is served by
-    //    DefaultDataSource itself;
-    //  - watani-enc:/// segments of a downloaded tree are decrypted
-    //    in memory by EncryptedHlsDataSource;
-    //  - http(s):// streaming (playlists, segments, subtitle URL)
-    //    goes through GatewayHlsDataSource, which rebuilds every
-    //    request via WorkerActivationApi.contentRequestForUrl with
-    //    the activation token — no direct fetch from the public
-    //    origin remains in any playback path.
-    // The chain is built here in the composable body, not inside the
-    // remember block below (1.2.31 lint saga, CI runs
-    // 44598215746..44604518726): lint's UnsafeOptInUsageError detector
-    // does not credit this function's @OptIn across the remember
-    // lambda boundary for the media3 load-error-policy APIs, while
-    // the body itself is covered. The factories are lightweight
-    // context holders (no I/O), so rebuilding them on recomposition
-    // is harmless; the remembered player keeps the instances it was
-    // built with.
-    val gatewayFactory = GatewayHlsDataSource.Factory(context)
-    val encFactory = EncryptedHlsDataSource.Factory(context, gatewayFactory)
-    val dataSourceFactory = DefaultDataSource.Factory(context, encFactory)
-    val mediaSourceFactory = buildMediaSourceFactory(context, dataSourceFactory)
-
     val player = remember(videoUri, subtitleUri) {
+        // Phase-3 (§4.2 + §6): THE DataSource chain for all playback —
+        // the single touch point in this screen, its external contract
+        // is unchanged:
+        //  - file:// (session playlist temps, SRT temps) is served by
+        //    DefaultDataSource itself;
+        //  - watani-enc:/// segments of a downloaded tree are decrypted
+        //    in memory by EncryptedHlsDataSource;
+        //  - http(s):// streaming (playlists, segments, subtitle URL)
+        //    goes through GatewayHlsDataSource, which rebuilds every
+        //    request via WorkerActivationApi.contentRequestForUrl with
+        //    the activation token — no direct fetch from the public
+        //    origin remains in any playback path.
+        val gatewayFactory = GatewayHlsDataSource.Factory(context)
+        val encFactory = EncryptedHlsDataSource.Factory(context, gatewayFactory)
+        val dataSourceFactory = DefaultDataSource.Factory(context, encFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(dataSourceFactory)
+            // 1.2.31: transient IO failures (a dropped connection
+            // mid-segment on a weak network) get more load retries
+            // before the player gives up and reports an error.
+            .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(5))
         ExoPlayer.Builder(context).setMediaSourceFactory(mediaSourceFactory).build().apply {
             if (videoUri != null) {
                 val itemBuilder = MediaItem.Builder().setUri(videoUri)
@@ -403,32 +396,3 @@ fun VideoPlayerScreen(
         }
     }
 }
-
-/**
- * Builds the media-source factory for the player. Extracted as a plain
- * function and marked with the media3 marker itself (1.2.31 lint fix,
- * CI runs 44598215746/44600236619): the load-error policy APIs are
- * @UnstableApi with error-level opt-in, and lint's
- * UnsafeOptInUsageError detector credits neither the composable's
- * @OptIn inside the remember lambda nor an @OptIn on a plain function
- * — the pattern this codebase already passes lint with is marker
- * propagation (cf. EncryptedHlsDataSource), so this function carries
- * @UnstableApi and its usages are covered by the marker; its call
- * site sits in the composable body, which the function's @OptIn
- * covers (inside the remember lambda it was flagged — run
- * 44602229137 — and a file-level @file:OptIn made the detector flag
- * a neighbouring factory call as well — run 44604518726 — so the
- * chain construction was hoisted to the body instead). Behavior is
- * unchanged.
- */
-@UnstableApi
-private fun buildMediaSourceFactory(
-    context: Context,
-    dataSourceFactory: DataSource.Factory
-): DefaultMediaSourceFactory =
-    DefaultMediaSourceFactory(context)
-        .setDataSourceFactory(dataSourceFactory)
-        // 1.2.31: transient IO failures (a dropped connection
-        // mid-segment on a weak network) get more load retries
-        // before the player gives up and reports an error.
-        .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(5))

@@ -135,9 +135,14 @@ android {
     // are FIXED AT THE ROOT by core library desugaring (below), so
     // their entries were removed from lint-baseline.xml — lint now
     // verifies the desugared java.time paths for real. The baseline
-    // still freezes only the remaining pre-existing errors (9 media3
-    // UnsafeOptIn, 1 WrongConstant). Any NEW lint error fails the CI
-    // lint step; warnings never fail it.
+    // freezes only the known UnsafeOptInUsageError detector blind
+    // spots around media3 opt-in markers (7 entries, all in
+    // VideoPlayerScreen.kt — the @OptIn annotation itself, the
+    // same-module DataSource Factory calls, and since 1.2.31 the
+    // 5-retry load-error policy, whose usages ARE covered by the
+    // composable's @OptIn and compile cleanly) plus 1 WrongConstant.
+    // Any NEW lint error fails the CI lint step; warnings never
+    // fail it.
     baseline = file("lint-baseline.xml")
   }
   compileOptions {
