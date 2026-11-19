@@ -396,13 +396,17 @@ fun VideoPlayerScreen(
 
 /**
  * Builds the media-source factory for the player. Extracted as a plain
- * function (1.2.31 lint fix, CI run 44598215746): the load-error policy
- * APIs are media3 @UnstableApi with error-level opt-in, and lint's
- * UnsafeOptInUsageError detector does not credit the composable's
- * @OptIn inside the remember lambda — here both usages sit directly
- * in an @OptIn-annotated body. Behavior is unchanged.
+ * function and marked with the media3 marker itself (1.2.31 lint fix,
+ * CI runs 44598215746/44600236619): the load-error policy APIs are
+ * @UnstableApi with error-level opt-in, and lint's
+ * UnsafeOptInUsageError detector credits neither the composable's
+ * @OptIn inside the remember lambda nor an @OptIn on a plain function
+ * — the pattern this codebase already passes lint with is marker
+ * propagation (cf. EncryptedHlsDataSource), so this function carries
+ * @UnstableApi and its usages are covered by the marker. Behavior is
+ * unchanged.
  */
-@OptIn(UnstableApi::class)
+@UnstableApi
 private fun buildMediaSourceFactory(
     context: Context,
     dataSourceFactory: DataSource.Factory
