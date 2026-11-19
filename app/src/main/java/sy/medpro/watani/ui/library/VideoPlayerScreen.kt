@@ -1,3 +1,5 @@
+@file:OptIn(UnstableApi::class)
+
 package sy.medpro.watani.ui.library
 
 import android.content.Context
@@ -403,8 +405,10 @@ fun VideoPlayerScreen(
  * @OptIn inside the remember lambda nor an @OptIn on a plain function
  * — the pattern this codebase already passes lint with is marker
  * propagation (cf. EncryptedHlsDataSource), so this function carries
- * @UnstableApi and its usages are covered by the marker. Behavior is
- * unchanged.
+ * @UnstableApi and its usages are covered by the marker; the call
+ * site inside the remember lambda is covered by the file-level
+ * @file:OptIn at the top of this file (run 44602229137: the marker
+ * alone left exactly that one call flagged). Behavior is unchanged.
  */
 @UnstableApi
 private fun buildMediaSourceFactory(
