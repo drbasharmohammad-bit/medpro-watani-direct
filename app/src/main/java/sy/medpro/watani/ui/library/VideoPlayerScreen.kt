@@ -1,5 +1,6 @@
 package sy.medpro.watani.ui.library
 
+import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -27,6 +28,7 @@ import androidx.activity.compose.BackHandler
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -149,12 +151,7 @@ fun VideoPlayerScreen(
         val gatewayFactory = GatewayHlsDataSource.Factory(context)
         val encFactory = EncryptedHlsDataSource.Factory(context, gatewayFactory)
         val dataSourceFactory = DefaultDataSource.Factory(context, encFactory)
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(dataSourceFactory)
-            // 1.2.31: transient IO failures (a dropped connection
-            // mid-segment on a weak network) get more load retries
-            // before the player gives up and reports an error.
-            .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(5))
+        val mediaSourceFactory = buildMediaSourceFactory(context, dataSourceFactory)
         ExoPlayer.Builder(context).setMediaSourceFactory(mediaSourceFactory).build().apply {
             if (videoUri != null) {
                 val itemBuilder = MediaItem.Builder().setUri(videoUri)
@@ -396,3 +393,23 @@ fun VideoPlayerScreen(
         }
     }
 }
+
+/**
+ * Builds the media-source factory for the player. Extracted as a plain
+ * function (1.2.31 lint fix, CI run 44598215746): the load-error policy
+ * APIs are media3 @UnstableApi with error-level opt-in, and lint's
+ * UnsafeOptInUsageError detector does not credit the composable's
+ * @OptIn inside the remember lambda — here both usages sit directly
+ * in an @OptIn-annotated body. Behavior is unchanged.
+ */
+@OptIn(UnstableApi::class)
+private fun buildMediaSourceFactory(
+    context: Context,
+    dataSourceFactory: DataSource.Factory
+): DefaultMediaSourceFactory =
+    DefaultMediaSourceFactory(context)
+        .setDataSourceFactory(dataSourceFactory)
+        // 1.2.31: transient IO failures (a dropped connection
+        // mid-segment on a weak network) get more load retries
+        // before the player gives up and reports an error.
+        .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(5))
