@@ -41,6 +41,7 @@ private fun bankLabel(bank: String): String = when (bank) {
     "uworld" -> "UWorld"
     "daily" -> "التحدي اليومي"
     "simulator" -> "محاكاة الامتحان"
+    "firstaid" -> "First Aid - Med Pro"
     else -> "اختبار"
 }
 

@@ -728,6 +728,55 @@ class WataniRepository(private val context: Context) {
         }
     }
 
+    /** Local file of one Step-1 First Aid media figure (disk asset on
+     * the public origin, auscultation-clip pattern). The pack's media
+     * [file] value is "media/<id>.png" relative to the unit; on the
+     * origin the figure lives at "firstaid/media/<UNIT>/<id>.png". */
+    fun getFirstAidMediaFile(unitId: String, mediaFile: String): File {
+        val dir = File(context.filesDir, "firstaid_media")
+        if (!dir.exists()) dir.mkdirs()
+        val base = mediaFile.substringAfterLast('/')
+        return File(dir, "${unitId}_$base")
+    }
+
+    /** Downloads one Step-1 media figure to its local file (no-op
+     * success when already present). Figures download WITH their unit:
+     * the unit player pulls every media entry of the open unit, then
+     * the reference renderer shows each figure at its in-text marker. */
+    suspend fun downloadFirstAidMedia(unitId: String, mediaFile: String): Result<File> =
+        withContext(Dispatchers.IO) {
+            val targetFile = getFirstAidMediaFile(unitId, mediaFile)
+            val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+            try {
+                if (targetFile.exists() && targetFile.length() > 0) {
+                    return@withContext Result.success(targetFile)
+                }
+                val base = mediaFile.substringAfterLast('/')
+                val request = okhttp3.Request.Builder()
+                    .url("${WataniApi.BASE_URL}firstaid/media/$unitId/$base")
+                    .build()
+                val resp = client.newCall(request).execute()
+                if (!resp.isSuccessful) {
+                    if (tempFile.exists()) tempFile.delete()
+                    return@withContext Result.failure(Exception("فشل تحميل الشكل (HTTP ${resp.code})"))
+                }
+                val body = resp.body ?: return@withContext Result.failure(Exception("استجابة شكل فارغة"))
+                body.byteStream().use { inputStream ->
+                    java.io.FileOutputStream(tempFile).use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+                if (tempFile.exists()) {
+                    if (targetFile.exists()) targetFile.delete()
+                    tempFile.renameTo(targetFile)
+                }
+                Result.success(targetFile)
+            } catch (e: Exception) {
+                if (tempFile.exists()) tempFile.delete()
+                Result.failure(Exception("تعذر تحميل الشكل — تحقق من الاتصال.", e))
+            }
+        }
+
     /**
      * Bundled fallback (assets/ecg_sample.json): a small sample pack so
      * the ECG course opens and teaches even before the pipeline's real

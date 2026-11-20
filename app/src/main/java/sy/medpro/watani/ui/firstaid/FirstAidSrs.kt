@@ -175,6 +175,20 @@ object FirstAidSrs {
         now: Long = System.currentTimeMillis()
     ): Int = dueKeys(context, keys, now).size
 
+    /** Every enrolled card key that is due now, across all units —
+     * the section home's «مراجعة المستحق اليوم» player groups these
+     * by unit and loads each unit's flashcards. */
+    fun dueKeysAll(
+        context: Context,
+        now: Long = System.currentTimeMillis()
+    ): List<String> {
+        val p = prefs(context)
+        return p.all.entries.mapNotNull { (key, value) ->
+            val state = (value as? String)?.let { parse(it) } ?: return@mapNotNull null
+            if (FirstAidSrsScheduler.isDue(state, now)) key else null
+        }
+    }
+
     /** Due counter over EVERY enrolled card (the section card's
      * «مستحق اليوم» badge): scans the account's whole SRS file. */
     fun dueCountAll(
