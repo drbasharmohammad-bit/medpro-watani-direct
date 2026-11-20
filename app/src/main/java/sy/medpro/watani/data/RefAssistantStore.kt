@@ -97,7 +97,7 @@ object RefAssistantPack {
         OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
-    )
+    ).build()
 
     fun bundleDir(context: Context): File = File(context.filesDir, "refsearch").apply { mkdirs() }
 
