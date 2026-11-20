@@ -1,18 +1,25 @@
 package sy.medpro.watani.ui.firstaid
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,9 +27,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,22 +42,42 @@ import sy.medpro.watani.data.FirstAidBanksDto
 import sy.medpro.watani.data.FirstAidIndexDto
 import sy.medpro.watani.data.FirstAidIntegrationDto
 import sy.medpro.watani.data.WataniRepository
+import sy.medpro.watani.ui.library.PdfViewerScreen
+import sy.medpro.watani.ui.theme.NotoKufiFontFamily
+import sy.medpro.watani.ui.theme.NotoSansArabicFontFamily
+import java.io.File
+
+/** Section destinations (internal navigation of the First Aid tab). */
+private sealed interface FaDest {
+    data object Home : FaDest
+    data class Path(val step: Int) : FaDest
+    data class Unit(val step: Int, val unitId: String, val isSession: Boolean) : FaDest
+    data object Integration : FaDest
+    data object Banks : FaDest
+    data class BankTest(val testIndex: Int) : FaDest
+    data object DueReview : FaDest
+    data class Pdf(val file: File, val title: String) : FaDest
+}
 
 /**
- * «First Aid - Med Pro» section home (build 1.2.36, merge phase 4):
- * the STRUCTURAL screen — it loads the real published packs through
- * the repository getters (cache-first + silent refresh) and renders
- * the section's true shape: the two book paths, the integration
- * layer, the printed banks and the booklets, with per-unit lock state
- * from [FirstAidProgress] and the flashcards due counter from
- * [FirstAidSrs]. The full screens and the unit player are phase 5,
- * which also applies the approved visual design verbatim — nothing
- * here is final styling.
+ * «First Aid - Med Pro» section (build 1.2.36, merge phases 5+6):
+ * the approved design applied verbatim — 01-home (maroon hero with
+ * the section progress, the two book paths, the gold integration
+ * strip), 02-path per book, the unit player, the integration layer
+ * (157 documented topic links + the INT/RAPI/FA2-INT sessions,
+ * playable unlocked), the five printed banks (499 questions as
+ * printed; the 13 unkeyed shown without auto-grading), the booklet
+ * catalog (always available, download-on-first-open, read in the
+ * existing PdfViewerScreen), and the flashcards due-today review.
+ * All data flows through the phase-4 repository getters (cache-first
+ * + silent refresh); progress/locks from FirstAidProgress, card
+ * scheduling from FirstAidSrs, wrong answers to MistakesBank.
  */
 @Composable
 fun FirstAidSectionScreen() {
     val context = LocalContext.current
     val repo = remember { WataniRepository(context) }
+    val scope = rememberCoroutineScope()
 
     var index1 by remember { mutableStateOf<FirstAidIndexDto?>(null) }
     var index2 by remember { mutableStateOf<FirstAidIndexDto?>(null) }
@@ -54,6 +85,13 @@ fun FirstAidSectionScreen() {
     var banks by remember { mutableStateOf<FirstAidBanksDto?>(null) }
     var loading by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
+
+    var stack by remember { mutableStateOf<List<FaDest>>(listOf(FaDest.Home)) }
+    val dest = stack.last()
+    fun push(d: FaDest) { stack = stack + d }
+    fun pop() { if (stack.size > 1) stack = stack.dropLast(1) }
+
+    val bookletOpener = rememberBookletOpener(repo) { file, title -> push(FaDest.Pdf(file, title)) }
 
     val srsChanges by FirstAidSrs.changes.collectAsState()
     val dueToday = remember(srsChanges) { FirstAidSrs.dueCountAll(context) }
@@ -67,88 +105,284 @@ fun FirstAidSectionScreen() {
         loading = false
     }
 
-    if (loading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-    if (failed) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                "تعذّر تحميل قسم First Aid — تحقق من الاتصال وحاول مجددًا.",
-                modifier = Modifier.padding(24.dp)
-            )
-        }
-        return
-    }
+    // The unit player registers its own BackHandler for its inner
+    // stages (composed later, so it wins while a stage is open); this
+    // host handler covers every other destination, including the unit
+    // home itself.
+    BackHandler(enabled = stack.size > 1) { pop() }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                "First Aid - Med Pro",
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp
-            )
-            Text(
-                "مساران مستقلان بترتيب الكتابين + طبقة تكامل بينهما. القسم مجاني ويعمل دون اتصال بعد تنزيل وحداته.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 13.sp
-            )
-            if (dueToday > 0) {
+    fun indexOf(step: Int) = if (step == 1) index1 else index2
+    fun unitTitleOf(step: Int, unitId: String): String? =
+        indexOf(step)?.units.orEmpty().firstOrNull { it.id == unitId }?.titleAr
+    fun isSessionId(step: Int, unitId: String): Boolean =
+        indexOf(step)?.units.orEmpty().firstOrNull { it.id == unitId }?.kind == "integration"
+
+    Box(modifier = Modifier.fillMaxSize().background(faBackground())) {
+        when {
+            loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FaColors.Maroon)
+            }
+
+            failed -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    "بطاقات مستحقة اليوم: $dueToday",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+                    "تعذّر تحميل قسم First Aid — تحقق من الاتصال وحاول مجددًا.",
+                    fontFamily = NotoSansArabicFontFamily,
+                    modifier = Modifier.padding(24.dp)
                 )
             }
-        }
 
-        index1?.let { idx ->
-            item { StepPathCard(step = 1, index = idx) }
-        }
-        index2?.let { idx ->
-            item { StepPathCard(step = 2, index = idx) }
-        }
-
-        integration?.let { integ ->
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("طبقة التكامل", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        val totals = integ.totals
-                        Text(
-                            "روابط مواضيع موثقة بين الكتابين: ${integ.count ?: integ.links?.size ?: 0}" +
-                                " (داخل الأنظمة: ${totals?.topicLinksInSystem ?: "—"}، عابرة: ${totals?.crossSystemLinks ?: "—"})",
-                            fontSize = 13.sp
+            else -> {
+                val current = dest
+                if (current is FaDest.Pdf) {
+                    // The PDF reader owns the whole window (never the
+                    // width-governed reading column).
+                    PdfViewerScreen(
+                        pdfFile = current.file,
+                        title = current.title,
+                        onBack = { pop() }
+                    )
+                } else {
+                FaReadingColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp)
+                ) {
+                    when (current) {
+                        FaDest.Home -> FaHome(
+                            index1 = index1, index2 = index2,
+                            integration = integration, banks = banks,
+                            dueToday = dueToday,
+                            onOpenPath = { push(FaDest.Path(it)) },
+                            onOpenUnit = { s, id, sess -> push(FaDest.Unit(s, id, sess)) },
+                            onOpenIntegration = { push(FaDest.Integration) },
+                            onOpenBanks = { push(FaDest.Banks) },
+                            onOpenDueReview = { push(FaDest.DueReview) },
+                            onOpenBooklet = { booklet -> bookletOpener.openIn(scope, booklet) }
                         )
-                        Text(
-                            "جلسات تكامل بلا قفل: Step 1 ‏${integ.integrationSessions?.step1?.size ?: 0} جلسة، " +
-                                "Step 2 ‏${integ.integrationSessions?.step2?.size ?: 0} جلسات",
-                            fontSize = 13.sp
+
+                        is FaDest.Path -> indexOf(current.step)?.let { idx ->
+                            FirstAidPathScreen(
+                                step = current.step, index = idx,
+                                onBack = { pop() },
+                                onOpenUnit = { id -> push(FaDest.Unit(current.step, id, false)) },
+                                onOpenBooklet = { booklet -> bookletOpener.openIn(scope, booklet) }
+                            )
+                        }
+
+                        is FaDest.Unit -> indexOf(current.step)?.let { idx ->
+                            FirstAidUnitPlayer(
+                                step = current.step,
+                                unitId = current.unitId,
+                                isSession = current.isSession,
+                                index = idx,
+                                integration = integration,
+                                unitTitleOf = { s, id -> unitTitleOf(s, id) },
+                                onBack = { pop() },
+                                onOpenUnit = { s, id, _ -> push(FaDest.Unit(s, id, isSessionId(s, id))) },
+                                onOpenBookletPdf = { file, title -> push(FaDest.Pdf(file, title)) }
+                            )
+                        }
+
+                        FaDest.Integration -> FaIntegrationScreen(
+                            integration = integration,
+                            unitTitleOf = { s, id -> unitTitleOf(s, id) },
+                            onBack = { pop() },
+                            onOpenUnit = { s, id -> push(FaDest.Unit(s, id, true)) },
+                            onOpenLinkedUnit = { s, id -> push(FaDest.Unit(s, id, isSessionId(s, id))) }
+                        )
+
+                        FaDest.Banks -> FaBanksList(
+                            banks = banks,
+                            onBack = { pop() },
+                            onOpenTest = { push(FaDest.BankTest(it)) }
+                        )
+
+                        is FaDest.BankTest -> {
+                            val test = banks?.tests.orEmpty().getOrNull(current.testIndex)
+                            if (test == null) {
+                                FaScreenHeader(title = "بنوك الكتاب المطبوعة", onBack = { pop() })
+                            } else {
+                                FirstAidQuizPlayer(
+                                    title = test.test ?: "اختبار مطبوع",
+                                    subtitle = "بنوك Step 2 المطبوعة — صفحات ${test.sourcePages ?: "—"}",
+                                    items = test.questions.orEmpty()
+                                        .mapIndexed { i, q -> q.toFaQuizItem(i) },
+                                    onWrong = { item ->
+                                        FirstAidMistakeWiring.recordWrong(
+                                            context = context,
+                                            file = "banks_step2/${test.test ?: "test"}",
+                                            subject = "بنوك Step 2 المطبوعة — ${test.test ?: ""}",
+                                            item = item
+                                        )
+                                    },
+                                    onClose = { pop() }
+                                )
+                            }
+                        }
+
+                        FaDest.DueReview -> FaDueReview(
+                            repo = repo,
+                            onBack = { pop() }
+                        )
+
+                        is FaDest.Pdf -> Unit // handled full-screen above
+                    }
+                }
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// 01-home
+// ---------------------------------------------------------------------
+
+@Composable
+private fun FaHome(
+    index1: FirstAidIndexDto?,
+    index2: FirstAidIndexDto?,
+    integration: FirstAidIntegrationDto?,
+    banks: FirstAidBanksDto?,
+    dueToday: Int,
+    onOpenPath: (Int) -> Unit,
+    onOpenUnit: (Int, String, Boolean) -> Unit,
+    onOpenIntegration: () -> Unit,
+    onOpenBanks: () -> Unit,
+    onOpenDueReview: () -> Unit,
+    onOpenBooklet: (sy.medpro.watani.data.FirstAidBookletDto) -> Unit
+) {
+    val context = LocalContext.current
+
+    fun pathStats(step: Int, index: FirstAidIndexDto?): Triple<Int, Int, String?> {
+        val units = index?.units.orEmpty()
+        val pathIds = units.filter { it.kind != "integration" }.mapNotNull { it.id }
+        val done = pathIds.count { FirstAidProgress.isUnitDone(context, step, it) }
+        val next = pathIds.firstOrNull { !FirstAidProgress.isUnitDone(context, step, it) }
+        return Triple(done, pathIds.size, next)
+    }
+    val (done1, total1, next1) = pathStats(1, index1)
+    val (done2, total2, next2) = pathStats(2, index2)
+    val totalDone = done1 + done2
+    val totalUnits = total1 + total2
+    val resume: Triple<Int, String, Boolean>? = when {
+        next2 != null -> Triple(2, next2, false)
+        next1 != null -> Triple(1, next1, false)
+        else -> null
+    }
+    val linkCount = integration?.count ?: integration?.links?.size ?: 0
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(11.dp)
+    ) {
+        item { Spacer(modifier = Modifier.height(6.dp)) }
+
+        // Hero (.hero): maroon gradient, section progress + stats.
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(14.dp, RoundedCornerShape(26.dp), clip = false)
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(FaColors.MaroonBrush)
+                    .padding(horizontal = 18.dp, vertical = 16.dp)
+            ) {
+                Text(
+                    "قسم التعلّم التفاعلي",
+                    fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
+                    fontSize = 11.5.sp, color = FaColors.Gold
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Text(
+                        "First Aid",
+                        fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
+                        fontSize = 27.sp, color = Color(0xFFFFF7EA)
+                    )
+                    Text(
+                        " - Med Pro",
+                        fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.5.sp, color = FaColors.GoldSoft,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                }
+                Text(
+                    "كورس First Aid بمسارين مترابطين — أساسيات Step 1 وتطبيق Step 2، بترتيب الكتابين وطبقة تكامل بينهما.",
+                    fontFamily = NotoSansArabicFontFamily,
+                    fontSize = 12.sp, lineHeight = 19.sp, color = FaColors.HeroTextSoft,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 11.dp)
+                        .height(7.dp)
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(Color.White.copy(alpha = 0.18f))
+                ) {
+                    val f = if (totalUnits == 0) 0f else totalDone.toFloat() / totalUnits
+                    if (f > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(f)
+                                .height(7.dp)
+                                .clip(RoundedCornerShape(99.dp))
+                                .background(FaColors.GoldBrush)
                         )
                     }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 11.dp),
+                    horizontalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    FaHeroStat("$totalDone", "وحدة منجزة", Modifier.weight(1f))
+                    FaHeroStat("$dueToday", "بطاقة مستحقة اليوم", Modifier.weight(1f))
+                    FaHeroStat("$linkCount", "رابط تكامل", Modifier.weight(1f))
                 }
             }
         }
 
-        banks?.let { b ->
+        // Resume card (.resume): the next available unit, if any.
+        if (resume != null) {
+            val (rStep, rUnit, _) = resume
+            val rTitle = (if (rStep == 1) index1 else index2)?.units.orEmpty()
+                .firstOrNull { it.id == rUnit }?.titleAr ?: rUnit
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("بنوك الكتاب المطبوعة — Step 2", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text(
-                            "${b.count ?: 0} سؤالًا كما هي مطبوعة (${b.keyed ?: 0} بمفتاح مطبوع، ${b.unkeyed ?: 0} بلا مفتاح تُعرض بلا تصحيح آلي)",
-                            fontSize = 13.sp
-                        )
-                        b.tests.orEmpty().forEach { test ->
+                FaCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onOpenUnit(rStep, rUnit, false) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(41.dp)
+                                .shadow(6.dp, CircleShape, clip = false)
+                                .clip(CircleShape)
+                                .background(FaColors.Maroon),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Filled.PlayArrow, contentDescription = null,
+                                tint = Color.White, modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "• ${test.test ?: ""} — ${test.questions?.size ?: 0} سؤالًا (صفحات ${test.sourcePages ?: "—"})",
-                                fontSize = 13.sp
+                                "تابع من حيث توقفت",
+                                fontFamily = NotoSansArabicFontFamily,
+                                fontSize = 11.3.sp, color = faMuted()
+                            )
+                            Text(
+                                "Step $rStep — $rTitle",
+                                fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp, color = faHeading()
                             )
                         }
                     }
@@ -156,82 +390,436 @@ fun FirstAidSectionScreen() {
             }
         }
 
+        // The two paths (.paths / .path).
+        item {
+            Text(
+                "المساران",
+                fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                fontSize = 15.5.sp, color = faHeading(),
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        if (index1 != null) {
+            item {
+                FaPathCard(
+                    badge = "S1", step = 1, index = index1!!,
+                    done = done1, total = total1,
+                    sub = "الأساسيات: كيمياء حيوية ومناعة وأحياء دقيقة وباثولوجيا وأدوية…",
+                    onClick = { onOpenPath(1) }
+                )
+            }
+        }
+        if (index2 != null) {
+            item {
+                FaPathCard(
+                    badge = "S2", step = 2, index = index2!!,
+                    done = done2, total = total2,
+                    sub = "التطبيق السريري: مدخل ومرجع وتدريب وخروج لكل وحدة",
+                    onClick = { onOpenPath(2) }
+                )
+            }
+        }
+
+        // Integration strip (.integ).
+        if (integration != null) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(Color(0xFFFBF4E2), FaColors.GoldTint)
+                            )
+                        )
+                        .clickable { onOpenIntegration() }
+                        .padding(horizontal = 15.dp, vertical = 11.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "طبقة التكامل بين الكتابين",
+                            fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp, color = FaColors.GoldDeepText
+                        )
+                        Text(
+                            "$linkCount رابط مواضيع موثّقًا + " +
+                                "${integration.integrationSessions?.step1.orEmpty().size} جلسة Step 1 و" +
+                                "${integration.integrationSessions?.step2.orEmpty().size} جلسات Step 2 — كلها قابلة للعب بلا قفل.",
+                            fontFamily = NotoSansArabicFontFamily,
+                            fontSize = 11.3.sp, lineHeight = 18.sp, color = Color(0xFF97824F)
+                        )
+                    }
+                    FaChip("افتح", Color.White, FaColors.GoldText)
+                }
+            }
+        }
+
+        // Due flashcards entry.
+        if (dueToday > 0) {
+            item {
+                FaCard(modifier = Modifier.fillMaxWidth(), onClick = onOpenDueReview) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "مراجعة البطاقات المستحقة",
+                                fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp, color = faHeading()
+                            )
+                            Text(
+                                "$dueToday بطاقة مستحقة اليوم على سلّم تكرار الكورس",
+                                fontFamily = NotoSansArabicFontFamily,
+                                fontSize = 11.3.sp, color = faMuted()
+                            )
+                        }
+                        FaChip("ابدأ المراجعة", FaColors.GoldTint, FaColors.GoldText)
+                    }
+                }
+            }
+        }
+
+        // Printed banks entry.
+        if (banks != null) {
+            item {
+                FaCard(modifier = Modifier.fillMaxWidth(), onClick = onOpenBanks) {
+                    Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
+                        Text(
+                            "بنوك الكتاب المطبوعة — Step 2",
+                            fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 14.5.sp, color = faHeading()
+                        )
+                        Text(
+                            "${banks.count ?: 499} سؤالًا كما هي مطبوعة في خمسة اختبارات (${banks.keyed ?: 486} بمفتاح مطبوع، ${banks.unkeyed ?: 13} بلا مفتاح تُعرض بلا تصحيح آلي)",
+                            fontFamily = NotoSansArabicFontFamily,
+                            fontSize = 11.8.sp, lineHeight = 18.sp, color = faMuted()
+                        )
+                    }
+                }
+            }
+        }
+
+        // Booklet catalog: always available.
         val booklets = (index1?.booklets.orEmpty().map { 1 to it } +
             index2?.booklets.orEmpty().map { 2 to it })
         if (booklets.isNotEmpty()) {
             item {
-                Text("الكتيّبات (PDF — متاحة دائمًا)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            }
-            items(booklets) { (step, booklet) ->
-                val fileName = booklet.file?.substringAfterLast('/') ?: ""
-                val sizeMb = (booklet.size ?: 0L) / 1_000_000.0
                 Text(
-                    "• Step $step — $fileName (${"%.1f".format(sizeMb)} MB)",
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    "الكتيّبات (PDF — متاحة دائمًا)",
+                    fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                    fontSize = 15.5.sp, color = faHeading(),
+                    modifier = Modifier.padding(top = 4.dp)
                 )
+            }
+            items(booklets.size) { i ->
+                val (bStep, booklet) = booklets[i]
+                BookletRow(step = bStep, booklet = booklet) { onOpenBooklet(booklet) }
             }
         }
 
-        item { Spacer(modifier = Modifier.height(8.dp)) }
+        item { Spacer(modifier = Modifier.height(10.dp)) }
     }
 }
 
-/** One book path: its systems in book order, each unit with its live
- * lock state. Path order and session split come from the index itself
- * (units carry "order" and "kind"). */
 @Composable
-private fun StepPathCard(step: Int, index: FirstAidIndexDto) {
-    val context = LocalContext.current
-    val units = remember(index) { index.units.orEmpty().sortedBy { it.order ?: Int.MAX_VALUE } }
-    val sessionIds = remember(units) {
-        units.filter { it.kind == "integration" }.mapNotNull { it.id }.toSet()
+private fun FaHeroStat(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            value, fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
+            fontSize = 15.sp, color = Color.White
+        )
+        Text(
+            label, fontFamily = NotoSansArabicFontFamily,
+            fontSize = 10.5.sp, color = Color(0xFFE4CFAF)
+        )
     }
-    val pathIds = remember(units) {
-        units.filter { it.kind != "integration" }.mapNotNull { it.id }
-    }
-    val doneCount = remember(units) {
-        units.count { FirstAidProgress.isUnitDone(context, step, it.id ?: "", it.id in sessionIds) }
-    }
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                "Step $step — ${index.count ?: units.size} وحدة",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-            Text(
-                "أُنجزت $doneCount وحدة • أسئلة تدريب: ${index.totals?.quiz ?: "—"}" +
-                    (if (step == 2) " • مدخل: ${index.totals?.precheck ?: "—"} • خروج: ${index.totals?.exitcheck ?: "—"}" else ""),
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            index.systems.orEmpty().forEach { system ->
+}
+
+@Composable
+private fun FaPathCard(
+    badge: String,
+    step: Int,
+    index: FirstAidIndexDto,
+    done: Int,
+    total: Int,
+    sub: String,
+    onClick: () -> Unit
+) {
+    FaCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+        Row(
+            modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (step == 1) FaColors.MaroonMidBrush else FaColors.GoldBrush),
+                contentAlignment = Alignment.Center
+            ) {
                 Text(
-                    system.sectionAr ?: system.sectionEn ?: system.code ?: "",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+                    badge, fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
+                    fontSize = 13.5.sp, color = Color.White
                 )
-                system.units.orEmpty().forEach { unitId ->
-                    val summary = units.firstOrNull { it.id == unitId }
-                    val status = FirstAidProgress.status(
-                        context, step, pathIds, unitId, sessionIds
-                    )
-                    val statusLabel = when (status) {
-                        FirstAidProgressRules.UnitStatus.DONE -> "منجزة"
-                        FirstAidProgressRules.UnitStatus.AVAILABLE -> "متاحة"
-                        FirstAidProgressRules.UnitStatus.LOCKED -> "مقفلة"
-                    }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    if (step == 1) "Step 1 — الأساسيات" else "Step 2 — التطبيق السريري",
+                    fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp, color = faHeading()
+                )
+                Text(
+                    sub, fontFamily = NotoSansArabicFontFamily,
+                    fontSize = 11.8.sp, color = faMuted()
+                )
+                FaProgressBar(
+                    fraction = if (total == 0) 0f else done.toFloat() / total,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
-                        "• ${summary?.titleAr ?: unitId} — $statusLabel" +
-                            " (تدريب ${summary?.quizCount ?: "—"}، بطاقات ${summary?.flashcardCount ?: "—"})",
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp)
+                        "$total وحدة · ${index.totals?.quiz ?: "—"} سؤال تدريب",
+                        fontFamily = NotoSansArabicFontFamily, fontSize = 11.sp, color = faMuted()
+                    )
+                    Text(
+                        "أُنجز $done",
+                        fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp, color = FaColors.Maroon
                     )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Integration layer screen: the 157 links + the sessions.
+// ---------------------------------------------------------------------
+
+@Composable
+private fun FaIntegrationScreen(
+    integration: FirstAidIntegrationDto?,
+    unitTitleOf: (Int, String) -> String?,
+    onBack: () -> Unit,
+    onOpenUnit: (Int, String) -> Unit,
+    onOpenLinkedUnit: (Int, String) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize().background(faBackground())) {
+        FaScreenHeader(
+            title = "طبقة التكامل",
+            subtitle = "روابط مواضيع موثّقة بين الكتابين وجلسات تكامل بلا قفل",
+            onBack = onBack
+        )
+        if (integration == null) {
+            Text(
+                "تعذّر تحميل طبقة التكامل.",
+                fontFamily = NotoSansArabicFontFamily, fontSize = 13.sp, color = faMuted(),
+                modifier = Modifier.padding(top = 12.dp)
+            )
+            return
+        }
+        val sessions1 = integration.integrationSessions?.step1.orEmpty()
+        val sessions2 = integration.integrationSessions?.step2.orEmpty()
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            if (sessions1.isNotEmpty() || sessions2.isNotEmpty()) {
+                item {
+                    Text(
+                        "جلسات التكامل (اختبار 25 سؤالًا — بلا قفل)",
+                        fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 14.5.sp, color = faHeading(),
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+                items(sessions1.size) { i ->
+                    val id = sessions1[i]
+                    FaSessionRow("Step 1", id, unitTitleOf(1, id)) { onOpenUnit(1, id) }
+                }
+                items(sessions2.size) { i ->
+                    val id = sessions2[i]
+                    FaSessionRow("Step 2", id, unitTitleOf(2, id)) { onOpenUnit(2, id) }
+                }
+            }
+            item {
+                Text(
+                    "روابط المواضيع (${integration.links.orEmpty().size})",
+                    fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                    fontSize = 14.5.sp, color = faHeading(),
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+            val links = integration.links.orEmpty()
+            items(links.size) { i ->
+                val link = links[i]
+                FaCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 11.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                link.topicAr ?: link.topicEn ?: "",
+                                fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp, color = FaColors.Maroon,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (link.crossSystem == true) {
+                                FaChip("عابر للأنظمة", FaColors.GoldTint, FaColors.GoldText)
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            link.step1Unit?.let { id ->
+                                FaChip(
+                                    "Step 1: ${unitTitleOf(1, id) ?: id}",
+                                    FaColors.ChipCodeBg, FaColors.Maroon,
+                                    modifier = Modifier.clickable { onOpenLinkedUnit(1, id) }
+                                )
+                            }
+                            link.step2Unit?.let { id ->
+                                FaChip(
+                                    "Step 2: ${unitTitleOf(2, id) ?: id}",
+                                    FaColors.GoldTint, FaColors.GoldText,
+                                    modifier = Modifier.clickable { onOpenLinkedUnit(2, id) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun FaSessionRow(stepLabel: String, id: String, title: String?, onClick: () -> Unit) {
+    FaCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+        Row(
+            modifier = Modifier.padding(horizontal = 15.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FaChip(stepLabel, FaColors.GoldTint, FaColors.GoldText)
+            Text(
+                title ?: id,
+                fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
+                fontSize = 13.sp, color = faHeading(),
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                id, fontFamily = NotoSansArabicFontFamily,
+                fontSize = 11.sp, color = faMuted()
+            )
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Printed banks list + due review.
+// ---------------------------------------------------------------------
+
+@Composable
+private fun FaBanksList(
+    banks: FirstAidBanksDto?,
+    onBack: () -> Unit,
+    onOpenTest: (Int) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize().background(faBackground())) {
+        FaScreenHeader(
+            title = "بنوك الكتاب المطبوعة — Step 2",
+            subtitle = "خمسة اختبارات كما هي مطبوعة — الأسئلة بلا مفتاح مطبوع تُعرض بلا تصحيح آلي",
+            onBack = onBack
+        )
+        val tests = banks?.tests.orEmpty()
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            items(tests.size) { i ->
+                val test = tests[i]
+                val unkeyed = test.questions.orEmpty().count { it.key.isNullOrBlank() }
+                FaCard(modifier = Modifier.fillMaxWidth(), onClick = { onOpenTest(i) }) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            test.test ?: "اختبار ${i + 1}",
+                            fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 14.5.sp, color = faHeading()
+                        )
+                        Text(
+                            "${test.questions.orEmpty().size} سؤالًا · صفحات ${test.sourcePages ?: "—"}" +
+                                if (unkeyed > 0) " · $unkeyed بلا مفتاح مطبوع" else "",
+                            fontFamily = NotoSansArabicFontFamily,
+                            fontSize = 11.8.sp, color = faMuted()
+                        )
+                    }
+                }
+            }
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+        }
+    }
+}
+
+/** Due-today review: groups every due FirstAidSrs key by unit, loads
+ * those units' packages, and plays the due cards as one deck. */
+@Composable
+private fun FaDueReview(
+    repo: WataniRepository,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    var deck by remember { mutableStateOf<List<FaDeckCard>?>(null) }
+    LaunchedEffect(Unit) {
+        val dueKeys = FirstAidSrs.dueKeysAll(context)
+        val byUnit = dueKeys.mapNotNull { key ->
+            val unitId = key.substringBefore('#')
+            val idx = key.substringAfter('#').toIntOrNull() ?: return@mapNotNull null
+            unitId to idx
+        }.groupBy({ it.first }, { it.second })
+        val cards = mutableListOf<FaDeckCard>()
+        for ((unitId, indices) in byUnit) {
+            val step = if (unitId.startsWith("FA2-")) 2 else 1
+            val pack = repo.getFirstAidUnit(step, unitId) ?: continue
+            val flashcards = pack.flashcards.orEmpty()
+            for (i in indices.sorted()) {
+                val card = flashcards.getOrNull(i) ?: continue
+                cards += FaDeckCard(unitId, i, card.front.orEmpty(), card.back.orEmpty())
+            }
+        }
+        deck = cards
+    }
+    val cards = deck
+    if (cards == null) {
+        Column(modifier = Modifier.fillMaxSize().background(faBackground())) {
+            FaScreenHeader(title = "مراجعة المستحق اليوم", onBack = onBack)
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+                contentAlignment = Alignment.Center
+            ) { CircularProgressIndicator(color = FaColors.Maroon) }
+        }
+    } else {
+        FirstAidFlashcardsPlayer(
+            title = "مراجعة المستحق اليوم",
+            cards = cards,
+            onClose = onBack
+        )
     }
 }
