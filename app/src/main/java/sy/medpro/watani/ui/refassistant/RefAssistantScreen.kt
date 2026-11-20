@@ -85,6 +85,14 @@ fun RefAssistantScreen(onBack: () -> Unit) {
     LaunchedEffect(packState.completedRuns) { refreshBundle() }
     LaunchedEffect(Unit) {
         refreshBundle()
+        // Hotfix 1.2.34: the offline rung must actually exist — start
+        // the one-time bundle download on first entry instead of
+        // waiting for a manual tap, so any online failure lands on a
+        // working on-device search, never on a dead end. Idempotent:
+        // an in-flight or completed download is untouched.
+        if (RefAssistantPack.installedBundle(context) == null) {
+            RefAssistantPack.startDownload(context)
+        }
         val user = FirebaseAuth.getInstance().currentUser
         if (user != null) {
             statusSmart = RefAssistantApi.fetchStatus(user)?.smartAvailable

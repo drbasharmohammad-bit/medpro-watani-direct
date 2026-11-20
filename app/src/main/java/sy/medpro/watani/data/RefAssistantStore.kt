@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import org.json.JSONArray
 import org.json.JSONObject
@@ -375,7 +376,12 @@ object RefAssistantApi {
      */
     suspend fun ask(user: FirebaseUser, question: String): RefAskResult? {
         val body = JSONObject().put("q", question)
-        val res = WorkerActivationApi.postToWorker(user, "/v1/assistant/ask", body)
+        // Hotfix 1.2.34: an overall deadline for the ask itself — past
+        // it, the screen falls back to the on-device search at once
+        // instead of spinning on a stalled route.
+        val res = withTimeoutOrNull(40_000) {
+            WorkerActivationApi.postToWorker(user, "/v1/assistant/ask", body)
+        } ?: return null
         if (res.code == 429) return RefAskResult.Failed("rate_limited")
         if (res.code != 200) return null
         val root = try {

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -149,6 +150,11 @@ object WorkerActivationApi {
         OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
+            // Hotfix 1.2.34: a whole-call deadline on top of the read
+            // timeout — a throttled route that keeps dripping (or a
+            // server holding the response open) must never pin a
+            // caller (the assistant's ask above all) indefinitely.
+            .callTimeout(45, TimeUnit.SECONDS)
     ).build()
 
     // ------------------------------------------------------------------
@@ -985,11 +991,20 @@ object WorkerActivationApi {
      */
     data class WorkerIdResult(val code: Int, val body: String?)
 
-    private suspend fun googleIdToken(user: FirebaseUser): String? = try {
-        user.getIdToken(false).await().token
-    } catch (_: Exception) {
-        null
-    }
+    // Hotfix 1.2.34: the token fetch is time-bounded. An expired cached
+    // token forces a network refresh inside getIdToken(); on throttled
+    // routes that refresh can stall for minutes, and the unbounded
+    // await() froze the assistant's search spinner forever (launch
+    // incident 2026-11-20: no /ask request ever reached the gateway).
+    // A timeout returns null and the caller degrades immediately.
+    private suspend fun googleIdToken(user: FirebaseUser): String? =
+        withTimeoutOrNull(12_000) {
+            try {
+                user.getIdToken(false).await().token
+            } catch (_: Exception) {
+                null
+            }
+        }
 
     suspend fun getFromWorker(user: FirebaseUser, path: String): WorkerIdResult = withContext(Dispatchers.IO) {
         val token = googleIdToken(user) ?: return@withContext WorkerIdResult(-1, null)
