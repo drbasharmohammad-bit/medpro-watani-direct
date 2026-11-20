@@ -136,7 +136,11 @@ object WorkerActivationApi {
         // Standalone per-dawra files (1.2.32): the same R2-mirrored
         // restricted class as questions/ — the gateway's
         // RESTRICTED_PREFIXES gained the same entry in the same round.
-        "dawrat_sessions/"
+        "dawrat_sessions/",
+        // «الباحث المعتمد» reference bundle (1.2.33): same contract —
+        // the gateway's RESTRICTED_PREFIXES gained "refsearch/" and its
+        // RESTRICTED_EXACT gained "refsearch.json" in the same round.
+        "refsearch/"
     )
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
@@ -873,6 +877,8 @@ object WorkerActivationApi {
         // The dawrat_sessions index file (1.2.32): restricted exact
         // file on the gateway side too (RESTRICTED_EXACT there).
         if (rel == "dawrat_sessions.json") return true
+        // The refsearch bundle index (1.2.33): same exact-file contract.
+        if (rel == "refsearch.json") return true
         return RESTRICTED_PREFIXES.any { rel.startsWith(it) }
     }
 
