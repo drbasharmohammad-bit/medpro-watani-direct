@@ -75,11 +75,17 @@ data class DawraSubjectSessions(
 
 /** A named dawra as the list screen shows it: its literal bank name,
  * how many of its questions are on this device, and in how many of
- * the downloaded subjects it appears. */
+ * the downloaded subjects it appears. [standaloneFile] (1.2.32)
+ * marks a dawra whose totals come from its downloaded standalone
+ * dawrat_sessions file — it is complete on the device from that one
+ * file alone; [inManifest] marks a dawra the manifest carries a
+ * standalone file for (downloadable from its detail page). */
 data class DawraInfo(
     val name: String,
     val totalQuestions: Int,
-    val subjectsPresent: Int
+    val subjectsPresent: Int,
+    val standaloneFile: Boolean = false,
+    val inManifest: Boolean = false
 )
 
 /**
@@ -113,6 +119,87 @@ fun listDawrat(inputs: List<DawraSubjectSessions>): List<DawraInfo> {
 fun missingSubjects(allSubjects: List<String>, downloadedSubjects: Collection<String>): List<String> {
     val downloaded = downloadedSubjects.toSet()
     return allSubjects.filter { it !in downloaded }
+}
+
+/**
+ * Standalone-file counts from the manifest (1.2.32): dawra name ->
+ * declared question count, for every `dawrat_sessions/<name>.json`
+ * entry. The index file itself (dawrat_sessions.json) is not a unit
+ * and never appears here.
+ */
+fun manifestDawraCounts(files: Map<String, ManifestFileEntry>): Map<String, Int> {
+    val counts = LinkedHashMap<String, Int>()
+    for ((path, entry) in files) {
+        val name = dawraSessionNameOfPath(path) ?: continue
+        counts[name] = entry.count ?: 0
+    }
+    return counts
+}
+
+/**
+ * The dawra list merge (1.2.32): one entry per named dawra across
+ * the three sources, best source winning per dawra —
+ *  1. the downloaded standalone file's own totals (complete alone),
+ *  2. the downloaded subject shards' assembly totals,
+ *  3. the manifest's standalone-file count (nothing downloaded yet;
+ *     the dawra is still listed so its file can be downloaded).
+ * Order: shard-appearance order first (newest dawra first, as
+ * [listDawrat] yields), then file-only dawrat in their input order,
+ * then manifest-only dawrat newest-year first.
+ */
+fun mergeDawraInfos(
+    shardInfos: List<DawraInfo>,
+    fileInfos: List<DawraInfo>,
+    manifestCounts: Map<String, Int>
+): List<DawraInfo> {
+    val fileByName = fileInfos.associateBy { it.name }
+    val merged = ArrayList<DawraInfo>()
+    val seen = HashSet<String>()
+    for (info in shardInfos) {
+        seen += info.name
+        val file = fileByName[info.name]
+        merged += if (file != null) {
+            file.copy(standaloneFile = true, inManifest = info.name in manifestCounts)
+        } else {
+            info.copy(inManifest = info.name in manifestCounts)
+        }
+    }
+    for (info in fileInfos) {
+        if (info.name in seen) continue
+        seen += info.name
+        merged += info.copy(standaloneFile = true, inManifest = info.name in manifestCounts)
+    }
+    val manifestOnly = manifestCounts.keys
+        .filter { it !in seen && isNamedDawra(it) }
+        .sortedWith(
+            compareByDescending<String> { dawraYear(it) ?: Int.MIN_VALUE }
+                .thenBy { it }
+        )
+    for (name in manifestOnly) {
+        merged += DawraInfo(
+            name = name,
+            totalQuestions = manifestCounts[name] ?: 0,
+            subjectsPresent = 0,
+            standaloneFile = false,
+            inManifest = true
+        )
+    }
+    return merged
+}
+
+/**
+ * The inputs a dawra's detail screen computes coverage from
+ * (1.2.32): when the dawra's standalone file is downloaded, ITS
+ * per-subject tables are the whole story (the file is complete
+ * alone); otherwise the subject-shard tables, exactly as before.
+ */
+fun resolveDawraInputs(
+    shardInputs: List<DawraSubjectSessions>,
+    fileInputs: List<DawraSubjectSessions>,
+    dawraName: String
+): List<DawraSubjectSessions> {
+    val fromFile = fileInputs.filter { (it.sessionCounts[dawraName] ?: 0) > 0 }
+    return if (fromFile.isNotEmpty()) fromFile else shardInputs
 }
 
 /** A contiguous run of one subject's questions inside an assembled

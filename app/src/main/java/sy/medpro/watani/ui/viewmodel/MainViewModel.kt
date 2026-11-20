@@ -93,6 +93,12 @@ data class UiState(
      * in official subject order). Question objects are never held
      * here — a dawra's questions load only when it is opened. */
     val fullDawraInputs: List<DawraSubjectSessions> = emptyList(),
+    /** «دورة كاملة» (1.2.32): the same light session tables built
+     * from the downloaded standalone dawrat_sessions files instead
+     * of the subject shards — one entry per subject present in each
+     * downloaded dawra file. A dawra present here is complete on the
+     * device from its own file alone. */
+    val fullDawraFileInputs: List<DawraSubjectSessions> = emptyList(),
     val fullDawraLoading: Boolean = false,
     val screenState: ScreenState = ScreenState.Home
 )
@@ -512,17 +518,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun loadFullDawraData() {
         if (fullDawraLoadRunning) return
+        // 1.2.32: the signature covers BOTH sources of dawra tables —
+        // the questions/ shards and the standalone dawrat_sessions
+        // files — so downloading (or refreshing) either one rebuilds.
         val signature = downloadedSections.value
-            .filter { it.sectionPath.startsWith("questions/") && it.sectionPath.endsWith(".json") }
+            .filter {
+                (it.sectionPath.startsWith("questions/") || it.sectionPath.startsWith(DAWRA_SESSIONS_PREFIX)) &&
+                    it.sectionPath.endsWith(".json")
+            }
             .associate { it.sectionPath to it.hash }
-        if (signature == fullDawraInputsSignature && _uiState.value.fullDawraInputs.isNotEmpty()) {
+        if (signature == fullDawraInputsSignature &&
+            (_uiState.value.fullDawraInputs.isNotEmpty() || _uiState.value.fullDawraFileInputs.isNotEmpty())
+        ) {
             return
         }
         fullDawraLoadRunning = true
         viewModelScope.launch {
             _uiState.update { it.copy(fullDawraLoading = true) }
             try {
-                val inputs = fetchEnvelopesParallel(signature.keys.toList()).map { (path, envelope) ->
+                val shardPaths = signature.keys.filter { it.startsWith("questions/") }
+                val inputs = fetchEnvelopesParallel(shardPaths).map { (path, envelope) ->
                     DawraSubjectSessions(
                         subjectName = envelope.subjectName
                             ?: path.removePrefix("questions/").removeSuffix(".json"),
@@ -533,8 +548,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 inputs.sortWith(
                     compareBy({ officialSubjectRank(it.subjectName) }, { it.subjectName })
                 )
+                // Standalone dawra files: per-subject tables parsed
+                // from each downloaded file itself (bounded parallel,
+                // same semaphore as the shard sweep).
+                val dawraPaths = signature.keys
+                    .filter { it.startsWith(DAWRA_SESSIONS_PREFIX) }
+                    .sorted()
+                val fileInputs = coroutineScope {
+                    dawraPaths.map { path ->
+                        async {
+                            shardSweepSemaphore.withPermit {
+                                repository.getDawraSessionRecords(path)
+                                    ?.let { records -> dawraSessionInputs(records, path) }
+                                    ?: emptyList()
+                            }
+                        }
+                    }.awaitAll().flatten()
+                }.toMutableList()
+                fileInputs.sortWith(
+                    compareBy({ officialSubjectRank(it.subjectName) }, { it.subjectName })
+                )
                 fullDawraInputsSignature = signature
-                _uiState.update { it.copy(fullDawraInputs = inputs) }
+                _uiState.update {
+                    it.copy(fullDawraInputs = inputs, fullDawraFileInputs = fileInputs)
+                }
             } finally {
                 fullDawraLoadRunning = false
                 _uiState.update { it.copy(fullDawraLoading = false) }
@@ -557,6 +594,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .firstOrNull {
                     it.sectionPath.startsWith("questions/") && it.sectionPath.endsWith(".json")
                 }?.sectionPath
+                // 1.2.32: a device holding ONLY a standalone dawra file
+                // (no subject shard yet) still passes the same gates —
+                // the dawra file is the same restriction class.
+                ?: dawraSessionPath(dawraName).takeIf { path ->
+                    downloadedSections.value.any { it.sectionPath == path }
+                }
             if (representativePath != null && WorkerActivationApi.isRestrictedPath(representativePath)) {
                 val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
                 if (!gate.allowed) {
@@ -570,6 +613,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (WorkerActivationApi.isRestrictedLeaseExpired(context)) {
                     _uiState.update { it.copy(gateMessage = WorkerActivationApi.LEASE_EXPIRED_MESSAGE) }
                     return@launch
+                }
+            }
+            // 1.2.32: the standalone dawra file wins when it is on
+            // the device — the whole dawra runs from its own file
+            // alone. Any failure (not downloaded, unreadable, empty)
+            // falls through to the shard assembly below, unchanged.
+            val sessionPath = dawraSessionPath(dawraName)
+            if (downloadedSections.value.any { it.sectionPath == sessionPath }) {
+                val records = repository.getDawraSessionRecords(sessionPath)
+                if (!records.isNullOrEmpty()) {
+                    val fromFile = buildDawraQuizFromRecords(records)
+                    if (fromFile.questions.isNotEmpty()) {
+                        navigateTo(
+                            ScreenState.Quiz(
+                                title = "دورة $dawraName",
+                                questions = fromFile.questions,
+                                sourcePath = null,
+                                subjectName = null,
+                                sections = fromFile.sections
+                            )
+                        )
+                        return@launch
+                    }
                 }
             }
             val downloadedPaths = downloadedSections.value

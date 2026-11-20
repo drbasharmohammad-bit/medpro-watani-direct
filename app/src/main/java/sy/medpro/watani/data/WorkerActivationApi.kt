@@ -132,7 +132,11 @@ object WorkerActivationApi {
         "uworld/",
         "explanations/",
         "books/",
-        "library/"
+        "library/",
+        // Standalone per-dawra files (1.2.32): the same R2-mirrored
+        // restricted class as questions/ — the gateway's
+        // RESTRICTED_PREFIXES gained the same entry in the same round.
+        "dawrat_sessions/"
     )
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
@@ -866,6 +870,9 @@ object WorkerActivationApi {
     fun isRestrictedPath(path: String): Boolean {
         val rel = normalizeRelativePath(path)
         if (rel == "library.json") return true
+        // The dawrat_sessions index file (1.2.32): restricted exact
+        // file on the gateway side too (RESTRICTED_EXACT there).
+        if (rel == "dawrat_sessions.json") return true
         return RESTRICTED_PREFIXES.any { rel.startsWith(it) }
     }
 

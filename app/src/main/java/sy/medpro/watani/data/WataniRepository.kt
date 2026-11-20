@@ -164,12 +164,14 @@ class WataniRepository(private val context: Context) {
          * sections after the activation ended. */
         const val MANIFEST_CACHE_FILENAME = "manifest_cache.json"
 
-        /** The four question-bank families swept by
-         * [refreshInstalledBankSections] (build 1.2.21). Single-file
-         * packs (concepts.json and friends) are NOT bank sections and
-         * keep their own refresh paths. */
+        /** The question-bank families swept by
+         * [refreshInstalledBankSections] (build 1.2.21; dawrat_sessions/
+         * added 1.2.32 so an installed standalone dawra file receives
+         * content corrections silently like every other bank file).
+         * Single-file packs (concepts.json and friends) are NOT bank
+         * sections and keep their own refresh paths. */
         private val BANK_SECTION_PREFIXES =
-            listOf("questions/", "questions_en/", "dawrat_jami3at/", "uworld/")
+            listOf("questions/", "questions_en/", "dawrat_jami3at/", "uworld/", "dawrat_sessions/")
 
         /**
          * Total questions across the downloaded question-bank sections
@@ -181,13 +183,19 @@ class WataniRepository(private val context: Context) {
          * section is downloaded.
          */
         fun downloadedBankQuestionTotal(context: Context): Int {
+            // The total counts each bank question ONCE: the standalone
+            // dawra files (dawrat_sessions/, 1.2.32) re-carry questions
+            // the shards already count, so they stay OUT of this sum
+            // even though the refresh sweep covers them.
+            val totalPrefixes =
+                listOf("questions/", "questions_en/", "dawrat_jami3at/", "uworld/")
             return try {
                 val registry = context.applicationContext
                     .getSharedPreferences("watani_downloaded_sections", Context.MODE_PRIVATE)
                 var total = 0
                 for ((path, value) in registry.all) {
                     if (value !is String) continue
-                    if (BANK_SECTION_PREFIXES.none { path.startsWith(it) }) continue
+                    if (totalPrefixes.none { path.startsWith(it) }) continue
                     val parts = value.split("|")
                     if (parts.size >= 4) total += parts[2].toIntOrNull() ?: 0
                 }
@@ -285,8 +293,9 @@ class WataniRepository(private val context: Context) {
      * updated when the student noticed the «تحميل» button return in
      * the section list and pressed it. This applies the SAME stale
      * check ([sectionNeedsRefresh] against a freshly fetched manifest)
-     * to every ALREADY-INSTALLED section of the four bank families
-     * (questions/, questions_en/, dawrat_jami3at/, uworld/) and
+     * to every ALREADY-INSTALLED section of the bank families
+     * (questions/, questions_en/, dawrat_jami3at/, uworld/,
+     * dawrat_sessions/) and
      * re-downloads the stale ones through the standard [downloadSection]
      * path — atomic as always: size + family hash + real count are
      * verified before install, and any failure keeps the working copy.
@@ -520,6 +529,30 @@ class WataniRepository(private val context: Context) {
             null
         }
     }
+
+    /**
+     * Standalone dawra file records (build 1.2.32): the downloaded
+     * `dawrat_sessions/<session>.json` section parsed as unified
+     * question records. Same gentle-lease gate as [getSubjectEnvelope]
+     * (the path is restricted, so an expired lease makes it behave as
+     * unavailable and the caller falls back to the shard assembly);
+     * null when the file is not downloaded or does not parse.
+     */
+    suspend fun getDawraSessionRecords(path: String): List<DawraSessionQuestionDto>? =
+        withContext(Dispatchers.IO) {
+            try {
+                if (WorkerActivationApi.isRestrictedPath(path) &&
+                    WorkerActivationApi.isRestrictedLeaseExpired(context)
+                ) return@withContext null
+                val jsonString = readSectionText(path) ?: return@withContext null
+                val listType = com.squareup.moshi.Types.newParameterizedType(
+                    List::class.java, DawraSessionQuestionDto::class.java
+                )
+                moshi.adapter<List<DawraSessionQuestionDto>>(listType).fromJson(jsonString)
+            } catch (e: Exception) {
+                null
+            }
+        }
 
     suspend fun getCasesEnvelope(): CasesEnvelope? = withContext(Dispatchers.IO) {
         try {

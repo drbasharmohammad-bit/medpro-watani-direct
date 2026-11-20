@@ -21,7 +21,7 @@ import com.squareup.moshi.Moshi
  *   Every non-subject envelope downloaded through downloadSection has
  *   its OWN branch here (cases/cases_de, guide, ddx, reverse,
  *   auscultation, osce, ecg, osce_procedures, dosing_drills,
- *   concepts): an
+ *   concepts, dawrat_sessions/): an
  *   envelope shape without a branch falls into
  *   the subject check, counts 0 and can NEVER download (the 1.2 defect
  *   fixed in 1.2.1 — auscultation, German cases and OSCE all failed
@@ -184,6 +184,24 @@ object SectionVerification {
             val actualCount = revEnv?.rounds?.size ?: 0
             if (revEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
                 throw IllegalStateException("خطأ في تطابق عدد جولات اقلبها الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+            }
+            return actualCount
+        }
+        if (path.startsWith("dawrat_sessions/")) {
+            // Build 1.2.32: a standalone dawra file is a BARE ARRAY of
+            // unified-schema question records (no envelope, no declared
+            // count) — without this branch it would fall into the
+            // subject check, count 0 and never download (the exact
+            // 1.2.1 defect class). Honest check: the array must parse
+            // as dawra records and be non-empty; the returned count is
+            // the real number of questions in the file.
+            val listType = com.squareup.moshi.Types.newParameterizedType(
+                List::class.java, DawraSessionQuestionDto::class.java
+            )
+            val records = moshi.adapter<List<DawraSessionQuestionDto>>(listType).fromJson(jsonString)
+            val actualCount = records?.size ?: 0
+            if (records == null || actualCount == 0) {
+                throw IllegalStateException("ملف الدورة المستقل بلا أسئلة — أعد التحميل.")
             }
             return actualCount
         }

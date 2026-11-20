@@ -21,8 +21,12 @@ import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.DawraSubjectSessions
 import sy.medpro.watani.data.DownloadedSectionEntity
 import sy.medpro.watani.data.ManifestFileEntry
+import sy.medpro.watani.data.dawraSessionPath
 import sy.medpro.watani.data.listDawrat
+import sy.medpro.watani.data.manifestDawraCounts
+import sy.medpro.watani.data.mergeDawraInfos
 import sy.medpro.watani.data.officialSubjectRank
+import sy.medpro.watani.data.resolveDawraInputs
 import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.theme.GoldAccent
 import sy.medpro.watani.ui.theme.MaroonPrimary
@@ -89,9 +93,17 @@ fun FullDawraListScreen(
     inputs: List<DawraSubjectSessions>,
     loading: Boolean,
     onDawraClick: (String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    // 1.2.32: the standalone-file source — per-subject tables of the
+    // downloaded dawrat_sessions files plus the manifest's counts, so
+    // a dawra is listed (and complete) from its own file alone, and
+    // even before anything is downloaded its file shows as available.
+    fileInputs: List<DawraSubjectSessions> = emptyList(),
+    files: Map<String, ManifestFileEntry> = emptyMap()
 ) {
-    val dawrat = remember(inputs) { listDawrat(inputs) }
+    val dawrat = remember(inputs, fileInputs, files) {
+        mergeDawraInfos(listDawrat(inputs), listDawrat(fileInputs), manifestDawraCounts(files))
+    }
     Scaffold(
         topBar = {
             SlimSubBar(onBack = onBack, containerColor = MaterialTheme.colorScheme.primary) {
@@ -136,7 +148,7 @@ fun FullDawraListScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                "الأعداد مما حمّلته على جهازك — كل دورة تُجمَّع من موادها المنزّلة.",
+                                "كل دورة إما كاملة عندك بملفها المستقل، أو تُجمَّع من موادها المنزّلة عندك.",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                             )
@@ -165,7 +177,11 @@ fun FullDawraListScreen(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
-                                            "من ${dawra.subjectsPresent} مادة منزّلة",
+                                            when {
+                                                dawra.standaloneFile -> "كاملة عندك بملفها المستقل"
+                                                dawra.subjectsPresent > 0 -> "من ${dawra.subjectsPresent} مادة منزّلة"
+                                                else -> "متاحة كملف دورة كامل"
+                                            },
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                         )
@@ -197,7 +213,12 @@ fun FullDawraDetailScreen(
     downloadingProgress: Map<String, Float> = emptyMap(),
     onDownloadSection: (String, ManifestFileEntry) -> Unit,
     onStart: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    // 1.2.32: per-subject tables of the downloaded standalone dawra
+    // files. When this dawra's own file is among them it is the
+    // coverage source — the dawra is complete from that file alone
+    // and the missing-subjects machinery below steps aside.
+    fileInputs: List<DawraSubjectSessions> = emptyList()
 ) {
     // Coverage is computed from the manifest vs the local registry:
     // a subject is «missing» only when its shard is not on the
@@ -218,11 +239,22 @@ fun FullDawraDetailScreen(
         downloadedSections.map { it.sectionPath }.toSet()
     }
     val missingPaths = allPaths.filter { it !in downloadedPathSet }
-    val totalForDawra = remember(inputs, dawraName) {
-        inputs.sumOf { it.sessionCounts[dawraName] ?: 0 }
+    // 1.2.32: coverage source — the standalone file's tables when
+    // the file is downloaded, the shard tables otherwise.
+    val effectiveInputs = remember(inputs, fileInputs, dawraName) {
+        resolveDawraInputs(inputs, fileInputs, dawraName)
     }
-    val perSubject = remember(inputs, dawraName) {
-        inputs.mapNotNull { input ->
+    val fromStandaloneFile = remember(effectiveInputs) {
+        effectiveInputs.any { it.path.startsWith("dawrat_sessions/") }
+    }
+    val sessionPath = remember(dawraName) { dawraSessionPath(dawraName) }
+    val sessionEntry = files[sessionPath]
+    val sessionDownloaded = sessionPath in downloadedPathSet
+    val totalForDawra = remember(effectiveInputs, dawraName) {
+        effectiveInputs.sumOf { it.sessionCounts[dawraName] ?: 0 }
+    }
+    val perSubject = remember(effectiveInputs, dawraName) {
+        effectiveInputs.mapNotNull { input ->
             val count = input.sessionCounts[dawraName] ?: 0
             if (count > 0) input.subjectName to count else null
         }
@@ -260,7 +292,11 @@ fun FullDawraDetailScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "$totalForDawra سؤالًا مجمّعًا من ${inputs.size} مادة منزّلة عندك",
+                            if (fromStandaloneFile) {
+                                "$totalForDawra سؤالًا من ملف الدورة المستقل عندك"
+                            } else {
+                                "$totalForDawra سؤالًا مجمّعًا من ${effectiveInputs.size} مادة منزّلة عندك"
+                            },
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
@@ -284,7 +320,63 @@ fun FullDawraDetailScreen(
                 }
             }
 
-            if (missingPaths.isNotEmpty()) {
+            // 1.2.32: the standalone dawra file — one download makes
+            // the whole dawra work offline from its own file alone.
+            if (fromStandaloneFile) {
+                item {
+                    Card(
+                        shape = MaterialTheme.shapes.medium,
+                        colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.08f)),
+                        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.45f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "هذه الدورة عندك بملفها المستقل — كاملة وتعمل أوفلاين من ملفها وحده، بلا حاجة لأي مادة أخرى.",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaroonPrimary,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                }
+            } else if (sessionEntry != null && !sessionDownloaded) {
+                item {
+                    Card(
+                        shape = MaterialTheme.shapes.medium,
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                "الأسرع: ملف الدورة المستقل",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = MaroonPrimary
+                            )
+                            Text(
+                                "حمّل ملف هذه الدورة كاملًا بضغطة واحدة فتعمل عندك كاملة أوفلاين من ملفها وحده — بدل تحميل مواد البنك كلها.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                            )
+                        }
+                    }
+                }
+                item {
+                    SectionCard(
+                        path = sessionPath,
+                        displayName = "ملف دورة $dawraName الكامل",
+                        entry = sessionEntry,
+                        isDownloaded = false,
+                        isDownloading = downloadingPaths.contains(sessionPath),
+                        downloadProgress = downloadingProgress[sessionPath],
+                        onDownloadClick = { onDownloadSection(sessionPath, sessionEntry) },
+                        onOpenClick = {}
+                    )
+                }
+            }
+
+            if (!fromStandaloneFile && missingPaths.isNotEmpty()) {
                 item {
                     Card(
                         shape = MaterialTheme.shapes.medium,
@@ -322,7 +414,7 @@ fun FullDawraDetailScreen(
                         )
                     }
                 }
-            } else {
+            } else if (!fromStandaloneFile) {
                 item {
                     Card(
                         shape = MaterialTheme.shapes.medium,

@@ -1413,7 +1413,9 @@ class MainActivity : ComponentActivity() {
                                                         inputs = uiState.fullDawraInputs,
                                                         loading = uiState.fullDawraLoading,
                                                         onDawraClick = { name -> viewModel.openFullDawraDetail(name) },
-                                                        onBack = { viewModel.goBack() }
+                                                        onBack = { viewModel.goBack() },
+                                                        fileInputs = uiState.fullDawraFileInputs,
+                                                        files = uiState.files
                                                     )
                                                 }
                                                 is ScreenState.FullDawraDetail -> {
@@ -1429,7 +1431,8 @@ class MainActivity : ComponentActivity() {
                                                         downloadingProgress = uiState.downloadingProgress,
                                                         onDownloadSection = { path, entry -> viewModel.downloadSection(path, entry) },
                                                         onStart = { viewModel.openFullDawra(screen.dawraName) },
-                                                        onBack = { viewModel.goBack() }
+                                                        onBack = { viewModel.goBack() },
+                                                        fileInputs = uiState.fullDawraFileInputs
                                                     )
                                                 }
                                                 is ScreenState.Quiz -> {
