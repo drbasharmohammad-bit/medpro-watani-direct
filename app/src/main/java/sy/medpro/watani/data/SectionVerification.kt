@@ -21,7 +21,7 @@ import com.squareup.moshi.Moshi
  *   Every non-subject envelope downloaded through downloadSection has
  *   its OWN branch here (cases/cases_de, guide, ddx, reverse,
  *   auscultation, osce, ecg, osce_procedures, dosing_drills,
- *   concepts, dawrat_sessions/): an
+ *   concepts, dawrat_sessions/, firstaid/): an
  *   envelope shape without a branch falls into
  *   the subject check, counts 0 and can NEVER download (the 1.2 defect
  *   fixed in 1.2.1 — auscultation, German cases and OSCE all failed
@@ -184,6 +184,49 @@ object SectionVerification {
             val actualCount = revEnv?.rounds?.size ?: 0
             if (revEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
                 throw IllegalStateException("خطأ في تطابق عدد جولات اقلبها الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+            }
+            return actualCount
+        }
+        if (path.startsWith("firstaid/")) {
+            // Build 1.2.36: the First Aid family — without this branch
+            // every firstaid file would fall into the subject check
+            // below, count 0 and never download (the exact 1.2.1 defect
+            // class). Honest per-file checks against each file's OWN
+            // declared count where one exists; unit packages carry no
+            // declared count, so their real quiz size is returned (the
+            // manifest entry's count is built from it — verified
+            // against all 154 published packages at merge time).
+            if (path.endsWith("index_step1.json") || path.endsWith("index_step2.json")) {
+                val idx = moshi.adapter(FirstAidIndexDto::class.java).fromJson(jsonString)
+                val declaredCount = idx?.count ?: 0
+                val actualCount = idx?.units?.size ?: 0
+                if (idx == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
+                    throw IllegalStateException("خطأ في تطابق عدد وحدات فهرس First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+                }
+                return actualCount
+            }
+            if (path == "firstaid/integration.json") {
+                val integ = moshi.adapter(FirstAidIntegrationDto::class.java).fromJson(jsonString)
+                val declaredCount = integ?.count ?: 0
+                val actualCount = integ?.links?.size ?: 0
+                if (integ == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
+                    throw IllegalStateException("خطأ في تطابق عدد روابط تكامل First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+                }
+                return actualCount
+            }
+            if (path == "firstaid/banks_step2.json") {
+                val banks = moshi.adapter(FirstAidBanksDto::class.java).fromJson(jsonString)
+                val declaredCount = banks?.count ?: 0
+                val actualCount = banks?.tests?.sumOf { it.questions?.size ?: 0 } ?: 0
+                if (banks == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
+                    throw IllegalStateException("خطأ في تطابق عدد أسئلة بنوك First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+                }
+                return actualCount
+            }
+            val pkg = moshi.adapter(FirstAidUnitPackageDto::class.java).fromJson(jsonString)
+            val actualCount = pkg?.quiz?.size ?: 0
+            if (pkg == null || actualCount == 0) {
+                throw IllegalStateException("حزمة وحدة First Aid بلا أسئلة تدريب — أعد التحميل.")
             }
             return actualCount
         }

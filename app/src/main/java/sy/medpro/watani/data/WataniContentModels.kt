@@ -414,3 +414,347 @@ data class LibraryItem(
     // the video ungrouped at the end of its subject, as before.
     @Json(name = "topic") val topic: String? = null
 )
+
+// ======================================================================
+// First Aid - Med Pro (build 1.2.36) — content family "firstaid/".
+//
+// Schema contract measured field-by-field from the published packs in
+// watani-content/public/v1/firstaid/ (154 unit packages, 2 indexes,
+// integration.json, banks_step2.json), NOT from the source course
+// folders: the packager already unified both steps into one shape.
+// Step 1 packages carry precheck/exitcheck/interactive = null; Step 2
+// integration sessions (FA2-INT-*) likewise have no pre/exit checks.
+// All fields nullable end-to-end, like every other pack DTO here.
+// ======================================================================
+
+@JsonClass(generateAdapter = true)
+data class FirstAidIndexDto(
+    @Json(name = "version") val version: String?,
+    @Json(name = "step") val step: Int?,
+    @Json(name = "count") val count: Int?,
+    @Json(name = "systems") val systems: List<FirstAidSystemDto>?,
+    @Json(name = "units") val units: List<FirstAidUnitSummaryDto>?,
+    @Json(name = "totals") val totals: FirstAidIndexTotalsDto?,
+    @Json(name = "booklets") val booklets: List<FirstAidBookletDto>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidSystemDto(
+    @Json(name = "code") val code: String?,
+    @Json(name = "sectionAr") val sectionAr: String?,
+    @Json(name = "sectionEn") val sectionEn: String?,
+    @Json(name = "units") val units: List<String>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidUnitSummaryDto(
+    @Json(name = "id") val id: String?,
+    @Json(name = "code") val code: String?,
+    @Json(name = "section") val section: String?,
+    @Json(name = "sectionAr") val sectionAr: String?,
+    @Json(name = "sectionEn") val sectionEn: String?,
+    @Json(name = "titleAr") val titleAr: String?,
+    @Json(name = "titleEn") val titleEn: String?,
+    @Json(name = "order") val order: Int?,
+    /** "unit" for path units, "integration" for INT/RAPI sessions. */
+    @Json(name = "kind") val kind: String?,
+    @Json(name = "parentUnit") val parentUnit: String?,
+    @Json(name = "parentLessons") val parentLessons: List<Int>?,
+    @Json(name = "quizCount") val quizCount: Int?,
+    @Json(name = "precheckCount") val precheckCount: Int?,
+    @Json(name = "exitcheckCount") val exitcheckCount: Int?,
+    @Json(name = "flashcardCount") val flashcardCount: Int?,
+    @Json(name = "glossaryCount") val glossaryCount: Int?,
+    @Json(name = "mediaCount") val mediaCount: Int?,
+    @Json(name = "mediaBytes") val mediaBytes: Long?,
+    /** Manifest path of the unit package, e.g. "firstaid/units2/FA2-CARD-01.json". */
+    @Json(name = "package") val pkg: String?,
+    @Json(name = "packageBytes") val packageBytes: Long?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidIndexTotalsDto(
+    @Json(name = "quiz") val quiz: Int?,
+    @Json(name = "precheck") val precheck: Int?,
+    @Json(name = "exitcheck") val exitcheck: Int?
+)
+
+/** A booklet PDF is a disk asset (not a manifest entry); [file] is
+ * relative to "firstaid/", e.g. "booklets2/FirstAid-Step2-CARD-Booklet.pdf". */
+@JsonClass(generateAdapter = true)
+data class FirstAidBookletDto(
+    @Json(name = "file") val file: String?,
+    @Json(name = "size") val size: Long?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidUnitPackageDto(
+    @Json(name = "unit") val unit: FirstAidUnitMetaDto?,
+    @Json(name = "referenceMd") val referenceMd: String?,
+    @Json(name = "precheck") val precheck: List<FirstAidQuestionDto>?,
+    @Json(name = "quiz") val quiz: List<FirstAidQuestionDto>?,
+    @Json(name = "exitcheck") val exitcheck: List<FirstAidQuestionDto>?,
+    @Json(name = "flashcards") val flashcards: List<FirstAidFlashcardDto>?,
+    @Json(name = "glossary") val glossary: List<FirstAidGlossaryDto>?,
+    @Json(name = "interactive") val interactive: FirstAidInteractiveDto?,
+    @Json(name = "media") val media: List<FirstAidMediaDto>?,
+    @Json(name = "repetition") val repetition: FirstAidRepetitionDto?,
+    @Json(name = "wataniTopics") val wataniTopics: List<FirstAidWataniTopicDto>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidUnitMetaDto(
+    @Json(name = "id") val id: String?,
+    @Json(name = "code") val code: String?,
+    @Json(name = "dir") val dir: String?,
+    @Json(name = "section") val section: String?,
+    @Json(name = "sectionAr") val sectionAr: String?,
+    @Json(name = "sectionEn") val sectionEn: String?,
+    @Json(name = "titleAr") val titleAr: String?,
+    @Json(name = "titleEn") val titleEn: String?,
+    @Json(name = "sourceChunk") val sourceChunk: String?,
+    @Json(name = "sourceSpan") val sourceSpan: String?,
+    @Json(name = "bookPages") val bookPages: String?,
+    @Json(name = "blueprintSystem") val blueprintSystem: String?,
+    @Json(name = "blueprintWeight") val blueprintWeight: String?,
+    @Json(name = "disciplines") val disciplines: List<String>?,
+    @Json(name = "integrationLinks") val integrationLinks: List<String>?,
+    @Json(name = "parentUnit") val parentUnit: String?,
+    @Json(name = "parentLessons") val parentLessons: List<Int>?,
+    /** Step-2 INT sessions name their two parent systems instead. */
+    @Json(name = "parentUnits") val parentUnits: List<String>?,
+    @Json(name = "unitKind") val unitKind: String?,
+    @Json(name = "preCheck") val preCheck: FirstAidCheckMetaDto?,
+    @Json(name = "exitCheck") val exitCheck: FirstAidCheckMetaDto?,
+    @Json(name = "status") val status: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidCheckMetaDto(
+    @Json(name = "file") val file: String?,
+    @Json(name = "questions") val questions: Int?,
+    @Json(name = "mode") val mode: String?,
+    @Json(name = "passThreshold") val passThreshold: Double?
+)
+
+/** One question — the schema is IDENTICAL across precheck/quiz/exitcheck
+ * and across both steps (measured on all 4,360 items). */
+@JsonClass(generateAdapter = true)
+data class FirstAidQuestionDto(
+    @Json(name = "question") val question: String?,
+    /** Boolean flag in EVERY published item (both steps, all three
+     * checks): whether the question carries a clinical vignette. */
+    @Json(name = "vignette") val vignette: Boolean?,
+    @Json(name = "options") val options: List<String>?,
+    @Json(name = "correct_option_id") val correctOptionId: Int?,
+    @Json(name = "explanation") val explanation: String?,
+    @Json(name = "option_explanations") val optionExplanations: List<String>?,
+    @Json(name = "discipline") val discipline: String?,
+    @Json(name = "competency") val competency: String?,
+    @Json(name = "difficulty") val difficulty: Int?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidFlashcardDto(
+    @Json(name = "front") val front: String?,
+    @Json(name = "back") val back: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidGlossaryDto(
+    @Json(name = "ar") val ar: String?,
+    @Json(name = "en") val en: String?,
+    @Json(name = "note") val note: String?
+)
+
+/** Media entry: Step-2 items are in-text tables (no [file]); Step-1
+ * cropped figures carry [file] = "media/<id>.png" relative to the
+ * unit's media folder on the origin ("firstaid/media/<UNIT>/<file>"). */
+@JsonClass(generateAdapter = true)
+data class FirstAidMediaDto(
+    @Json(name = "id") val id: String?,
+    @Json(name = "type") val type: String?,
+    @Json(name = "captionAr") val captionAr: String?,
+    @Json(name = "bookPage") val bookPage: Int?,
+    @Json(name = "status") val status: String?,
+    @Json(name = "file") val file: String?,
+    @Json(name = "layer1Check") val layer1Check: String?,
+    @Json(name = "layer1Note") val layer1Note: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidInteractiveDto(
+    @Json(name = "unit") val unit: String?,
+    @Json(name = "source") val source: String?,
+    @Json(name = "note") val note: String?,
+    @Json(name = "branching_cases") val branchingCases: List<FirstAidBranchingCaseDto>?,
+    @Json(name = "comparison_tables") val comparisonTables: List<FirstAidComparisonTableDto>?,
+    @Json(name = "ordering_exercises") val orderingExercises: List<FirstAidOrderingDto>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidBranchingCaseDto(
+    @Json(name = "id") val id: String?,
+    @Json(name = "title") val title: String?,
+    @Json(name = "type") val type: String?,
+    @Json(name = "setting") val setting: String?,
+    @Json(name = "source") val source: String?,
+    @Json(name = "steps") val steps: List<FirstAidBranchingStepDto>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidBranchingStepDto(
+    @Json(name = "step") val step: Int?,
+    @Json(name = "prompt") val prompt: String?,
+    @Json(name = "feedback_correct") val feedbackCorrect: String?,
+    @Json(name = "options") val options: List<FirstAidBranchingOptionDto>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidBranchingOptionDto(
+    /** Nullable ON PURPOSE: 21 published options ship without a text
+     * (the documented FA2-CARD-01 gap, completed at packaging); the
+     * player must skip or placeholder a null text, never crash. */
+    @Json(name = "text") val text: String?,
+    @Json(name = "correct") val correct: Boolean?,
+    @Json(name = "feedback") val feedback: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidComparisonTableDto(
+    @Json(name = "id") val id: String?,
+    @Json(name = "title") val title: String?,
+    @Json(name = "type") val type: String?,
+    @Json(name = "note") val note: String?,
+    @Json(name = "source") val source: String?,
+    @Json(name = "columns") val columns: List<String>?,
+    @Json(name = "rows") val rows: List<FirstAidComparisonRowDto>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidComparisonRowDto(
+    @Json(name = "type") val type: String?,
+    @Json(name = "cells") val cells: List<String>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidOrderingDto(
+    @Json(name = "id") val id: String?,
+    @Json(name = "title") val title: String?,
+    @Json(name = "type") val type: String?,
+    @Json(name = "instruction") val instruction: String?,
+    @Json(name = "source") val source: String?,
+    @Json(name = "correct_order") val correctOrder: List<String>?,
+    @Json(name = "shuffled_steps") val shuffledSteps: List<String>?
+)
+
+/** The repetition.json ladder, identical in both steps:
+ * intervals [0,1,3,7,14,30], long-term 45–90, lapse -> 1 day,
+ * quiz-error cards due the same day. FirstAidSrs applies it. */
+@JsonClass(generateAdapter = true)
+data class FirstAidRepetitionDto(
+    @Json(name = "algorithm") val algorithm: String?,
+    @Json(name = "intervals_days") val intervalsDays: List<Int>?,
+    @Json(name = "long_term_range_days") val longTermRangeDays: List<Int>?,
+    @Json(name = "on_lapse_reset_to_days") val onLapseResetToDays: Int?,
+    @Json(name = "quiz_error_cards") val quizErrorCards: String?,
+    @Json(name = "retention_target") val retentionTarget: Double?,
+    @Json(name = "unit") val unit: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidWataniTopicDto(
+    @Json(name = "subject") val subject: String?,
+    @Json(name = "topic") val topic: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidIntegrationDto(
+    @Json(name = "version") val version: String?,
+    @Json(name = "count") val count: Int?,
+    @Json(name = "links") val links: List<FirstAidTopicLinkDto>?,
+    @Json(name = "byUnit") val byUnit: Map<String, List<FirstAidUnitLinkDto>>?,
+    @Json(name = "integrationSessions") val integrationSessions: FirstAidIntegrationSessionsDto?,
+    @Json(name = "unlinkedDocumented") val unlinkedDocumented: List<FirstAidUnlinkedDto>?,
+    @Json(name = "totals") val totals: FirstAidIntegrationTotalsDto?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidTopicLinkDto(
+    @Json(name = "topicAr") val topicAr: String?,
+    @Json(name = "topicEn") val topicEn: String?,
+    @Json(name = "step1Unit") val step1Unit: String?,
+    @Json(name = "step2Unit") val step2Unit: String?,
+    @Json(name = "crossSystem") val crossSystem: Boolean?,
+    @Json(name = "evidenceStep1") val evidenceStep1: String?,
+    @Json(name = "evidenceStep2") val evidenceStep2: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidUnitLinkDto(
+    @Json(name = "topicAr") val topicAr: String?,
+    @Json(name = "topicEn") val topicEn: String?,
+    @Json(name = "targetUnit") val targetUnit: String?,
+    @Json(name = "targetStep") val targetStep: Int?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidIntegrationSessionsDto(
+    @Json(name = "step1") val step1: List<String>?,
+    @Json(name = "step2") val step2: List<String>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidUnlinkedDto(
+    @Json(name = "unit") val unit: String?,
+    @Json(name = "topic") val topic: String?,
+    @Json(name = "reason") val reason: String?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidIntegrationTotalsDto(
+    @Json(name = "step1Units") val step1Units: Int?,
+    @Json(name = "step1UnitsLinked") val step1UnitsLinked: Int?,
+    @Json(name = "step2Units") val step2Units: Int?,
+    @Json(name = "step2UnitsLinked") val step2UnitsLinked: Int?,
+    @Json(name = "step2UnitsUnlinked") val step2UnitsUnlinked: Int?,
+    @Json(name = "topicLinksInSystem") val topicLinksInSystem: Int?,
+    @Json(name = "crossSystemLinks") val crossSystemLinks: Int?,
+    @Json(name = "topicLinksTotal") val topicLinksTotal: Int?,
+    @Json(name = "unitPairsWithTopicLinks") val unitPairsWithTopicLinks: Int?,
+    @Json(name = "unitPairsWithCrossSystemLinks") val unitPairsWithCrossSystemLinks: Int?,
+    @Json(name = "unitPairsTotal") val unitPairsTotal: Int?,
+    @Json(name = "linksReprovenFromV1") val linksReprovenFromV1: Int?,
+    @Json(name = "linksNewOnV2") val linksNewOnV2: Int?
+)
+
+/** The five printed Step-2 practice tests, exactly as printed:
+ * 499 questions, 486 with a printed [key] letter, 13 with key = null
+ * (shown without auto-grading — never guessed). */
+@JsonClass(generateAdapter = true)
+data class FirstAidBanksDto(
+    @Json(name = "version") val version: String?,
+    @Json(name = "count") val count: Int?,
+    @Json(name = "keyed") val keyed: Int?,
+    @Json(name = "unkeyed") val unkeyed: Int?,
+    @Json(name = "tests") val tests: List<FirstAidBankTestDto>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidBankTestDto(
+    @Json(name = "test") val test: String?,
+    @Json(name = "titleNote") val titleNote: String?,
+    @Json(name = "sourcePages") val sourcePages: String?,
+    @Json(name = "questions") val questions: List<FirstAidBankQuestionDto>?
+)
+
+@JsonClass(generateAdapter = true)
+data class FirstAidBankQuestionDto(
+    @Json(name = "n") val n: Int?,
+    @Json(name = "stem") val stem: String?,
+    @Json(name = "options") val options: List<String>?,
+    /** Printed answer letter "A".."E"; null for the 13 unkeyed items. */
+    @Json(name = "key") val key: String?,
+    @Json(name = "explanation") val explanation: String?,
+    @Json(name = "garbled") val garbled: Boolean?
+)

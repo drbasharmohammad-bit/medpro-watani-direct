@@ -618,6 +618,116 @@ class WataniRepository(private val context: Context) {
         }
     }
 
+    // ---------------- First Aid - Med Pro (firstaid/, 1.2.36) ----------------
+    // FREE family: files live on the public origin and flow through the
+    // ordinary manifest + downloadSection path (never the gateway, never
+    // a restricted list). Every getter is cache-first via readSectionText;
+    // a cached copy is silently refreshed through refreshSectionIfStale
+    // (hash-compare, no-op when current), and a missing copy is pulled
+    // once through fetchManifest + downloadSection. Null on any failure —
+    // the section screen owns the retry/empty states.
+
+    private suspend fun <T> getFirstAidSection(path: String, clazz: Class<T>): T? =
+        withContext(Dispatchers.IO) {
+            try {
+                val cached = readSectionText(path)
+                    ?.let { moshi.adapter(clazz).fromJson(it) }
+                if (cached != null) {
+                    if (refreshSectionIfStale(path)) {
+                        readSectionText(path)
+                            ?.let { moshi.adapter(clazz).fromJson(it) } ?: cached
+                    } else {
+                        cached
+                    }
+                } else {
+                    val manifest = fetchManifest().getOrNull() ?: return@withContext null
+                    val entry = manifest.files?.get(path) ?: return@withContext null
+                    if (downloadSection(path, entry).isFailure) return@withContext null
+                    readSectionText(path)?.let { moshi.adapter(clazz).fromJson(it) }
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+    /** Step index (1 or 2): systems in book order + per-unit summaries
+     * + booklet catalog. Path: "firstaid/index_step<step>.json". */
+    suspend fun getFirstAidIndex(step: Int): FirstAidIndexDto? =
+        getFirstAidSection("firstaid/index_step$step.json", FirstAidIndexDto::class.java)
+
+    /** One unified unit package. Path: "firstaid/units<step>/<id>.json". */
+    suspend fun getFirstAidUnit(step: Int, id: String): FirstAidUnitPackageDto? =
+        getFirstAidSection("firstaid/units$step/$id.json", FirstAidUnitPackageDto::class.java)
+
+    /** The integration layer: 157 topic links + integration sessions. */
+    suspend fun getFirstAidIntegration(): FirstAidIntegrationDto? =
+        getFirstAidSection("firstaid/integration.json", FirstAidIntegrationDto::class.java)
+
+    /** The five printed Step-2 practice tests (499 questions as printed). */
+    suspend fun getFirstAidBanks(): FirstAidBanksDto? =
+        getFirstAidSection("firstaid/banks_step2.json", FirstAidBanksDto::class.java)
+
+    /** Local file of a First Aid booklet PDF (library-download pattern:
+     * a plain filesDir asset, downloaded on first open, then read by
+     * the existing PdfViewerScreen). [relativePath] is the index's
+     * booklet "file" value prefixed with "firstaid/", e.g.
+     * "firstaid/booklets2/FirstAid-Step2-CARD-Booklet.pdf". */
+    fun getFirstAidBookletFile(relativePath: String): File {
+        val dir = File(context.filesDir, "firstaid_booklets")
+        if (!dir.exists()) dir.mkdirs()
+        return File(dir, relativePath.replace('/', '_'))
+    }
+
+    suspend fun downloadFirstAidBooklet(
+        relativePath: String,
+        expectedSize: Long = 0L,
+        onProgress: (Float) -> Unit = {}
+    ): Result<File> = withContext(Dispatchers.IO) {
+        val targetFile = getFirstAidBookletFile(relativePath)
+        val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+        try {
+            if (targetFile.exists() && targetFile.length() > 0 &&
+                (expectedSize <= 0 || targetFile.length() == expectedSize)
+            ) {
+                return@withContext Result.success(targetFile)
+            }
+            val request = okhttp3.Request.Builder()
+                .url("${WataniApi.BASE_URL}$relativePath")
+                .build()
+            val resp = client.newCall(request).execute()
+            if (!resp.isSuccessful) {
+                if (tempFile.exists()) tempFile.delete()
+                return@withContext Result.failure(Exception("فشل تحميل الكتيّب (HTTP ${resp.code})"))
+            }
+            val body = resp.body ?: return@withContext Result.failure(Exception("استجابة كتيّب فارغة"))
+            body.byteStream().use { inputStream ->
+                java.io.FileOutputStream(tempFile).use { outputStream ->
+                    val buffer = ByteArray(8192)
+                    var read: Int
+                    var downloaded = 0L
+                    val total = body.contentLength().coerceAtLeast(1L)
+                    while (inputStream.read(buffer).also { read = it } != -1) {
+                        outputStream.write(buffer, 0, read)
+                        downloaded += read
+                        onProgress((downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f))
+                    }
+                }
+            }
+            if (expectedSize > 0 && tempFile.length() != expectedSize) {
+                if (tempFile.exists()) tempFile.delete()
+                return@withContext Result.failure(Exception("حجم الكتيّب غير مطابق للمتوقع"))
+            }
+            if (tempFile.exists()) {
+                if (targetFile.exists()) targetFile.delete()
+                tempFile.renameTo(targetFile)
+            }
+            Result.success(targetFile)
+        } catch (e: Exception) {
+            if (tempFile.exists()) tempFile.delete()
+            Result.failure(Exception("تعذر تحميل الكتيّب — تحقق من الاتصال وحاول مجددًا.", e))
+        }
+    }
+
     /**
      * Bundled fallback (assets/ecg_sample.json): a small sample pack so
      * the ECG course opens and teaches even before the pipeline's real
