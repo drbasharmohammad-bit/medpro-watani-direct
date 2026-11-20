@@ -7,11 +7,14 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /**
  * In-app update download + install (build 1.2.28, doctor's order
@@ -21,33 +24,88 @@ import java.io.FileOutputStream
  * same signing certificate, so no data is lost and no Telegram trip
  * is needed.
  *
- * The APK lives at ONE fixed URL on the content site; every release
- * replaces the file at that path (see release-prep/BUILD_1_2_28.md
- * for the per-release procedure). The gateway also carries the URL
- * as `apkUrl` in GET /v1/config (persisted like minVersion via
- * [WorkerActivationApi]), but the app only ever trusts an https URL
- * on the content host itself — a poisoned config can never point
- * the installer at a foreign file; anything else falls back to the
- * fixed URL.
+ * Build 1.2.32 (doctor's Syria report, 20 Nov 2026): on Syrian
+ * connections without a VPN the 21 MB download from the content
+ * host never completed — and the old downloader made a bad link
+ * fatal (default OkHttp timeouts, a 10 s read timeout, no resume,
+ * no retry, the partial discarded on every attempt). The download
+ * layer is now hardened and multi-address:
+ *
+ * - Generous timeouts (30 s connect / 120 s read, no overall call
+ *   cap — a throttled 21 MB transfer may legitimately take many
+ *   minutes; the read timeout still detects a dead stall).
+ * - The partial download is KEPT (a `.part` file plus a small meta
+ *   sidecar: URL + ETag + expected total) and resumed with
+ *   `Range`/`If-Range`. A server that answers a range request with
+ *   200 (the content host does exactly that today — verified) is
+ *   handled by restarting that stream cleanly, never by appending
+ *   a full body onto a partial; a 416 discards the stale partial.
+ * - Automatic retries with exponential backoff (2 s → 30 s cap),
+ *   four attempts per address, then the NEXT candidate address is
+ *   tried: the config URL first when trustworthy, then the fixed
+ *   content-host URL, then the GitHub release mirror of the live
+ *   build — whichever address a student's network can actually
+ *   reach completes the update.
+ *
+ * Trust model (unchanged in spirit since 1.2.28): the app only
+ * ever STARTS a download from an https URL whose host is on
+ * [ALLOWED_HOSTS] — a poisoned config can never point the
+ * installer at a foreign file. Redirects after that first hop are
+ * followed by OkHttp as usual (github.com release links redirect
+ * to GitHub's own asset host); the pin is on the initial host,
+ * exactly like a browser trusting the link it was given.
  */
 object AppUpdate {
 
-    /** The one fixed update address; replaced in place per release. */
+    /** The fixed update address on the content host; replaced in
+     * place per release. */
     const val FALLBACK_APK_URL = "https://watani-content.pages.dev/apk/watani-latest.apk"
 
-    private const val ALLOWED_HOST = "watani-content.pages.dev"
+    /** GitHub release mirror of the live build (release asset on
+     * the app repository — a different network path than the
+     * content host, for networks where *.pages.dev is throttled). */
+    const val GITHUB_APK_URL =
+        "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.31/watani-latest.apk"
+
+    /** Custom domain attached to the same content project
+     * (dl.hdr-market.com). Trusted since 1.2.32 so it can be
+     * adopted later by a config value alone, with no new build,
+     * once its DNS record exists; it is NOT auto-tried until then. */
+    const val CUSTOM_DOMAIN_HOST = "dl.hdr-market.com"
+
+    private val ALLOWED_HOSTS = setOf(
+        "watani-content.pages.dev",
+        "github.com",
+        CUSTOM_DOMAIN_HOST
+    )
+
     private const val UPDATE_DIR = "updates"
     private const val UPDATE_FILE = "watani-update.apk"
+    private const val PART_FILE = "watani-update.apk.part"
+    private const val META_FILE = "watani-update.meta"
+
+    /** Attempts per candidate address before failing over. */
+    const val MAX_ATTEMPTS_PER_URL = 4
+
+    private val downloadClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        // No overall call cap: on a throttled link the full 21 MB
+        // may take many minutes; the 120 s read timeout is what
+        // detects a truly dead stall.
+        .callTimeout(0, TimeUnit.SECONDS)
+        .build()
 
     /** Pure (unit-tested): only an https URL whose host is exactly
-     * the content host is installable. */
+     * one of the trusted update hosts is installable. */
     fun isApkUrlAllowed(url: String?): Boolean {
         val u = url?.trim().orEmpty()
         if (!u.startsWith("https://")) return false
         val host = u.removePrefix("https://")
             .substringBefore('/')
             .substringBefore(':')
-        return host == ALLOWED_HOST
+        return host in ALLOWED_HOSTS
     }
 
     /** Pure (unit-tested): the config value when it is trustworthy,
@@ -55,28 +113,201 @@ object AppUpdate {
     fun resolveApkUrl(configValue: String?): String =
         if (isApkUrlAllowed(configValue)) configValue!!.trim() else FALLBACK_APK_URL
 
+    /** Pure (unit-tested): the ordered candidate addresses the
+     * downloader tries until one completes — the trustworthy
+     * config value first (the operator's chosen primary), then the
+     * built-in addresses, de-duplicated. */
+    fun candidateUrls(configValue: String?): List<String> {
+        val out = mutableListOf<String>()
+        if (isApkUrlAllowed(configValue)) out += configValue!!.trim()
+        for (u in listOf(FALLBACK_APK_URL, GITHUB_APK_URL)) {
+            if (u !in out) out += u
+        }
+        return out
+    }
+
+    /** Pure (unit-tested): where a kept partial may resume from.
+     * A partial is only trusted when its length sits strictly
+     * inside the expected total; a complete-looking, oversized or
+     * total-less partial restarts from zero. */
+    fun resumeOffset(partialLength: Long, expectedTotal: Long): Long =
+        if (expectedTotal > 0 && partialLength in 1L until expectedTotal) {
+            partialLength
+        } else {
+            0L
+        }
+
+    /** Pure (unit-tested): only a 206 answer may be appended to a
+     * kept partial; a 200 means the server ignored the range and
+     * is streaming the whole file again. */
+    fun shouldAppend(responseCode: Int): Boolean = responseCode == 206
+
+    /** Pure (unit-tested): retry backoff — 2 s doubling to a 30 s
+     * cap. */
+    fun backoffMs(attempt: Int): Long =
+        minOf(2000L shl attempt.coerceIn(0, 10), 30_000L)
+
+    /** Pure (unit-tested): completion check at end of stream. */
+    fun isComplete(downloaded: Long, total: Long): Boolean =
+        if (total > 0) downloaded == total else downloaded > 0
+
+    /** Pure (unit-tested): the total out of a `Content-Range:
+     * bytes a-b/TOTAL` header; -1 when absent or malformed. */
+    fun parseContentRangeTotal(header: String?): Long {
+        if (header.isNullOrBlank()) return -1
+        val slash = header.lastIndexOf('/')
+        if (slash < 0) return -1
+        return header.substring(slash + 1).trim().toLongOrNull() ?: -1
+    }
+
+    /** The kept partial's sidecar: which URL it belongs to, the
+     * ETag it was started under, and the expected total. */
+    data class PartMeta(val url: String, val etag: String, val total: Long)
+
+    /** Pure (unit-tested): sidecar serialization (key=value lines). */
+    fun encodeMeta(meta: PartMeta): String =
+        "url=${meta.url}\netag=${meta.etag}\ntotal=${meta.total}\n"
+
+    /** Pure (unit-tested): sidecar parsing; null on anything
+     * incomplete or malformed (the partial is then discarded). */
+    fun parseMeta(text: String?): PartMeta? {
+        if (text.isNullOrBlank()) return null
+        var url: String? = null
+        var etag = ""
+        var total: Long? = null
+        for (line in text.lineSequence()) {
+            val idx = line.indexOf('=')
+            if (idx <= 0) continue
+            when (line.substring(0, idx).trim()) {
+                "url" -> url = line.substring(idx + 1).trim()
+                "etag" -> etag = line.substring(idx + 1).trim()
+                "total" -> total = line.substring(idx + 1).trim().toLongOrNull()
+            }
+        }
+        val u = url?.takeIf { it.isNotEmpty() } ?: return null
+        val t = total ?: return null
+        return PartMeta(u, etag, t)
+    }
+
     fun updateFile(context: Context): File =
         File(File(context.cacheDir, UPDATE_DIR), UPDATE_FILE)
 
-    /** Streams the APK to the cache updates folder (any previous
-     * partial copy is discarded first), reporting byte progress. */
+    /** Downloads the APK from the single given address (kept for
+     * API compatibility; the update screen uses the candidate
+     * form). */
     suspend fun downloadApk(
         context: Context,
         url: String,
         onProgress: (downloaded: Long, total: Long) -> Unit
+    ): File = downloadApkFromCandidates(context, listOf(url), onProgress)
+
+    /** Tries each candidate address in order — up to
+     * [MAX_ATTEMPTS_PER_URL] attempts each, resuming the kept
+     * partial and backing off between attempts — until one
+     * completes the file. Throws the last error when every
+     * candidate is exhausted. */
+    suspend fun downloadApkFromCandidates(
+        context: Context,
+        urls: List<String>,
+        onProgress: (downloaded: Long, total: Long) -> Unit
     ): File = withContext(Dispatchers.IO) {
-        val target = updateFile(context)
-        target.parentFile?.mkdirs()
-        if (target.exists()) target.delete()
-        val request = Request.Builder().url(url).get().build()
-        OkHttpClient().newCall(request).execute().use { resp ->
-            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
-            val body = resp.body ?: throw IllegalStateException("empty body")
-            val total = body.contentLength()
+        val clean = urls.map { it.trim() }
+            .filter { isApkUrlAllowed(it) }
+            .distinct()
+        require(clean.isNotEmpty()) { "no trusted update url" }
+        var lastError: Exception? = null
+        for (url in clean) {
+            for (attempt in 0 until MAX_ATTEMPTS_PER_URL) {
+                try {
+                    if (downloadOnce(context, url, onProgress)) {
+                        return@withContext updateFile(context)
+                    }
+                } catch (e: Exception) {
+                    lastError = e
+                }
+                if (attempt < MAX_ATTEMPTS_PER_URL - 1) {
+                    delay(backoffMs(attempt))
+                }
+            }
+        }
+        throw lastError ?: IllegalStateException("update download failed")
+    }
+
+    /** One download attempt against [url], resuming the kept
+     * partial when it provably belongs to this URL. Returns true
+     * when the file completed and was promoted to [updateFile];
+     * false when the attempt was rejected in a way a fresh attempt
+     * can fix (a stale partial answered 416). Throws on I/O and
+     * HTTP failures — the caller retries with backoff. */
+    private fun downloadOnce(
+        context: Context,
+        url: String,
+        onProgress: (downloaded: Long, total: Long) -> Unit
+    ): Boolean {
+        val dir = File(context.cacheDir, UPDATE_DIR).apply { mkdirs() }
+        val part = File(dir, PART_FILE)
+        val metaFile = File(dir, META_FILE)
+        val meta = if (metaFile.exists()) {
+            try {
+                parseMeta(metaFile.readText())
+            } catch (_: Exception) {
+                null
+            }
+        } else {
+            null
+        }
+
+        var offset = 0L
+        if (meta != null && meta.url == url && part.exists()) {
+            offset = resumeOffset(part.length(), meta.total)
+            if (offset == 0L && part.length() > 0L) {
+                // Complete-looking or oversized partial: untrusted.
+                part.delete()
+            }
+        } else {
+            // A partial from another address (or with no sidecar)
+            // is never resumed against this one.
+            if (part.exists()) part.delete()
+            if (metaFile.exists()) metaFile.delete()
+        }
+
+        val request = Request.Builder().url(url).get()
+        if (offset > 0L) {
+            request.header("Range", "bytes=$offset-")
+            if (!meta?.etag.isNullOrBlank()) {
+                request.header("If-Range", meta!!.etag)
+            }
+        }
+
+        downloadClient.newCall(request.build()).execute().use { resp ->
+            if (resp.code == 416) {
+                // The kept partial no longer matches the server's
+                // file; drop it so the next attempt starts clean.
+                part.delete()
+                metaFile.delete()
+                return false
+            }
+            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
+            val body = resp.body ?: throw IOException("empty body")
+            val append = shouldAppend(resp.code)
+            if (!append) offset = 0L
+            val total = if (append) {
+                parseContentRangeTotal(resp.header("Content-Range"))
+                    .takeIf { it > 0 } ?: meta?.total ?: -1L
+            } else {
+                body.contentLength()
+            }
+            // Persist the sidecar before streaming so an interrupted
+            // attempt leaves a resumable, attributable partial.
+            val etag = resp.header("ETag") ?: meta?.etag.orEmpty()
+            try {
+                metaFile.writeText(encodeMeta(PartMeta(url, etag, total)))
+            } catch (_: Exception) {
+            }
+            var downloaded = offset
             body.byteStream().use { input ->
-                FileOutputStream(target).use { out ->
+                FileOutputStream(part, append).use { out ->
                     val buffer = ByteArray(64 * 1024)
-                    var downloaded = 0L
                     while (true) {
                         val n = input.read(buffer)
                         if (n < 0) break
@@ -84,11 +315,22 @@ object AppUpdate {
                         downloaded += n
                         onProgress(downloaded, total)
                     }
+                    out.flush()
                 }
             }
+            if (!isComplete(downloaded, total)) {
+                throw IOException("short read: $downloaded of $total")
+            }
         }
-        if (target.length() <= 0L) throw IllegalStateException("empty file")
-        target
+
+        val target = updateFile(context)
+        if (target.exists()) target.delete()
+        if (!part.renameTo(target)) {
+            part.copyTo(target, overwrite = true)
+            part.delete()
+        }
+        metaFile.delete()
+        return true
     }
 
     /** Android 8+: sideload installs need the per-app «install

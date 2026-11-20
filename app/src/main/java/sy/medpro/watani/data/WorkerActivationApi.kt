@@ -474,6 +474,16 @@ object WorkerActivationApi {
             activationPrefs(context, null).getString(KEY_KNOWN_APK_URL, null)
         )
 
+    /** Ordered update-APK candidates (build 1.2.32): the learned
+     * config URL first when trustworthy, then the built-in mirror
+     * addresses — the update screen tries them in order until one
+     * completes, so a network that throttles one host can still
+     * update through another. */
+    fun knownApkUrls(context: Context): List<String> =
+        AppUpdate.candidateUrls(
+            activationPrefs(context, null).getString(KEY_KNOWN_APK_URL, null)
+        )
+
     fun saveKnownApkUrl(context: Context, apkUrl: String) {
         if (!AppUpdate.isApkUrlAllowed(apkUrl)) return
         activationPrefs(context, null).edit()

@@ -55,6 +55,14 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
  * certificate — no data loss). On Android 8+ the first run detours
  * once through the system «install unknown apps» settings page for
  * this app; afterwards the button installs directly.
+ *
+ * Build 1.2.32: the download goes through [AppUpdate]'s hardened
+ * candidate downloader — it tries the known update addresses in
+ * order (config URL, content host, GitHub mirror), resuming the
+ * kept partial and retrying with backoff, so a network that
+ * throttles one host can still complete the update through
+ * another. The manual «إعادة المحاولة» button remains as the
+ * last resort.
  */
 private enum class UpdatePhase { Idle, Downloading, Downloaded, Error }
 
@@ -90,9 +98,9 @@ fun UpdateRequiredScreen() {
         progress = 0f
         scope.launch {
             try {
-                val file = AppUpdate.downloadApk(
+                val file = AppUpdate.downloadApkFromCandidates(
                     context,
-                    WorkerActivationApi.knownApkUrl(context)
+                    WorkerActivationApi.knownApkUrls(context)
                 ) { downloaded, total ->
                     if (total > 0) progress = downloaded.toFloat() / total.toFloat()
                 }
