@@ -695,7 +695,6 @@ class MainActivity : ComponentActivity() {
                                                 "مؤقت التركيز",
                                                 "الإنجازات والأوسمة",
                                                 "البحث الشامل",
-                                                "الباحث المعتمد",
                                                 "المفضلة",
                                                 "ملاحظاتي",
                                                 "سجلّ حالاتي",
@@ -728,7 +727,6 @@ class MainActivity : ComponentActivity() {
                                                     "مؤقت التركيز" -> Icons.Default.Timer
                                                     "الإنجازات والأوسمة" -> Icons.Default.WorkspacePremium
                                                     "البحث الشامل" -> Icons.Default.Search
-                                                    "الباحث المعتمد" -> Icons.Default.MenuBook
                                                     "المفضلة" -> Icons.Default.Favorite
                                                     "ملاحظاتي" -> Icons.Default.NoteAlt
                                                     "سجلّ حالاتي" -> Icons.Default.Assignment
@@ -1034,7 +1032,6 @@ class MainActivity : ComponentActivity() {
                                                 "مؤقت التركيز" -> FocusTimerScreen(onBack = { drawerScreen = null })
                                                 "الإنجازات والأوسمة" -> BadgesScreen(onBack = { drawerScreen = null })
                                                 "البحث الشامل" -> GlobalSearchScreen(onBack = { drawerScreen = null })
-                                                "الباحث المعتمد" -> sy.medpro.watani.ui.refassistant.RefAssistantScreen(onBack = { drawerScreen = null })
                                                 "المفضلة" -> FavoritesScreen(onBack = { drawerScreen = null })
                                                 "ملاحظاتي" -> MyNotesScreen(onBack = { drawerScreen = null })
                                                 "سجلّ حالاتي" -> LogbookScreen(onBack = { drawerScreen = null })

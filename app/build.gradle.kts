@@ -71,8 +71,8 @@ android {
     // are opt-in and OFF by default, managed from the existing
     // «الإشعارات والتذكير» screen; sign-in/consent (1.2.29) and
     // every other existing behavior are untouched.
-    versionCode = 74308
-    versionName = "1.2.34"
+    versionCode = 74309
+    versionName = "1.2.35"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
