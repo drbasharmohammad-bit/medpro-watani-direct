@@ -24,6 +24,31 @@ val ThmanyahFontFamily = FontFamily(
     Font(R.font.thmanyahsans_bold, FontWeight.Bold)
 )
 
+/**
+ * First Aid - Med Pro design fonts (build 1.2.36, merge phase 5): the
+ * approved design (~/workspace/firstaid-design/style.css) is set in
+ * "Noto Kufi Arabic" for headings and "Noto Sans Arabic" for body text.
+ * Neither was bundled before this build, so the official static TTFs
+ * were downloaded from Google Fonts (fonts.gstatic.com, family repos
+ * google/fonts: ofl/notokufiarabic v27, ofl/notosansarabic v33 —
+ * Kufi weights 400/600/700/800, Sans weights 400/500/700) and bundled
+ * under res/font/noto_*.ttf. Both families are SIL Open Font License
+ * 1.1. Used by the First Aid section only; the app-wide Typography
+ * above is untouched.
+ */
+val NotoKufiFontFamily = FontFamily(
+    Font(R.font.noto_kufi_arabic_regular, FontWeight.Normal),
+    Font(R.font.noto_kufi_arabic_semibold, FontWeight.SemiBold),
+    Font(R.font.noto_kufi_arabic_bold, FontWeight.Bold),
+    Font(R.font.noto_kufi_arabic_extrabold, FontWeight.ExtraBold)
+)
+
+val NotoSansArabicFontFamily = FontFamily(
+    Font(R.font.noto_sans_arabic_regular, FontWeight.Normal),
+    Font(R.font.noto_sans_arabic_medium, FontWeight.Medium),
+    Font(R.font.noto_sans_arabic_bold, FontWeight.Bold)
+)
+
 val TajawalFontFamily = FontFamily(
     Font(R.font.tajawal, FontWeight.Normal),
     Font(R.font.tajawal, FontWeight.Medium),
