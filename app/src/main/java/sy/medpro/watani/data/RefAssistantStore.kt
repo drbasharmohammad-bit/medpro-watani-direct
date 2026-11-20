@@ -25,7 +25,7 @@ import java.util.zip.GZIPInputStream
  * device, the offline weighted search over it, and the online ask.
  *
  * The bundle is a restricted content family (`refsearch.json` +
- * `refsearch/*.json.gz`, gateway-served from R2 like the banks): the
+ * the `refsearch/` .json.gz shards, gateway-served from R2 like the banks): the
  * curated corpus of 178 references / 14,350 chunks, pre-chunked and
  * pre-indexed at preparation time (build_refsearch.py). The device
  * downloads it ONCE through the gateway with the activation token,
