@@ -890,6 +890,7 @@ class MainActivity : ComponentActivity() {
                                 AppTab.BANK -> "بنك الأسئلة"
                                 AppTab.CASES -> "المريض الافتراضي"
                                 AppTab.LIBRARY -> "المكتبة"
+                                AppTab.FIRSTAID -> "First Aid - Med Pro"
                                 AppTab.LEADERBOARD -> "الصدارة"
                                 AppTab.TOOLS -> "أدوات"
                                 else -> "Med Pro - وطني"
@@ -951,6 +952,7 @@ class MainActivity : ComponentActivity() {
                                             AppTab.BANK to "بنك",
                                             AppTab.CASES to "المريض",
                                             AppTab.LIBRARY to "المكتبة",
+                                            AppTab.FIRSTAID to "First Aid",
                                             AppTab.LEADERBOARD to "الصدارة",
                                             AppTab.TOOLS to "أدوات"
                                         )
@@ -1313,6 +1315,14 @@ class MainActivity : ComponentActivity() {
                                                                     }
                                                                 )
                                                             }
+                                                        }
+                                                        AppTab.FIRSTAID -> {
+                                                            // First Aid - Med Pro (1.2.36): a FREE
+                                                            // section — Google sign-in only (the
+                                                            // app-wide SignInGate), never the
+                                                            // activation/restricted gates, so no
+                                                            // M4/M8 re-checks here by design.
+                                                            sy.medpro.watani.ui.firstaid.FirstAidSectionScreen()
                                                         }
                                                         AppTab.TOOLS -> {
                                                             ToolsScreen(

@@ -82,6 +82,10 @@ object TabIcons {
         AppTab.BANK, AppTab.UNIVERSITIES, AppTab.UWORLD -> R.drawable.ic_tab_bank
         AppTab.CASES -> R.drawable.ic_tab_patient
         AppTab.LIBRARY -> R.drawable.ic_tab_library
+        // First Aid (1.2.36): structural wiring only — the section's
+        // own tab icon ships with the approved design pass (phase 5);
+        // until then it reuses the library glyph.
+        AppTab.FIRSTAID -> R.drawable.ic_tab_library
         AppTab.LEADERBOARD -> R.drawable.ic_tab_leaderboard
         AppTab.TOOLS -> R.drawable.ic_tab_tools
     }
