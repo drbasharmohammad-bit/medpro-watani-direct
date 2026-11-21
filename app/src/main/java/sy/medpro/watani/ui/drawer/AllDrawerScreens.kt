@@ -33,7 +33,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import sy.medpro.watani.data.*
 import sy.medpro.watani.ui.SlimSubBar
-import sy.medpro.watani.ui.anki.AnkiFlashcardScreen
 import sy.medpro.watani.ui.explanation.ExplanationSection
 import sy.medpro.watani.ui.explanation.GatedExplanationSection
 import sy.medpro.watani.ui.explanation.ExplanationUiState
@@ -704,22 +703,10 @@ fun WrongAnswersScreen(onBack: () -> Unit, onOpenAnkiWrong: (() -> Unit)? = null
     }
 }
 
-// 8. Anki Smart Review
-@Composable
-fun AnkiSmartReviewScreen(onBack: () -> Unit) {
-    AnkiFlashcardScreen(onBack = onBack)
-}
-
 // 9. Exam Simulation
 @Composable
 fun ExamSimulationScreen(onBack: () -> Unit) {
     ExamSimulatorScreen(onBack = onBack)
-}
-
-// 10. Virtual Patient
-@Composable
-fun VirtualPatientDrawerScreen(onBack: () -> Unit) {
-    onBack()
 }
 
 // 11. Weak Points
@@ -1199,10 +1186,4 @@ fun ContactScreen(onBack: () -> Unit) {
             }
         }
     }
-}
-
-// 20. Social Links & Sign-Out
-@Composable
-fun SocialLinksScreen(onBack: () -> Unit) {
-    ContactScreen(onBack = onBack)
 }
