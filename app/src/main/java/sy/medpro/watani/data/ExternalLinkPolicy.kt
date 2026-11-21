@@ -22,11 +22,10 @@ object ExternalLinkPolicy {
 
     /** Pure (unit-testable): may this URL be opened externally? */
     fun isAllowed(url: String?): Boolean {
-        val u = url?.trim().orEmpty()
-        if (u.isEmpty()) return false
-        val parsed = u.toHttpUrlOrNull() ?: return false
-        if (parsed.scheme != "https") return false
-        if (parsed.username.isNotEmpty() || parsed.password.isNotEmpty()) return false
-        return parsed.host in ALLOWED_HOSTS
+        val parsed = url?.trim().orEmpty().toHttpUrlOrNull()
+        return parsed != null &&
+            parsed.scheme == "https" &&
+            parsed.username.isEmpty() && parsed.password.isEmpty() &&
+            parsed.host in ALLOWED_HOSTS
     }
 }

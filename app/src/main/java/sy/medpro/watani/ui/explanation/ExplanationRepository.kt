@@ -396,32 +396,40 @@ class ExplanationRepository(
             return Result.failure(Exception("تعذر قراءة ملف الشرح — أعد المحاولة"))
         }
         // Audit fix (21 Nov 2026, SEC-C1): verify the downloaded BYTES
-        // against the index entry (size + sha256[:16] — the exact
-        // contract SectionVerification enforces for section downloads,
-        // and the format the explanations pipeline publishes) BEFORE
-        // anything is persisted. The G1 fingerprint only ever compared
-        // the index's declared values against a stored copy of those
-        // same declared values — the bytes themselves were never
-        // hashed, so a substituted body with a parseable shape passed.
-        // A mismatch also deletes the resume temp: a corrupt partial
-        // must never be resumed into a "complete" file.
-        val entry = cachedIndex?.files?.get(shardName)
-        if (entry != null && (!entry.hash.isNullOrBlank() || entry.size != null)) {
-            val mismatch = sy.medpro.watani.data.SectionVerification.manifestMismatch(
-                "explanations/$shardName",
-                text.toByteArray(Charsets.UTF_8),
-                entry.size,
-                entry.hash
-            )
-            if (mismatch != null) {
-                try { shardTempFile(shardName).delete() } catch (_: Exception) { }
-                return Result.failure(Exception(mismatch))
-            }
+        // against the index entry before anything is persisted (see
+        // shardBytesMismatch). A mismatch also deletes the resume
+        // temp: a corrupt partial must never be resumed into a
+        // "complete" file.
+        val mismatch = shardBytesMismatch(shardName, text)
+        if (mismatch != null) {
+            try { shardTempFile(shardName).delete() } catch (_: Exception) { }
+            return Result.failure(Exception(mismatch))
         }
         persistShardCache(shardName, text)
         shardCache[shardName] = records
         shardCacheFingerprints[shardName] = expectedFingerprint
         return Result.success(records)
+    }
+
+    /** Audit fix (21 Nov 2026, SEC-C1): verifies the downloaded
+     * shard BYTES against the index entry (size + sha256[:16] — the
+     * exact contract SectionVerification enforces for section
+     * downloads, and the format the explanations pipeline
+     * publishes). Returns the mismatch message, or null when the
+     * bytes verify or the entry declares nothing to verify against.
+     * Before this fix the G1 fingerprint only ever compared the
+     * index's declared values against a stored copy of those same
+     * declared values — the bytes themselves were never hashed, so
+     * a substituted body with a parseable shape passed. */
+    private fun shardBytesMismatch(shardName: String, text: String): String? {
+        val entry = cachedIndex?.files?.get(shardName) ?: return null
+        if (entry.hash.isNullOrBlank() && entry.size == null) return null
+        return sy.medpro.watani.data.SectionVerification.manifestMismatch(
+            "explanations/$shardName",
+            text.toByteArray(Charsets.UTF_8),
+            entry.size,
+            entry.hash
+        )
     }
 
     /**

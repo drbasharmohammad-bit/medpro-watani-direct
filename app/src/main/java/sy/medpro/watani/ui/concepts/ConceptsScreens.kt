@@ -193,6 +193,13 @@ fun rememberConceptUnits(refreshKey: Int = 0): ConceptUnitsState {
  * ONE of the three concepts cards; this one is the installed-pack
  * branch.
  */
+// LongParameterList/LongMethod suppressed deliberately (audit
+// fix-loop, 21 Nov 2026): the parameters are the card's display
+// state — each one an independent input the Library screen already
+// holds (pack counts, update-offer state, progress) — and the body
+// is one cohesive visual unit in the library design language.
+// Splitting either for a style counter would scatter the card.
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 fun ConceptsEntryCard(
     // Item Z (21 Nov 2026): the card renders COUNTS, not the pack —
@@ -503,6 +510,25 @@ fun ConceptsSubjectsScreen(
     }
 }
 
+/** The counts line of a concepts subject card, in the library's
+ * meta style (bold maroon numbers, muted words). */
+private fun conceptSubjectMeta(
+    group: sy.medpro.watani.data.ConceptSubjectGroup
+): androidx.compose.ui.text.AnnotatedString = buildAnnotatedString {
+    val num = SpanStyle(
+        color = sy.medpro.watani.ui.library.LibColors.Maroon,
+        fontWeight = FontWeight.Bold
+    )
+    withStyle(num) { append(group.units.size.toString()) }
+    append(" موضوعًا")
+    append("  ·  ")
+    withStyle(num) { append(group.totalWatani.toString()) }
+    append(" وطني")
+    append("  ·  ")
+    withStyle(num) { append(group.totalDamascus.toString()) }
+    append(" دمشق")
+}
+
 /** One subject card of the concepts grid — the library's
  * SubjectGridCard shape, carrying concept counts instead of video
  * counts (item ح). */
@@ -543,24 +569,8 @@ private fun ConceptSubjectGridCard(
                     modifier = Modifier.weight(1f)
                 )
             }
-            val metaText = buildAnnotatedString {
-                withStyle(SpanStyle(color = sy.medpro.watani.ui.library.LibColors.Maroon, fontWeight = FontWeight.Bold)) {
-                    append(group.units.size.toString())
-                }
-                append(" موضوعًا")
-                append("  ·  ")
-                withStyle(SpanStyle(color = sy.medpro.watani.ui.library.LibColors.Maroon, fontWeight = FontWeight.Bold)) {
-                    append(group.totalWatani.toString())
-                }
-                append(" وطني")
-                append("  ·  ")
-                withStyle(SpanStyle(color = sy.medpro.watani.ui.library.LibColors.Maroon, fontWeight = FontWeight.Bold)) {
-                    append(group.totalDamascus.toString())
-                }
-                append(" دمشق")
-            }
             Text(
-                metaText,
+                conceptSubjectMeta(group),
                 fontFamily = NotoSansArabicFontFamily,
                 fontSize = 12.sp, color = sy.medpro.watani.ui.library.libMuted(),
                 modifier = Modifier.padding(top = 8.dp)

@@ -56,22 +56,25 @@ object StalePlaintextTemps {
     }
 
     private fun sweepDir(dir: File, suffix: String, nowMs: Long): Int {
-        var deleted = 0
-        try {
-            dir.listFiles()?.forEach { file ->
-                try {
-                    if (file.isFile &&
-                        file.name.endsWith(suffix) &&
-                        isStale(file.lastModified(), nowMs) &&
-                        file.delete()
-                    ) {
-                        deleted++
-                    }
-                } catch (_: Exception) {
-                }
-            }
+        val files = try {
+            dir.listFiles()?.toList()
         } catch (_: Exception) {
-        }
-        return deleted
+            null
+        } ?: return 0
+        return files.count { file -> isStaleTemp(file, suffix, nowMs) && deleteQuietly(file) }
     }
+
+    private fun isStaleTemp(file: File, suffix: String, nowMs: Long): Boolean =
+        try {
+            file.isFile && file.name.endsWith(suffix) && isStale(file.lastModified(), nowMs)
+        } catch (_: Exception) {
+            false
+        }
+
+    private fun deleteQuietly(file: File): Boolean =
+        try {
+            file.delete()
+        } catch (_: Exception) {
+            false
+        }
 }

@@ -120,12 +120,11 @@ object AppUpdate {
      * (evil). Any URL carrying userinfo (user@host) is refused
      * outright, and the compared host is the parser's host. */
     fun isApkUrlAllowed(url: String?): Boolean {
-        val u = url?.trim().orEmpty()
-        if (u.isEmpty()) return false
-        val parsed = u.toHttpUrlOrNull() ?: return false
-        if (parsed.scheme != "https") return false
-        if (parsed.username.isNotEmpty() || parsed.password.isNotEmpty()) return false
-        return parsed.host in ALLOWED_HOSTS
+        val parsed = url?.trim().orEmpty().toHttpUrlOrNull()
+        return parsed != null &&
+            parsed.scheme == "https" &&
+            parsed.username.isEmpty() && parsed.password.isEmpty() &&
+            parsed.host in ALLOWED_HOSTS
     }
 
     /** Pure (unit-tested): the config value when it is trustworthy,
@@ -294,18 +293,18 @@ object AppUpdate {
                     apk.absolutePath,
                     PackageManager.GET_SIGNATURES
                 )
-            } ?: return null
-            val pkgInfo = info ?: return null
-            val certs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                pkgInfo.signingInfo?.apkContentsSigners
-            } else {
-                @Suppress("DEPRECATION")
-                pkgInfo.signatures
             }
-            val first = certs?.firstOrNull() ?: return null
-            MessageDigest.getInstance("SHA-256")
-                .digest(first.toByteArray())
-                .joinToString("") { "%02x".format(it) }
+            val certs = when {
+                info == null -> null
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ->
+                    info.signingInfo?.apkContentsSigners
+                else -> @Suppress("DEPRECATION") info.signatures
+            }
+            certs?.firstOrNull()?.let { first ->
+                MessageDigest.getInstance("SHA-256")
+                    .digest(first.toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+            }
         } catch (_: Exception) {
             null
         }

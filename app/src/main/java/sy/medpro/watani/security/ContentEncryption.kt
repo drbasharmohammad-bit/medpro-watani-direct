@@ -95,6 +95,13 @@ object ContentEncryption {
         }
     }
 
+    // ReturnCount suppressed deliberately (audit fix-loop, 21 Nov
+    // 2026): the guard clauses ARE the safety pattern of this
+    // function — each early `return false` is a distinct refuse-to-
+    // emit-plaintext exit, and restructuring them into nested
+    // branches for a style counter would make the crypto flow
+    // harder to audit, not safer.
+    @Suppress("ReturnCount")
     fun decryptFile(context: Context, encryptedFile: File, outputFile: File): Boolean {
         // Audit fix (21 Nov 2026, SEC-C5): GCM verifies the tag only
         // at doFinal(), but the old code streamed plaintext straight

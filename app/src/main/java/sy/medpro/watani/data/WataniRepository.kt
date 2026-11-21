@@ -207,15 +207,17 @@ class WataniRepository(private val context: Context) {
                 val registry = context.getSharedPreferences(
                     "watani_downloaded_sections", Context.MODE_PRIVATE
                 )
-                if (!registry.contains("concepts.json")) return null
                 val prefs = context.getSharedPreferences(
                     CONCEPTS_SUMMARY_PREFS, Context.MODE_PRIVATE
                 )
                 val units = prefs.getInt(KEY_SUMMARY_UNITS, 0)
                 val subjects = prefs.getInt(KEY_SUMMARY_SUBJECTS, 0)
-                val hash = prefs.getString(KEY_SUMMARY_HASH, null) ?: return null
-                if (units <= 0) return null
-                ConceptsPackSummary(hash = hash, unitCount = units, subjectCount = subjects)
+                val hash = prefs.getString(KEY_SUMMARY_HASH, null)
+                if (registry.contains("concepts.json") && hash != null && units > 0) {
+                    ConceptsPackSummary(hash = hash, unitCount = units, subjectCount = subjects)
+                } else {
+                    null
+                }
             } catch (_: Exception) {
                 null
             }

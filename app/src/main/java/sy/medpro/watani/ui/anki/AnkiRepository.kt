@@ -113,11 +113,9 @@ class AnkiRepository(private val context: Context) {
         } catch (_: Exception) {
             null
         }
-        if (key != null && key == memoizedKey) {
-            memoizedSet?.let { return it }
-        }
-        val parsed = AnkiValidation.validatedParse(text, moshi) ?: return null
-        if (key != null) {
+        val cached = if (key != null && key == memoizedKey) memoizedSet else null
+        val parsed = cached ?: AnkiValidation.validatedParse(text, moshi)
+        if (parsed != null && key != null && cached == null) {
             memoizedKey = key
             memoizedSet = parsed
         }
