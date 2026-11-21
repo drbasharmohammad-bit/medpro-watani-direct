@@ -157,6 +157,7 @@ class FocusSessionService : Service() {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(WidgetRouter.EXTRA_ROUTE, WidgetQuickAction.FOCUS.route)
         }
+        sy.medpro.watani.ui.widget.WidgetRouter.stampRoute(intent, this)
         return PendingIntent.getActivity(
             this, REQ_CONTENT, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

@@ -1064,6 +1064,12 @@ fun ContactScreen(onBack: () -> Unit) {
     }
 
     fun openLink(url: String) {
+        // Audit fix (21 Nov 2026, SEC-P2): gateway-supplied contact
+        // links are opened only through the ExternalLinkPolicy
+        // allowlist (https + Telegram hosts) — a poisoned config
+        // value can no longer push an arbitrary scheme/deep link
+        // out of the app. A refused link simply does nothing.
+        if (!sy.medpro.watani.data.ExternalLinkPolicy.isAllowed(url)) return
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         } catch (_: Exception) {

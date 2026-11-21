@@ -145,6 +145,7 @@ object StudyNotifications {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(WidgetRouter.EXTRA_ROUTE, route)
         }
+        WidgetRouter.stampRoute(intent, context)
         return PendingIntent.getActivity(
             context, requestCode, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

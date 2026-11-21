@@ -96,6 +96,14 @@ fun TelegramLinkScreen(onBack: () -> Unit) {
                 actionMessage = "تعذر إنشاء رمز الربط — تحقق من الاتصال وحاول مجددًا."
                 return@launch
             }
+            // Audit fix (21 Nov 2026, SEC-P2): the deep link comes
+            // from a gateway response — it is opened only if it
+            // passes the ExternalLinkPolicy allowlist (https +
+            // Telegram hosts).
+            if (!sy.medpro.watani.data.ExternalLinkPolicy.isAllowed(created.deepLink)) {
+                actionMessage = "تعذر فتح تليجرام — رابط غير صالح من الخادم، حاول مجددًا لاحقًا."
+                return@launch
+            }
             try {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(created.deepLink)))
                 actionMessage = "اضغط «ابدأ» (Start) في البوت ثم عُد إلى هنا — ستتحدث الحالة تلقائيًا عند عودتك."

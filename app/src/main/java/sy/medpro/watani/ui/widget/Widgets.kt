@@ -519,6 +519,7 @@ object Widgets {
             putExtra(WidgetRouter.EXTRA_ROUTE, action.route)
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
+        WidgetRouter.stampRoute(intent, context)
         val requestCode = 100 + kind * 10 + action.ordinal
         return PendingIntent.getActivity(
             context, requestCode, intent,

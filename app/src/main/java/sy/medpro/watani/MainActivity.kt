@@ -141,10 +141,17 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // Audit fix (21 Nov 2026, SEC-P1): a route extra is honored
+        // only when it carries this install's route nonce (stamped
+        // by the app's own widget/notification PendingIntents) —
+        // MainActivity is exported, so an unstamped route could come
+        // from any installed app.
         try {
-            sy.medpro.watani.ui.widget.WidgetRouter.request(
-                intent.getStringExtra(sy.medpro.watani.ui.widget.WidgetRouter.EXTRA_ROUTE)
-            )
+            if (sy.medpro.watani.ui.widget.WidgetRouter.isRouteAuthentic(this, intent)) {
+                sy.medpro.watani.ui.widget.WidgetRouter.request(
+                    intent.getStringExtra(sy.medpro.watani.ui.widget.WidgetRouter.EXTRA_ROUTE)
+                )
+            }
         } catch (_: Exception) { }
     }
 
@@ -154,9 +161,11 @@ class MainActivity : ComponentActivity() {
         // onNewIntent — stored in WidgetRouter until the signed-in
         // UI composes and consumes it exactly once.
         try {
-            sy.medpro.watani.ui.widget.WidgetRouter.request(
-                intent?.getStringExtra(sy.medpro.watani.ui.widget.WidgetRouter.EXTRA_ROUTE)
-            )
+            if (sy.medpro.watani.ui.widget.WidgetRouter.isRouteAuthentic(this, intent)) {
+                sy.medpro.watani.ui.widget.WidgetRouter.request(
+                    intent?.getStringExtra(sy.medpro.watani.ui.widget.WidgetRouter.EXTRA_ROUTE)
+                )
+            }
         } catch (_: Exception) { }
         // Crashlytics test path (phase-2 hardening, DEBUG BUILDS ONLY):
         // `adb shell am start -n sy.medpro.watani/.MainActivity

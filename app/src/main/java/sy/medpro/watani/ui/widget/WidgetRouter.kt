@@ -1,5 +1,7 @@
 package sy.medpro.watani.ui.widget
 
+import android.content.Context
+import android.content.Intent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import sy.medpro.watani.data.WidgetQuickAction
@@ -49,6 +51,47 @@ sealed interface WidgetDestination {
 object WidgetRouter {
 
     const val EXTRA_ROUTE: String = "sy.medpro.watani.widget.ROUTE"
+
+    const val EXTRA_ROUTE_NONCE: String = "sy.medpro.watani.widget.ROUTE_NONCE"
+
+    private const val ROUTE_PREFS: String = "watani_route_nonce"
+    private const val KEY_NONCE: String = "nonce"
+
+    /**
+     * Per-install route nonce (audit fix, 21 Nov 2026 — SEC-P1).
+     * MainActivity is exported (it is the launcher), so ANY app
+     * could fire an intent carrying EXTRA_ROUTE and steer a signed-in
+     * student to a chosen screen. The destinations are a closed list
+     * and every content gate still applies, so the impact was
+     * confusion/social engineering rather than a content bypass —
+     * but the route is now accepted only when the intent also
+     * carries this install's nonce, which only the app's own
+     * PendingIntent producers (widgets, notifications, the focus
+     * service) can know. Every producer stamps its intent via
+     * [stampRoute]; MainActivity verifies via [isRouteAuthentic].
+     */
+    fun routeNonce(context: Context): String {
+        val prefs = context.getSharedPreferences(ROUTE_PREFS, Context.MODE_PRIVATE)
+        prefs.getString(KEY_NONCE, null)?.let { if (it.isNotBlank()) return it }
+        val fresh = java.util.UUID.randomUUID().toString()
+        prefs.edit().putString(KEY_NONCE, fresh).apply()
+        return fresh
+    }
+
+    /** Stamps [intent] as a genuine in-app route carrier. */
+    fun stampRoute(intent: Intent, context: Context) {
+        intent.putExtra(EXTRA_ROUTE_NONCE, routeNonce(context))
+    }
+
+    /** True only when [intent] carries this install's route nonce. */
+    fun isRouteAuthentic(context: Context, intent: Intent?): Boolean {
+        val presented = try {
+            intent?.getStringExtra(EXTRA_ROUTE_NONCE)
+        } catch (_: Exception) {
+            null
+        } ?: return false
+        return presented == routeNonce(context)
+    }
 
     const val ROUTE_SETTINGS: String = "widget_settings"
 
