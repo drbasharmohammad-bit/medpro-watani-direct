@@ -56,36 +56,72 @@ class AnkiRepository(private val context: Context) {
         // Working copy: adopted cache first, bundled asset as the
         // guaranteed floor. Both are parsed through the same strict
         // validation; an invalid cache falls back to the asset.
+        // Audit fix (21 Nov 2026, N+1 sweep N1-02): the parse is
+        // MEMOIZED per process (keyed by the text's SHA-256) and the
+        // remote freshness fetch runs AT MOST ONCE per process. The
+        // old code re-parsed the whole 5.2MB / 9,071-card set AND
+        // re-downloaded it (up to 3 attempts) on EVERY entry into
+        // the Anki screen, which also delayed the cards until the
+        // fetch settled — on a dead connection, for its full retry
+        // cycle. Adoption semantics are unchanged: a newer remote is
+        // still fully validated and atomically persisted, just not
+        // re-fetched on every screen entry within one session.
         val cachedText = readCache()
-        val cachedSet = cachedText?.let { AnkiValidation.validatedParse(it, moshi) }
+        val cachedSet = cachedText?.let { memoizedParse(it) }
         val working: Pair<String?, AnkiSet> = when {
             cachedSet != null -> cachedText to cachedSet
             else -> {
                 val assetText = readBundledAsset()
-                assetText to (assetText?.let { AnkiValidation.validatedParse(it, moshi) }
+                assetText to (assetText?.let { memoizedParse(it) }
                     ?: AnkiSet(version = null, subjects = emptyList()))
             }
         }
         var workingText = working.first
         var workingSet = working.second
 
-        val remoteText = fetchRemote()
-        if (remoteText != null) {
-            val remoteSet = AnkiValidation.validatedParse(remoteText, moshi)
-            val remoteVersion = remoteSet?.version?.takeIf { it.isNotBlank() }
-            val workingVersion = workingSet.version?.takeIf { it.isNotBlank() }
-            if (remoteSet != null && remoteVersion != null &&
-                AnkiValidation.isStrictlyNewer(remoteVersion, workingVersion)
-            ) {
-                // Atomic adoption: content + version persist together,
-                // only after full validation above.
-                if (persistCache(remoteText)) {
-                    workingText = remoteText
-                    workingSet = remoteSet
+        if (!sessionFetchDone) {
+            sessionFetchDone = true
+            val remoteText = fetchRemote()
+            if (remoteText != null) {
+                val remoteSet = memoizedParse(remoteText)
+                val remoteVersion = remoteSet?.version?.takeIf { it.isNotBlank() }
+                val workingVersion = workingSet.version?.takeIf { it.isNotBlank() }
+                if (remoteSet != null && remoteVersion != null &&
+                    AnkiValidation.isStrictlyNewer(remoteVersion, workingVersion)
+                ) {
+                    // Atomic adoption: content + version persist together,
+                    // only after full validation above.
+                    if (persistCache(remoteText)) {
+                        workingText = remoteText
+                        workingSet = remoteSet
+                    }
                 }
             }
         }
         workingSet
+    }
+
+    /** validatedParse behind a per-process memo: the same text is
+     * never parsed twice in one process. The key is the text's
+     * SHA-256 — orders of magnitude cheaper than the full Moshi
+     * validation parse it guards. */
+    private fun memoizedParse(text: String): AnkiSet? {
+        val key = try {
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(text.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+        } catch (_: Exception) {
+            null
+        }
+        if (key != null && key == memoizedKey) {
+            memoizedSet?.let { return it }
+        }
+        val parsed = AnkiValidation.validatedParse(text, moshi) ?: return null
+        if (key != null) {
+            memoizedKey = key
+            memoizedSet = parsed
+        }
+        return parsed
     }
 
     private fun readBundledAsset(): String? = try {
@@ -122,6 +158,17 @@ class AnkiRepository(private val context: Context) {
     }
 
     private companion object {
+        /** N1-02: the remote freshness fetch runs once per process. */
+        @Volatile
+        var sessionFetchDone: Boolean = false
+
+        /** N1-02: last validated parse, keyed by its text's SHA-256. */
+        @Volatile
+        var memoizedKey: String? = null
+
+        @Volatile
+        var memoizedSet: AnkiSet? = null
+
         const val MAX_FETCH_ATTEMPTS = 3
         const val RETRY_DELAY_MS = 1500L
     }
