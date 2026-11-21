@@ -44,6 +44,12 @@ object ContentEncryption {
     }
 
     fun encryptFile(context: Context, plainFile: File, encryptedFile: File, onProgress: ((Float) -> Unit)? = null): Boolean {
+        // Audit fix (21 Nov 2026, SEC-C5): write to a temp file in the
+        // same directory and rename over the target only on success —
+        // the old code streamed straight into the target, so a failure
+        // mid-write left a truncated ciphertext file in place of a
+        // good one (encryptBytesToFile already worked this way).
+        val tmpFile = File(encryptedFile.parentFile, encryptedFile.name + ".enc.tmp")
         return try {
             val key = getOrCreateKey()
             val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -53,7 +59,7 @@ object ContentEncryption {
             var processed = 0L
             var lastReported = 0L
 
-            FileOutputStream(encryptedFile).use { output ->
+            FileOutputStream(tmpFile).use { output ->
                 output.write(iv)
                 FileInputStream(plainFile).use { input ->
                     val buffer = ByteArray(8192)
@@ -76,20 +82,38 @@ object ContentEncryption {
                 }
             }
             onProgress?.invoke(1f)
+            if (encryptedFile.exists()) encryptedFile.delete()
+            if (!tmpFile.renameTo(encryptedFile)) {
+                tmpFile.delete()
+                return false
+            }
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            // Audit fix (SEC-S9): no printStackTrace in release paths.
+            try { tmpFile.delete() } catch (_: Exception) { }
             false
         }
     }
 
     fun decryptFile(context: Context, encryptedFile: File, outputFile: File): Boolean {
+        // Audit fix (21 Nov 2026, SEC-C5): GCM verifies the tag only
+        // at doFinal(), but the old code streamed plaintext straight
+        // into outputFile as it went — a tampered/corrupt ciphertext
+        // left a PARTIAL PLAINTEXT file behind on failure, and only
+        // the callers' own cleanup discipline prevented it from
+        // being used. The plaintext now lands in a temp file first
+        // and is renamed over the target ONLY after doFinal()
+        // succeeds; on any failure the temp is deleted here, so a
+        // failed decrypt can never leave plaintext (or a partial
+        // file) at the target path.
+        val tmpFile = File(outputFile.parentFile, outputFile.name + ".dec.tmp")
         return try {
             val key = getOrCreateKey()
 
             FileInputStream(encryptedFile).use { input ->
                 val iv = ByteArray(IV_SIZE)
                 if (input.read(iv) != IV_SIZE) {
+                    try { tmpFile.delete() } catch (_: Exception) { }
                     return false
                 }
 
@@ -97,7 +121,7 @@ object ContentEncryption {
                 val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
                 cipher.init(Cipher.DECRYPT_MODE, key, spec)
 
-                FileOutputStream(outputFile).use { output ->
+                FileOutputStream(tmpFile).use { output ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
                     while (input.read(buffer).also { bytesRead = it } != -1) {
@@ -112,9 +136,14 @@ object ContentEncryption {
                     }
                 }
             }
+            if (outputFile.exists()) outputFile.delete()
+            if (!tmpFile.renameTo(outputFile)) {
+                tmpFile.delete()
+                return false
+            }
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            try { tmpFile.delete() } catch (_: Exception) { }
             false
         }
     }
@@ -147,7 +176,7 @@ object ContentEncryption {
             }
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            // Audit fix (SEC-S9): no printStackTrace in release paths.
             false
         }
     }

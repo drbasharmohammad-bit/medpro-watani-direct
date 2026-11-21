@@ -28,6 +28,18 @@ import java.io.File
  * parses as JSON text (starts with '{' or '[') is re-saved encrypted
  * on the spot and its plaintext is returned; anything else is treated
  * as corrupt and returns null (the section then re-downloads).
+ *
+ * Audit bound (21 Nov 2026, SEC-S8): legacy acceptance used to be
+ * PERMANENT — any plaintext JSON planted in the cache directory at
+ * any future time was silently adopted and re-encrypted, so the
+ * store had no tamper evidence at all. Acceptance is now bounded by
+ * a persisted cutoff: the first time this store runs on an install
+ * it records [legacyCutoffMs]; only files last modified at or before
+ * that moment can be legacy (they predate the encrypted store on
+ * this device). A plaintext file appearing later is rejected as
+ * corrupt and re-downloaded. (An attacker who can write into
+ * filesDir AND forge mtimes is outside this layer's threat model;
+ * the bound removes the silent, indefinite acceptance.)
  */
 object SectionCacheCrypto {
 
@@ -41,6 +53,26 @@ object SectionCacheCrypto {
     fun writeText(context: Context, file: File, text: String): Boolean =
         writeBytes(context, file, text.toByteArray(Charsets.UTF_8))
 
+    private const val PREFS_NAME = "section_cache_crypto"
+    private const val KEY_LEGACY_CUTOFF = "legacy_cutoff_ms"
+
+    /** The persisted legacy cutoff for this install (see class docs):
+     * set once, the first time the store runs, and never moved. */
+    fun legacyCutoffMs(context: Context): Long {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val existing = prefs.getLong(KEY_LEGACY_CUTOFF, 0L)
+        if (existing > 0L) return existing
+        val now = System.currentTimeMillis()
+        prefs.edit().putLong(KEY_LEGACY_CUTOFF, now).apply()
+        return now
+    }
+
+    /** Pure decision (unit-testable): may [fileLastModifiedMs] still be
+     * a legacy plaintext file under [cutoffMs]? Unknown mtimes (0)
+     * count as legacy — the conservative direction for real users. */
+    fun isLegacyWindowOpen(fileLastModifiedMs: Long, cutoffMs: Long): Boolean =
+        fileLastModifiedMs <= cutoffMs
+
     /**
      * The single section-read path: decrypts [file], migrating a legacy
      * plaintext JSON file to encrypted form on first read. Returns null
@@ -50,7 +82,11 @@ object SectionCacheCrypto {
         if (!file.exists()) return null
         ContentEncryption.decryptFileToText(file)?.let { return it }
         // Legacy plaintext (pre-hardening cache): accept only real JSON
-        // text, then immediately re-save it encrypted.
+        // text that predates this install's encrypted store (SEC-S8
+        // bound), then immediately re-save it encrypted.
+        if (!isLegacyWindowOpen(file.lastModified(), legacyCutoffMs(context))) {
+            return null
+        }
         val plain = try {
             file.readText(Charsets.UTF_8)
         } catch (_: Exception) {
