@@ -1,0 +1,34 @@
+# detekt tuning — full audit phase 2 triage (21 Nov 2026).
+#
+# Method (Tricorder rule): a rule whose findings are overwhelmingly
+# noise gets TUNED, not obeyed blindly and not deleted. The phase-0
+# full scan found 5,778 findings; two style rules made 82% of them:
+#   MaxLineLength  3,017 (52%)
+#   MagicNumber    1,720 (30%)
+# The frozen baseline (baseline.xml, 4,796 ids) already neutralizes
+# the existing stock; this file only tunes how NEW code is judged.
+#
+# MaxLineLength: TUNED 120 -> 160. This codebase's lines are
+# structurally long (Arabic comments and long Arabic UI strings are
+# the norm, and Arabic text cannot be re-wrapped mid-sentence
+# without harming readability). 160 keeps the rule catching truly
+# pathological lines while stopping it from taxing every Arabic
+# comment. 
+#
+# MagicNumber: KEPT at the default on purpose. A reviewed sample
+# showed its logic-code hits are real unnamed constants worth
+# naming; its UI dp/sp noise is accepted (the stock is frozen in
+# the baseline, and new UI constants can be named when it matters).
+#
+# WildcardImport (145) and FunctionNaming (247): documented as
+# accepted idiom (Compose imports; Arabic-adjacent naming in UI
+# code) — frozen stock in the baseline, no tuning.
+#
+# Everything else stays at detekt defaults
+# (buildUponDefaultConfig = true in app/build.gradle.kts): the
+# correctness/complexity rulesets are the gate's real teeth and are
+# NOT relaxed here.
+
+style:
+  MaxLineLength:
+    maxLineLength: 160
