@@ -1033,6 +1033,10 @@ fun ContactScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val contactLinks by ContactLinksStore.links.collectAsState()
     var guideEnvelope by remember { mutableStateOf<GuideEnvelope?>(null) }
+    // Sweep fixes M-4/M-5: link failures and guide-load failures are
+    // surfaced to the student instead of being swallowed silently.
+    var linkError by remember { mutableStateOf<String?>(null) }
+    var guideLoadFailed by remember { mutableStateOf(false) }
 
     fun loadGuide() {
         scope.launch {
@@ -1055,6 +1059,7 @@ fun ContactScreen(onBack: () -> Unit) {
                 env = repo.getGuideEnvelope() ?: env
             }
             guideEnvelope = env
+            guideLoadFailed = env == null
         }
     }
 
@@ -1068,11 +1073,18 @@ fun ContactScreen(onBack: () -> Unit) {
         // links are opened only through the ExternalLinkPolicy
         // allowlist (https + Telegram hosts) — a poisoned config
         // value can no longer push an arbitrary scheme/deep link
-        // out of the app. A refused link simply does nothing.
-        if (!sy.medpro.watani.data.ExternalLinkPolicy.isAllowed(url)) return
+        // out of the app. Sweep fix M-4: a refused or failed link now
+        // shows a visible message instead of looking like a dead button
+        // (same behaviour as TelegramLinkScreen).
+        if (!sy.medpro.watani.data.ExternalLinkPolicy.isAllowed(url)) {
+            linkError = "تعذّر فتح الرابط — تحقق من الاتصال وحاول مجددًا."
+            return
+        }
         try {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            linkError = null
         } catch (_: Exception) {
+            linkError = "تعذّر فتح الرابط — تحقق من الاتصال وحاول مجددًا."
         }
     }
 
@@ -1117,7 +1129,19 @@ fun ContactScreen(onBack: () -> Unit) {
                                 Text("إنستغرام")
                             }
                         }
+                        if (contactLinks.supportBot.isBlank() && contactLinks.wataniChannel.isBlank() &&
+                            contactLinks.medproChannel.isBlank() && contactLinks.instagram.isBlank()
+                        ) {
+                            // Sweep fix M-5: never render an unexplained
+                            // empty channels card.
+                            Text("لا توجد روابط تواصل متاحة حاليًا — تُحدَّث الروابط من إدارة التطبيق.", fontSize = 13.sp)
+                        }
                     }
+                }
+            }
+            if (linkError != null) {
+                item {
+                    Text(linkError!!, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
                 }
             }
             val info = guideEnvelope?.info
@@ -1131,14 +1155,43 @@ fun ContactScreen(onBack: () -> Unit) {
                             if (!info.adminEmail.isNullOrBlank()) {
                                 Spacer(modifier = Modifier.height(16.dp))
                                 OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = {
-                                    val uriStr = "mailto:${info.adminEmail}"
-                                    val intent = Intent(Intent.ACTION_SENDTO, Uri.parse(uriStr))
-                                    context.startActivity(intent)
+                                    // Sweep fix M-4: the mailto intent was the
+                                    // only unguarded startActivity on this
+                                    // screen — on a device with no mail app it
+                                    // threw ActivityNotFoundException.
+                                    try {
+                                        val uriStr = "mailto:${info.adminEmail}"
+                                        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse(uriStr))
+                                        context.startActivity(intent)
+                                        linkError = null
+                                    } catch (_: Exception) {
+                                        linkError = "تعذّر فتح تطبيق البريد — لا يوجد تطبيق بريد مُثبَّت على هذا الجهاز."
+                                    }
                                 }, modifier = Modifier.fillMaxWidth()) {
                                     Icon(Icons.Default.Email, contentDescription = null)
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text("راسلنا عبر البريد الإلكتروني")
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+            if (info == null && guideLoadFailed) {
+                item {
+                    // Sweep fix M-5: a failed guide load used to make the
+                    // support card vanish with no explanation.
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("تعذّر تحميل قنوات الدعم الرسمي — تحقق من الاتصال.", fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                border = BorderStroke(1.dp, MaroonPrimary),
+                                shape = MaterialTheme.shapes.medium,
+                                onClick = { guideLoadFailed = false; loadGuide() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("إعادة المحاولة")
                             }
                         }
                     }
