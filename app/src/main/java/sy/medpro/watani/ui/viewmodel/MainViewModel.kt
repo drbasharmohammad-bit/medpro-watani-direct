@@ -221,10 +221,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 val reason = error.localizedMessage?.takeIf { m ->
                                     m.any { it.code in 0x0600..0x06FF }
                                 }
+                                // Sweep fix M-3: the raw section path
+                                // (e.g. questions/<subject>.json) is an
+                                // internal identifier and must never be
+                                // shown to the student; the banner names
+                                // the section generically and keeps the
+                                // Arabic reason when there is one.
                                 if (reason != null) {
-                                    "فشل تحميل $path — $reason"
+                                    "فشل تحميل القسم — $reason"
                                 } else {
-                                    "فشل تحميل $path — تحقق من الاتصال وحاول مجددًا."
+                                    "فشل تحميل القسم — تحقق من الاتصال وحاول مجددًا."
                                 }
                             }
                         )
