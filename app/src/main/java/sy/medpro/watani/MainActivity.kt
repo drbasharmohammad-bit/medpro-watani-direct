@@ -547,7 +547,19 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(pendingWidgetRoute) {
                         val route = pendingWidgetRoute ?: return@LaunchedEffect
                         when (val destination = sy.medpro.watani.ui.widget.WidgetRouter.destinationFor(route)) {
-                            is sy.medpro.watani.ui.widget.WidgetDestination.Drawer -> drawerScreen = destination.title
+                            is sy.medpro.watani.ui.widget.WidgetDestination.Drawer -> {
+                                // Sweep fix L-5: widget routes used to assign
+                                // drawerScreen directly, bypassing the gate
+                                // that drawer taps and tool tiles apply. All
+                                // current widget destinations are free, but a
+                                // future restricted destination must not slip
+                                // in ungated — apply the same check here.
+                                if (destination.title == "المراجعة الذكية Anki") {
+                                    openRestrictedDrawer(destination.title)
+                                } else {
+                                    drawerScreen = destination.title
+                                }
+                            }
                             is sy.medpro.watani.ui.widget.WidgetDestination.Tab -> requestTab(destination.tab)
                             sy.medpro.watani.ui.widget.WidgetDestination.MistakesReview -> {
                                 mistakesAutoReview = true
