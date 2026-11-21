@@ -645,7 +645,7 @@ private val ErCase.specialty: String get() = erCaseSpecialty[id] ?: "عامة"
 private data class ErMistake(val caseTitle: String, val actionLabel: String, val feedback: String)
 
 @Composable
-fun EmergencyRoomScreen(onBack: () -> Unit) {
+fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit = {}) {
     var caseIndex by remember { mutableIntStateOf(-1) }
     var nodeId by remember { mutableStateOf<String?>(null) }
     var totalScore by remember { mutableIntStateOf(0) }
@@ -758,6 +758,11 @@ fun EmergencyRoomScreen(onBack: () -> Unit) {
                             Text("189 حالة طارئة مقسمة حسب الاختصاص. كل حالة: عرض وعلامات حيوية، ثم اختر إجراءً من 3-4 إجراءات. العلامات تتغير فقط مع قرارك، والتغذية الراجعة تشرح لماذا الصح صحيح ولماذا الخطأ خطأ، مع مرجع إرشادي. بلا اتصال أثناء اللعب.", color = Color.White, fontSize = 13.sp)
                         }
                     }
+                    OutlinedButton(
+                        onClick = onOpenNightShift,
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("محاكاة المناوبة الليلية الإسعافية", fontWeight = FontWeight.Bold) }
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(specialtyOrder) { spec ->
                             val count = if (spec == "الكل") erCases.size else erCases.count { it.specialty == spec }

@@ -1093,7 +1093,11 @@ class MainActivity : ComponentActivity() {
                                                 "مدرب الجرعات" -> DosingDrillsScreen(onBack = { drawerScreen = null })
                                                 "مدرّب التشخيص التفريقي" -> DdxTrainerScreen(onBack = { drawerScreen = null })
                                                 "اقلبها" -> ReverseTrainerScreen(onBack = { drawerScreen = null })
-                                                "غرفة الطوارئ" -> EmergencyRoomScreen(onBack = { drawerScreen = null })
+                                                "غرفة الطوارئ" -> EmergencyRoomScreen(
+                                                    onBack = { drawerScreen = null },
+                                                    onOpenNightShift = { drawerScreen = "محاكاة المناوبة الليلية" }
+                                                )
+                                                "محاكاة المناوبة الليلية" -> NightShiftSimulatorScreen(onBack = { drawerScreen = "غرفة الطوارئ" })
                                                 "محاكاة الامتحان" -> ExamSimulationScreen(onBack = { drawerScreen = null })
                                                 else -> ProfileScreen(onBack = { drawerScreen = null })
                                             }
