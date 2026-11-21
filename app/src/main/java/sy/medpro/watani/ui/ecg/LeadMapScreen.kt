@@ -61,14 +61,18 @@ fun LeadMapScreen(envelope: EcgEnvelope, store: EcgProgressStore, onBack: () -> 
             )
             val entryCard: @Composable (Int, sy.medpro.watani.data.EcgLeadMapDto) -> Unit = { index, entry ->
                 val isSelected = selected == index
+                // Sweep fix L-1: one selection action shared by the card
+                // and its lead chips — the chips used to carry an empty
+                // onClick and only looked interactive.
+                val selectEntry = {
+                    selected = index
+                    viewed = viewed + index
+                    if (viewed.size + 1 >= entries.size && entries.isNotEmpty()) {
+                        store.markLeadMapDone()
+                    }
+                }
                 Card(
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        selected = index
-                        viewed = viewed + index
-                        if (viewed.size + 1 >= entries.size && entries.isNotEmpty()) {
-                            store.markLeadMapDone()
-                        }
-                    },
+                    modifier = Modifier.fillMaxWidth().clickable { selectEntry() },
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = if (isSelected) RoseSurfaceVariant else MaterialTheme.colorScheme.surface
@@ -79,7 +83,7 @@ fun LeadMapScreen(envelope: EcgEnvelope, store: EcgProgressStore, onBack: () -> 
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             (entry.leads ?: emptyList()).forEach { lead ->
                                 SuggestionChip(
-                                    onClick = {},
+                                    onClick = { selectEntry() },
                                     label = { Text(lead, fontWeight = FontWeight.Bold) },
                                     colors = SuggestionChipDefaults.suggestionChipColors(
                                         containerColor = MaterialTheme.colorScheme.surface
