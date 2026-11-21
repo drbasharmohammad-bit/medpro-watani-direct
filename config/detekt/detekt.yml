@@ -20,9 +20,17 @@
 # naming; its UI dp/sp noise is accepted (the stock is frozen in
 # the baseline, and new UI constants can be named when it matters).
 #
-# WildcardImport (145) and FunctionNaming (247): documented as
-# accepted idiom (Compose imports; Arabic-adjacent naming in UI
-# code) — frozen stock in the baseline, no tuning.
+# WildcardImport (145): documented as accepted idiom (Compose
+# imports) — frozen stock in the baseline, no tuning.
+#
+# FunctionNaming (247): the frozen stock is overwhelmingly
+# @Composable functions — PascalCase IS the Compose naming
+# convention, so composables are excluded from the rule below
+# (audit fix-loop, 21 Nov 2026: this surfaced when item Z
+# re-signed ConceptsEntryCard and item ح added a new composable;
+# both were flagged as "new" against a baseline that only ever
+# passed composables by freezing them one by one). Plain
+# functions keep the default camelCase pattern.
 #
 # Everything else stays at detekt defaults
 # (buildUponDefaultConfig = true in app/build.gradle.kts): the
@@ -32,3 +40,8 @@
 style:
   MaxLineLength:
     maxLineLength: 160
+
+naming:
+  FunctionNaming:
+    ignoreAnnotated:
+      - 'Composable'
