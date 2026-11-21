@@ -70,6 +70,7 @@ private val TOOL_GROUPS = listOf(
             ToolEntry("اقلبها", "ابنِ الصورة السريرية للتشخيص، ميّز العنصر الدخيل، وأكمل العبارة الناقصة", Icons.Default.FlipCameraAndroid, Color(0xFF00897B), "اقلبها"),
             ToolEntry("الحالات الألمانية", "حالات مريض افتراضي بالألمانية (Deutsche Fälle)", Icons.Default.Language, Color(0xFF00695C), "الحالات الألمانية"),
             ToolEntry("غرفة الطوارئ", "مناوبة إسعافية تفاعلية بحالات متغيرة", Icons.Default.Emergency, Color(0xFFC62828), "غرفة الطوارئ"),
+            ToolEntry("محاكاة الامتحان", "اختبار وطني كامل بعدد الأسئلة والتوقيت الحقيقيين ونتيجة فورية", Icons.Default.AssignmentTurnedIn, Color(0xFF37474F), "محاكاة الامتحان"),
             ToolEntry("محطات OSCE", "محطات فحص سريري تفاعلية", Icons.Default.FactCheck, Color(0xFF283593), "محطات OSCE"),
             ToolEntry("مدرب الجرعات", "سيناريوهات جرعات وأدوية بجرعات موثّقة بمصادرها", Icons.Default.MedicalServices, Color(0xFFAD1457), "مدرب الجرعات"),
             // Fix 1.2.2 (doctor's order): ONE tools entry — «القلب والإصغاء».

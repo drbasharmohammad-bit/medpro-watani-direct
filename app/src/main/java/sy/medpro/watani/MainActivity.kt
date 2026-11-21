@@ -1094,6 +1094,7 @@ class MainActivity : ComponentActivity() {
                                                 "مدرّب التشخيص التفريقي" -> DdxTrainerScreen(onBack = { drawerScreen = null })
                                                 "اقلبها" -> ReverseTrainerScreen(onBack = { drawerScreen = null })
                                                 "غرفة الطوارئ" -> EmergencyRoomScreen(onBack = { drawerScreen = null })
+                                                "محاكاة الامتحان" -> ExamSimulationScreen(onBack = { drawerScreen = null })
                                                 else -> ProfileScreen(onBack = { drawerScreen = null })
                                             }
                                         } else {
@@ -1341,7 +1342,12 @@ class MainActivity : ComponentActivity() {
                                                         AppTab.TOOLS -> {
                                                             ToolsScreen(
                                                                 onToolClick = { title ->
-                                                                    if (title == "المراجعة الذكية Anki") openRestrictedDrawer(title) else drawerScreen = title
+                                                                    // The Anki review and the exam
+                                                                    // simulator both consume restricted
+                                                                    // bank content, so their tiles pass
+                                                                    // the same activation gate as the
+                                                                    // bank tabs; every other tile is free.
+                                                                    if (title == "المراجعة الذكية Anki" || title == "محاكاة الامتحان") openRestrictedDrawer(title) else drawerScreen = title
                                                                 }
                                                             )
                                                         }
