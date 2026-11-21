@@ -1024,6 +1024,9 @@ fun ContactScreen(onBack: () -> Unit) {
     // surfaced to the student instead of being swallowed silently.
     var linkError by remember { mutableStateOf<String?>(null) }
     var guideLoadFailed by remember { mutableStateOf(false) }
+    // Split in two so the empty-links check stays a simple condition.
+    val noPrimaryLinks = contactLinks.supportBot.isBlank() && contactLinks.wataniChannel.isBlank()
+    val noSocialLinks = contactLinks.medproChannel.isBlank() && contactLinks.instagram.isBlank()
 
     fun loadGuide() {
         scope.launch {
@@ -1116,9 +1119,7 @@ fun ContactScreen(onBack: () -> Unit) {
                                 Text("إنستغرام")
                             }
                         }
-                        if (contactLinks.supportBot.isBlank() && contactLinks.wataniChannel.isBlank() &&
-                            contactLinks.medproChannel.isBlank() && contactLinks.instagram.isBlank()
-                        ) {
+                        if (noPrimaryLinks && noSocialLinks) {
                             // Sweep fix M-5: never render an unexplained
                             // empty channels card.
                             Text("لا توجد روابط تواصل متاحة حاليًا — تُحدَّث الروابط من إدارة التطبيق.", fontSize = 13.sp)

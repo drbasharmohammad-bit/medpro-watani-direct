@@ -1380,7 +1380,13 @@ class MainActivity : ComponentActivity() {
                                                                     // bank content, so their tiles pass
                                                                     // the same activation gate as the
                                                                     // bank tabs; every other tile is free.
-                                                                    if (title == "المراجعة الذكية Anki" || title == "محاكاة الامتحان") openRestrictedDrawer(title) else drawerScreen = title
+                                                                    if (title == "المراجعة الذكية Anki" ||
+                                                                        title == "محاكاة الامتحان"
+                                                                    ) {
+                                                                        openRestrictedDrawer(title)
+                                                                    } else {
+                                                                        drawerScreen = title
+                                                                    }
                                                                 }
                                                             )
                                                         }

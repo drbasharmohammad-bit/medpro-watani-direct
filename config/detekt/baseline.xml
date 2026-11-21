@@ -47,7 +47,7 @@
     <ID>CyclomaticComplexMethod:DosingDrillsScreen.kt$@Composable private fun DosingDrillCard( drill: DosingDrillDto, position: Int, total: Int, chosen: Int?, onChoose: (Int) -&gt; Unit, onNext: () -&gt; Unit )</ID>
     <ID>CyclomaticComplexMethod:EcgCourseScreen.kt$@Composable private fun EcgPatternDetailScreen( envelope: EcgEnvelope?, pattern: EcgPatternDto, store: EcgProgressStore, onCompare: () -&gt; Unit, onGuidedStrip: (String) -&gt; Unit, onBack: () -&gt; Unit )</ID>
     <ID>CyclomaticComplexMethod:EcgCourseScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EcgCourseScreen(onBack: () -&gt; Unit)</ID>
-    <ID>CyclomaticComplexMethod:EmergencyRoomScreen.kt$@Composable fun EmergencyRoomScreen(onBack: () -&gt; Unit)</ID>
+    <ID>CyclomaticComplexMethod:EmergencyRoomScreen.kt$@Composable fun EmergencyRoomScreen(onBack: () -&gt; Unit, onOpenNightShift: () -&gt; Unit)</ID>
     <ID>CyclomaticComplexMethod:ExamSimulatorScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ExamSimulatorScreen(onBack: () -&gt; Unit)</ID>
     <ID>CyclomaticComplexMethod:ExplanationRepository.kt$ExplanationRepository$private suspend fun downloadShard(shardName: String): Result&lt;String&gt;</ID>
     <ID>CyclomaticComplexMethod:ExplanationRepository.kt$ExplanationRepository$private suspend fun fetchLayerIndex(): Result&lt;ExplanationIndex?&gt;</ID>
@@ -197,7 +197,7 @@
     <ID>FunctionNaming:EcgStripView.kt$@Composable fun EcgStripView( samples: List&lt;Int&gt;, fs: Int, label: String?, modifier: Modifier = Modifier, seconds: Double = 10.0, interactive: Boolean = true )</ID>
     <ID>FunctionNaming:EcgStripView.kt$@Composable fun EcgTwelveLeadView(strip: EcgStripDto, modifier: Modifier = Modifier)</ID>
     <ID>FunctionNaming:EcgStripView.kt$@Composable private fun EcgLeadCell( strip: EcgStripDto, lead: String, startSample: Int, count: Int, modifier: Modifier = Modifier )</ID>
-    <ID>FunctionNaming:EmergencyRoomScreen.kt$@Composable fun EmergencyRoomScreen(onBack: () -&gt; Unit)</ID>
+    <ID>FunctionNaming:EmergencyRoomScreen.kt$@Composable fun EmergencyRoomScreen(onBack: () -&gt; Unit, onOpenNightShift: () -&gt; Unit)</ID>
     <ID>FunctionNaming:EmergencyRoomScreen.kt$@Composable private fun VitalsCard(v: ErVitals)</ID>
     <ID>FunctionNaming:ExamSimulatorScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ExamSimulatorScreen(onBack: () -&gt; Unit)</ID>
     <ID>FunctionNaming:ExplanationSection.kt$@Composable fun ExplanationSection(content: ExplanationContent?, modifier: Modifier = Modifier)</ID>
@@ -430,7 +430,7 @@
     <ID>LongMethod:EcgCourseScreen.kt$@Composable private fun EcgPatternDetailScreen( envelope: EcgEnvelope?, pattern: EcgPatternDto, store: EcgProgressStore, onCompare: () -&gt; Unit, onGuidedStrip: (String) -&gt; Unit, onBack: () -&gt; Unit )</ID>
     <ID>LongMethod:EcgCourseScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun EcgCourseScreen(onBack: () -&gt; Unit)</ID>
     <ID>LongMethod:EcgStripView.kt$@Composable fun EcgCalipersView( strip: EcgStripDto, modifier: Modifier = Modifier, onMeasurement: (deltaMs: Double, hrFromRr: Double) -&gt; Unit = { _, _ -&gt; } )</ID>
-    <ID>LongMethod:EmergencyRoomScreen.kt$@Composable fun EmergencyRoomScreen(onBack: () -&gt; Unit)</ID>
+    <ID>LongMethod:EmergencyRoomScreen.kt$@Composable fun EmergencyRoomScreen(onBack: () -&gt; Unit, onOpenNightShift: () -&gt; Unit)</ID>
     <ID>LongMethod:ExamSimulatorScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ExamSimulatorScreen(onBack: () -&gt; Unit)</ID>
     <ID>LongMethod:ExplanationSection.kt$@Composable fun ExplanationSection(content: ExplanationContent?, modifier: Modifier = Modifier)</ID>
     <ID>LongMethod:FirstAidFlashcards.kt$@Composable fun FirstAidFlashcardsPlayer( title: String, cards: List&lt;FaDeckCard&gt;, onClose: () -&gt; Unit, onDeckFinished: () -&gt; Unit = {} )</ID>
@@ -1211,6 +1211,7 @@
     <ID>MagicNumber:ToolsScreen.kt$0xFF283593</ID>
     <ID>MagicNumber:ToolsScreen.kt$0xFF2E7D32</ID>
     <ID>MagicNumber:ToolsScreen.kt$0xFF33691E</ID>
+    <ID>MagicNumber:ToolsScreen.kt$0xFF37474F</ID>
     <ID>MagicNumber:ToolsScreen.kt$0xFF4527A0</ID>
     <ID>MagicNumber:ToolsScreen.kt$0xFF455A64</ID>
     <ID>MagicNumber:ToolsScreen.kt$0xFF5D4037</ID>

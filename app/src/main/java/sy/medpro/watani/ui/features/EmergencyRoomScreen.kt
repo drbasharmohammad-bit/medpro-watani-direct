@@ -645,7 +645,7 @@ private val ErCase.specialty: String get() = erCaseSpecialty[id] ?: "عامة"
 private data class ErMistake(val caseTitle: String, val actionLabel: String, val feedback: String)
 
 @Composable
-fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit = {}) {
+fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit) {
     var caseIndex by remember { mutableIntStateOf(-1) }
     var nodeId by remember { mutableStateOf<String?>(null) }
     var totalScore by remember { mutableIntStateOf(0) }
