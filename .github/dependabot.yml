@@ -1,0 +1,25 @@
+# Dependabot version updates — full-audit phase 0 (21 Nov 2026).
+# Weekly PRs for Gradle dependencies and GitHub Actions, grouped to
+# keep review load small for a solo-maintained project. Merging is
+# always a human decision gated by the CI build.
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      androidx:
+        patterns: ["androidx.*"]
+      firebase:
+        patterns: ["com.google.firebase.*", "com.google.gms.*"]
+      kotlin-coroutines:
+        patterns: ["org.jetbrains.kotlinx.*"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3

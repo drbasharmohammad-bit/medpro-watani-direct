@@ -8,6 +8,12 @@ plugins {
   // Phase-2 hardening (Nov 2026): Crashlytics symbol/mapping upload
   // wiring for release builds (firebase-crashlytics via the BoM).
   alias(libs.plugins.crashlytics)
+  // Full-audit phase 0 (21 Nov 2026): detekt static analysis gate
+  // (baseline-frozen legacy findings; NEW findings fail CI) and
+  // JaCoCo unit-test coverage measurement (baseline announced, no
+  // imposed target in the first round — audit program §0).
+  alias(libs.plugins.detekt)
+  id("jacoco")
 }
 
 android {
@@ -241,4 +247,49 @@ dependencies {
   androidTestImplementation(libs.androidx.runner)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+// ---------------------------------------------------------------------------
+// Full-audit phase 0 (21 Nov 2026): detekt gate + JaCoCo measurement.
+//
+// detekt runs with the default rule set on top of the built-in config
+// (buildUponDefaultConfig). Every finding that exists today is frozen
+// in config/detekt/baseline.xml (generated once by the
+// detekt-baseline workflow); any NEW finding fails the CI detekt step,
+// mirroring the lint-baseline pattern this project already uses.
+// ---------------------------------------------------------------------------
+detekt {
+  buildUponDefaultConfig = true
+  parallel = true
+  baseline = file("$rootDir/config/detekt/baseline.xml")
+  source.setFrom("src/main/java", "src/test/java")
+  reports {
+    html.required.set(true)
+    xml.required.set(true)
+    txt.required.set(true)
+  }
+}
+
+// JaCoCo coverage over the CI unit-test run. Measurement only in this
+// round: the baseline percentage is announced in the audit execution
+// log; no coverage target is imposed until the audit's phase 2.
+tasks.register<JacocoReport>("jacocoTestReport") {
+  dependsOn(tasks.named("testDebugUnitTest"))
+  reports {
+    xml.required.set(true)
+    html.required.set(true)
+  }
+  val kotlinClasses = fileTree("${layout.buildDirectory.get().asFile}/tmp/kotlin-classes/debug") {
+    exclude(
+      "**/R.class", "**/R$*.class", "**/BuildConfig.*", "**/Manifest*.*",
+      "**/*_Factory.*", "**/*_MembersInjector.*", "**/Dagger*.*"
+    )
+  }
+  classDirectories.setFrom(kotlinClasses)
+  sourceDirectories.setFrom(files("src/main/java"))
+  executionData.setFrom(
+    fileTree(layout.buildDirectory.get().asFile) {
+      include("jacoco/testDebugUnitTest.exec", "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec")
+    }
+  )
 }

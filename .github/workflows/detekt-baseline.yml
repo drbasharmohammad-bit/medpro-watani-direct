@@ -1,0 +1,58 @@
+# One-shot detekt baseline generator (full-audit phase 0, 21 Nov 2026).
+#
+# Manual dispatch only. Runs `gradle :app:detektBaseline` and uploads
+# config/detekt/baseline.xml as an artifact; the coordinator downloads
+# it, reviews the frozen finding count, and commits it. After that,
+# the main build workflow's detekt step fails on any NEW finding.
+# Re-run this only when a deliberate re-baseline is decided and
+# documented in the audit execution log.
+name: Generate detekt baseline
+
+on:
+  workflow_dispatch:
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Download Gradle 9.3.1 (no gradlew in Studio export)
+        run: |
+          ok=""
+          for url in https://services.gradle.org/distributions/gradle-9.3.1-bin.zip https://downloads.gradle.org/distributions/gradle-9.3.1-bin.zip https://mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip https://mirrors.cloud.tencent.com/gradle/gradle-9.3.1-bin.zip https://github.com/gradle/gradle-distributions/releases/download/v9.3.1/gradle-9.3.1-bin.zip; do
+            for attempt in 1 2; do
+              if curl -fsSL --retry 2 "$url" -o /tmp/gradle-9.3.1-bin.zip && unzip -tq /tmp/gradle-9.3.1-bin.zip >/dev/null; then ok=1; break; fi
+              echo "Gradle download from $url (attempt $attempt) failed/corrupt; retrying..."
+              sleep 8
+            done
+            if [ -n "$ok" ]; then break; fi
+          done
+          if [ -z "$ok" ]; then echo "ERROR: could not download a valid Gradle 9.3.1 zip from any mirror." >&2; exit 1; fi
+          unzip -q /tmp/gradle-9.3.1-bin.zip -d /tmp
+          echo "/tmp/gradle-9.3.1/bin" >> "$GITHUB_PATH"
+
+      - name: Generate detekt baseline
+        run: |
+          for attempt in 1 2 3; do
+            if gradle :app:detektBaseline --console=plain --max-workers=2; then break; fi
+            if [ "$attempt" = "3" ]; then exit 1; fi
+            echo "Gradle attempt $attempt failed; retrying in 30s..."; sleep 30
+          done
+          ls -la config/detekt/
+
+      - name: Upload baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: detekt-baseline
+          path: config/detekt/baseline.xml
+          if-no-files-found: error
+          retention-days: 14

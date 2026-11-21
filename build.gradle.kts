@@ -6,4 +6,5 @@ plugins {
   kotlin("kapt") version "2.1.10" apply false
   alias(libs.plugins.secrets) apply false
   alias(libs.plugins.google.services) apply false
+  alias(libs.plugins.detekt) apply false
 }

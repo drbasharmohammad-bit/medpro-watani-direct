@@ -44,6 +44,7 @@ credentials = "1.5.0"
 googleid = "1.1.1"
 media3 = "1.5.1"
 pdfboxAndroid = "2.0.27.0"
+detekt = "1.23.8"
 
 
 [libraries]
@@ -113,3 +114,4 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 secrets = { id = "com.google.android.libraries.mapsplatform.secrets-gradle-plugin", version.ref = "secretsGradlePlugin" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlyticsPlugin" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }

@@ -1,0 +1,33 @@
+# gitleaks configuration — full-audit phase 0 (21 Nov 2026).
+#
+# The ONLY allowlist entry is the Firebase client API key. A Firebase
+# API key is a public client identifier by design: it ships inside
+# google-services.json and inside every distributed APK, and Google
+# documents it as non-secret. Its real protection is (a) API/Android
+# restrictions in Google Cloud Console and (b) Firebase Security
+# Rules / App Check — the console restriction is an owner action
+# tracked as audit card SEC-001.
+#
+# The allowlist is deliberately narrow (this exact key shape, only in
+# the two files where the key legitimately lives) so that any REAL
+# future secret stands out instead of drowning in noise — the
+# Tricorder rule from the audit program: a scanner whose findings are
+# routinely ignored is worse than no scanner.
+#
+# Format note: the legacy [allowlist] table is used because the
+# [[allowlists]] AND-condition form did not suppress these two
+# findings under gitleaks 8.21.2 (verified locally 21 Nov 2026).
+title = "watani gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Firebase client API key (public by design) in google-services.json and the manual FirebaseOptions fallback in MainActivity.kt — audit card SEC-001"
+paths = [
+  "app/google-services.json",
+  "app/src/main/java/sy/medpro/watani/MainActivity.kt",
+]
+regexes = [
+  "AIza[0-9A-Za-z\\-_]{35}",
+]
