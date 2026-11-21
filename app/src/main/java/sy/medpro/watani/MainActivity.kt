@@ -1041,8 +1041,13 @@ class MainActivity : ComponentActivity() {
                                                     onBack = { drawerScreen = null },
                                                     onOpenAnkiWrong = { drawerScreen = "المراجعة الذكية Anki - الخاطئة" }
                                                 )
-                                                "المراجعة الذكية Anki" -> FlashcardsReviewScreen(onBack = { drawerScreen = null })
-                                                "المراجعة الذكية Anki - الخاطئة" -> FlashcardsReviewScreen(ankiWrongOnly = true, onBack = { drawerScreen = null })
+                                                "المراجعة الذكية Anki" -> FlashcardsReviewScreen(
+                                                    onBack = { drawerScreen = null }
+                                                )
+                                                "المراجعة الذكية Anki - الخاطئة" -> FlashcardsReviewScreen(
+                                                    ankiWrongOnly = true,
+                                                    onBack = { drawerScreen = null }
+                                                )
                                                 "بنك أخطائي" -> MistakesBankScreen(
                                                     autoStartReview = mistakesAutoReview,
                                                     onBack = {
