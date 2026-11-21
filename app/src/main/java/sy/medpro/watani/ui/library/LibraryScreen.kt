@@ -335,13 +335,14 @@ fun LibraryScreen(
         // entry card stays reachable in a minimal view, alongside
         // the library error and its retry (the rest of the tab's
         // content keeps the full error screen below, unchanged).
-        if (conceptState.units.isNotEmpty()) {
+        if (conceptState.hasPack) {
             Column(
                 Modifier.fillMaxSize().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 ConceptsEntryCard(
-                    units = conceptState.units,
+                    unitCount = conceptState.unitCount,
+                    subjectCount = conceptState.subjectCount,
                     onClick = { libraryRoute = LibraryRoute.ConceptsSubjects },
                     updateAvailable = conceptState.updateAvailable,
                     serverCount = conceptState.serverCount,
@@ -485,11 +486,12 @@ fun LibraryScreen(
                 if (conceptState.loaded) {
                     item {
                         when (conceptsCardKind(
-                            hasPack = conceptState.units.isNotEmpty(),
+                            hasPack = conceptState.hasPack,
                             serverKnown = conceptState.serverKnown
                         )) {
                             ConceptsCardKind.ENTRY -> ConceptsEntryCard(
-                                units = conceptState.units,
+                                unitCount = conceptState.unitCount,
+                                subjectCount = conceptState.subjectCount,
                                 onClick = { libraryRoute = LibraryRoute.ConceptsSubjects },
                                 updateAvailable = conceptState.updateAvailable,
                                 serverCount = conceptState.serverCount,

@@ -34,6 +34,22 @@ data class ConceptsEnvelope(
     @Json(name = "units") val units: List<ConceptUnitDto>?
 )
 
+/**
+ * Persisted summary of the installed concepts pack (audit item Z,
+ * 21 Nov 2026): just the two numbers the Library entry card renders
+ * (topics + subjects) plus the registry hash they were computed
+ * from. Stored in SharedPreferences at download/parse time so the
+ * card renders on the first frame — the full 11.9MB pack parse
+ * proceeds in the background and replaces the counts with its own
+ * (identical) numbers when it lands. See
+ * WataniRepository.conceptsInstalledSummary.
+ */
+data class ConceptsPackSummary(
+    val hash: String,
+    val unitCount: Int,
+    val subjectCount: Int
+)
+
 @JsonClass(generateAdapter = true)
 data class ConceptUnitDto(
     @Json(name = "id") val id: String?,

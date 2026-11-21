@@ -60,6 +60,13 @@ import sy.medpro.watani.ui.theme.*
 data class ConceptUnitsState(
     val units: List<ConceptUnitDto> = emptyList(),
     val loaded: Boolean = false,
+    // Item Z (21 Nov 2026): renderable counts, seeded SYNCHRONOUSLY
+    // from the persisted pack summary (see
+    // WataniRepository.conceptsInstalledSummary) so the Library
+    // entry card renders on the first frame; the background pack
+    // load then replaces them with the parsed pack's own counts.
+    val unitCount: Int = 0,
+    val subjectCount: Int = 0,
     // Build 1.2.17: what the server currently offers (manifest count)
     // and whether a newer pack than the on-device one exists — the
     // Library renders the explicit download card / «new topics» badge
@@ -74,7 +81,11 @@ data class ConceptUnitsState(
     // A failed re-check must never clear a previously known value:
     // [rememberConceptUnits] preserves the last known status.
     val serverKnown: Boolean = false
-)
+) {
+    /** A pack is installed when the parsed units are in hand OR the
+     * persisted summary already proves one (item Z). */
+    val hasPack: Boolean get() = units.isNotEmpty() || unitCount > 0
+}
 
 /**
  * Loads the downloaded concepts pack state (build 1.2.21 rework —
@@ -108,15 +119,40 @@ data class ConceptUnitsState(
 @Composable
 fun rememberConceptUnits(refreshKey: Int = 0): ConceptUnitsState {
     val context = LocalContext.current
-    var state by remember { mutableStateOf(ConceptUnitsState()) }
+    // Item Z (21 Nov 2026): the initial state is seeded from the
+    // persisted pack summary — synchronously, during composition —
+    // so an installed pack's entry card renders on the FIRST frame
+    // with its true counts, exactly like the videos card. The full
+    // pack load below then fills in the unit list (the parse itself
+    // is now process-cached in WataniRepository, so it is paid once
+    // per process, not once per screen).
+    var state by remember {
+        mutableStateOf(
+            WataniRepository.conceptsInstalledSummary(context)?.let { summary ->
+                ConceptUnitsState(
+                    loaded = true,
+                    unitCount = summary.unitCount,
+                    subjectCount = summary.subjectCount
+                )
+            } ?: ConceptUnitsState()
+        )
+    }
     LaunchedEffect(refreshKey) {
         val repo = WataniRepository(context)
         // (1) Cache first, assigned at once — offline browsing of an
         // installed pack never waits for (or needs) the network.
+        // The parsed pack is authoritative for the counts: a pack
+        // that no longer parses/reads resets them to zero, so a
+        // stale summary can never leave a phantom card behind.
         try {
             val cachedUnits = repo.getConcepts()?.units.orEmpty()
                 .filter { !it.id.isNullOrBlank() }
-            state = state.copy(units = cachedUnits, loaded = true)
+            state = state.copy(
+                units = cachedUnits,
+                loaded = true,
+                unitCount = cachedUnits.size,
+                subjectCount = groupConceptsBySubject(cachedUnits).size
+            )
         } catch (_: Exception) {
             state = state.copy(loaded = true)
         }
@@ -134,7 +170,7 @@ fun rememberConceptUnits(refreshKey: Int = 0): ConceptUnitsState {
                     serverCount = status.serverCount,
                     serverKnown = true,
                     updateAvailable = status.updateAvailable &&
-                        state.units.isNotEmpty()
+                        state.hasPack
                 )
             } else {
                 // Check failed: keep the last known serverCount /
@@ -158,7 +194,13 @@ fun rememberConceptUnits(refreshKey: Int = 0): ConceptUnitsState {
  */
 @Composable
 fun ConceptsEntryCard(
-    units: List<ConceptUnitDto>,
+    // Item Z (21 Nov 2026): the card renders COUNTS, not the pack —
+    // it used to take the whole parsed unit list just to print two
+    // numbers, which chained its first render to the full 11.9MB
+    // parse. Callers pass ConceptUnitsState's counts (seeded from
+    // the persisted summary, then confirmed by the parse).
+    unitCount: Int,
+    subjectCount: Int,
     onClick: () -> Unit,
     // Build 1.2.17: «new topics» notice (doctor's order) — rendered
     // only when the server pack is newer than the on-device one; the
@@ -169,7 +211,7 @@ fun ConceptsEntryCard(
     updateProgress: Float = 0f,
     onUpdateClick: (() -> Unit)? = null
 ) {
-    val subjectsCount = remember(units) { groupConceptsBySubject(units).size }
+    val subjectsCount = subjectCount
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -196,7 +238,7 @@ fun ConceptsEntryCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        "شرح المفاهيم الأهم في الدورات — ${units.size} موضوعًا في $subjectsCount مادة، مرتّبة بأسئلة الوطني أولًا",
+                        "شرح المفاهيم الأهم في الدورات — $unitCount موضوعًا في $subjectsCount مادة، مرتّبة بأسئلة الوطني أولًا",
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.85f),
                         lineHeight = 17.sp
@@ -220,7 +262,7 @@ fun ConceptsEntryCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        if (serverCount != null && serverCount > units.size)
+                        if (serverCount != null && serverCount > unitCount)
                             "أُضيفت مواضيع جديدة — صار المحتوى $serverCount موضوعًا"
                         else
                             "توجد إضافة جديدة للمحتوى",

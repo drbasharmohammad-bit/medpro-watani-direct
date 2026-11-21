@@ -60,7 +60,17 @@ class WataniRepository(private val context: Context) {
     // concept-unit screen calls it on every entry — returning from
     // a bank question re-parsed ~5MB before the page could render.
     // Same registry-hash guard as the envelope cache.
-    private val conceptsEnvelopeCache = EnvelopeCache<ConceptsEnvelope>()
+    // Audit fix (21 Nov 2026, item Z / N+1 sweep N1-01): the cache
+    // used to be an INSTANCE field — but the concepts screens build
+    // a brand-new WataniRepository on every composition effect, so
+    // the cache was empty on every Library entry and the whole
+    // 11.9MB pack was re-read, re-decrypted and re-parsed before
+    // the «ادرس مع ميد برو» card could render, while the videos
+    // card (held in LibraryViewModel state) appeared instantly.
+    // The cache now lives in the companion object (process-wide,
+    // EnvelopeCache is fully synchronized), so the pack is parsed
+    // ONCE per process and served from memory everywhere after.
+    private val conceptsEnvelopeCache get() = sharedConceptsEnvelopeCache
 
     // Question-id index (1.2.31): qid -> section path of its FIRST
     // occurrence in registry order (topics before sessions inside
@@ -163,6 +173,66 @@ class WataniRepository(private val context: Context) {
          * proven revocation: a stale copy would keep listing restricted
          * sections after the activation ended. */
         const val MANIFEST_CACHE_FILENAME = "manifest_cache.json"
+
+        /** Process-wide parsed-concepts cache (see the field note in
+         * the class body — audit item Z, 21 Nov 2026). */
+        private val sharedConceptsEnvelopeCache = EnvelopeCache<ConceptsEnvelope>()
+
+        // ── Concepts pack summary (audit item Z, 21 Nov 2026) ──
+        // The doctor's mechanism for «ادرس مع ميد برو»: the pack is a
+        // PERMANENT on-device cache — downloaded once through the
+        // app's protected channel, stored ENCRYPTED in sections_cache
+        // (SectionCacheCrypto, like every section; deliberately NOT
+        // bundled in the APK — the doctor's 15 Nov 2026 rule), shown
+        // instantly at every open, fully offline with no expiry, and
+        // silently refreshed in the background when the network is
+        // available. What was missing for "instantly" was a
+        // renderable summary: the entry card needs only two numbers
+        // (topics, subjects), and those are now persisted at
+        // download/parse time so the card renders on the FIRST frame
+        // from this tiny record while the full pack parse proceeds
+        // in the background.
+        private const val CONCEPTS_SUMMARY_PREFS = "watani_concepts_summary"
+        private const val KEY_SUMMARY_HASH = "hash"
+        private const val KEY_SUMMARY_UNITS = "unit_count"
+        private const val KEY_SUMMARY_SUBJECTS = "subject_count"
+
+        /** The persisted summary of the INSTALLED concepts pack, or
+         * null when no pack is installed (or the summary was never
+         * written). Synchronous and cheap: two SharedPreferences
+         * reads, cross-checked against the downloaded-sections
+         * registry so a wiped pack never leaves a phantom card. */
+        fun conceptsInstalledSummary(context: Context): ConceptsPackSummary? {
+            return try {
+                val registry = context.getSharedPreferences(
+                    "watani_downloaded_sections", Context.MODE_PRIVATE
+                )
+                if (!registry.contains("concepts.json")) return null
+                val prefs = context.getSharedPreferences(
+                    CONCEPTS_SUMMARY_PREFS, Context.MODE_PRIVATE
+                )
+                val units = prefs.getInt(KEY_SUMMARY_UNITS, 0)
+                val subjects = prefs.getInt(KEY_SUMMARY_SUBJECTS, 0)
+                val hash = prefs.getString(KEY_SUMMARY_HASH, null) ?: return null
+                if (units <= 0) return null
+                ConceptsPackSummary(hash = hash, unitCount = units, subjectCount = subjects)
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        /** Persists the summary for the pack parsed under [hash]. */
+        fun persistConceptsSummary(context: Context, hash: String, unitCount: Int, subjectCount: Int) {
+            try {
+                context.getSharedPreferences(CONCEPTS_SUMMARY_PREFS, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(KEY_SUMMARY_HASH, hash)
+                    .putInt(KEY_SUMMARY_UNITS, unitCount)
+                    .putInt(KEY_SUMMARY_SUBJECTS, subjectCount)
+                    .apply()
+            } catch (_: Exception) {
+            }
+        }
 
         /** The question-bank families swept by
          * [refreshInstalledBankSections] (build 1.2.21; dawrat_sessions/
@@ -968,6 +1038,18 @@ class WataniRepository(private val context: Context) {
             val parsed = moshi.adapter(ConceptsEnvelope::class.java).fromJson(jsonString)
             if (parsed != null && registryHash != null) {
                 conceptsEnvelopeCache.put("concepts.json", registryHash, jsonString.length, parsed)
+                // Item Z: persist the renderable summary (same
+                // filters the UI applies: non-blank id for topics;
+                // non-blank subject+topic for the subject count) so
+                // the Library card renders instantly next launch.
+                val allUnits = parsed.units.orEmpty()
+                val unitCount = allUnits.count { !it.id.isNullOrBlank() }
+                val subjectCount = allUnits
+                    .filter { !it.subject.isNullOrBlank() && !it.topic.isNullOrBlank() }
+                    .map { it.subject!!.trim() }
+                    .distinct()
+                    .size
+                persistConceptsSummary(context, registryHash, unitCount, subjectCount)
             }
             parsed
         } catch (e: Exception) {
@@ -1031,7 +1113,14 @@ class WataniRepository(private val context: Context) {
             try {
                 val manifest = fetchManifest().getOrNull() ?: return@withContext false
                 val entry = manifest.files?.get("concepts.json") ?: return@withContext false
-                downloadSection("concepts.json", entry, onProgress).isSuccess
+                val ok = downloadSection("concepts.json", entry, onProgress).isSuccess
+                if (ok) {
+                    // Item Z: warm the process-wide parse cache and
+                    // persist the renderable summary NOW, so the card
+                    // the student returns to is already instant.
+                    try { getConcepts() } catch (_: Exception) { }
+                }
+                ok
             } catch (e: Exception) {
                 false
             }
