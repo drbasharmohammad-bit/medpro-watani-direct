@@ -13,6 +13,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -24,6 +28,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,6 +41,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -46,6 +52,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -496,6 +503,10 @@ class MainActivity : ComponentActivity() {
                             notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                         }
                     }
+                    sy.medpro.watani.data.OfflineStudyVault.ensureInitialized(context)
+                    val vaultStats by sy.medpro.watani.data.OfflineStudyVault.statsFlow.collectAsState()
+                    val faSrsChanges by sy.medpro.watani.ui.firstaid.FirstAidSrs.changes.collectAsState()
+                    val faDueCount = remember(faSrsChanges) { try { sy.medpro.watani.ui.firstaid.FirstAidSrs.dueKeysAll(context).size } catch (e: Exception) { 0 } }
                     val uiState by viewModel.uiState.collectAsState()
                     val downloadedSections by viewModel.downloadedSections.collectAsState()
                     val coroutineScope = rememberCoroutineScope()
@@ -712,67 +723,64 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
                                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                                        LazyColumn(
-                                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            // تجميع 28 أكتوبر 2026 (بأمر الدكتور): كل فكرة واحدة تحت
-                                            // تبويب واحد — القلب والإصغاء، المختبرات وغازات الدم،
-                                            // المراجعة الذكية، والتواصل — بلا حذف أي محتوى.
-                                            // Premium grouping: the SAME 24
-                                            // items with the SAME titles and
-                                            // destinations, presented under
-                                            // small gold group headers
-                                            // (study / tools / account &
-                                            // support) instead of one flat
-                                            // list. No item added, removed,
-                                            // renamed or re-routed.
-                                            val drawerGroups = listOf(
-                                                "الدراسة" to listOf(
-                                                    "المراجعة الذكية Anki",
-                                                    "دليل الدراسة",
-                                                    "سجل أخطائي والاختبارات",
-                                                    "المريض الافتراضي",
-                                                    "نقاط الضعف",
-                                                    "مؤقت التركيز",
-                                                    "الإنجازات والأوسمة",
-                                                    "المفضلة",
-                                                    "ملاحظاتي",
-                                                    "سجلّ حالاتي",
-                                                    "محطات OSCE",
-                                                    "القلب والإصغاء",
-                                                    "غرفة الطوارئ",
-                                                    "المختبرات وغازات الدم"
-                                                ),
-                                                "الأدوات" to listOf(
-                                                    "البحث الشامل",
-                                                    "الإشعارات والتذكير",
-                                                    "إعدادات الويدجت",
-                                                    "الوضع الليلي"
-                                                ),
-                                                "الحساب والدعم" to listOf(
-                                                    "الملف الشخصي",
-                                                    "ربط التليجرام",
-                                                    "الاشتراك وتفعيل الحساب",
-                                                    "التواصل",
-                                                    "سياسة الخصوصية والشروط",
-                                                    "تسجيل الخروج"
-                                                )
+                                        // تجميع 28 أكتوبر 2026 (بأمر الدكتور): كل فكرة واحدة تحت
+                                        // تبويب واحد — القلب والإصغاء، المختبرات وغازات الدم،
+                                        // المراجعة الذكية، والتواصل — بلا حذف أي محتوى.
+                                        // Premium grouping: the SAME 24
+                                        // items with the SAME titles and
+                                        // destinations, presented under
+                                        // small gold group headers
+                                        // (study / tools / account &
+                                        // support) instead of one flat
+                                        // list. No item added, removed,
+                                        // renamed or re-routed.
+                                        val drawerGroups = listOf(
+                                            "الدراسة" to listOf(
+                                                "المراجعة الذكية Anki",
+                                                "دليل الدراسة",
+                                                "سجل أخطائي والاختبارات",
+                                                "المريض الافتراضي",
+                                                "نقاط الضعف",
+                                                "مؤقت التركيز",
+                                                "الإنجازات والأوسمة",
+                                                "المفضلة",
+                                                "ملاحظاتي",
+                                                "سجلّ حالاتي",
+                                                "محطات OSCE",
+                                                "القلب والإصغاء",
+                                                "غرفة الطوارئ",
+                                                "المختبرات وغازات الدم"
+                                            ),
+                                            "الأدوات" to listOf(
+                                                "البحث الشامل",
+                                                "الإشعارات والتذكير",
+                                                "إعدادات الويدجت",
+                                                "الوضع الليلي"
+                                            ),
+                                            "الحساب والدعم" to listOf(
+                                                "الملف الشخصي",
+                                                "ربط التليجرام",
+                                                "الاشتراك وتفعيل الحساب",
+                                                "التواصل",
+                                                "سياسة الخصوصية والشروط",
+                                                "تسجيل الخروج"
                                             )
-                                            drawerGroups.forEach { (groupTitle, groupItems) ->
-                                                item {
-                                                    Text(
-                                                        groupTitle,
-                                                        color = GoldAccent,
-                                                        fontSize = 11.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.padding(
-                                                            start = 12.dp, end = 12.dp,
-                                                            top = 14.dp, bottom = 4.dp
-                                                        )
-                                                    )
-                                                }
-                                                items(groupItems) { title ->
+                                        )
+                                        var drawerQuery by remember { mutableStateOf("") }
+                                        var expandedGroup by remember { mutableStateOf<String?>("الدراسة") }
+                                        OutlinedTextField(
+                                            value = drawerQuery,
+                                            onValueChange = { drawerQuery = it },
+                                            singleLine = true,
+                                            placeholder = { Text("ابحث في الأقسام…", fontSize = 13.sp) },
+                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaroonPrimary) },
+                                            trailingIcon = if (drawerQuery.isNotEmpty()) {
+                                                { IconButton(onClick = { drawerQuery = "" }) { Icon(Icons.Default.Close, contentDescription = "مسح البحث") } }
+                                            } else null,
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                        )
+                                        val drawerDestination: @Composable (String) -> Unit = { title ->
                                                 // Direction-2 drawer icons (Nov 2026):
                                                 // every drawer title has a custom
                                                 // drawing; the vector below remains
@@ -866,6 +874,67 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     }
                                                 )
+                                        }
+                                        LazyColumn(
+                                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            if (drawerQuery.isNotEmpty()) {
+                                                val matches = drawerGroups.flatMap { it.second }
+                                                    .filter { it.contains(drawerQuery.trim()) }
+                                                if (matches.isEmpty()) {
+                                                    item {
+                                                        Text(
+                                                            "لا توجد وجهة مطابقة لبحثك",
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            fontSize = 13.sp,
+                                                            modifier = Modifier.padding(12.dp)
+                                                        )
+                                                    }
+                                                } else {
+                                                    items(matches) { title -> drawerDestination(title) }
+                                                }
+                                            } else {
+                                                drawerGroups.forEach { (groupTitle, groupItems) ->
+                                                    item {
+                                                        val expanded = expandedGroup == groupTitle
+                                                        val chevronRotation by animateFloatAsState(
+                                                            targetValue = if (expanded) 180f else 0f,
+                                                            label = "drawerGroupChevron"
+                                                        )
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .clip(RoundedCornerShape(10.dp))
+                                                                .clickable {
+                                                                    expandedGroup = if (expanded) null else groupTitle
+                                                                }
+                                                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                                                        ) {
+                                                            Text(
+                                                                groupTitle,
+                                                                color = GoldAccent,
+                                                                fontWeight = FontWeight.Bold,
+                                                                fontSize = 12.5.sp
+                                                            )
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Text(
+                                                                "(${groupItems.size})",
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                fontSize = 11.sp
+                                                            )
+                                                            Spacer(modifier = Modifier.weight(1f))
+                                                            Icon(
+                                                                Icons.Default.ExpandMore,
+                                                                contentDescription = null,
+                                                                modifier = Modifier.rotate(chevronRotation)
+                                                            )
+                                                        }
+                                                    }
+                                                    if (expandedGroup == groupTitle) {
+                                                        items(groupItems) { title -> drawerDestination(title) }
+                                                    }
                                                 }
                                             }
                                         }
@@ -1002,15 +1071,13 @@ class MainActivity : ComponentActivity() {
                                         color = MaterialTheme.colorScheme.surface,
                                         shadowElevation = 4.dp
                                     ) {
-                                    NavigationBar(
-                                        modifier = Modifier.height(72.dp),
-                                        containerColor = Color.Transparent,
-                                        tonalElevation = 0.dp
-                                    ) {
+                                    BoxWithConstraints(modifier = Modifier.fillMaxWidth().height(72.dp)) {
                                         // Direction-2 tab icons (Nov 2026): custom
                                         // two-tone drawings per tab (TabIcons);
-                                        // selection stays signalled by the
-                                        // indicator pill + bold maroon label.
+                                        // selection is signalled by the sliding gold
+                                        // indicator at the top of the bar plus the
+                                        // bold maroon label (the old gold dot under
+                                        // the label is gone).
                                         val tabs = listOf(
                                             AppTab.HOME to "الرئيسية",
                                             AppTab.BANK to "بنك",
@@ -1020,16 +1087,30 @@ class MainActivity : ComponentActivity() {
                                             AppTab.LEADERBOARD to "الصدارة",
                                             AppTab.TOOLS to "أدوات"
                                         )
-                                        tabs.forEach { (tab, label) ->
-                                            val selected = uiState.currentTab == tab
-                                            NavigationBarItem(
-                                                selected = selected,
-                                                colors = NavigationBarItemDefaults.colors(
-                                                    // Approved models (01/02): no pill —
-                                                    // selection is the maroon label plus
-                                                    // a gold dot under it (label slot).
-                                                    indicatorColor = Color.Transparent
-                                                ),
+                                        val cellWidth = maxWidth / 7
+                                        val selectedIndex = tabs.indexOfFirst { it.first == uiState.currentTab }
+                                            .let { if (it >= 0) it else 0 }
+                                        val indicatorOffset by animateDpAsState(
+                                            targetValue = cellWidth * selectedIndex + (cellWidth - 28.dp) / 2,
+                                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                            label = "bottomBarIndicator"
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .offset(x = indicatorOffset, y = 6.dp)
+                                                .width(28.dp)
+                                                .height(3.5.dp)
+                                                .clip(RoundedCornerShape(99.dp))
+                                                .background(LibColors.Gold)
+                                        )
+                                        Row(modifier = Modifier.fillMaxSize()) {
+                                            tabs.forEach { (tab, label) ->
+                                                val selected = uiState.currentTab == tab
+                                                val badgeCount = when (tab) {
+                                                    AppTab.BANK -> vaultStats.savedMistakes.size
+                                                    AppTab.FIRSTAID -> faDueCount
+                                                    else -> 0
+                                                }
                                                 // Bottom-bar fix: tapping a tab while a
                                                 // drawer screen is open used to change
                                                 // the tab state but leave the drawer
@@ -1038,35 +1119,51 @@ class MainActivity : ComponentActivity() {
                                                 // drawer screen too; on a gate failure
                                                 // (prompt shown) keep it, so the user
                                                 // does not lose their place.
-                                                onClick = { if (requestTab(tab)) drawerScreen = null },
-                                                icon = {
-                                                    Image(
-                                                        painter = painterResource(sy.medpro.watani.ui.TabIcons.forTab(tab)),
-                                                        contentDescription = label,
-                                                        modifier = Modifier.size(24.dp)
-                                                    )
-                                                },
-                                                label = {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .fillMaxHeight()
+                                                        .selectable(selected = selected, role = Role.Tab) {
+                                                            if (requestTab(tab)) drawerScreen = null
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
                                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Box {
+                                                            Image(
+                                                                painter = painterResource(sy.medpro.watani.ui.TabIcons.forTab(tab)),
+                                                                contentDescription = label,
+                                                                modifier = Modifier.size(24.dp)
+                                                            )
+                                                            if (badgeCount > 0) {
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .align(Alignment.TopEnd)
+                                                                        .offset(x = 8.dp, y = (-3).dp)
+                                                                        .clip(CircleShape)
+                                                                        .background(LibColors.Maroon)
+                                                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                                ) {
+                                                                    Text(
+                                                                        if (badgeCount > 99) "99+" else badgeCount.toString(),
+                                                                        color = Color.White,
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        fontSize = 9.sp
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
                                                         Text(
                                                             label,
                                                             color = if (selected) LibColors.Maroon else
                                                                 MaterialTheme.colorScheme.onSurfaceVariant,
                                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                                            style = MaterialTheme.typography.labelMedium,
                                                             maxLines = 1
                                                         )
-                                                        if (selected) {
-                                                            Spacer(modifier = Modifier.height(2.dp))
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .size(5.dp)
-                                                                    .clip(CircleShape)
-                                                                    .background(LibColors.Gold)
-                                                            )
-                                                        }
                                                     }
                                                 }
-                                            )
+                                            }
                                         }
                                     }
                                     }
