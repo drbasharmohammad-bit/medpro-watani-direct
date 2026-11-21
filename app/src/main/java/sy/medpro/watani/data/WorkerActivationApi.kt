@@ -241,6 +241,18 @@ object WorkerActivationApi {
             )
         } catch (e: Exception) {
             Log.w("WorkerActivationApi", "encrypted prefs unavailable for $name; keeping plain store", e)
+            // Audit marker (21 Nov 2026, SEC-S7/SEC-A6): the silent
+            // plaintext fallback used to leave NO trace, so a device
+            // stuck on the plain activation store was undiagnosable.
+            // A marker key (not one of the activation keys, so the
+            // migration detection below is unaffected) now records
+            // that this store fell back; support/diagnostics can see
+            // it, and a later successful migration carries it into
+            // the encrypted store as history.
+            try {
+                plain.edit().putBoolean("__enc_unavailable", true).apply()
+            } catch (_: Exception) {
+            }
             return plain
         }
         // Migration runs ONLY when the file still holds PLAIN entries
