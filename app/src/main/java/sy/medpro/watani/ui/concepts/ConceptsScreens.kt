@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -452,63 +453,128 @@ fun ConceptsSubjectsScreen(
     // restarting it at the top (the route itself was already
     // saveable in the Library; the scroll was not).
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    // Item ح (21 Nov 2026, doctor's order): this screen — and the
+    // topics list below — now speak the LIBRARY's approved design
+    // language (the 1.2.37 design the doctor signed off): the same
+    // two-column subject grid, LibCard clean cards with one soft
+    // shadow and no borders, the 42dp gold subject tile with the
+    // app's own subject icons, Kufi headings / Noto Sans body, bold
+    // maroon counts, and the gold bar. Content and information are
+    // UNCHANGED: same groups, same order, same three counts; the
+    // gold bar visualizes the subject's watani weight relative to
+    // the heaviest subject (the very number the list is sorted by).
+    val maxWatani = remember(groups) { groups.maxOfOrNull { it.totalWatani } ?: 0 }
     DrawerScreenScaffold(title = "ادرس مع ميد برو", onBack = onBack) { padding ->
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(sy.medpro.watani.ui.library.libBackground())
                 .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
                 Text(
                     "المواد مرتّبة بمجموع أسئلة الوطني في مواضيعها — الأعلى أولًا.",
+                    fontFamily = NotoSansArabicFontFamily,
                     fontSize = 12.5.sp,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
+                    color = sy.medpro.watani.ui.library.libMuted()
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
-            items(groups, key = { it.subject }) { group ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSubjectClick(group.subject) },
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                group.subject,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = MaroonPrimary
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                "${group.units.size} موضوعًا • وطني: ${group.totalWatani} • دمشق: ${group.totalDamascus}",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = MaroonPrimary,
-                            modifier = Modifier.size(20.dp)
+            items(groups.chunked(2), key = { it.first().subject }) { pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    pair.forEach { group ->
+                        ConceptSubjectGridCard(
+                            group = group,
+                            maxWatani = maxWatani,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onSubjectClick(group.subject) }
                         )
+                    }
+                    if (pair.size == 1) {
+                        Spacer(Modifier.weight(1f))
                     }
                 }
             }
+        }
+    }
+}
+
+/** One subject card of the concepts grid — the library's
+ * SubjectGridCard shape, carrying concept counts instead of video
+ * counts (item ح). */
+@Composable
+private fun ConceptSubjectGridCard(
+    group: sy.medpro.watani.data.ConceptSubjectGroup,
+    maxWatani: Int,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    sy.medpro.watani.ui.library.LibCard(modifier = modifier, radius = 20.dp, onClick = onClick) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(sy.medpro.watani.ui.library.LibColors.GoldTint),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (sy.medpro.watani.ui.icons.librarySubjectIconRes(null, group.subject) != null) {
+                        sy.medpro.watani.ui.icons.LibrarySubjectIcon(null, group.subject, Modifier.size(30.dp))
+                    } else {
+                        Text(
+                            group.subject.trim().firstOrNull()?.toString() ?: "؟",
+                            fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp, color = sy.medpro.watani.ui.library.LibColors.Maroon
+                        )
+                    }
+                }
+                Text(
+                    group.subject,
+                    fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp, color = sy.medpro.watani.ui.library.libInk(), lineHeight = 20.sp,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            val metaText = buildAnnotatedString {
+                withStyle(SpanStyle(color = sy.medpro.watani.ui.library.LibColors.Maroon, fontWeight = FontWeight.Bold)) {
+                    append(group.units.size.toString())
+                }
+                append(" موضوعًا")
+                append("  ·  ")
+                withStyle(SpanStyle(color = sy.medpro.watani.ui.library.LibColors.Maroon, fontWeight = FontWeight.Bold)) {
+                    append(group.totalWatani.toString())
+                }
+                append(" وطني")
+                append("  ·  ")
+                withStyle(SpanStyle(color = sy.medpro.watani.ui.library.LibColors.Maroon, fontWeight = FontWeight.Bold)) {
+                    append(group.totalDamascus.toString())
+                }
+                append(" دمشق")
+            }
+            Text(
+                metaText,
+                fontFamily = NotoSansArabicFontFamily,
+                fontSize = 12.sp, color = sy.medpro.watani.ui.library.libMuted(),
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            sy.medpro.watani.ui.library.LibGoldBar(
+                fraction = if (maxWatani > 0) group.totalWatani.toFloat() / maxWatani else 0f,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            Text(
+                "وزن المادة في أسئلة الوطني",
+                fontFamily = NotoSansArabicFontFamily,
+                fontSize = 10.5.sp, color = sy.medpro.watani.ui.library.LibColors.BarLabel,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
 }
@@ -527,46 +593,65 @@ fun ConceptsTopicsScreen(
     }
     // 1.2.31: saveable scroll, same rule as the subjects list.
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    // Item ح (21 Nov 2026): topics rows in the library language —
+    // LibCard rows with the gold rank tile (the list is ordered, so
+    // the tile carries the topic's rank, the same role the letter
+    // mark plays on library cards), Kufi titles, bold-maroon counts,
+    // and the weight as a LibChip. Same topics, same order, same
+    // numbers — presentation only.
     DrawerScreenScaffold(title = subject, onBack = onBack) { padding ->
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(sy.medpro.watani.ui.library.libBackground())
                 .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
                 Text(
                     "المواضيع مرتّبة بعدد أسئلة الوطني — الأعلى أولًا.",
+                    fontFamily = NotoSansArabicFontFamily,
                     fontSize = 12.5.sp,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
+                    color = sy.medpro.watani.ui.library.libMuted()
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
-            items(topics, key = { it.id ?: it.topic ?: "" }) { unit ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { unit.id?.let(onUnitClick) },
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                    shape = MaterialTheme.shapes.medium
+            items(topics.size, key = { idx -> topics[idx].id ?: topics[idx].topic ?: idx }) { idx ->
+                val unit = topics[idx]
+                sy.medpro.watani.ui.library.LibCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    radius = 20.dp,
+                    onClick = { unit.id?.let(onUnitClick) }
                 ) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(sy.medpro.watani.ui.library.LibColors.GoldTint),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                (idx + 1).toString(),
+                                fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp, color = sy.medpro.watani.ui.library.LibColors.Maroon
+                            )
+                        }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 unit.topic ?: "",
+                                fontFamily = NotoKufiFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = sy.medpro.watani.ui.library.libInk(),
+                                lineHeight = 20.sp
                             )
                             val counts = listOfNotNull(
                                 unit.watani?.let { "وطني: $it" },
@@ -576,23 +661,22 @@ fun ConceptsTopicsScreen(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     counts.joinToString(" • ") + " سؤالًا",
+                                    fontFamily = NotoSansArabicFontFamily,
                                     fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    color = sy.medpro.watani.ui.library.libMuted()
                                 )
                             }
                         }
-                        Surface(
-                            color = MaroonPrimary.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                "الوزن ${unit.weight ?: 0}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaroonPrimary,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
+                        sy.medpro.watani.ui.library.LibChip(
+                            text = "الوزن ${unit.weight ?: 0}",
+                            pdfStyle = true
+                        )
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = sy.medpro.watani.ui.library.LibColors.Chevron,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
