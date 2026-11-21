@@ -1,5 +1,7 @@
 package sy.medpro.watani.ui.firstaid
 
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -38,6 +41,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import sy.medpro.watani.data.FirstAidBanksDto
 import sy.medpro.watani.data.FirstAidIndexDto
 import sy.medpro.watani.data.FirstAidIntegrationDto
@@ -134,13 +139,90 @@ fun FirstAidSectionScreen() {
             else -> {
                 val current = dest
                 if (current is FaDest.Pdf) {
-                    // The PDF reader owns the whole window (never the
-                    // width-governed reading column).
-                    PdfViewerScreen(
-                        pdfFile = current.file,
-                        title = current.title,
-                        onBack = { pop() }
-                    )
+                    // Booklet integrity gate (1.2.37): before the
+                    // reader opens, the file must actually parse as a
+                    // PDF (PdfRenderer, pageCount > 0, on IO). A file
+                    // that fails is deleted and re-downloaded ONCE
+                    // automatically (matched back to its index booklet
+                    // by its local file); a second failure surfaces
+                    // the REAL reason (exception class + message) —
+                    // never a bare «check your connection».
+                    var pdfGate by remember(current.file) { mutableStateOf(0) } // 0 checking, 1 ready, 2 failed
+                    var pdfGateError by remember(current.file) { mutableStateOf<String?>(null) }
+                    LaunchedEffect(current.file) {
+                        pdfGate = 0
+                        pdfGateError = null
+                        val firstError = validateFaPdfFile(current.file)
+                        if (firstError == null) {
+                            pdfGate = 1
+                        } else {
+                            val booklet = (index1?.booklets.orEmpty() + index2?.booklets.orEmpty())
+                                .firstOrNull { b ->
+                                    !b.file.isNullOrBlank() &&
+                                        repo.getFirstAidBookletFile("firstaid/${b.file}") == current.file
+                                }
+                            var secondError: String? = firstError
+                            if (booklet?.file != null) {
+                                try { current.file.delete() } catch (_: Exception) {}
+                                val dl = repo.downloadFirstAidBooklet(
+                                    "firstaid/${booklet.file}",
+                                    booklet.size ?: 0L
+                                )
+                                secondError = dl.fold(
+                                    onSuccess = { validateFaPdfFile(current.file) },
+                                    onFailure = { e ->
+                                        "${e.javaClass.simpleName}: ${e.message ?: "فشل إعادة تحميل الكتيّب"}"
+                                    }
+                                )
+                            } else {
+                                try { current.file.delete() } catch (_: Exception) {}
+                            }
+                            if (secondError == null) {
+                                pdfGate = 1
+                            } else {
+                                pdfGateError = secondError
+                                pdfGate = 2
+                            }
+                        }
+                    }
+                    when (pdfGate) {
+                        1 -> {
+                            // The PDF reader owns the whole window (never the
+                            // width-governed reading column). Recents from
+                            // inside the reader open as new Pdf destinations.
+                            PdfViewerScreen(
+                                pdfFile = current.file,
+                                title = current.title,
+                                onBack = { pop() },
+                                onOpenRecent = { f, t -> push(FaDest.Pdf(f, t)) }
+                            )
+                        }
+                        2 -> Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(24.dp)
+                            ) {
+                                Text(
+                                    "تعذّر فتح الكتيّب — ${pdfGateError ?: "خطأ غير معروف"}",
+                                    fontFamily = NotoSansArabicFontFamily,
+                                    fontSize = 13.5.sp, color = faHeading()
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Button(onClick = { pop() }) {
+                                    Text("رجوع", fontFamily = NotoSansArabicFontFamily)
+                                }
+                            }
+                        }
+                        else -> Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = FaColors.Maroon)
+                        }
+                    }
                 } else {
                 FaReadingColumn(
                     modifier = Modifier
@@ -821,5 +903,34 @@ private fun FaDueReview(
             cards = cards,
             onClose = onBack
         )
+    }
+}
+
+/**
+ * Booklet integrity probe (1.2.37): opens [file] with PdfRenderer on
+ * the IO dispatcher and returns null only when it parses with at
+ * least one page. Any failure returns the REAL reason as
+ * "ExceptionClass: message" for the caller's error path. Every
+ * handle (renderer + descriptor) is closed on every path.
+ */
+private suspend fun validateFaPdfFile(file: File): String? = withContext(Dispatchers.IO) {
+    var fd: ParcelFileDescriptor? = null
+    var renderer: PdfRenderer? = null
+    try {
+        if (!file.exists() || file.length() == 0L) {
+            return@withContext "الملف غير موجود على الجهاز أو فارغ"
+        }
+        fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        renderer = PdfRenderer(fd)
+        if (renderer.pageCount > 0) {
+            null
+        } else {
+            "PdfRenderer: الملف بلا صفحات (pageCount = 0)"
+        }
+    } catch (e: Exception) {
+        "${e.javaClass.simpleName}: ${e.message ?: "خطأ غير معروف أثناء فتح ملف PDF"}"
+    } finally {
+        try { renderer?.close() } catch (_: Exception) {}
+        try { fd?.close() } catch (_: Exception) {}
     }
 }

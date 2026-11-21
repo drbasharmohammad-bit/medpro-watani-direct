@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -33,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -56,12 +59,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import sy.medpro.watani.data.BookTextIndex
+import sy.medpro.watani.data.PdfTextEngine
+import sy.medpro.watani.data.SearchHit
+import sy.medpro.watani.data.WordBox
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.GoldAccent
 import java.io.File
@@ -75,6 +83,7 @@ import kotlin.math.roundToInt
  * page) so it survives zoom and screen sizes. Persisted per book in prefs.
  * The reader also supports go-to-page (jump by number) from the indicator.
  */
+@JsonClass(generateAdapter = true)
 data class HighlightStrokeDto(
     val page: Int,
     val points: List<Float>,
@@ -89,6 +98,7 @@ data class HighlightStrokeDto(
  * type: TEXT (tap-placed text box; x1/y1 = origin, text = content),
  * RECT, ELLIPSE, ARROW (drag start x1/y1 -> end x2/y2).
  */
+@JsonClass(generateAdapter = true)
 data class PdfAnnotationDto(
     val page: Int,
     val type: String,
@@ -99,6 +109,41 @@ data class PdfAnnotationDto(
     val text: String,
     val color: Int
 )
+
+/**
+ * A TEXT highlight (build 1.2.37): whole extracted words the student
+ * dragged over, stored as their WordBox rects (page fractions, y from
+ * the top — the same normalized space as strokes) plus the covered
+ * text for the highlights list. Persisted per book in prefs under
+ * "texthighlights_<nameWithoutExtension>", separate from the freehand
+ * strokes because the two markings are created and deleted apart.
+ */
+@JsonClass(generateAdapter = true)
+data class TextHighlightDto(
+    val page: Int,
+    val rects: List<WordBox>,
+    val text: String
+)
+
+/**
+ * One entry of the reader's recent-books list (build 1.2.37):
+ * most-recent-first, capped at 12, one entry per absolute path.
+ * Persisted reader-wide in prefs under "reader_recents".
+ */
+@JsonClass(generateAdapter = true)
+data class ReaderRecentDto(
+    val path: String,
+    val title: String,
+    val page: Int,
+    val totalPages: Int,
+    val timestamp: Long
+)
+
+/** Hard cap on simultaneously held page bitmaps (build 1.2.37):
+ * the cache keeps the current page ±1 (3) plus at most one
+ * zoom-resolution replacement of the current page — never more
+ * than this many bitmaps alive; eviction always recycles. */
+private const val READER_MAX_CACHED_BITMAPS = 4
 
 private fun getFirebaseUid(): String {
     return try {
@@ -119,7 +164,7 @@ private fun getFirebaseUid(): String {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCorrupt: (() -> Unit)? = null, onFullscreenChange: ((Boolean) -> Unit)? = null) {
+fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCorrupt: (() -> Unit)? = null, onFullscreenChange: ((Boolean) -> Unit)? = null, onProgress: ((page: Int, totalPages: Int) -> Unit)? = null, onOpenRecent: ((java.io.File, String) -> Unit)? = null) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var totalPages by remember { mutableStateOf(0) }
@@ -172,52 +217,217 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
 
     // Highlighter persistence (outer scope so the open effect can restore it).
+    // CRASH ARMOR (Crashlytics c3b30976, build 1.2.37): adapter creation
+    // used to run bare inside remember{} during composition — when the
+    // Moshi adapter for a marking DTO could not be built, composition
+    // itself died and the book never opened. Adapter creation is now
+    // runCatching-wrapped: on ANY failure the adapter is null, marking
+    // persistence is disabled for this session (loads yield empty,
+    // saves no-op) and the book still opens normally.
     val highlightAdapter = remember {
-        Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-            .adapter<List<HighlightStrokeDto>>(
-                Types.newParameterizedType(List::class.java, HighlightStrokeDto::class.java)
-            )
+        runCatching {
+            Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+                .adapter<List<HighlightStrokeDto>>(
+                    Types.newParameterizedType(List::class.java, HighlightStrokeDto::class.java)
+                )
+        }.getOrNull()
     }
     var highlightStrokes by remember { mutableStateOf<List<HighlightStrokeDto>>(emptyList()) }
     fun saveHighlights() {
-        prefs.edit().putString(
-            "highlights_${pdfFile.nameWithoutExtension}",
-            highlightAdapter.toJson(highlightStrokes)
-        ).apply()
+        val adapter = highlightAdapter ?: return
+        runCatching {
+            prefs.edit().putString(
+                "highlights_${pdfFile.nameWithoutExtension}",
+                adapter.toJson(highlightStrokes)
+            ).apply()
+        }
     }
 
     // Shape/text annotations (outer scope so the open effect restores them).
     val annotationAdapter = remember {
-        Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-            .adapter<List<PdfAnnotationDto>>(
-                Types.newParameterizedType(List::class.java, PdfAnnotationDto::class.java)
-            )
+        runCatching {
+            Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+                .adapter<List<PdfAnnotationDto>>(
+                    Types.newParameterizedType(List::class.java, PdfAnnotationDto::class.java)
+                )
+        }.getOrNull()
     }
     var annotations by remember { mutableStateOf<List<PdfAnnotationDto>>(emptyList()) }
     fun saveAnnotations() {
-        prefs.edit().putString(
-            "annotations_${pdfFile.nameWithoutExtension}",
-            annotationAdapter.toJson(annotations)
-        ).apply()
+        val adapter = annotationAdapter ?: return
+        runCatching {
+            prefs.edit().putString(
+                "annotations_${pdfFile.nameWithoutExtension}",
+                adapter.toJson(annotations)
+            ).apply()
+        }
+    }
+
+    // Text highlights (1.2.37): whole-word highlights from the PDF
+    // text layer, persisted per book like the strokes/annotations.
+    val textHighlightAdapter = remember {
+        runCatching {
+            Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+                .adapter<List<TextHighlightDto>>(
+                    Types.newParameterizedType(List::class.java, TextHighlightDto::class.java)
+                )
+        }.getOrNull()
+    }
+    var textHighlights by remember { mutableStateOf<List<TextHighlightDto>>(emptyList()) }
+    fun saveTextHighlights() {
+        val adapter = textHighlightAdapter ?: return
+        runCatching {
+            prefs.edit().putString(
+                "texthighlights_${pdfFile.nameWithoutExtension}",
+                adapter.toJson(textHighlights)
+            ).apply()
+        }
+    }
+
+    // Recent books (1.2.37): reader-wide, most-recent-first, cap 12,
+    // one entry per absolute path. Same crash armor as the marking
+    // adapters: creation is runCatching-wrapped and nullable, every
+    // read/write is runCatching-guarded — a corrupt recents payload
+    // degrades to an empty list and never blocks opening a book.
+    val recentAdapter = remember {
+        runCatching {
+            Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+                .adapter<List<ReaderRecentDto>>(
+                    Types.newParameterizedType(List::class.java, ReaderRecentDto::class.java)
+                )
+        }.getOrNull()
+    }
+    var recents by remember { mutableStateOf<List<ReaderRecentDto>>(emptyList()) }
+    fun loadRecents() {
+        recents = runCatching {
+            val json = prefs.getString("reader_recents", null) ?: return@runCatching emptyList()
+            recentAdapter?.fromJson(json) ?: emptyList()
+        }.getOrDefault(emptyList())
+    }
+    fun saveRecents(list: List<ReaderRecentDto>) {
+        recents = list
+        val adapter = recentAdapter ?: return
+        runCatching {
+            prefs.edit().putString("reader_recents", adapter.toJson(list)).apply()
+        }
+    }
+    /** Records this book as the most recent (on successful open). */
+    fun recordRecent(page: Int, total: Int) {
+        if (total <= 0) return
+        val entry = ReaderRecentDto(
+            path = pdfFile.absolutePath,
+            title = title,
+            page = page,
+            totalPages = total,
+            timestamp = System.currentTimeMillis()
+        )
+        saveRecents((listOf(entry) + recents.filter { it.path != entry.path }).take(12))
+    }
+    /** Refreshes this book's saved page (on every page turn, next to
+     * the existing last_page_ write) and keeps it most-recent. */
+    fun updateRecentPage(page: Int) {
+        val idx = recents.indexOfFirst { it.path == pdfFile.absolutePath }
+        if (idx < 0) return
+        val updated = recents[idx].copy(page = page, timestamp = System.currentTimeMillis())
+        saveRecents(listOf(updated) + recents.filterIndexed { i, _ -> i != idx })
+    }
+
+    // Display mode (1.2.37): a READER-WIDE tri-state preference —
+    // NORMAL / WARM (sepia paper) / NIGHT (inversion) — stored under
+    // "reader_display_mode". Migration: the old boolean key
+    // "reader_night_mode" seeds the first value (true -> NIGHT) and
+    // is kept in sync on every change for downgrade safety. Filters
+    // apply ONLY to the page bitmap; the chrome and every marking
+    // layer stay exactly as they are in all three modes.
+    var displayMode by remember {
+        mutableStateOf(
+            runCatching { prefs.getString("reader_display_mode", null) }.getOrNull()
+                ?: if (prefs.getBoolean("reader_night_mode", false)) "NIGHT" else "NORMAL"
+        )
+    }
+    val nightMode = displayMode == "NIGHT"
+    val warmMode = displayMode == "WARM"
+    fun cycleDisplayMode() {
+        displayMode = when (displayMode) {
+            "NORMAL" -> "WARM"
+            "WARM" -> "NIGHT"
+            else -> "NORMAL"
+        }
+        prefs.edit()
+            .putString("reader_display_mode", displayMode)
+            .putBoolean("reader_night_mode", displayMode == "NIGHT")
+            .apply()
+    }
+    val nightColorFilter = remember {
+        ColorFilter.colorMatrix(
+            ColorMatrix(
+                floatArrayOf(
+                    -1f, 0f, 0f, 0f, 255f,
+                    0f, -1f, 0f, 0f, 255f,
+                    0f, 0f, -1f, 0f, 255f,
+                    0f, 0f, 0f, 1f, 0f
+                )
+            )
+        )
+    }
+    // Warm paper: the classic sepia matrix (no inversion) — warm
+    // tint on the page image only, over a warm page background.
+    val warmColorFilter = remember {
+        ColorFilter.colorMatrix(
+            ColorMatrix(
+                floatArrayOf(
+                    0.393f, 0.769f, 0.189f, 0f, 0f,
+                    0.349f, 0.686f, 0.168f, 0f, 0f,
+                    0.272f, 0.534f, 0.131f, 0f, 0f,
+                    0f, 0f, 0f, 1f, 0f
+                )
+            )
+        )
+    }
+    val pageColorFilter = when {
+        nightMode -> nightColorFilter
+        warmMode -> warmColorFilter
+        else -> null
+    }
+
+    // The book's text index (words + outline), extracted/cached by
+    // PdfTextEngine in the background. Null = no text layer features
+    // for this book (still loading, or extraction failed): search,
+    // text highlighting and the outline button stay silently absent
+    // and the reader behaves exactly as before.
+    var textIndex by remember { mutableStateOf<BookTextIndex?>(null) }
+    LaunchedEffect(pdfFile) {
+        textIndex = PdfTextEngine.load(context, pdfFile)
+    }
+
+    // Bookmarks: a TYPED List<Int> adapter built once (build 1.2.37).
+    // The old code built a raw adapter(List::class.java) on every
+    // save/load — untyped reflective plumbing of exactly the family
+    // that crashed in Crashlytics c3b30976. The stored format is the
+    // same JSON array of page numbers, so old bookmarks load as-is.
+    val bookmarkAdapter = remember {
+        runCatching {
+            Moshi.Builder().build()
+                .adapter<List<Int>>(
+                    Types.newParameterizedType(List::class.java, Integer::class.java)
+                )
+        }.getOrNull()
     }
 
     fun saveBookmarks() {
+        val adapter = bookmarkAdapter ?: return
         val key = "bookmarks_${pdfFile.nameWithoutExtension}"
-        val json = com.squareup.moshi.Moshi.Builder().build().adapter(List::class.java).toJson(bookmarks.toList())
-        prefs.edit().putString(key, json).apply()
+        runCatching {
+            prefs.edit().putString(key, adapter.toJson(bookmarks.toList())).apply()
+        }
     }
 
     fun loadBookmarks() {
         val key = "bookmarks_${pdfFile.nameWithoutExtension}"
-        val json = prefs.getString(key, null)
-        if (json != null) {
-            try {
-                val list = com.squareup.moshi.Moshi.Builder().build().adapter(List::class.java).fromJson(json) as? List<*>
-                bookmarks = (list?.filterIsInstance<Number>()?.map { it.toInt() } ?: emptyList()).toSet()
-            } catch (e: Exception) {
-                bookmarks = emptySet()
-            }
-        }
+        val json = prefs.getString(key, null) ?: return
+        bookmarks = runCatching {
+            bookmarkAdapter?.fromJson(json) ?: emptyList()
+        }.getOrDefault(emptyList()).toSet()
     }
 
     fun toggleBookmark(page: Int) {
@@ -244,18 +454,27 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 loadBookmarks()
                 try {
                     prefs.getString("highlights_${pdfFile.nameWithoutExtension}", null)?.let {
-                        highlightStrokes = highlightAdapter.fromJson(it) ?: emptyList()
+                        highlightStrokes = highlightAdapter?.fromJson(it) ?: emptyList()
                     }
                 } catch (_: Exception) {
                     // Corrupt highlights JSON must never block opening the book.
                 }
                 try {
                     prefs.getString("annotations_${pdfFile.nameWithoutExtension}", null)?.let {
-                        annotations = annotationAdapter.fromJson(it) ?: emptyList()
+                        annotations = annotationAdapter?.fromJson(it) ?: emptyList()
                     }
                 } catch (_: Exception) {
                     // Corrupt annotations JSON must never block opening the book.
                 }
+                try {
+                    prefs.getString("texthighlights_${pdfFile.nameWithoutExtension}", null)?.let {
+                        textHighlights = textHighlightAdapter?.fromJson(it) ?: emptyList()
+                    }
+                } catch (_: Exception) {
+                    // Corrupt text-highlight JSON must never block opening the book.
+                }
+                // Recents load (armored inside loadRecents itself).
+                loadRecents()
                 val fd = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)
                 val renderer = PdfRenderer(fd)
                 parcelFd = fd
@@ -263,6 +482,8 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 totalPages = renderer.pageCount
                 savedPage = prefs.getInt("last_page_${pdfFile.nameWithoutExtension}", 0)
                     .coerceIn(0, (totalPages - 1).coerceAtLeast(0))
+                // Successful open: this book becomes the most recent.
+                recordRecent(savedPage, totalPages)
                 isLoading = false
             } catch (e: Exception) {
                 error = "تعذر فتح الملف: ${e.localizedMessage}"
@@ -273,6 +494,17 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
 
     LaunchedEffect(showBars) {
         if (showBars) scheduleHideBar()
+    }
+
+    // Keep the screen awake for the whole reading session
+    // (1.2.37): the flag is set on the activity window while the
+    // reader is composed and always cleared on dispose.
+    DisposableEffect(Unit) {
+        val activity = context as? android.app.Activity
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     DisposableEffect(Unit) {
@@ -320,6 +552,76 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             var boxSize by remember { mutableStateOf(IntSize.Zero) }
             var sliderPos by remember { mutableStateOf<Float?>(null) }
             val bitmapCache = remember { mutableStateMapOf<Int, Bitmap>() }
+            // PdfRenderer is NOT thread-safe: every openPage/render/
+            // close sequence (base renders + zoom re-renders) is
+            // serialized on this lock, and every opened Page handle
+            // is closed in a finally block (1.2.37 hardening).
+            val renderLock = remember { Any() }
+
+            /** Renders one page at [scaleFactor] x its point size on
+             * the Default dispatcher; null on any failure. The caller
+             * owns the returned bitmap (cache it or recycle it). */
+            suspend fun renderPageBitmap(page: Int, scaleFactor: Float): Bitmap? {
+                val renderer = pdfRenderer ?: return null
+                return withContext(Dispatchers.Default) {
+                    synchronized(renderLock) {
+                        try {
+                            val pg = renderer.openPage(page)
+                            try {
+                                val bmp = Bitmap.createBitmap(
+                                    (pg.width * scaleFactor).toInt().coerceAtLeast(1),
+                                    (pg.height * scaleFactor).toInt().coerceAtLeast(1),
+                                    Bitmap.Config.ARGB_8888
+                                )
+                                // Fill white first: some PDFs leave the page
+                                // background transparent, which showed as black.
+                                bmp.eraseColor(android.graphics.Color.WHITE)
+                                pg.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                bmp
+                            } finally {
+                                try { pg.close() } catch (_: Exception) {}
+                            }
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                }
+            }
+
+            /** Unified undo (1.2.37): removes the most recent marking
+             * added on the CURRENT page across all three marking
+             * groups (freehand stroke / shape-text annotation / text
+             * highlight), driven by the shared markHistory stack, and
+             * persists the affected group immediately. */
+            fun undoLastMark() {
+                val idx = markHistory.indexOfLast { (_, p) -> p == currentPage }
+                if (idx < 0) return
+                val (kind, _) = markHistory[idx]
+                markHistory = markHistory.toMutableList().also { it.removeAt(idx) }
+                when (kind) {
+                    "stroke" -> {
+                        val sIdx = highlightStrokes.indexOfLast { it.page == currentPage }
+                        if (sIdx >= 0) {
+                            highlightStrokes = highlightStrokes.toMutableList().also { it.removeAt(sIdx) }
+                            saveHighlights()
+                        }
+                    }
+                    "annotation" -> {
+                        val aIdx = annotations.indexOfLast { it.page == currentPage }
+                        if (aIdx >= 0) {
+                            annotations = annotations.toMutableList().also { it.removeAt(aIdx) }
+                            saveAnnotations()
+                        }
+                    }
+                    "texthighlight" -> {
+                        val tIdx = textHighlights.indexOfLast { it.page == currentPage }
+                        if (tIdx >= 0) {
+                            textHighlights = textHighlights.toMutableList().also { it.removeAt(tIdx) }
+                            saveTextHighlights()
+                        }
+                    }
+                }
+            }
 
             // Highlighter UI state (strokes live in the outer scope).
             var highlightMode by remember { mutableStateOf(false) }
@@ -336,8 +638,22 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             var pendingTextAt by remember { mutableStateOf<Offset?>(null) }
             var showTextEditor by remember { mutableStateOf(false) }
             var paintingPoints by remember { mutableStateOf<List<Offset>?>(null) }
+            var showRecents by remember { mutableStateOf(false) }
             var showGoToPage by remember { mutableStateOf(false) }
             var goToPageText by remember { mutableStateOf("") }
+
+            // Text-layer UI state (1.2.37). Search hits are recomputed
+            // (debounced) from the text index; currentHitIndex is the
+            // hit prev/next navigation walks and the one drawn strong.
+            var searchHits by remember { mutableStateOf<List<SearchHit>>(emptyList()) }
+            var currentHitIndex by remember { mutableStateOf(-1) }
+            // Text-highlight selection: a drag at 1x only (see the drag
+            // handler) — the live rect is kept normalized like strokes.
+            var textHighlightMode by remember { mutableStateOf(false) }
+            var selectionStart by remember { mutableStateOf<Offset?>(null) }
+            var selectionEnd by remember { mutableStateOf<Offset?>(null) }
+            var showTextHighlights by remember { mutableStateOf(false) }
+            var showOutline by remember { mutableStateOf(false) }
 
             // While highlighting, the bars (which hold the off switch) must
             // never auto-hide — losing the off switch mid-stroke is what
@@ -376,6 +692,57 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 zoom = 1f
                 pan = Offset.Zero
                 prefs.edit().putInt("last_page_${pdfFile.nameWithoutExtension}", currentPage).apply()
+                // The recents entry tracks the live page too (1.2.37).
+                updateRecentPage(currentPage)
+            }
+
+            // Reading progress for the caller (library booklet cards):
+            // snapshotFlow emits the saved start page on collection —
+            // that is the on-open report — then every page turn.
+            LaunchedEffect(pagerState, totalPages) {
+                snapshotFlow { pagerState.currentPage }.collect { page ->
+                    onProgress?.invoke(page, totalPages)
+                }
+            }
+
+            // Real search (1.2.37): debounce the query ~300ms, run the
+            // pure search off the main thread, land on the first hit.
+            LaunchedEffect(searchQuery, textIndex) {
+                val index = textIndex
+                if (index == null || searchQuery.isBlank()) {
+                    searchHits = emptyList()
+                    currentHitIndex = -1
+                } else {
+                    kotlinx.coroutines.delay(300)
+                    val hits = withContext(Dispatchers.Default) {
+                        PdfTextEngine.search(index, searchQuery)
+                    }
+                    searchHits = hits
+                    currentHitIndex = if (hits.isNotEmpty()) 0 else -1
+                }
+            }
+
+            // Prev/next (and the initial landing) scroll to the
+            // current hit's page.
+            LaunchedEffect(currentHitIndex, searchHits) {
+                val hit = searchHits.getOrNull(currentHitIndex)
+                if (hit != null && hit.page != pagerState.currentPage) {
+                    pagerState.animateScrollToPage(hit.page)
+                }
+            }
+
+            // Like highlight mode, text-highlight mode keeps its off
+            // switch (the bars) on screen while it is active.
+            LaunchedEffect(textHighlightMode) {
+                if (textHighlightMode) {
+                    hideBarJob?.cancel()
+                    showBars = true
+                }
+            }
+            BackHandler(enabled = textHighlightMode) {
+                textHighlightMode = false
+                selectionStart = null
+                selectionEnd = null
             }
 
             // Keep only the current page ±1 rendered; recycle evicted bitmaps.
@@ -384,6 +751,58 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 bitmapCache.keys.filter { it !in keep }.forEach { key ->
                     bitmapCache.remove(key)?.recycle()
                 }
+                // Explicit memory ceiling (READER_MAX_CACHED_BITMAPS):
+                // ±1 is 3 by construction, so this guard only fires
+                // if a future change widens the window — evict the
+                // pages farthest from the current one, recycling each.
+                while (bitmapCache.size > READER_MAX_CACHED_BITMAPS) {
+                    val farthest = bitmapCache.keys.maxByOrNull { abs(it - currentPage) } ?: break
+                    bitmapCache.remove(farthest)?.recycle()
+                }
+            }
+
+            // Zoom-resolution rendering (1.2.37): the settled zoom
+            // (debounced ~250ms) drives ONE re-render of the CURRENT
+            // page at base x min(zoom, 2.0); neighbours stay at base
+            // resolution. Settling back to 1x restores the base render.
+            var settledRenderScale by remember { mutableStateOf(2f) }
+            var hiResPage by remember { mutableStateOf(-1) }
+            var hiResScale by remember { mutableStateOf(2f) }
+            LaunchedEffect(zoom) {
+                kotlinx.coroutines.delay(250)
+                settledRenderScale = 2f * min(zoom, 2f).coerceAtLeast(1f)
+            }
+            LaunchedEffect(currentPage, settledRenderScale) {
+                val renderer = pdfRenderer ?: return@LaunchedEffect
+                if (settledRenderScale > 2.01f) {
+                    if (hiResPage != currentPage || hiResScale != settledRenderScale) {
+                        val bmp = renderPageBitmap(currentPage, settledRenderScale)
+                        if (bmp != null) {
+                            val old = bitmapCache[currentPage]
+                            bitmapCache[currentPage] = bmp
+                            if (old != null && old !== bmp) old.recycle()
+                            hiResPage = currentPage
+                            hiResScale = settledRenderScale
+                        }
+                    }
+                } else if (hiResPage == currentPage) {
+                    // Back at 1x: swap the hi-res bitmap for the base one.
+                    val bmp = renderPageBitmap(currentPage, 2f)
+                    if (bmp != null) {
+                        val old = bitmapCache[currentPage]
+                        bitmapCache[currentPage] = bmp
+                        if (old != null && old !== bmp) old.recycle()
+                    }
+                    hiResPage = -1
+                    hiResScale = 2f
+                }
+            }
+            // A page turn invalidates the hi-res marker: the eviction
+            // above already recycled that bitmap, and a stale marker
+            // would wrongly skip a later hi-res render of this page.
+            LaunchedEffect(currentPage) {
+                hiResPage = -1
+                hiResScale = 2f
             }
 
             DisposableEffect(Unit) {
@@ -407,29 +826,16 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 // While zoomed, horizontal drags pan the page instead of
                 // flipping it; in highlight mode they paint instead of
                 // flipping; at 1x they always flip.
-                userScrollEnabled = zoom <= 1.01f && !highlightMode,
+                userScrollEnabled = zoom <= 1.01f && !highlightMode && !textHighlightMode,
                 modifier = Modifier.fillMaxSize().onSizeChanged { boxSize = it }
             ) { page ->
                 val bitmap = bitmapCache[page]
                 LaunchedEffect(page, pdfRenderer) {
                     if (bitmapCache[page] == null && pdfRenderer != null) {
-                        withContext(Dispatchers.Default) {
-                            try {
-                                val pg = pdfRenderer!!.openPage(page)
-                                val bmp = Bitmap.createBitmap(
-                                    (pg.width * 2f).toInt(),
-                                    (pg.height * 2f).toInt(),
-                                    Bitmap.Config.ARGB_8888
-                                )
-                                // Fill white first: some PDFs leave the page
-                                // background transparent, which showed as black.
-                                bmp.eraseColor(android.graphics.Color.WHITE)
-                                pg.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                                pg.close()
-                                bitmapCache[page] = bmp
-                            } catch (_: Exception) {
-                            }
-                        }
+                        // Base resolution (x2) through the shared
+                        // serialized renderer; zoom re-renders of the
+                        // current page swap this entry at higher scale.
+                        renderPageBitmap(page, 2f)?.let { bitmapCache[page] = it }
                     }
                 }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -459,7 +865,17 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 // the bitmap, so pages with a transparent background
                                 // rendered as black text on the black canvas. The
                                 // page area is always white now, whatever the PDF.
-                                .background(Color.White)
+                                // Display mode: the letterbox follows
+                                // the page — black in night mode, warm
+                                // paper in warm mode, white otherwise;
+                                // the outer canvas stays black as always.
+                                .background(
+                                    when {
+                                        nightMode -> Color.Black
+                                        warmMode -> Color(0xFFF3E5C8)
+                                        else -> Color.White
+                                    }
+                                )
                                 .graphicsLayer(
                                     scaleX = if (isCurrent) zoom else 1f,
                                     scaleY = if (isCurrent) zoom else 1f,
@@ -479,6 +895,10 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                             if (highlightMode && annotationTool == "TEXT") {
                                                 pendingTextAt = toNormalized(tapOff, bitmap)
                                                 showTextEditor = true
+                                            } else if (textHighlightMode) {
+                                                // Selection is drag-only: a
+                                                // tap must not toggle the
+                                                // bars out from under it.
                                             } else if (!highlightMode) {
                                                 if (!showBars) {
                                                     showBars = true
@@ -551,7 +971,65 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                     } else Modifier
                                 )
                                 .then(
-                                    if (isCurrent && !highlightMode) {
+                                    if (isCurrent && textHighlightMode && zoom <= 1.01f) {
+                                        Modifier.pointerInput(Unit) {
+                                            // Text selection drag (1.2.37).
+                                            // LIMITATION, by design: active
+                                            // ONLY at zoom 1f. While zoomed
+                                            // the drag keeps its old job —
+                                            // panning (the handler below) —
+                                            // because a normalized selection
+                                            // rect is only unambiguous
+                                            // against the untransformed page.
+                                            detectDragGestures(
+                                                onDragStart = { off ->
+                                                    val n = toNormalized(off, bitmap)
+                                                    selectionStart = n
+                                                    selectionEnd = n
+                                                },
+                                                onDrag = { change, _ ->
+                                                    selectionEnd = toNormalized(change.position, bitmap)
+                                                },
+                                                onDragEnd = {
+                                                    val s = selectionStart
+                                                    val e = selectionEnd
+                                                    selectionStart = null
+                                                    selectionEnd = null
+                                                    if (s != null && e != null) {
+                                                        val left = minOf(s.x, e.x)
+                                                        val right = maxOf(s.x, e.x)
+                                                        val top = minOf(s.y, e.y)
+                                                        val bottom = maxOf(s.y, e.y)
+                                                        val pageWords = textIndex
+                                                            ?.pages?.firstOrNull { it.page == page }
+                                                            ?.words.orEmpty()
+                                                        val matched = pageWords.filter { w ->
+                                                            w.x1 > left && w.x0 < right &&
+                                                                w.y1 > top && w.y0 < bottom
+                                                        }
+                                                        if (matched.isNotEmpty()) {
+                                                            textHighlights = textHighlights + TextHighlightDto(
+                                                                page = page,
+                                                                rects = matched,
+                                                                text = matched.joinToString(" ") { it.text }
+                                                            )
+                                                            saveTextHighlights()
+                                                            // Unified undo stack (1.2.37): text
+                                                            // highlights join strokes/annotations.
+                                                            markHistory = markHistory + ("texthighlight" to page)
+                                                        }
+                                                    }
+                                                },
+                                                onDragCancel = {
+                                                    selectionStart = null
+                                                    selectionEnd = null
+                                                }
+                                            )
+                                        }
+                                    } else Modifier
+                                )
+                                .then(
+                                    if (isCurrent && !highlightMode && !textHighlightMode) {
                                         Modifier.pointerInput(Unit) {
                                             // Pinch/pan that never steals
                                             // single-finger swipes at 1x
@@ -616,6 +1094,11 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 bitmap = bitmap.asImageBitmap(),
                                 contentDescription = null,
                                 contentScale = ContentScale.Fit,
+                                // Display-mode filters apply ONLY to
+                                // the page image (inversion at night,
+                                // sepia when warm); markings drawn over
+                                // it (the Canvas below) are never filtered.
+                                colorFilter = pageColorFilter,
                                 modifier = Modifier.fillMaxSize()
                             )
                             // Highlighter layer: strokes drawn over the page,
@@ -641,6 +1124,62 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                         style = Stroke(width = wFrac * fittedW, cap = StrokeCap.Round),
                                         alpha = 0.45f
                                     )
+                                }
+                                // Text-layer markings (1.2.37), drawn in
+                                // this same fitted-page transform (offX/
+                                // offY/fittedW/fittedH) and UNDER the
+                                // freehand layer: saved text highlights
+                                // first, then this page's search hits
+                                // (the current hit stronger + outlined),
+                                // then the live selection rect.
+                                fun drawWordRect(w: WordBox, color: Color, alpha: Float, outline: Boolean = false) {
+                                    val left = offX + w.x0 * fittedW
+                                    val top = offY + w.y0 * fittedH
+                                    val rectSize = Size((w.x1 - w.x0) * fittedW, (w.y1 - w.y0) * fittedH)
+                                    drawRect(color = color, topLeft = Offset(left, top), size = rectSize, alpha = alpha)
+                                    if (outline) {
+                                        drawRect(
+                                            color = color, topLeft = Offset(left, top), size = rectSize,
+                                            style = Stroke(width = 2f)
+                                        )
+                                    }
+                                }
+                                textHighlights.filter { it.page == page }.forEach { th ->
+                                    th.rects.forEach { r -> drawWordRect(r, Color(0xFFFFEB3B), 0.45f) }
+                                }
+                                if (searchHits.isNotEmpty()) {
+                                    val pageWords = textIndex?.pages?.firstOrNull { it.page == page }?.words.orEmpty()
+                                    searchHits.withIndex()
+                                        .filter { it.value.page == page }
+                                        .forEach { (hitIdx, hit) ->
+                                            val isCurrentHit = hitIdx == currentHitIndex
+                                            for (wi in hit.wordStart..hit.wordEnd) {
+                                                pageWords.getOrNull(wi)?.let { w ->
+                                                    if (isCurrentHit) {
+                                                        drawWordRect(w, Color(0xFFFF9800), 0.55f, outline = true)
+                                                    } else {
+                                                        drawWordRect(w, Color(0xFFFFEB3B), 0.35f)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                }
+                                if (isCurrent) {
+                                    val s = selectionStart
+                                    val e = selectionEnd
+                                    if (s != null && e != null) {
+                                        val left = offX + minOf(s.x, e.x) * fittedW
+                                        val top = offY + minOf(s.y, e.y) * fittedH
+                                        val rectSize = Size(abs(e.x - s.x) * fittedW, abs(e.y - s.y) * fittedH)
+                                        drawRect(
+                                            color = Color(0xFFFFEB3B), topLeft = Offset(left, top),
+                                            size = rectSize, alpha = 0.30f
+                                        )
+                                        drawRect(
+                                            color = Color(0xFFFF9800), topLeft = Offset(left, top),
+                                            size = rectSize, style = Stroke(width = 2f)
+                                        )
+                                    }
                                 }
                                 highlightStrokes.filter { it.page == page }.forEach { s ->
                                     val pts = s.points.chunked(2).map { Offset(it[0], it[1]) }
@@ -739,11 +1278,49 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         IconButton(onClick = { toggleBookmark(currentPage) }) {
                             Icon(Icons.Default.Bookmark, null, tint = if (currentPage in bookmarks) GoldAccent else Color.White)
                         }
-                        IconButton(onClick = { highlightMode = !highlightMode }) {
+                        IconButton(onClick = {
+                            highlightMode = !highlightMode
+                            if (highlightMode) textHighlightMode = false
+                        }) {
                             Icon(Icons.Default.Brush, null, tint = if (highlightMode) GoldAccent else Color.White)
+                        }
+                        // Text highlighting exists only with a text
+                        // index; without one the button stays absent.
+                        if (textIndex != null) {
+                            IconButton(onClick = {
+                                textHighlightMode = !textHighlightMode
+                                if (textHighlightMode) highlightMode = false
+                                if (!textHighlightMode) {
+                                    selectionStart = null
+                                    selectionEnd = null
+                                }
+                            }) {
+                                Icon(Icons.Default.BorderColor, null, tint = if (textHighlightMode) GoldAccent else Color.White)
+                            }
                         }
                         IconButton(onClick = { showSearch = !showSearch }) {
                             Icon(Icons.Default.Search, null, tint = Color.White)
+                        }
+                        // One button cycles the three display modes;
+                        // the icon names the CURRENT mode (normal /
+                        // warm paper / night).
+                        IconButton(onClick = { cycleDisplayMode() }) {
+                            Icon(
+                                when (displayMode) {
+                                    "WARM" -> Icons.Default.WbSunny
+                                    "NIGHT" -> Icons.Default.DarkMode
+                                    else -> Icons.Default.LightMode
+                                },
+                                null, tint = if (displayMode == "NORMAL") Color.White else GoldAccent
+                            )
+                        }
+                        IconButton(onClick = { showRecents = true }) {
+                            Icon(Icons.Default.History, null, tint = Color.White)
+                        }
+                        if (!textIndex?.outline.isNullOrEmpty()) {
+                            IconButton(onClick = { showOutline = true }) {
+                                Icon(Icons.Default.List, null, tint = Color.White)
+                            }
                         }
                         TextButton(onClick = {
                             isFullscreen = true
@@ -837,31 +1414,13 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                // One undo for both marking kinds: the
-                                // student sees one kind of marking, so
-                                // the last marking on this page (stroke
-                                // or shape/text) is what comes off.
+                                // One undo for all three marking kinds
+                                // (1.2.37): the shared undoLastMark()
+                                // pops the newest marking on this page —
+                                // stroke, shape/text, or text highlight —
+                                // and saves its group immediately.
                                 val hasPageMark = markHistory.any { (_, p) -> p == currentPage }
-                                TextButton(onClick = {
-                                    val idx = markHistory.indexOfLast { (_, p) -> p == currentPage }
-                                    if (idx >= 0) {
-                                        val (kind, _) = markHistory[idx]
-                                        markHistory = markHistory.toMutableList().also { it.removeAt(idx) }
-                                        if (kind == "stroke") {
-                                            val sIdx = highlightStrokes.indexOfLast { it.page == currentPage }
-                                            if (sIdx >= 0) {
-                                                highlightStrokes = highlightStrokes.toMutableList().also { it.removeAt(sIdx) }
-                                                saveHighlights()
-                                            }
-                                        } else {
-                                            val aIdx = annotations.indexOfLast { it.page == currentPage }
-                                            if (aIdx >= 0) {
-                                                annotations = annotations.toMutableList().also { it.removeAt(aIdx) }
-                                                saveAnnotations()
-                                            }
-                                        }
-                                    }
-                                }) {
+                                TextButton(onClick = { undoLastMark() }) {
                                     Text(
                                         "تراجع",
                                         color = Color.White.copy(alpha = if (hasPageMark) 1f else 0.4f),
@@ -876,6 +1435,55 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                     markHistory = markHistory.filter { (_, p) -> p != currentPage }
                                 }) {
                                     Text("مسح العلامات", color = Color.White, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Text-highlight panel (1.2.37): the mode's hint, the
+                // saved-highlights list entry, and its off switch —
+                // mirroring the freehand panel's shape.
+                if (textHighlightMode) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                            .padding(top = 64.dp)
+                            .background(MaroonPrimary.copy(alpha = 0.9f))
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                if (zoom <= 1.01f) "اسحب فوق النص لتظليله" else "صغّر إلى 100% لتظليل النص",
+                                color = Color.White, fontSize = 12.sp
+                            )
+                            Row {
+                                TextButton(onClick = { showTextHighlights = true }) {
+                                    Text("المظللات (${textHighlights.size})", color = Color.White, fontSize = 12.sp)
+                                }
+                                // Same unified undo as the freehand
+                                // panel: pops this page's newest marking
+                                // (here: the last text highlight).
+                                TextButton(onClick = { undoLastMark() }) {
+                                    Text(
+                                        "تراجع",
+                                        color = Color.White.copy(
+                                            alpha = if (markHistory.any { (_, p) -> p == currentPage }) 1f else 0.4f
+                                        ),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                                TextButton(onClick = {
+                                    textHighlightMode = false
+                                    selectionStart = null
+                                    selectionEnd = null
+                                }) {
+                                    Text("إنهاء ✓", color = GoldAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -906,8 +1514,19 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 goToPageText = (currentPage + 1).toString()
                                 showGoToPage = true
                             }) {
+                                // Full progress label (1.2.37): page X
+                                // of Y, the percentage, and how many
+                                // pages remain (Arabic plural rules).
+                                val remainingPages = totalPages - currentPage - 1
+                                val remainingText = when {
+                                    remainingPages <= 0 -> "لا صفحات متبقية"
+                                    remainingPages == 1 -> "تبقّت صفحة واحدة"
+                                    remainingPages == 2 -> "تبقّت صفحتان"
+                                    remainingPages in 3..10 -> "تبقّى $remainingPages صفحات"
+                                    else -> "تبقّى $remainingPages صفحة"
+                                }
                                 Text(
-                                    "${currentPage + 1} / $totalPages (${((currentPage + 1).toFloat() / totalPages * 100).toInt()}%)",
+                                    "صفحة ${currentPage + 1} من $totalPages (${((currentPage + 1).toFloat() / totalPages * 100).toInt()}%) — $remainingText",
                                     color = Color.White,
                                     fontWeight = FontWeight.Medium
                                 )
@@ -1035,32 +1654,72 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                             .background(MaroonPrimary, RoundedCornerShape(8.dp))
                             .padding(12.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            TextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                placeholder = { Text("البحث في الملف...") },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(40.dp),
-                                colors = TextFieldDefaults.colors(
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                TextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    placeholder = { Text("البحث في الملف...") },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(40.dp),
+                                    colors = TextFieldDefaults.colors(
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
                                 )
-                            )
-                            IconButton(onClick = { showSearch = false }) {
-                                Icon(Icons.Default.Close, null, tint = Color.White)
+                                IconButton(onClick = { showSearch = false }) {
+                                    Icon(Icons.Default.Close, null, tint = Color.White)
+                                }
+                            }
+                            if (textIndex == null) {
+                                Text(
+                                    "البحث في النصوص يدعم ملفات PDF بطبقة نصية محفوظة.",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 10.sp
+                                )
+                            } else if (searchQuery.isNotBlank()) {
+                                // Hit counter + prev/next walk (1.2.37):
+                                // navigation itself is the effect on
+                                // currentHitIndex above.
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        if (searchHits.isEmpty()) "لا نتائج"
+                                        else "${currentHitIndex + 1} من ${searchHits.size} نتيجة",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            if (searchHits.isNotEmpty()) {
+                                                currentHitIndex =
+                                                    (currentHitIndex - 1 + searchHits.size) % searchHits.size
+                                            }
+                                        },
+                                        enabled = searchHits.isNotEmpty()
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowUp, null, tint = Color.White)
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            if (searchHits.isNotEmpty()) {
+                                                currentHitIndex = (currentHitIndex + 1) % searchHits.size
+                                            }
+                                        },
+                                        enabled = searchHits.isNotEmpty()
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.White)
+                                    }
+                                }
                             }
                         }
-                        Text(
-                            "البحث في النصوص يدعم ملفات PDF بطبقة نصية محفوظة.",
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(top = 40.dp)
-                        )
                     }
                 }
             }
@@ -1114,6 +1773,148 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     },
                     dismissButton = {
                         TextButton(onClick = { showTextEditor = false; pendingTextAt = null }) { Text("إلغاء") }
+                    }
+                )
+            }
+
+            // Book outline dialog (1.2.37): the PDF's own table of
+            // contents, indented by level; a tap jumps and closes.
+            if (showOutline) {
+                val outline = textIndex?.outline.orEmpty()
+                AlertDialog(
+                    onDismissRequest = { showOutline = false },
+                    title = { Text("فهرس الكتاب") },
+                    text = {
+                        LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                            items(outline) { item ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            coroutineScope.launch {
+                                                pagerState.scrollToPage(
+                                                    item.page.coerceIn(0, totalPages - 1)
+                                                )
+                                            }
+                                            showOutline = false
+                                        }
+                                        .padding(
+                                            start = (item.level * 16).dp,
+                                            top = 8.dp, bottom = 8.dp, end = 4.dp
+                                        ),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(item.title, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                                    Text("${item.page + 1}", fontSize = 12.sp, color = MaroonPrimary)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showOutline = false }) { Text("إغلاق") }
+                    }
+                )
+            }
+
+            // Text-highlights list (1.2.37): page + snippet per saved
+            // highlight, with individual delete (same dialog pattern
+            // as the bookmarks panel).
+            if (showTextHighlights) {
+                AlertDialog(
+                    onDismissRequest = { showTextHighlights = false },
+                    title = { Text("المظللات النصية") },
+                    text = {
+                        if (textHighlights.isEmpty()) {
+                            Text("لا توجد مظللات نصية بعد", fontSize = 13.sp)
+                        } else {
+                            LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                                items(textHighlights) { th ->
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                coroutineScope.launch {
+                                                    pagerState.scrollToPage(
+                                                        th.page.coerceIn(0, totalPages - 1)
+                                                    )
+                                                }
+                                                showTextHighlights = false
+                                            }
+                                            .padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("الصفحة ${th.page + 1}", fontSize = 11.sp, color = MaroonPrimary)
+                                            Text(
+                                                th.text.take(80),
+                                                fontSize = 13.sp,
+                                                maxLines = 2
+                                            )
+                                        }
+                                        IconButton(onClick = {
+                                            textHighlights = textHighlights - th
+                                            saveTextHighlights()
+                                        }) {
+                                            Icon(
+                                                Icons.Default.Delete, null,
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showTextHighlights = false }) { Text("إغلاق") }
+                    }
+                )
+            }
+
+            // Recent books dialog (1.2.37): title + saved page per
+            // entry. Tapping the CURRENT book jumps to its saved
+            // page; tapping another book delegates to onOpenRecent
+            // when the caller wired it, and does nothing otherwise.
+            if (showRecents) {
+                AlertDialog(
+                    onDismissRequest = { showRecents = false },
+                    title = { Text("آخر الكتيّبات المفتوحة") },
+                    text = {
+                        if (recents.isEmpty()) {
+                            Text("لا توجد كتيّبات مفتوحة بعد", fontSize = 13.sp)
+                        } else {
+                            LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                                items(recents) { recent ->
+                                    Column(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                showRecents = false
+                                                if (recent.path == pdfFile.absolutePath) {
+                                                    coroutineScope.launch {
+                                                        pagerState.scrollToPage(
+                                                            recent.page.coerceIn(0, totalPages - 1)
+                                                        )
+                                                    }
+                                                } else {
+                                                    onOpenRecent?.invoke(File(recent.path), recent.title)
+                                                }
+                                            }
+                                            .padding(vertical = 8.dp)
+                                    ) {
+                                        Text(recent.title, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                        Text(
+                                            "صفحة ${recent.page + 1} من ${recent.totalPages}",
+                                            fontSize = 11.sp, color = MaroonPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showRecents = false }) { Text("إغلاق") }
                     }
                 )
             }

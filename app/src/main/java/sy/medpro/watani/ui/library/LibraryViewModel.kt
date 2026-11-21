@@ -97,6 +97,27 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         return repository.isLibraryItemDownloaded(item)
     }
 
+    /**
+     * Watch-progress fraction (0f..1f) of one subject for the
+     * subjects grid (build 1.2.37, design 01's gold bar).
+     *
+     * INVESTIGATED before building (the design asks for the mean of
+     * the subject's per-video watched fractions): the ONLY watch
+     * position store in the app is VideoPlayerScreen's
+     * `savedPositionMs` — a `rememberSaveable(videoUri)` composition
+     * state that lives and dies with the player instance. It is not
+     * persisted to disk, it is not readable from the Library, and no
+     * video duration is stored anywhere beside it, so NO per-video
+     * fraction can be computed from any existing source. Inventing
+     * a number would be fabrication, so this returns 0f for every
+     * subject and the grid renders its «لم تبدأ بعد» state — the
+     * exact behaviour the 1.2.37 spec prescribes when no source
+     * exists. When a durable position+duration store lands, this
+     * function is the single place to wire it: mean of the videos'
+     * fractions, a missing video counting as 0.
+     */
+    fun subjectWatchFraction(videos: List<LibraryItem>): Float = 0f
+
     fun getLocalFile(item: LibraryItem): java.io.File {
         return repository.getLibraryFile(item)
     }

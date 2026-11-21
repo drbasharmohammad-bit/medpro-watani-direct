@@ -412,7 +412,15 @@ data class LibraryItem(
     // the grouping follows with no app change. Default null keeps old
     // catalogs parsing exactly as before; a null/blank topic renders
     // the video ungrouped at the end of its subject, as before.
-    @Json(name = "topic") val topic: String? = null
+    @Json(name = "topic") val topic: String? = null,
+    // Enriched chapter booklet linked to this video (build 1.2.37):
+    // a path relative to the content origin ("booklets/<slug>/<file>.pdf")
+    // for 439 of the 581 videos; the 131 foundation videos and the
+    // bookless subject carry no field. Display metadata (chapter
+    // title/pages) lives in the bundled booklet_links.json asset —
+    // this field is the single source of truth for the link itself.
+    // Default null keeps old library.json files parsing as before.
+    @Json(name = "booklet") val booklet: String? = null
 )
 
 // ======================================================================

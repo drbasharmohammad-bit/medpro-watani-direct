@@ -71,8 +71,8 @@ android {
     // are opt-in and OFF by default, managed from the existing
     // «الإشعارات والتذكير» screen; sign-in/consent (1.2.29) and
     // every other existing behavior are untouched.
-    versionCode = 74310
-    versionName = "1.2.36"
+    versionCode = 74311
+    versionName = "1.2.37"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -218,6 +218,10 @@ dependencies {
   implementation(libs.androidx.media3.exoplayer)
   implementation(libs.androidx.media3.ui)
   implementation(libs.androidx.media3.exoplayer.hls)
+  // PDF text layer only (build 1.2.37): word boxes, search and the
+  // book outline for the internal reader. Page RENDERING stays on
+  // android.graphics.pdf.PdfRenderer — PDFBox is never asked to draw.
+  implementation(libs.pdfbox.android)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)

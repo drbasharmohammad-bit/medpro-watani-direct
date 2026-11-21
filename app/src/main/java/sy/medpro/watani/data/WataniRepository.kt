@@ -685,11 +685,39 @@ class WataniRepository(private val context: Context) {
     ): Result<File> = withContext(Dispatchers.IO) {
         val targetFile = getFirstAidBookletFile(relativePath)
         val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+        // PDF magic check (1.2.37 hardening): a real booklet starts
+        // with the five bytes "%PDF-". Applied to the cached copy
+        // AND to every fresh download before it is installed — a
+        // right-size-but-wrong-content file (HTML error page, a
+        // truncated transfer) must never reach the reader.
+        fun hasPdfHeader(f: File): Boolean = try {
+            if (!f.exists() || f.length() < 5) {
+                false
+            } else {
+                f.inputStream().use { input ->
+                    val head = ByteArray(5)
+                    var off = 0
+                    while (off < head.size) {
+                        val r = input.read(head, off, head.size - off)
+                        if (r < 0) break
+                        off += r
+                    }
+                    off == head.size && String(head, Charsets.US_ASCII) == "%PDF-"
+                }
+            }
+        } catch (_: Exception) {
+            false
+        }
         try {
             if (targetFile.exists() && targetFile.length() > 0 &&
                 (expectedSize <= 0 || targetFile.length() == expectedSize)
             ) {
-                return@withContext Result.success(targetFile)
+                if (hasPdfHeader(targetFile)) {
+                    return@withContext Result.success(targetFile)
+                }
+                // Cached copy has the right size but is not a PDF:
+                // drop it and fall through to a fresh download.
+                targetFile.delete()
             }
             val request = okhttp3.Request.Builder()
                 .url("${WataniApi.BASE_URL}$relativePath")
@@ -713,9 +741,27 @@ class WataniRepository(private val context: Context) {
                     }
                 }
             }
+            // Post-transfer verification (1.2.37): expected size
+            // (when the index/manifest provides one) AND the PDF
+            // magic header. Any mismatch deletes the temp file and
+            // fails with a descriptive IOException — the corrupt
+            // bytes are never installed under the booklet's name.
             if (expectedSize > 0 && tempFile.length() != expectedSize) {
+                val actualSize = tempFile.length()
                 if (tempFile.exists()) tempFile.delete()
-                return@withContext Result.failure(Exception("حجم الكتيّب غير مطابق للمتوقع"))
+                return@withContext Result.failure(
+                    java.io.IOException(
+                        "حجم الكتيّب غير مطابق: المتوقع $expectedSize بايت والواصل فعليًا $actualSize بايت — حُذفت النسخة الناقصة."
+                    )
+                )
+            }
+            if (!hasPdfHeader(tempFile)) {
+                if (tempFile.exists()) tempFile.delete()
+                return@withContext Result.failure(
+                    java.io.IOException(
+                        "الملف المحمّل ليس كتيّب PDF صالحًا: ترويسة %PDF- مفقودة من أول الملف — حُذفت النسخة التالفة."
+                    )
+                )
             }
             if (tempFile.exists()) {
                 if (targetFile.exists()) targetFile.delete()

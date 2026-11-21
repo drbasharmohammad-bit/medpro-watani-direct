@@ -61,3 +61,20 @@
 # reflectively there.
 -keep class com.google.gson.** { *; }
 -dontwarn com.google.gson.**
+
+# ── PDF reader marking DTOs (Crashlytics c3b30976, build 1.2.37) ──
+# HighlightStrokeDto / PdfAnnotationDto / TextHighlightDto live in
+# ui.library — the one Moshi surface NOT covered by the package keeps
+# above — and are (de)serialized reflectively by PdfViewerScreen.
+# Under R8 their names were obfuscated (the crash's "List<dx1>") and
+# adapter creation threw during composition, killing every book open.
+# The DTOs now carry @JsonClass(generateAdapter = true) (which also
+# matches the @JsonClass keep rule above); these explicit keeps are
+# the second layer so neither the DTOs nor their generated adapters
+# can be renamed or stripped.
+-keep class sy.medpro.watani.ui.library.HighlightStrokeDto { *; }
+-keep class sy.medpro.watani.ui.library.PdfAnnotationDto { *; }
+-keep class sy.medpro.watani.ui.library.TextHighlightDto { *; }
+-keep class sy.medpro.watani.ui.library.HighlightStrokeDtoJsonAdapter { *; }
+-keep class sy.medpro.watani.ui.library.PdfAnnotationDtoJsonAdapter { *; }
+-keep class sy.medpro.watani.ui.library.TextHighlightDtoJsonAdapter { *; }
