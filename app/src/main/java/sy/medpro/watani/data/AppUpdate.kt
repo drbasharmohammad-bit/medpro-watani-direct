@@ -295,11 +295,12 @@ object AppUpdate {
                     PackageManager.GET_SIGNATURES
                 )
             } ?: return null
+            val pkgInfo = info ?: return null
             val certs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                info.signingInfo?.apkContentsSigners
+                pkgInfo.signingInfo?.apkContentsSigners
             } else {
                 @Suppress("DEPRECATION")
-                info.signatures
+                pkgInfo.signatures
             }
             val first = certs?.firstOrNull() ?: return null
             MessageDigest.getInstance("SHA-256")
