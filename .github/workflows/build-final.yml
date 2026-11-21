@@ -125,6 +125,30 @@ jobs:
             echo "Gradle attempt $attempt failed; retrying in 30s..."; sleep 30
           done
 
+      - name: Full unit test suite (audit enumeration — never fails)
+        continue-on-error: true
+        env:
+          WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
+          WATANI_KEY_ALIAS: watani
+          WATANI_KEY_PASSWORD: ${{ secrets.WATANI_KEY_PASSWORD }}
+          WATANI_KEYSTORE_TYPE: PKCS12
+        run: |
+          # TEMP (audit phase 0/2): the gate above runs 25 named test
+          # classes; this step runs ALL unit tests to enumerate any
+          # failures hiding outside the named list. Never fails.
+          gradle :app:testDebugUnitTest --console=plain --max-workers=2 || true
+
+      - name: Upload full-suite test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-suite-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            app/build/test-results/testDebugUnitTest
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Coverage report (JaCoCo — measurement only, never fails)
         continue-on-error: true
         env:
@@ -186,8 +210,11 @@ jobs:
           # Full-audit phase 0 gate (21 Nov 2026): same pattern as
           # lint — config/detekt/baseline.xml freezes today's
           # findings; any NEW detekt finding fails this step.
+          # TEMP (one run only): detektBaseline generates the initial
+          # baseline; the coordinator downloads it from the reports
+          # artifact, commits it, and this step reverts to :app:detekt.
           for attempt in 1 2 3; do
-            if gradle :app:detekt --console=plain --max-workers=2; then break; fi
+            if gradle :app:detektBaseline --console=plain --max-workers=2; then break; fi
             if [ "$attempt" = "3" ]; then exit 1; fi
             echo "Gradle attempt $attempt failed; retrying in 30s..."; sleep 30
           done
@@ -201,6 +228,7 @@ jobs:
             app/build/reports/detekt/detekt.html
             app/build/reports/detekt/detekt.xml
             app/build/reports/detekt/detekt.txt
+            config/detekt/baseline.xml
           if-no-files-found: ignore
           retention-days: 14
 
