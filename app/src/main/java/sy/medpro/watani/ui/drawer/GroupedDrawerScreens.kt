@@ -138,8 +138,9 @@ fun MedicalCalculatorsScreen(
 }
 
 @Composable
-fun FlashcardsReviewScreen(onBack: () -> Unit, initialTab: Int = 0, ankiWrongOnly: Boolean = false) {
-    // التبويب حُذف نهائيًا — تبقى المراجعة الذكية Anki وحدها،
-    // و initialTab صار غير مستخدم ويُبقى للتوافق مع المستدعين.
+fun FlashcardsReviewScreen(onBack: () -> Unit, ankiWrongOnly: Boolean = false) {
+    // التبويب حُذف نهائيًا — تبقى المراجعة الذكية Anki وحدها.
+    // Sweep fix L-4: the ignored initialTab parameter is gone; callers
+    // passed initialTab = 1 expecting a tab that no longer exists.
     AnkiFlashcardScreen(onBack = onBack, wrongOnly = ankiWrongOnly)
 }
