@@ -33,8 +33,8 @@ val ThmanyahFontFamily = FontFamily(
  * google/fonts: ofl/notokufiarabic v27, ofl/notosansarabic v33 —
  * Kufi weights 400/600/700/800, Sans weights 400/500/700) and bundled
  * under res/font/noto_*.ttf. Both families are SIL Open Font License
- * 1.1. Used by the First Aid section only; the app-wide Typography
- * above is untouched.
+ * 1.1. Now also the app-wide Typography families (Premium theme
+ * unification): headings use Noto Kufi, body uses Noto Sans Arabic.
  */
 val NotoKufiFontFamily = FontFamily(
     Font(R.font.noto_kufi_arabic_regular, FontWeight.Normal),
@@ -58,32 +58,32 @@ val TajawalFontFamily = FontFamily(
 
 val Typography = Typography(
     displayLarge = TextStyle(
-        fontFamily = CairoFontFamily,
+        fontFamily = ThmanyahFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 32.sp,
         lineHeight = 42.sp
     ),
     headlineMedium = TextStyle(
-        fontFamily = CairoFontFamily,
+        fontFamily = NotoKufiFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
         lineHeight = 34.sp
     ),
     titleLarge = TextStyle(
-        fontFamily = CairoFontFamily,
+        fontFamily = NotoKufiFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 20.sp,
         lineHeight = 30.sp,
         letterSpacing = 0.sp
     ),
     titleMedium = TextStyle(
-        fontFamily = CairoFontFamily,
+        fontFamily = NotoKufiFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 25.sp
     ),
     bodyLarge = TextStyle(
-        fontFamily = TajawalFontFamily,
+        fontFamily = NotoSansArabicFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 26.sp,
@@ -94,19 +94,19 @@ val Typography = Typography(
         )
     ),
     bodyMedium = TextStyle(
-        fontFamily = TajawalFontFamily,
+        fontFamily = NotoSansArabicFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 22.sp
     ),
     labelLarge = TextStyle(
-        fontFamily = CairoFontFamily,
+        fontFamily = NotoKufiFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
         lineHeight = 20.sp
     ),
     labelSmall = TextStyle(
-        fontFamily = CairoFontFamily,
+        fontFamily = NotoKufiFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 16.sp,

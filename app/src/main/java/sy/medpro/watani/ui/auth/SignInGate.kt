@@ -113,8 +113,8 @@ import sy.medpro.watani.ui.theme.ThmanyahFontFamily
  * Luxury redesign (doctor's order, Nov 2026 — «فخمة مثل التطبيقات
  * العالمية»): the gate logic above is byte-for-byte the old one;
  * only the presentation changed. A deep-maroon immersive hero in the
- * splash's own dark family (#2D1015 ← #52131C ← #7A1F2B, with a
- * muted-copper glow behind the logo) carries the official app icon
+ * splash's own dark family (#2D1015 ← #42091A ← #5E1224, with a
+ * Premium-gold glow behind the logo) carries the official app icon
  * as the hero, the «وطني» wordmark and the official slogan; an ivory
  * sheet with 32dp top corners holds the form. The Google button now
  * follows Google's branding guidelines literally (white surface,
@@ -245,7 +245,7 @@ fun SignInGate(
                         }
                     }
                     Box(contentAlignment = Alignment.Center) {
-                        // Muted-copper halo behind the logo (brand
+                        // Premium-gold halo behind the logo (brand
                         // accent only — never a yellow UI surface).
                         Box(
                             modifier = Modifier
