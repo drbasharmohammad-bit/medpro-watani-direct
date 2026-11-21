@@ -2,6 +2,7 @@ package sy.medpro.watani.ui.library
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -254,7 +255,7 @@ fun LibGhostButton(text: String, modifier: Modifier = Modifier, onClick: () -> U
             .height(52.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(libSurface())
-            .androidx.compose.foundation.border(
+            .border(
                 1.5.dp, LibColors.Line, RoundedCornerShape(16.dp)
             )
             .clickable { onClick() },

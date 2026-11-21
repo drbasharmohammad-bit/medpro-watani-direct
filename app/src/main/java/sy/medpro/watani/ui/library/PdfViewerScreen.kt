@@ -588,6 +588,15 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 }
             }
 
+            // One undo history for both marking kinds (strokes and
+            // shape/text annotations): the student sees one kind of
+            // marking, so there is one undo, not two. Entries are
+            // (kind, page); session-only — reopening the book clears
+            // undo history, the markings themselves stay saved.
+            // Declared BEFORE undoLastMark() below: a local function
+            // can only capture state declared earlier in the block.
+            var markHistory by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
+
             /** Unified undo (1.2.37): removes the most recent marking
              * added on the CURRENT page across all three marking
              * groups (freehand stroke / shape-text annotation / text
@@ -629,12 +638,6 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // Annotation tool inside highlight mode: FREEHAND (strokes),
             // TEXT (tap places a text box), RECT, ELLIPSE, ARROW (drag).
             var annotationTool by remember { mutableStateOf("FREEHAND") }
-            // One undo history for both marking kinds (strokes and
-            // shape/text annotations): the student sees one kind of
-            // marking, so there is one undo, not two. Entries are
-            // (kind, page); session-only — reopening the book clears
-            // undo history, the markings themselves stay saved.
-            var markHistory by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
             var pendingTextAt by remember { mutableStateOf<Offset?>(null) }
             var showTextEditor by remember { mutableStateOf(false) }
             var paintingPoints by remember { mutableStateOf<List<Offset>?>(null) }

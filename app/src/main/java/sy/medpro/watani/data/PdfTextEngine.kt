@@ -186,7 +186,7 @@ object PdfTextEngine {
 
     private fun collectOutlineInto(node: PDOutlineNode, level: Int, out: MutableList<OutlineItem>) {
         val children = try {
-            node.children?.toList().orEmpty()
+            node.children().toList()
         } catch (_: Exception) {
             emptyList()
         }
