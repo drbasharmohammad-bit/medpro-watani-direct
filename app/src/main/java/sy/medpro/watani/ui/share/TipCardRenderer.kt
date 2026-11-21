@@ -28,7 +28,7 @@ import java.io.FileOutputStream
  * ([ShareCardRenderer], 1080x1350): warm ivory background with faint
  * gold corner decoration, full-width dark-maroon header band
  * "Med Pro — وطني" with the gold medical plus, the tip's category as a
- * gold pill, the message text in Thmanyah (Cairo fallback) laid out
+ * gold pill, the message text in Thmanyah (Noto Sans Arabic fallback) laid out
  * ONLY with StaticLayout (real Arabic shaping + RTL), and the gold
  * gradient footer carrying "t.me/medprowatain". The text is vertically
  * centred in the body area; font steps down until it fits, and — as a
@@ -55,10 +55,10 @@ object TipCardRenderer {
 
     private fun fonts(context: Context): Pair<Typeface, Typeface> {
         val regular = loadTypeface(context, R.font.thmanyahsans_regular)
-            ?: loadTypeface(context, R.font.cairo)
+            ?: loadTypeface(context, R.font.noto_sans_arabic_regular)
             ?: Typeface.SANS_SERIF
         val bold = loadTypeface(context, R.font.thmanyahsans_bold)
-            ?: loadTypeface(context, R.font.cairo)
+            ?: loadTypeface(context, R.font.noto_sans_arabic_regular)
             ?: Typeface.SANS_SERIF
         return regular to bold
     }

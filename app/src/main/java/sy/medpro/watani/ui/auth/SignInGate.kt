@@ -74,7 +74,7 @@ import sy.medpro.watani.R
 import sy.medpro.watani.data.PrivacyConsent
 import sy.medpro.watani.data.ProfileNameStore
 import sy.medpro.watani.ui.drawer.PrivacyPolicyScreen
-import sy.medpro.watani.ui.theme.CairoFontFamily
+import sy.medpro.watani.ui.theme.NotoKufiFontFamily
 import sy.medpro.watani.ui.theme.DarkMaroonOutline
 import sy.medpro.watani.ui.theme.ErrorRed
 import sy.medpro.watani.ui.theme.GoldAccent
@@ -309,7 +309,7 @@ fun SignInGate(
                     Text(
                         "MED PRO",
                         style = TextStyle(
-                            fontFamily = CairoFontFamily,
+                            fontFamily = NotoKufiFontFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp,
                             letterSpacing = 4.5.sp,
@@ -380,7 +380,7 @@ fun SignInGate(
                         ) {
                             Text(
                                 "أهلاً بك",
-                                fontFamily = CairoFontFamily,
+                                fontFamily = NotoKufiFontFamily,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 22.sp,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -399,7 +399,7 @@ fun SignInGate(
                             Spacer(modifier = Modifier.height(22.dp))
                             Text(
                                 "اسمك يا دكتور/ة",
-                                fontFamily = CairoFontFamily,
+                                fontFamily = NotoKufiFontFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp,
                                 color = if (dark) MaroonLight else MaroonPrimary,
@@ -485,7 +485,7 @@ fun SignInGate(
                                 ) {
                                     Text(
                                         "متابعة",
-                                        fontFamily = CairoFontFamily,
+                                        fontFamily = NotoKufiFontFamily,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 16.sp,
                                         color = Color.White

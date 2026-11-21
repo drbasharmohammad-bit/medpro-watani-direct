@@ -9,16 +9,10 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.R
 
-val CairoFontFamily = FontFamily(
-    Font(R.font.cairo, FontWeight.Normal),
-    Font(R.font.cairo, FontWeight.Medium),
-    Font(R.font.cairo, FontWeight.SemiBold),
-    Font(R.font.cairo, FontWeight.Bold)
-)
-
 /** Thmanyah Sans (question share card + headings): OTF files copied from
  * the brand font set. If a device cannot load the OTF, renderers fall
- * back to CairoFontFamily (see ShareCardRenderer). */
+ * back to Noto Sans Arabic (R.font.noto_sans_arabic_regular, see
+ * ShareCardRenderer). */
 val ThmanyahFontFamily = FontFamily(
     Font(R.font.thmanyahsans_regular, FontWeight.Normal),
     Font(R.font.thmanyahsans_bold, FontWeight.Bold)

@@ -28,7 +28,7 @@ import java.io.FileOutputStream
  * - full-width dark-maroon header band: "Med Pro — وطني" in bold white,
  *   a tasteful gold medical plus, and the subject as a gold pill with
  *   maroon text,
- * - question in dark text (Thmanyah Sans; Cairo fallback), ~44px at
+ * - question in dark text (Thmanyah Sans; Noto Sans Arabic fallback), ~44px at
  *   1.35 line spacing, laid out ONLY with StaticLayout (real Arabic
  *   shaping + RTL — strings are never reversed by hand),
  * - each option in a white rounded card with a light maroon border and
@@ -61,13 +61,13 @@ object ShareCardRenderer {
         try { ResourcesCompat.getFont(context, resId) } catch (_: Exception) { null }
 
     /** Thmanyah Sans first (regular + bold OTF in res/font); when the OTF
-     * cannot be loaded on a device, fall back to the bundled Cairo. */
+     * cannot be loaded on a device, fall back to the bundled Noto Sans Arabic. */
     private fun fonts(context: Context): Pair<Typeface, Typeface> {
         val regular = loadTypeface(context, R.font.thmanyahsans_regular)
-            ?: loadTypeface(context, R.font.cairo)
+            ?: loadTypeface(context, R.font.noto_sans_arabic_regular)
             ?: Typeface.SANS_SERIF
         val bold = loadTypeface(context, R.font.thmanyahsans_bold)
-            ?: loadTypeface(context, R.font.cairo)
+            ?: loadTypeface(context, R.font.noto_sans_arabic_regular)
             ?: Typeface.SANS_SERIF
         return regular to bold
     }

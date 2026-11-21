@@ -39,7 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import sy.medpro.watani.ui.theme.CairoFontFamily
+import sy.medpro.watani.ui.theme.NotoKufiFontFamily
 import sy.medpro.watani.ui.theme.GoldAccent
 import sy.medpro.watani.ui.theme.MaroonDark
 import sy.medpro.watani.ui.theme.MaroonInk
@@ -205,7 +205,7 @@ fun BrandIntroScreen(onDone: () -> Unit) {
                     Text(
                         "MED PRO",
                         style = TextStyle(
-                            fontFamily = CairoFontFamily,
+                            fontFamily = NotoKufiFontFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp,
                             letterSpacing = 4.5.sp,

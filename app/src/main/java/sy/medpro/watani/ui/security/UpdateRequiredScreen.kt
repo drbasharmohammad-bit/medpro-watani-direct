@@ -36,7 +36,7 @@ import java.io.File
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.AppUpdate
 import sy.medpro.watani.data.WorkerActivationApi
-import sy.medpro.watani.ui.theme.CairoFontFamily
+import sy.medpro.watani.ui.theme.NotoKufiFontFamily
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
 /**
@@ -175,7 +175,7 @@ fun UpdateRequiredScreen() {
                 ) {
                     Text(
                         "إعادة المحاولة",
-                        fontFamily = CairoFontFamily,
+                        fontFamily = NotoKufiFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = Color.White
@@ -200,7 +200,7 @@ fun UpdateRequiredScreen() {
                 ) {
                     Text(
                         "تثبيت التحديث الآن",
-                        fontFamily = CairoFontFamily,
+                        fontFamily = NotoKufiFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = Color.White
@@ -216,7 +216,7 @@ fun UpdateRequiredScreen() {
                 ) {
                     Text(
                         "تحميل التحديث وتثبيته",
-                        fontFamily = CairoFontFamily,
+                        fontFamily = NotoKufiFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = Color.White
