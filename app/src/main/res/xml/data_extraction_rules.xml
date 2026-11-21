@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Data extraction rules (unified fixes build, Nov 2026): the same
-  sensitive stores excluded from cloud backup are also excluded from
-  device-to-device transfer — an activation must never migrate to a
-  new phone via transfer; the new device activates (or restores at
+  Data extraction rules — see backup_rules.xml: since the 21 Nov
+  2026 audit (SEC-S2) the manifest disables backup/transfer
+  entirely (allowBackup="false"); these exclusions remain as
+  defence in depth only. An activation never migrates to a new
+  phone via transfer; the new device activates (or restores at
   sign-in) through the gateway like any other device.
 -->
 <data-extraction-rules>

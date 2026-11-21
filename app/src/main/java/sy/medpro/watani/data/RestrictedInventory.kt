@@ -30,6 +30,13 @@ import java.io.File
  *  - All registered decrypt temps (TempDecryptedFiles sweep).
  *  - The manifest disk cache (manifest_cache.json): it lists restricted
  *    sections, so a stale copy must not survive a revocation.
+ *  - Audit additions (21 Nov 2026, SEC-S6): pdf_text_index (full-text
+ *    indexes derived from restricted books), booklets (downloaded
+ *    library booklet PDFs), firstaid_booklets + firstaid_media
+ *    (activation-gated First Aid downloads) and auscultation_clips
+ *    (library content). NOT wiped: the student's own Anki data and
+ *    other user-owned stores — revocation removes OUR content, never
+ *    the student's own data.
  *
  * WHAT IS NOT WIPED: free-section files, the activation prefs' device
  * UUID fallback (it identifies the device, not content), and any
@@ -115,6 +122,16 @@ object RestrictedInventory {
         } catch (e: Exception) {
             Log.w("RestrictedInventory", "delete failed for manifest cache", e)
         }
+        // 7. Audit additions (21 Nov 2026, SEC-S6): content stores the
+        // original inventory missed. pdf_text_index holds full-text
+        // indexes OF restricted books (SEC-S1); the rest are
+        // downloaded content behind the same activation gate as the
+        // sections above.
+        deleteDirContents(File(context.filesDir, "pdf_text_index"))
+        deleteDirContents(File(context.filesDir, "booklets"))
+        deleteDirContents(File(context.filesDir, "firstaid_booklets"))
+        deleteDirContents(File(context.filesDir, "firstaid_media"))
+        deleteDirContents(File(context.filesDir, "auscultation_clips"))
     }
 
     /**

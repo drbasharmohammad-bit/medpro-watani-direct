@@ -111,6 +111,18 @@ object PdfTextEngine {
      * Loads the book's text index: disk cache when present, PDFBox
      * extraction (then cached) otherwise. Null on ANY failure — the
      * caller treats null as "this book has no text layer features".
+     *
+     * Audit fix (21 Nov 2026, SEC-S1): the index is the book's FULL
+     * text (every word, with positions) and was cached as PLAINTEXT
+     * JSON in filesDir/pdf_text_index — for library books that had
+     * been decrypted only in memory, the index silently undid the
+     * encryption at rest, survived temp cleanup, and was missing
+     * from the revocation wipe. The cache now goes through
+     * [SectionCacheCrypto] (the app's central encrypted store:
+     * AES-GCM via ContentEncryption): writes are ciphertext, reads
+     * decrypt, and a legacy plaintext index is migrated to
+     * ciphertext on its first read. The directory is also in the
+     * revocation wipe (RestrictedInventory).
      */
     suspend fun load(context: Context, file: File): BookTextIndex? =
         withContext(Dispatchers.IO) {
@@ -119,7 +131,10 @@ object PdfTextEngine {
                 val cached = cacheFile(context, file)
                 if (cached.isFile) {
                     try {
-                        adapter.fromJson(cached.readText(Charsets.UTF_8))?.let { return@withContext it }
+                        val text = SectionCacheCrypto.readText(context, cached)
+                        if (text != null) {
+                            adapter.fromJson(text)?.let { return@withContext it }
+                        }
                     } catch (_: Exception) {
                         // Corrupt cache entry: fall through and re-extract.
                     }
@@ -128,7 +143,7 @@ object PdfTextEngine {
                 val extracted = extract(file) ?: return@withContext null
                 try {
                     cached.parentFile?.mkdirs()
-                    cached.writeText(adapter.toJson(extracted), Charsets.UTF_8)
+                    SectionCacheCrypto.writeText(context, cached, adapter.toJson(extracted))
                 } catch (_: Exception) {
                     // An unwritable cache must not lose the extraction.
                 }

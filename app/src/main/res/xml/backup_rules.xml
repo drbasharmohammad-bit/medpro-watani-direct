@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Backup rules (unified fixes build, Nov 2026): sensitive local state
-  must NEVER leave the device via cloud backup — the activation store
-  above all (activation flag + code + token + expiry live in
-  watani_activation and the per-account watani_activation_<uid> files),
-  plus the downloaded-sections registry.
-
-  Note on per-account files: the backup-rules path language has no
-  wildcards, so concrete per-account files cannot be enumerated here
-  (uids are unknown at build time). The legacy/global
-  watani_activation.xml (device keys + migration source) is excluded
-  explicitly; per-account activation files are covered by the same
-  exclusion in data_extraction_rules.xml for device transfer, and the
-  activation token is only usable together with the account's Firebase
-  session, which is never part of a backup.
+  Backup rules — SUPERSEDED as the primary defence by the 21 Nov 2026
+  full audit (SEC-S2/SEC-P3): the manifest now sets
+  android:allowBackup="false", so NO app data leaves the device via
+  cloud backup or device transfer at all. That decisive switch was
+  necessary because this path language has no wildcards: the
+  per-account activation stores (watani_activation_<uid>) could
+  never be enumerated here, so rule-based exclusion could not
+  actually cover them (the old comment below claimed coverage it
+  could not provide). These rules are kept as defence in depth in
+  case allowBackup is ever re-enabled; they are not the protection.
+  Trade-off, recorded: Google backup / device-transfer no longer
+  migrates the student's local progress; activation itself is
+  restorable on a new device by sign-in restore or the same code.
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="watani_activation.xml" />

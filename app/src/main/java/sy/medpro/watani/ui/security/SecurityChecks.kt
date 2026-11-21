@@ -69,6 +69,14 @@ object SecurityChecks {
                 TempDecryptedFiles.deleteAll(activity)
             } catch (_: Exception) {
             }
+            // Audit fix (21 Nov 2026, SEC-S3/S4): bound the lifetime
+            // of resumable plaintext download temps (sections .tmp,
+            // library .part) — abandoned partials older than 24 h
+            // are deleted here, once per process start.
+            try {
+                sy.medpro.watani.data.StalePlaintextTemps.sweep(activity)
+            } catch (_: Exception) {
+            }
         }
         registerTempSweep(activity)
     }
