@@ -78,3 +78,12 @@
 -keep class sy.medpro.watani.ui.library.HighlightStrokeDtoJsonAdapter { *; }
 -keep class sy.medpro.watani.ui.library.PdfAnnotationDtoJsonAdapter { *; }
 -keep class sy.medpro.watani.ui.library.TextHighlightDtoJsonAdapter { *; }
+
+# PDFBox Android (build 1.2.37, text layer only): its JPXFilter
+# references the optional Gemalto JPEG2000 decoder, which is NOT
+# bundled with pdfbox-android and never ships on Android. R8 treats
+# the reference as a missing class and fails minifyReleaseWithR8;
+# the reference is dead at runtime (no JPX decoding path is used —
+# the reader renders with PdfRenderer and only extracts text), so
+# the warning is suppressed exactly as R8's missing_rules suggests.
+-dontwarn com.gemalto.jp2.JP2Decoder
