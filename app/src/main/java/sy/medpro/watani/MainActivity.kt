@@ -97,6 +97,9 @@ import sy.medpro.watani.ui.viewmodel.AppTab
 import sy.medpro.watani.ui.viewmodel.MainViewModel
 import sy.medpro.watani.ui.viewmodel.ScreenState
 
+/** Bottom-bar badge counts render verbatim up to this cap, then as "99+". */
+private const val BADGE_COUNT_CAP = 99
+
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -506,7 +509,13 @@ class MainActivity : ComponentActivity() {
                     sy.medpro.watani.data.OfflineStudyVault.ensureInitialized(context)
                     val vaultStats by sy.medpro.watani.data.OfflineStudyVault.statsFlow.collectAsState()
                     val faSrsChanges by sy.medpro.watani.ui.firstaid.FirstAidSrs.changes.collectAsState()
-                    val faDueCount = remember(faSrsChanges) { try { sy.medpro.watani.ui.firstaid.FirstAidSrs.dueKeysAll(context).size } catch (e: Exception) { 0 } }
+                    val faDueCount = remember(faSrsChanges) {
+                        try {
+                            sy.medpro.watani.ui.firstaid.FirstAidSrs.dueKeysAll(context).size
+                        } catch (e: Exception) {
+                            0
+                        }
+                    }
                     val uiState by viewModel.uiState.collectAsState()
                     val downloadedSections by viewModel.downloadedSections.collectAsState()
                     val coroutineScope = rememberCoroutineScope()
@@ -1087,7 +1096,7 @@ class MainActivity : ComponentActivity() {
                                             AppTab.LEADERBOARD to "الصدارة",
                                             AppTab.TOOLS to "أدوات"
                                         )
-                                        val cellWidth = maxWidth / 7
+                                        val cellWidth = maxWidth / tabs.size
                                         val selectedIndex = tabs.indexOfFirst { it.first == uiState.currentTab }
                                             .let { if (it >= 0) it else 0 }
                                         val indicatorOffset by animateDpAsState(
@@ -1145,7 +1154,7 @@ class MainActivity : ComponentActivity() {
                                                                         .padding(horizontal = 4.dp, vertical = 1.dp)
                                                                 ) {
                                                                     Text(
-                                                                        if (badgeCount > 99) "99+" else badgeCount.toString(),
+                                                                        if (badgeCount > BADGE_COUNT_CAP) "99+" else badgeCount.toString(),
                                                                         color = Color.White,
                                                                         fontWeight = FontWeight.Bold,
                                                                         fontSize = 9.sp
