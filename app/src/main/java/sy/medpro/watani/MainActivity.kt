@@ -1317,12 +1317,17 @@ class MainActivity : ComponentActivity() {
                                                             }
                                                         }
                                                         AppTab.FIRSTAID -> {
-                                                            // First Aid - Med Pro (1.2.36): a FREE
-                                                            // section — Google sign-in only (the
-                                                            // app-wide SignInGate), never the
-                                                            // activation/restricted gates, so no
-                                                            // M4/M8 re-checks here by design.
-                                                            sy.medpro.watani.ui.firstaid.FirstAidSectionScreen()
+                                                            // First Aid - Med Pro (1.2.36; gate
+                                                            // added 1.2.38 by the doctor's
+                                                            // decision, superseding the fully-free
+                                                            // model): sign-in for everyone, the
+                                                            // first 3 path units of each step are
+                                                            // free, everything else follows the
+                                                            // app's code activation — enforced
+                                                            // inside the section host itself.
+                                                            sy.medpro.watani.ui.firstaid.FirstAidSectionScreen(
+                                                                onReaderFullscreenChange = { readerFullscreen = it }
+                                                            )
                                                         }
                                                         AppTab.TOOLS -> {
                                                             ToolsScreen(

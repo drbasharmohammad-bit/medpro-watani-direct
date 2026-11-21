@@ -44,9 +44,12 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import sy.medpro.watani.data.FirstAidBanksDto
+import sy.medpro.watani.data.FirstAidBookletDto
 import sy.medpro.watani.data.FirstAidIndexDto
 import sy.medpro.watani.data.FirstAidIntegrationDto
 import sy.medpro.watani.data.WataniRepository
+import sy.medpro.watani.data.WorkerActivationApi
+import sy.medpro.watani.ui.activation.ActivationPromptDialog
 import sy.medpro.watani.ui.library.PdfViewerScreen
 import sy.medpro.watani.ui.theme.NotoKufiFontFamily
 import sy.medpro.watani.ui.theme.NotoSansArabicFontFamily
@@ -75,11 +78,21 @@ private sealed interface FaDest {
  * catalog (always available, download-on-first-open, read in the
  * existing PdfViewerScreen), and the flashcards due-today review.
  * All data flows through the phase-4 repository getters (cache-first
- * + silent refresh); progress/locks from FirstAidProgress, card
- * scheduling from FirstAidSrs, wrong answers to MistakesBank.
+ * + silent refresh); progress from FirstAidProgress, card scheduling
+ * from FirstAidSrs, wrong answers to MistakesBank.
+ *
+ * Build 1.2.38 (doctor's decisions): (أ) the home resume card and the
+ * due counter derive from the student's OWN FirstAidProgress /
+ * FirstAidSrs state — no fixed card for a student who never started;
+ * (ب) the section is gated by the app's own activation
+ * ([WorkerActivationApi.isActivated] + [ActivationPromptDialog]):
+ * the first 3 path units of each step are free, everything else
+ * (remaining units, integration sessions, printed banks, and the
+ * booklets that follow gated units) needs an activated account;
+ * (ج) no hard locks anywhere — order is advisory only.
  */
 @Composable
-fun FirstAidSectionScreen() {
+fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null) {
     val context = LocalContext.current
     val repo = remember { WataniRepository(context) }
     val scope = rememberCoroutineScope()
@@ -121,6 +134,77 @@ fun FirstAidSectionScreen() {
         indexOf(step)?.units.orEmpty().firstOrNull { it.id == unitId }?.titleAr
     fun isSessionId(step: Int, unitId: String): Boolean =
         indexOf(step)?.units.orEmpty().firstOrNull { it.id == unitId }?.kind == "integration"
+
+    // ---- Activation gate (1.2.38, item ب) -------------------------------
+    // The entitlement check is the app's own WorkerActivationApi —
+    // the same one guarding the library and the other paid sections;
+    // it reads the stored token + expiry, so an activated account
+    // stays activated offline. The gate lives HERE, at the host's
+    // navigation choke points, so every entry path (home cards, path
+    // levels, integration screen, unit cross-links, banks, booklet
+    // rows) passes through it exactly once.
+    var activated by remember { mutableStateOf(WorkerActivationApi.isActivated(context)) }
+    var showActivation by remember { mutableStateOf(false) }
+    LaunchedEffect(dest) {
+        // Re-read on every return Home (the student may have
+        // activated from another section meanwhile).
+        if (dest == FaDest.Home) {
+            activated = WorkerActivationApi.isActivated(context)
+        }
+    }
+    if (showActivation) {
+        ActivationPromptDialog(
+            onDismiss = { showActivation = false },
+            onActivated = {
+                activated = true
+                showActivation = false
+            }
+        )
+    }
+
+    /** Path unit ids of [step] in course order (sessions excluded). */
+    fun pathIdsOf(step: Int): List<String> =
+        indexOf(step)?.units.orEmpty()
+            .sortedBy { it.order ?: Int.MAX_VALUE }
+            .filter { it.kind != "integration" }
+            .mapNotNull { it.id }
+
+    fun openUnit(step: Int, id: String, sess: Boolean) {
+        val isInt = isSessionId(step, id)
+        if (FirstAidAccessRules.canOpenUnit(pathIdsOf(step), id, isInt, activated)) {
+            // Record the opening for path units (incl. RAPI): this is
+            // the trail the home resume card derives from (item أ).
+            if (!isInt) FirstAidProgress.recordUnitOpened(context, step, id)
+            push(FaDest.Unit(step, id, sess || isInt))
+        } else {
+            showActivation = true
+        }
+    }
+
+    fun openBooklet(step: Int, booklet: FirstAidBookletDto) {
+        val idx = indexOf(step)
+        val systems = idx?.systems.orEmpty().map {
+            FirstAidAccessRules.SystemInfo(it.code, it.sectionEn, it.units.orEmpty())
+        }
+        val gateUnit = FirstAidAccessRules.bookletGateUnitId(
+            booklet.file, systems, pathIdsOf(step)
+        )
+        if (FirstAidAccessRules.canOpenBooklet(gateUnit, pathIdsOf(step), activated)) {
+            bookletOpener.openIn(scope, booklet)
+        } else {
+            showActivation = true
+        }
+    }
+
+    fun openBanks() {
+        if (FirstAidAccessRules.canOpenBanks(activated)) push(FaDest.Banks)
+        else showActivation = true
+    }
+
+    fun openBankTest(testIndex: Int) {
+        if (FirstAidAccessRules.canOpenBanks(activated)) push(FaDest.BankTest(testIndex))
+        else showActivation = true
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(faBackground())) {
         when {
@@ -194,6 +278,11 @@ fun FirstAidSectionScreen() {
                                 pdfFile = current.file,
                                 title = current.title,
                                 onBack = { pop() },
+                                // 1.2.38 (item هـ): the First Aid host now
+                                // reports reader fullscreen exactly like
+                                // the Library host, so the app scaffold
+                                // hides its bars during reading here too.
+                                onFullscreenChange = onReaderFullscreenChange,
                                 onOpenRecent = { f, t -> push(FaDest.Pdf(f, t)) }
                             )
                         }
@@ -234,20 +323,23 @@ fun FirstAidSectionScreen() {
                             index1 = index1, index2 = index2,
                             integration = integration, banks = banks,
                             dueToday = dueToday,
+                            activated = activated,
                             onOpenPath = { push(FaDest.Path(it)) },
-                            onOpenUnit = { s, id, sess -> push(FaDest.Unit(s, id, sess)) },
+                            onOpenUnit = { s, id, sess -> openUnit(s, id, sess) },
                             onOpenIntegration = { push(FaDest.Integration) },
-                            onOpenBanks = { push(FaDest.Banks) },
+                            onOpenBanks = { openBanks() },
                             onOpenDueReview = { push(FaDest.DueReview) },
-                            onOpenBooklet = { booklet -> bookletOpener.openIn(scope, booklet) }
+                            onOpenBooklet = { s, booklet -> openBooklet(s, booklet) }
                         )
 
                         is FaDest.Path -> indexOf(current.step)?.let { idx ->
                             FirstAidPathScreen(
                                 step = current.step, index = idx,
                                 onBack = { pop() },
-                                onOpenUnit = { id -> push(FaDest.Unit(current.step, id, false)) },
-                                onOpenBooklet = { booklet -> bookletOpener.openIn(scope, booklet) }
+                                onOpenUnit = { id -> openUnit(current.step, id, false) },
+                                onOpenBooklet = { booklet -> openBooklet(current.step, booklet) },
+                                activated = activated,
+                                freeUnitIds = FirstAidAccessRules.freePathUnitIds(pathIdsOf(current.step))
                             )
                         }
 
@@ -260,7 +352,7 @@ fun FirstAidSectionScreen() {
                                 integration = integration,
                                 unitTitleOf = { s, id -> unitTitleOf(s, id) },
                                 onBack = { pop() },
-                                onOpenUnit = { s, id, _ -> push(FaDest.Unit(s, id, isSessionId(s, id))) },
+                                onOpenUnit = { s, id, _ -> openUnit(s, id, false) },
                                 onOpenBookletPdf = { file, title -> push(FaDest.Pdf(file, title)) }
                             )
                         }
@@ -269,14 +361,14 @@ fun FirstAidSectionScreen() {
                             integration = integration,
                             unitTitleOf = { s, id -> unitTitleOf(s, id) },
                             onBack = { pop() },
-                            onOpenUnit = { s, id -> push(FaDest.Unit(s, id, true)) },
-                            onOpenLinkedUnit = { s, id -> push(FaDest.Unit(s, id, isSessionId(s, id))) }
+                            onOpenUnit = { s, id -> openUnit(s, id, true) },
+                            onOpenLinkedUnit = { s, id -> openUnit(s, id, false) }
                         )
 
                         FaDest.Banks -> FaBanksList(
                             banks = banks,
                             onBack = { pop() },
-                            onOpenTest = { push(FaDest.BankTest(it)) }
+                            onOpenTest = { openBankTest(it) }
                         )
 
                         is FaDest.BankTest -> {
@@ -327,31 +419,58 @@ private fun FaHome(
     integration: FirstAidIntegrationDto?,
     banks: FirstAidBanksDto?,
     dueToday: Int,
+    activated: Boolean,
     onOpenPath: (Int) -> Unit,
     onOpenUnit: (Int, String, Boolean) -> Unit,
     onOpenIntegration: () -> Unit,
     onOpenBanks: () -> Unit,
     onOpenDueReview: () -> Unit,
-    onOpenBooklet: (sy.medpro.watani.data.FirstAidBookletDto) -> Unit
+    onOpenBooklet: (Int, sy.medpro.watani.data.FirstAidBookletDto) -> Unit
 ) {
     val context = LocalContext.current
 
-    fun pathStats(step: Int, index: FirstAidIndexDto?): Triple<Int, Int, String?> {
+    // Package stats (1.2.38, item D): the totals count EVERY unit in
+    // the step's published index — path units AND integration
+    // sessions — so the card matches the package on disk and the
+    // index's own question totals (Step 1: 87 = 77 path + 10
+    // sessions, 2,075 questions; Step 2: 67 = 61 + 6). In 1.2.37 the
+    // card counted path units only (77) beside the package-wide
+    // question total — the mismatch the doctor flagged.
+    fun packageStats(step: Int, index: FirstAidIndexDto?): Pair<Int, Int> {
         val units = index?.units.orEmpty()
-        val pathIds = units.filter { it.kind != "integration" }.mapNotNull { it.id }
-        val done = pathIds.count { FirstAidProgress.isUnitDone(context, step, it) }
-        val next = pathIds.firstOrNull { !FirstAidProgress.isUnitDone(context, step, it) }
-        return Triple(done, pathIds.size, next)
+        val done = units.count { u ->
+            u.id != null &&
+                FirstAidProgress.isUnitDone(context, step, u.id!!, u.kind == "integration")
+        }
+        return done to units.size
     }
-    val (done1, total1, next1) = pathStats(1, index1)
-    val (done2, total2, next2) = pathStats(2, index2)
+    fun pathState(step: Int, index: FirstAidIndexDto?): FirstAidAccessRules.PathState {
+        val pathIds = index?.units.orEmpty()
+            .sortedBy { it.order ?: Int.MAX_VALUE }
+            .filter { it.kind != "integration" }
+            .mapNotNull { it.id }
+        val done = pathIds.filterTo(HashSet()) {
+            FirstAidProgress.isUnitDone(context, step, it)
+        }
+        return FirstAidAccessRules.PathState(pathIds, done)
+    }
+    val (done1, total1) = packageStats(1, index1)
+    val (done2, total2) = packageStats(2, index2)
     val totalDone = done1 + done2
     val totalUnits = total1 + total2
-    val resume: Triple<Int, String, Boolean>? = when {
-        next2 != null -> Triple(2, next2, false)
-        next1 != null -> Triple(1, next1, false)
-        else -> null
-    }
+    // Resume (1.2.38, item أ): derived from the student's OWN trail —
+    // the last unit they actually opened (FirstAidProgress) plus
+    // their done sets, via FirstAidAccessRules.resumeTarget. Root
+    // cause of the 1.2.37 defect: the card showed the first undone
+    // unit of the Step 2 path for EVERY student (no last-opened
+    // record existed), so even a brand-new account saw a fixed
+    // «تابع من حيث توقفت». Now a zero-progress student gets null
+    // here and the start card below instead.
+    val lastOpened = FirstAidProgress.lastOpened(context)
+    val resume = FirstAidAccessRules.resumeTarget(
+        lastOpened?.first, lastOpened?.second,
+        pathState(1, index1), pathState(2, index2)
+    )
     val linkCount = integration?.count ?: integration?.links?.size ?: 0
 
     LazyColumn(
@@ -427,9 +546,11 @@ private fun FaHome(
             }
         }
 
-        // Resume card (.resume): the next available unit, if any.
+        // Resume card (.resume): the student's own stopping point —
+        // shown only when they actually started something.
         if (resume != null) {
-            val (rStep, rUnit, _) = resume
+            val rStep = resume.step
+            val rUnit = resume.unitId
             val rTitle = (if (rStep == 1) index1 else index2)?.units.orEmpty()
                 .firstOrNull { it.id == rUnit }?.titleAr ?: rUnit
             item {
@@ -472,6 +593,49 @@ private fun FaHome(
             }
         }
 
+        // Start card (1.2.38, item أ): a student with zero progress
+        // gets NO resume card — this start card takes its place.
+        if (resume == null && (index1 != null || index2 != null)) {
+            item {
+                FaCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onOpenPath(1) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 15.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(41.dp)
+                                .shadow(6.dp, CircleShape, clip = false)
+                                .clip(CircleShape)
+                                .background(FaColors.Maroon),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Filled.PlayArrow, contentDescription = null,
+                                tint = Color.White, modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "ابدأ الكورس",
+                                fontFamily = NotoSansArabicFontFamily,
+                                fontSize = 11.3.sp, color = faMuted()
+                            )
+                            Text(
+                                "ابدأ من Step 1 — الأساسيات بترتيب الكتاب المقترح",
+                                fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp, color = faHeading()
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // The two paths (.paths / .path).
         item {
             Text(
@@ -487,6 +651,7 @@ private fun FaHome(
                     badge = "S1", step = 1, index = index1!!,
                     done = done1, total = total1,
                     sub = "الأساسيات: كيمياء حيوية ومناعة وأحياء دقيقة وباثولوجيا وأدوية…",
+                    gateNote = if (!activated) "أول 3 وحدات بالمسار مجانية — كل ما عداها بالتفعيل" else null,
                     onClick = { onOpenPath(1) }
                 )
             }
@@ -497,6 +662,7 @@ private fun FaHome(
                     badge = "S2", step = 2, index = index2!!,
                     done = done2, total = total2,
                     sub = "التطبيق السريري: مدخل ومرجع وتدريب وخروج لكل وحدة",
+                    gateNote = if (!activated) "أول 3 وحدات بالمسار مجانية — كل ما عداها بالتفعيل" else null,
                     onClick = { onOpenPath(2) }
                 )
             }
@@ -599,7 +765,7 @@ private fun FaHome(
             }
             items(booklets.size) { i ->
                 val (bStep, booklet) = booklets[i]
-                BookletRow(step = bStep, booklet = booklet) { onOpenBooklet(booklet) }
+                BookletRow(step = bStep, booklet = booklet) { onOpenBooklet(bStep, booklet) }
             }
         }
 
@@ -635,6 +801,7 @@ private fun FaPathCard(
     done: Int,
     total: Int,
     sub: String,
+    gateNote: String? = null,
     onClick: () -> Unit
 ) {
     FaCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
@@ -681,6 +848,14 @@ private fun FaPathCard(
                         "أُنجز $done",
                         fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 11.sp, color = FaColors.Maroon
+                    )
+                }
+                if (gateNote != null) {
+                    Text(
+                        gateNote,
+                        fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
+                        fontSize = 10.5.sp, color = FaColors.GoldText,
+                        modifier = Modifier.padding(top = 5.dp)
                     )
                 }
             }

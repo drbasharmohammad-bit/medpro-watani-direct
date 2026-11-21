@@ -7,13 +7,16 @@ import org.junit.Test
 import sy.medpro.watani.ui.firstaid.FirstAidProgressRules.UnitStatus
 
 /**
- * JVM tests for the First Aid unlock/completion rules (build 1.2.36).
+ * JVM tests for the First Aid completion rules (build 1.2.36;
+ * contract updated 1.2.38).
  *
- * THE CONTRACT under test (merge plan §5.2/§5.4): a Step 2 unit is
- * done when its exit check reaches the pack's own 0.6 threshold and
- * that opens the next path unit; a Step 1 unit (no exit check exists
- * in its source pack) is done by finishing its training; integration
- * sessions are never locked.
+ * THE CONTRACT under test: a Step 2 unit is done when its exit check
+ * reaches the pack's own 0.6 threshold; a Step 1 unit (no exit check
+ * exists in its source pack) is done by finishing its training.
+ * Since 1.2.38 (doctor's no-hard-locks decision) the ≥60% rule is
+ * ONLY the definition of completion — status() NEVER returns LOCKED:
+ * every unit is openable whatever its predecessors' state, and the
+ * course order is advisory.
  */
 class FirstAidProgressRulesTest {
 
@@ -51,7 +54,7 @@ class FirstAidProgressRulesTest {
         assertTrue(FirstAidProgressRules.step2Done(1.0))
     }
 
-    // ---- path locking ------------------------------------------------------
+    // ---- no hard locks (1.2.38) --------------------------------------------
 
     @Test
     fun firstUnitIsAvailableWithNothingDone() {
@@ -62,19 +65,25 @@ class FirstAidProgressRulesTest {
     }
 
     @Test
-    fun laterUnitsAreLockedUntilPreviousIsDone() {
+    fun laterUnitsAreAvailableWithoutAnyPredecessorDone() {
+        // The 1.2.36 contract locked these; the doctor's 1.2.38
+        // decision removed every hard lock — order is advisory only.
         assertEquals(
-            UnitStatus.LOCKED,
+            UnitStatus.AVAILABLE,
             FirstAidProgressRules.status(path, "U2", emptySet(), isIntegrationSession = false)
         )
         assertEquals(
-            UnitStatus.LOCKED,
+            UnitStatus.AVAILABLE,
             FirstAidProgressRules.status(path, "U3", setOf("U1"), isIntegrationSession = false)
+        )
+        assertEquals(
+            UnitStatus.AVAILABLE,
+            FirstAidProgressRules.status(path, "U3", emptySet(), isIntegrationSession = false)
         )
     }
 
     @Test
-    fun finishingAUnitOpensExactlyTheNext() {
+    fun finishingAUnitMarksItDoneAndEverythingStaysAvailable() {
         val done = setOf("U1")
         assertEquals(
             UnitStatus.DONE,
@@ -85,7 +94,7 @@ class FirstAidProgressRulesTest {
             FirstAidProgressRules.status(path, "U2", done, isIntegrationSession = false)
         )
         assertEquals(
-            UnitStatus.LOCKED,
+            UnitStatus.AVAILABLE,
             FirstAidProgressRules.status(path, "U3", done, isIntegrationSession = false)
         )
     }
@@ -101,7 +110,7 @@ class FirstAidProgressRulesTest {
     // ---- integration sessions ------------------------------------------------
 
     @Test
-    fun integrationSessionsAreNeverLocked() {
+    fun integrationSessionsAreAvailableOrDone() {
         assertEquals(
             UnitStatus.AVAILABLE,
             FirstAidProgressRules.status(path, "INT-1", emptySet(), isIntegrationSession = true)

@@ -13,6 +13,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -36,19 +37,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -79,9 +71,14 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * One highlight stroke on a book page, stored normalized (0..1 across the
- * page) so it survives zoom and screen sizes. Persisted per book in prefs.
- * The reader also supports go-to-page (jump by number) from the indicator.
+ * LEGACY (build 1.2.38): one freehand highlight stroke, stored
+ * normalized (0..1 across the page). The freehand marking mode was
+ * DELETED by the doctor's order in 1.2.38 — the class, its Moshi
+ * adapter and its prefs payload stay so old data parses-and-is-
+ * ignored safely (never rendered, never mutated, never crashes),
+ * and so the release dex check for the reader DTO names keeps
+ * passing. The reader's only marking system is now the yellow TEXT
+ * highlight ([TextHighlightDto]).
  */
 @JsonClass(generateAdapter = true)
 data class HighlightStrokeDto(
@@ -92,11 +89,10 @@ data class HighlightStrokeDto(
 )
 
 /**
- * A shape/text annotation on a book page, normalized (0..1 across the
- * page) like strokes so it survives zoom and screen sizes. Persisted
- * per book in prefs alongside highlights.
- * type: TEXT (tap-placed text box; x1/y1 = origin, text = content),
- * RECT, ELLIPSE, ARROW (drag start x1/y1 -> end x2/y2).
+ * LEGACY (build 1.2.38): a shape/text annotation (TEXT / RECT /
+ * ELLIPSE / ARROW), normalized (0..1 across the page). Deleted as a
+ * feature together with the freehand mode — see [HighlightStrokeDto]:
+ * the class and adapter stay for parse-and-ignore of old payloads.
  */
 @JsonClass(generateAdapter = true)
 data class PdfAnnotationDto(
@@ -162,7 +158,7 @@ private fun getFirebaseUid(): String {
  * the current page ±1 and recycled on eviction (the old version never
  * recycled bitmaps on page change and never closed the file descriptor).
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCorrupt: (() -> Unit)? = null, onFullscreenChange: ((Boolean) -> Unit)? = null, onProgress: ((page: Int, totalPages: Int) -> Unit)? = null, onOpenRecent: ((java.io.File, String) -> Unit)? = null) {
     val context = LocalContext.current
@@ -204,15 +200,18 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     // fullscreen lays the page out correctly — so landscape reading
     // behaves like fullscreen for chrome: the reader bars start hidden
     // and the Scaffold bars hide too. A tap still brings bars back.
+    // (The effect itself sits further down, next to the other chrome
+    // effects, because it must not hide the bars mid text-highlight
+    // session — 1.2.38.)
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    LaunchedEffect(isLandscape) {
-        if (isLandscape) showBars = false
-    }
-    // True fullscreen needs the main Scaffold bars hidden too, so the
-    // reader reports its state up (MainActivity hides top/bottom bars).
-    // Landscape counts as chrome-hidden for the same reason.
-    LaunchedEffect(isFullscreen, isLandscape) {
-        onFullscreenChange?.invoke(isFullscreen || isLandscape)
+    // Reader chrome diet (1.2.38, item هـ): the reader is a full
+    // takeover for its whole lifetime — the app Scaffold's top and
+    // bottom bars stay hidden from open to dispose in BOTH hosts
+    // (Library booklets and First Aid booklets), not only in
+    // landscape/fullscreen as before. The dispose effect below
+    // reports false on the way out.
+    LaunchedEffect(Unit) {
+        onFullscreenChange?.invoke(true)
     }
     val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
 
@@ -232,16 +231,9 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 )
         }.getOrNull()
     }
-    var highlightStrokes by remember { mutableStateOf<List<HighlightStrokeDto>>(emptyList()) }
-    fun saveHighlights() {
-        val adapter = highlightAdapter ?: return
-        runCatching {
-            prefs.edit().putString(
-                "highlights_${pdfFile.nameWithoutExtension}",
-                adapter.toJson(highlightStrokes)
-            ).apply()
-        }
-    }
+    // 1.2.38: no stroke state and no stroke saving remain — the
+    // adapter above is kept ONLY so the open effect can parse-and-
+    // ignore legacy payloads (see the load block below).
 
     // Shape/text annotations (outer scope so the open effect restores them).
     val annotationAdapter = remember {
@@ -252,16 +244,8 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 )
         }.getOrNull()
     }
-    var annotations by remember { mutableStateOf<List<PdfAnnotationDto>>(emptyList()) }
-    fun saveAnnotations() {
-        val adapter = annotationAdapter ?: return
-        runCatching {
-            prefs.edit().putString(
-                "annotations_${pdfFile.nameWithoutExtension}",
-                adapter.toJson(annotations)
-            ).apply()
-        }
-    }
+    // 1.2.38: same parse-and-ignore treatment as the strokes — no
+    // annotation state or saving remains in the reader.
 
     // Text highlights (1.2.37): whole-word highlights from the PDF
     // text layer, persisted per book like the strokes/annotations.
@@ -283,6 +267,20 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             ).apply()
         }
     }
+
+    // Text-highlight mode state lives in the OUTER scope (1.2.38) so
+    // the chrome auto-hide can consult it. Root cause of the «إنهاء
+    // doesn't stop the mode» defect: the mode flag and the chrome
+    // visibility used to be independent states — the panel carrying
+    // the only visible exit sits inside the auto-hiding chrome, and
+    // fullscreen entry (showBars = false), landscape rotation
+    // (showBars = false) or the 3-second timer could hide that exit
+    // while the mode's drag layer stayed live and its tap handler
+    // was deliberately inert, so no gesture could bring the exit
+    // back. Now: while the mode is on, auto-hide is fully suspended
+    // (see scheduleHideBar and the mode effect below), and every
+    // exit path funnels through one exit function.
+    var textHighlightMode by remember { mutableStateOf(false) }
 
     // Recent books (1.2.37): reader-wide, most-recent-first, cap 12,
     // one entry per absolute path. Same crash armor as the marking
@@ -437,6 +435,10 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
 
     fun scheduleHideBar() {
         hideBarJob?.cancel()
+        // Suspended for the whole text-highlight session (1.2.38):
+        // the bars carry the mode's exit and must never auto-hide
+        // from under it.
+        if (textHighlightMode) return
         hideBarJob = coroutineScope.launch {
             kotlinx.coroutines.delay(3000)
             showBars = false
@@ -452,19 +454,21 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
         withContext(Dispatchers.Default) {
             try {
                 loadBookmarks()
-                try {
+                // Legacy freehand strokes + shape/text annotations
+                // (1.2.38): PARSED and deliberately DISCARDED — the
+                // modes are deleted, the payloads are never rendered
+                // or mutated, and a corrupt payload still never
+                // blocks opening the book. Text highlights below are
+                // untouched by this: they load and save as before.
+                runCatching {
                     prefs.getString("highlights_${pdfFile.nameWithoutExtension}", null)?.let {
-                        highlightStrokes = highlightAdapter?.fromJson(it) ?: emptyList()
+                        highlightAdapter?.fromJson(it)
                     }
-                } catch (_: Exception) {
-                    // Corrupt highlights JSON must never block opening the book.
                 }
-                try {
+                runCatching {
                     prefs.getString("annotations_${pdfFile.nameWithoutExtension}", null)?.let {
-                        annotations = annotationAdapter?.fromJson(it) ?: emptyList()
+                        annotationAdapter?.fromJson(it)
                     }
-                } catch (_: Exception) {
-                    // Corrupt annotations JSON must never block opening the book.
                 }
                 try {
                     prefs.getString("texthighlights_${pdfFile.nameWithoutExtension}", null)?.let {
@@ -493,7 +497,26 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     }
 
     LaunchedEffect(showBars) {
-        if (showBars) scheduleHideBar()
+        if (showBars && !textHighlightMode) scheduleHideBar()
+    }
+
+    // Text-highlight session chrome rule (1.2.38): entering the mode
+    // pins the bars visible for the WHOLE session; leaving it (via
+    // the single exit function) re-arms the normal 3s auto-hide.
+    LaunchedEffect(textHighlightMode) {
+        if (textHighlightMode) {
+            hideBarJob?.cancel()
+            showBars = true
+        } else if (showBars) {
+            scheduleHideBar()
+        }
+    }
+
+    // Landscape starts with the reader bars hidden (Nov 2026) —
+    // except mid text-highlight session, where hiding the bars would
+    // hide the mode's exit with them (1.2.38).
+    LaunchedEffect(isLandscape) {
+        if (isLandscape && !textHighlightMode) showBars = false
     }
 
     // Keep the screen awake for the whole reading session
@@ -588,59 +611,18 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 }
             }
 
-            // One undo history for both marking kinds (strokes and
-            // shape/text annotations): the student sees one kind of
-            // marking, so there is one undo, not two. Entries are
-            // (kind, page); session-only — reopening the book clears
-            // undo history, the markings themselves stay saved.
-            // Declared BEFORE undoLastMark() below: a local function
-            // can only capture state declared earlier in the block.
-            var markHistory by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
-
-            /** Unified undo (1.2.37): removes the most recent marking
-             * added on the CURRENT page across all three marking
-             * groups (freehand stroke / shape-text annotation / text
-             * highlight), driven by the shared markHistory stack, and
-             * persists the affected group immediately. */
-            fun undoLastMark() {
-                val idx = markHistory.indexOfLast { (_, p) -> p == currentPage }
+            /** Text-highlight undo (1.2.38): pops the newest text
+             * highlight on the CURRENT page and saves immediately.
+             * (The 1.2.37 unified undo also covered freehand strokes
+             * and shape/text annotations — both deleted with their
+             * mode; text highlights are the only markings left.) */
+            fun undoLastTextHighlight() {
+                val idx = textHighlights.indexOfLast { it.page == currentPage }
                 if (idx < 0) return
-                val (kind, _) = markHistory[idx]
-                markHistory = markHistory.toMutableList().also { it.removeAt(idx) }
-                when (kind) {
-                    "stroke" -> {
-                        val sIdx = highlightStrokes.indexOfLast { it.page == currentPage }
-                        if (sIdx >= 0) {
-                            highlightStrokes = highlightStrokes.toMutableList().also { it.removeAt(sIdx) }
-                            saveHighlights()
-                        }
-                    }
-                    "annotation" -> {
-                        val aIdx = annotations.indexOfLast { it.page == currentPage }
-                        if (aIdx >= 0) {
-                            annotations = annotations.toMutableList().also { it.removeAt(aIdx) }
-                            saveAnnotations()
-                        }
-                    }
-                    "texthighlight" -> {
-                        val tIdx = textHighlights.indexOfLast { it.page == currentPage }
-                        if (tIdx >= 0) {
-                            textHighlights = textHighlights.toMutableList().also { it.removeAt(tIdx) }
-                            saveTextHighlights()
-                        }
-                    }
-                }
+                textHighlights = textHighlights.toMutableList().also { it.removeAt(idx) }
+                saveTextHighlights()
             }
 
-            // Highlighter UI state (strokes live in the outer scope).
-            var highlightMode by remember { mutableStateOf(false) }
-            var highlightColor by remember { mutableStateOf(Color.Yellow) }
-            // Annotation tool inside highlight mode: FREEHAND (strokes),
-            // TEXT (tap places a text box), RECT, ELLIPSE, ARROW (drag).
-            var annotationTool by remember { mutableStateOf("FREEHAND") }
-            var pendingTextAt by remember { mutableStateOf<Offset?>(null) }
-            var showTextEditor by remember { mutableStateOf(false) }
-            var paintingPoints by remember { mutableStateOf<List<Offset>?>(null) }
             var showRecents by remember { mutableStateOf(false) }
             var showGoToPage by remember { mutableStateOf(false) }
             var goToPageText by remember { mutableStateOf("") }
@@ -650,30 +632,35 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // hit prev/next navigation walks and the one drawn strong.
             var searchHits by remember { mutableStateOf<List<SearchHit>>(emptyList()) }
             var currentHitIndex by remember { mutableStateOf(-1) }
-            // Text-highlight selection: a drag at 1x only (see the drag
-            // handler) — the live rect is kept normalized like strokes.
-            var textHighlightMode by remember { mutableStateOf(false) }
+            // Text-highlight selection state (the mode flag itself is
+            // hoisted to the outer scope — see its declaration). The
+            // live selection rect is kept normalized like the saved
+            // highlights.
             var selectionStart by remember { mutableStateOf<Offset?>(null) }
             var selectionEnd by remember { mutableStateOf<Offset?>(null) }
             var showTextHighlights by remember { mutableStateOf(false) }
             var showOutline by remember { mutableStateOf(false) }
+            // On-demand chrome popups (1.2.38 diet): zoom and
+            // brightness live behind these, never as stacked sliders.
+            var showZoomPopup by remember { mutableStateOf(false) }
+            var showBrightnessPopup by remember { mutableStateOf(false) }
 
-            // While highlighting, the bars (which hold the off switch) must
-            // never auto-hide — losing the off switch mid-stroke is what
-            // made stopping highlight mode feel difficult.
-            LaunchedEffect(highlightMode) {
-                if (highlightMode) {
-                    hideBarJob?.cancel()
-                    showBars = true
-                }
-            }
-
-            // System Back leaves highlight mode first, then fullscreen,
-            // then the book — one predictable chain. (The fullscreen
-            // BackHandler above is composed earlier, so this later one
-            // wins while the mode is on.)
-            BackHandler(enabled = highlightMode) {
-                highlightMode = false
+            /** THE exit from text-highlight mode (1.2.38): every exit
+             * path — the panel's «إنهاء ✓», the top-bar toggle,
+             * system Back, opening another tool (search / bookmarks /
+             * recents / outline / go-to-page / fullscreen) — calls
+             * this one function, so no path can leave a stuck session
+             * behind: the mode flag drops (the selection drag layer
+             * is keyed on it and disposes), the live selection clears,
+             * the saved highlights are flushed through the armored
+             * save, and the outer mode effect re-arms the normal
+             * chrome auto-hide. */
+            fun exitTextHighlightMode() {
+                if (!textHighlightMode) return
+                textHighlightMode = false
+                selectionStart = null
+                selectionEnd = null
+                saveTextHighlights()
             }
 
             // Touch point -> page-normalized point (0..1 across the fitted
@@ -734,18 +721,13 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 }
             }
 
-            // Like highlight mode, text-highlight mode keeps its off
-            // switch (the bars) on screen while it is active.
-            LaunchedEffect(textHighlightMode) {
-                if (textHighlightMode) {
-                    hideBarJob?.cancel()
-                    showBars = true
-                }
-            }
+            // System Back leaves the text-highlight mode first (via
+            // the single exit function), then fullscreen, then the
+            // book — one predictable chain. (The fullscreen
+            // BackHandler in the outer scope is composed earlier, so
+            // this later one wins while the mode is on.)
             BackHandler(enabled = textHighlightMode) {
-                textHighlightMode = false
-                selectionStart = null
-                selectionEnd = null
+                exitTextHighlightMode()
             }
 
             // Keep only the current page ±1 rendered; recycle evicted bitmaps.
@@ -827,9 +809,9 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             HorizontalPager(
                 state = pagerState,
                 // While zoomed, horizontal drags pan the page instead of
-                // flipping it; in highlight mode they paint instead of
-                // flipping; at 1x they always flip.
-                userScrollEnabled = zoom <= 1.01f && !highlightMode && !textHighlightMode,
+                // flipping it; in text-highlight mode they select
+                // instead of flipping; at 1x they always flip.
+                userScrollEnabled = zoom <= 1.01f && !textHighlightMode,
                 modifier = Modifier.fillMaxSize().onSizeChanged { boxSize = it }
             ) { page ->
                 val bitmap = bitmapCache[page]
@@ -888,21 +870,31 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 .pointerInput(Unit) {
                                     detectTapGestures(
                                         onTap = { tapOff ->
-                                            // Text tool: tap places a text box.
-                                            // Any other tap in highlight mode
-                                            // does nothing on purpose: an
-                                            // accidental tap must never kill
-                                            // the mode mid-marking. Exit is
-                                            // only the finish button, the
-                                            // brush toggle, or Back.
-                                            if (highlightMode && annotationTool == "TEXT") {
-                                                pendingTextAt = toNormalized(tapOff, bitmap)
-                                                showTextEditor = true
-                                            } else if (textHighlightMode) {
-                                                // Selection is drag-only: a
-                                                // tap must not toggle the
-                                                // bars out from under it.
-                                            } else if (!highlightMode) {
+                                            if (textHighlightMode) {
+                                                // Tap-to-delete (1.2.38): a tap
+                                                // ON an existing highlight of
+                                                // this page deletes just that
+                                                // one and saves at once. A tap
+                                                // anywhere else never kills
+                                                // the mode — but if the bars
+                                                // were somehow hidden it
+                                                // brings them (and the exit)
+                                                // back.
+                                                val n = toNormalized(tapOff, bitmap)
+                                                val hitIdx = textHighlights.indexOfLast { th ->
+                                                    th.page == page && th.rects.any { r ->
+                                                        n.x >= r.x0 && n.x <= r.x1 &&
+                                                            n.y >= r.y0 && n.y <= r.y1
+                                                    }
+                                                }
+                                                if (hitIdx >= 0) {
+                                                    textHighlights = textHighlights.toMutableList()
+                                                        .also { it.removeAt(hitIdx) }
+                                                    saveTextHighlights()
+                                                } else if (!showBars) {
+                                                    showBars = true
+                                                }
+                                            } else {
                                                 if (!showBars) {
                                                     showBars = true
                                                     resetHideBarTimer()
@@ -915,75 +907,25 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                     )
                                 }
                                 .then(
-                                    if (isCurrent && highlightMode) {
-                                        Modifier.pointerInput(Unit) {
-                                            detectDragGestures(
-                                                onDragStart = { off ->
-                                                    // TEXT comes only from taps:
-                                                    // a drag in TEXT mode paints
-                                                    // nothing and stores nothing
-                                                    // (a stroke preview that
-                                                    // vanished unsaved was a trap).
-                                                    if (annotationTool != "TEXT") {
-                                                        paintingPoints = listOf(toNormalized(off, bitmap))
-                                                    }
-                                                },
-                                                onDrag = { change, _ ->
-                                                    if (annotationTool != "TEXT") {
-                                                        paintingPoints = (paintingPoints ?: emptyList()) +
-                                                            toNormalized(change.position, bitmap)
-                                                    }
-                                                },
-                                                onDragEnd = {
-                                                    val pts = paintingPoints
-                                                    paintingPoints = null
-                                                    if (pts != null && pts.size >= 2) {
-                                                        if (annotationTool == "FREEHAND") {
-                                                            highlightStrokes = highlightStrokes + HighlightStrokeDto(
-                                                                page = page,
-                                                                points = pts.flatMap { listOf(it.x, it.y) },
-                                                                color = highlightColor.toArgb(),
-                                                                width = 0.035f
-                                                            )
-                                                            saveHighlights()
-                                                            markHistory = markHistory + ("stroke" to page)
-                                                        } else if (annotationTool != "TEXT") {
-                                                            // Shape tools: drag start -> end.
-                                                            // TEXT comes only from taps (dialog),
-                                                            // never from a drag, so a drag in
-                                                            // TEXT mode must not store anything.
-                                                            val a = pts.first()
-                                                            val b = pts.last()
-                                                            if (a != b) {
-                                                                annotations = annotations + PdfAnnotationDto(
-                                                                    page = page,
-                                                                    type = annotationTool,
-                                                                    x1 = a.x, y1 = a.y, x2 = b.x, y2 = b.y,
-                                                                    text = "",
-                                                                    color = highlightColor.toArgb()
-                                                                )
-                                                                saveAnnotations()
-                                                                markHistory = markHistory + ("annotation" to page)
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                                onDragCancel = { paintingPoints = null }
-                                            )
-                                        }
-                                    } else Modifier
-                                )
-                                .then(
-                                    if (isCurrent && textHighlightMode && zoom <= 1.01f) {
-                                        Modifier.pointerInput(Unit) {
-                                            // Text selection drag (1.2.37).
-                                            // LIMITATION, by design: active
-                                            // ONLY at zoom 1f. While zoomed
-                                            // the drag keeps its old job —
-                                            // panning (the handler below) —
-                                            // because a normalized selection
-                                            // rect is only unambiguous
-                                            // against the untransformed page.
+                                    if (isCurrent && textHighlightMode) {
+                                        // Keyed on the mode (1.2.38): the
+                                        // layer installs on entry and
+                                        // DISPOSES on exit, so no stuck
+                                        // interception can outlive the
+                                        // session.
+                                        Modifier.pointerInput(textHighlightMode) {
+                                            // Text selection drag. 1.2.38:
+                                            // active at EVERY zoom level —
+                                            // the 1.2.37 code gated it to
+                                            // zoom <= 1.01f, which left a
+                                            // dead touch zone while zoomed
+                                            // (neither selection nor pan
+                                            // was installed). Pointer
+                                            // coordinates inside the
+                                            // graphicsLayer are layer-local
+                                            // (pre-transform), so the
+                                            // normalized-rect math stays
+                                            // exact at any zoom.
                                             detectDragGestures(
                                                 onDragStart = { off ->
                                                     val n = toNormalized(off, bitmap)
@@ -1017,9 +959,6 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                                 text = matched.joinToString(" ") { it.text }
                                                             )
                                                             saveTextHighlights()
-                                                            // Unified undo stack (1.2.37): text
-                                                            // highlights join strokes/annotations.
-                                                            markHistory = markHistory + ("texthighlight" to page)
                                                         }
                                                     }
                                                 },
@@ -1032,7 +971,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                     } else Modifier
                                 )
                                 .then(
-                                    if (isCurrent && !highlightMode && !textHighlightMode) {
+                                    if (isCurrent && !textHighlightMode) {
                                         Modifier.pointerInput(Unit) {
                                             // Pinch/pan that never steals
                                             // single-finger swipes at 1x
@@ -1106,35 +1045,21 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                             )
                             // Highlighter layer: strokes drawn over the page,
                             // inside the same zoom/pan transform as the image.
-                            val textMeasurer = rememberTextMeasurer()
                             Canvas(Modifier.fillMaxSize()) {
                                 val fit = minOf(size.width / bitmap.width, size.height / bitmap.height)
                                 val fittedW = bitmap.width * fit
                                 val fittedH = bitmap.height * fit
                                 val offX = (size.width - fittedW) / 2f
                                 val offY = (size.height - fittedH) / 2f
-                                fun drawStroke(pts: List<Offset>, argb: Int, wFrac: Float) {
-                                    if (pts.size < 2) return
-                                    val path = Path().apply {
-                                        moveTo(offX + pts[0].x * fittedW, offY + pts[0].y * fittedH)
-                                        pts.drop(1).forEach {
-                                            lineTo(offX + it.x * fittedW, offY + it.y * fittedH)
-                                        }
-                                    }
-                                    drawPath(
-                                        path = path,
-                                        color = Color(argb),
-                                        style = Stroke(width = wFrac * fittedW, cap = StrokeCap.Round),
-                                        alpha = 0.45f
-                                    )
-                                }
                                 // Text-layer markings (1.2.37), drawn in
                                 // this same fitted-page transform (offX/
-                                // offY/fittedW/fittedH) and UNDER the
-                                // freehand layer: saved text highlights
-                                // first, then this page's search hits
-                                // (the current hit stronger + outlined),
-                                // then the live selection rect.
+                                // offY/fittedW/fittedH): saved text
+                                // highlights first, then this page's
+                                // search hits (the current hit stronger
+                                // + outlined), then the live selection
+                                // rect. Since 1.2.38 these are the ONLY
+                                // markings drawn — the freehand layer
+                                // that used to sit above them is deleted.
                                 fun drawWordRect(w: WordBox, color: Color, alpha: Float, outline: Boolean = false) {
                                     val left = offX + w.x0 * fittedW
                                     val top = offY + w.y0 * fittedH
@@ -1184,75 +1109,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                         )
                                     }
                                 }
-                                highlightStrokes.filter { it.page == page }.forEach { s ->
-                                    val pts = s.points.chunked(2).map { Offset(it[0], it[1]) }
-                                    drawStroke(pts, s.color, s.width)
-                                }
-                                if (isCurrent) paintingPoints?.let {
-                                    drawStroke(it, highlightColor.toArgb(), 0.035f)
-                                }
-                                // Shape/text annotations on this page + the
-                                // in-progress shape preview while dragging.
-                                fun drawShape(type: String, ax1: Float, ay1: Float, ax2: Float, ay2: Float, col: Color, strokeW: Float) {
-                                    val left = minOf(ax1, ax2)
-                                    val top = minOf(ay1, ay2)
-                                    val w = abs(ax2 - ax1)
-                                    val h = abs(ay2 - ay1)
-                                    when (type) {
-                                        "RECT" -> {
-                                            drawRect(color = col.copy(alpha = 0.15f), topLeft = Offset(left, top), size = Size(w, h))
-                                            drawRect(color = col, topLeft = Offset(left, top), size = Size(w, h), style = Stroke(width = strokeW))
-                                        }
-                                        "ELLIPSE" -> {
-                                            drawOval(color = col.copy(alpha = 0.15f), topLeft = Offset(left, top), size = Size(w, h))
-                                            drawOval(color = col, topLeft = Offset(left, top), size = Size(w, h), style = Stroke(width = strokeW))
-                                        }
-                                        "ARROW" -> {
-                                            drawLine(color = col, start = Offset(ax1, ay1), end = Offset(ax2, ay2), strokeWidth = strokeW, cap = StrokeCap.Round)
-                                            val ang = kotlin.math.atan2(ay2 - ay1, ax2 - ax1)
-                                            val head = 22f
-                                            drawLine(color = col, start = Offset(ax2, ay2), end = Offset(ax2 - head * kotlin.math.cos(ang - 0.45f), ay2 - head * kotlin.math.sin(ang - 0.45f)), strokeWidth = strokeW, cap = StrokeCap.Round)
-                                            drawLine(color = col, start = Offset(ax2, ay2), end = Offset(ax2 - head * kotlin.math.cos(ang + 0.45f), ay2 - head * kotlin.math.sin(ang + 0.45f)), strokeWidth = strokeW, cap = StrokeCap.Round)
-                                        }
-                                    }
-                                }
-                                annotations.filter { it.page == page }.forEach { ann ->
-                                    val ax1 = offX + ann.x1 * fittedW
-                                    val ay1 = offY + ann.y1 * fittedH
-                                    val ax2 = offX + ann.x2 * fittedW
-                                    val ay2 = offY + ann.y2 * fittedH
-                                    val col = Color(ann.color)
-                                    if (ann.type == "TEXT") {
-                                        val layout = textMeasurer.measure(
-                                            text = AnnotatedString(ann.text),
-                                            style = TextStyle(fontSize = 15.sp, color = Color.Black),
-                                            constraints = Constraints(maxWidth = (fittedW * 0.7f).toInt().coerceAtLeast(100))
-                                        )
-                                        val pad = 8f
-                                        val bw = layout.size.width + pad * 2
-                                        val bh = layout.size.height + pad * 2
-                                        drawRoundRect(color = Color.White.copy(alpha = 0.85f), topLeft = Offset(ax1, ay1), size = Size(bw, bh), cornerRadius = CornerRadius(10f, 10f))
-                                        drawRoundRect(color = col, topLeft = Offset(ax1, ay1), size = Size(bw, bh), cornerRadius = CornerRadius(10f, 10f), style = Stroke(width = 2f))
-                                        drawText(layout, topLeft = Offset(ax1 + pad, ay1 + pad))
-                                    } else {
-                                        drawShape(ann.type, ax1, ay1, ax2, ay2, col, 3f)
-                                    }
-                                }
-                                if (isCurrent && annotationTool != "FREEHAND" && annotationTool != "TEXT") {
-                                    paintingPoints?.let { pts ->
-                                        if (pts.size >= 2) {
-                                            val a = pts.first()
-                                            val b = pts.last()
-                                            drawShape(
-                                                annotationTool,
-                                                offX + a.x * fittedW, offY + a.y * fittedH,
-                                                offX + b.x * fittedW, offY + b.y * fittedH,
-                                                highlightColor, 3f
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                                                            }
                         }
                     } else {
                         CircularProgressIndicator(
@@ -1274,342 +1131,326 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             }
 
             if (showBars) {
-                TopAppBar(
-                    title = { Text(title, maxLines = 1, color = Color.White) },
-                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } },
-                    actions = {
-                        IconButton(onClick = { toggleBookmark(currentPage) }) {
-                            Icon(Icons.Default.Bookmark, null, tint = if (currentPage in bookmarks) GoldAccent else Color.White)
-                        }
-                        IconButton(onClick = {
-                            highlightMode = !highlightMode
-                            if (highlightMode) textHighlightMode = false
-                        }) {
-                            Icon(Icons.Default.Brush, null, tint = if (highlightMode) GoldAccent else Color.White)
-                        }
-                        // Text highlighting exists only with a text
-                        // index; without one the button stays absent.
-                        if (textIndex != null) {
-                            IconButton(onClick = {
-                                textHighlightMode = !textHighlightMode
-                                if (textHighlightMode) highlightMode = false
-                                if (!textHighlightMode) {
-                                    selectionStart = null
-                                    selectionEnd = null
+                // Slim reader chrome (1.2.38, item هـ — the doctor's
+                // reader diet): ONE slim top bar (48dp: back, title,
+                // tools) and ONE slim bottom bar (52dp: page
+                // indicator + slider, with zoom and brightness as
+                // on-demand popup overlays) replace the old 64dp
+                // TopAppBar + stacked marking panels + 3-row bottom
+                // stack. The only marking tool is yellow TEXT
+                // highlighting, entered from the pen icon; its panel
+                // is a slim overlay row that never pushes the page.
+                // With the app Scaffold bars hidden for the reader's
+                // whole lifetime, total visible chrome is 100dp —
+                // the page keeps ~88% of an 800dp screen with bars
+                // shown and 100% in the default auto-hidden reading
+                // state (1.2.37: ~52% with bars shown, ~33% with a
+                // marking panel open — the doctor's screenshot).
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .background(MaroonPrimary)
+                        .height(48.dp)
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    Text(
+                        title, maxLines = 1, color = Color.White, fontSize = 13.5.sp,
+                        modifier = Modifier.weight(1f),
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    // Bookmark: tap toggles this page's bookmark
+                    // (unchanged); long-press opens the bookmarks
+                    // list panel — which shipped unreachable in
+                    // 1.2.37 (nothing ever set showBookmarks = true).
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .combinedClickable(
+                                onClick = { toggleBookmark(currentPage) },
+                                onLongClick = {
+                                    exitTextHighlightMode()
+                                    showBookmarks = true
                                 }
-                            }) {
-                                Icon(Icons.Default.BorderColor, null, tint = if (textHighlightMode) GoldAccent else Color.White)
-                            }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Bookmark, null, tint = if (currentPage in bookmarks) GoldAccent else Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    // The pen: the reader's ONLY marking system —
+                    // yellow text highlighting (the freehand mode is
+                    // deleted, 1.2.38). Shown only with a text index.
+                    if (textIndex != null) {
+                        IconButton(
+                            onClick = {
+                                if (textHighlightMode) exitTextHighlightMode()
+                                else textHighlightMode = true
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Default.BorderColor, null, tint = if (textHighlightMode) GoldAccent else Color.White, modifier = Modifier.size(20.dp))
                         }
-                        IconButton(onClick = { showSearch = !showSearch }) {
-                            Icon(Icons.Default.Search, null, tint = Color.White)
+                    }
+                    IconButton(
+                        onClick = {
+                            if (!showSearch) exitTextHighlightMode()
+                            showSearch = !showSearch
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(Icons.Default.Search, null, tint = if (showSearch) GoldAccent else Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    // One button cycles the three display modes
+                    // (normal / warm paper / night) — display modes
+                    // are untouched by this build, per the doctor's
+                    // correction to item و.
+                    IconButton(onClick = { cycleDisplayMode() }, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            when (displayMode) {
+                                "WARM" -> Icons.Default.WbSunny
+                                "NIGHT" -> Icons.Default.DarkMode
+                                else -> Icons.Default.LightMode
+                            },
+                            null, tint = if (displayMode == "NORMAL") Color.White else GoldAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { exitTextHighlightMode(); showRecents = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(Icons.Default.History, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    if (!textIndex?.outline.isNullOrEmpty()) {
+                        IconButton(
+                            onClick = { exitTextHighlightMode(); showOutline = true },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Default.List, null, tint = Color.White, modifier = Modifier.size(20.dp))
                         }
-                        // One button cycles the three display modes;
-                        // the icon names the CURRENT mode (normal /
-                        // warm paper / night).
-                        IconButton(onClick = { cycleDisplayMode() }) {
-                            Icon(
-                                when (displayMode) {
-                                    "WARM" -> Icons.Default.WbSunny
-                                    "NIGHT" -> Icons.Default.DarkMode
-                                    else -> Icons.Default.LightMode
-                                },
-                                null, tint = if (displayMode == "NORMAL") Color.White else GoldAccent
-                            )
-                        }
-                        IconButton(onClick = { showRecents = true }) {
-                            Icon(Icons.Default.History, null, tint = Color.White)
-                        }
-                        if (!textIndex?.outline.isNullOrEmpty()) {
-                            IconButton(onClick = { showOutline = true }) {
-                                Icon(Icons.Default.List, null, tint = Color.White)
-                            }
-                        }
-                        TextButton(onClick = {
+                    }
+                    IconButton(
+                        onClick = {
+                            exitTextHighlightMode()
                             isFullscreen = true
                             setSystemBarsVisible(false)
                             showBars = false
-                        }) {
-                            Text("ملء الشاشة", color = Color.White, fontSize = 12.sp)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary)
-                )
-
-                // Highlighter panel: one finish button, tools, colors,
-                // one undo, one clear — a single markings model, not
-                // two parallel ones. Three rows so the page keeps
-                // as much height as possible.
-                if (highlightMode) {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.TopCenter)
-                            .padding(top = 64.dp)
-                            .background(MaroonPrimary.copy(alpha = 0.9f))
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        },
+                        modifier = Modifier.size(40.dp)
                     ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                when (annotationTool) {
-                                    "TEXT" -> "اضغط على الصفحة لوضع مربع نص"
-                                    "FREEHAND" -> "اسحب للتأشير"
-                                    else -> "اسحب لرسم الشكل"
-                                },
-                                color = Color.White, fontSize = 12.sp
-                            )
-                            TextButton(onClick = { highlightMode = false }) {
-                                Text("إنهاء التأشير ✓", color = GoldAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                        // Annotation tools: freehand strokes plus text boxes
-                        // and shapes, all saved per book like highlights.
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            listOf(
-                                "FREEHAND" to "تأشير",
-                                "TEXT" to "مربع نص",
-                                "RECT" to "مستطيل",
-                                "ELLIPSE" to "بيضوي",
-                                "ARROW" to "سهم"
-                            ).forEach { (tool, label) ->
-                                TextButton(onClick = { annotationTool = tool }) {
-                                    Text(
-                                        label,
-                                        color = if (annotationTool == tool) GoldAccent else Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = if (annotationTool == tool) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                }
-                            }
-                        }
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf(
-                                    Color.Yellow,
-                                    Color(0xFFFF8FA3),
-                                    Color(0xFF90EE90),
-                                    Color(0xFF87CEEB)
-                                ).forEach { c ->
-                                    Box(
-                                        Modifier
-                                            .size(28.dp)
-                                            .background(c, CircleShape)
-                                            .border(
-                                                width = if (highlightColor == c) 2.dp else 0.dp,
-                                                color = GoldAccent,
-                                                shape = CircleShape
-                                            )
-                                            .clickable { highlightColor = c }
-                                    )
-                                }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                // One undo for all three marking kinds
-                                // (1.2.37): the shared undoLastMark()
-                                // pops the newest marking on this page —
-                                // stroke, shape/text, or text highlight —
-                                // and saves its group immediately.
-                                val hasPageMark = markHistory.any { (_, p) -> p == currentPage }
-                                TextButton(onClick = { undoLastMark() }) {
-                                    Text(
-                                        "تراجع",
-                                        color = Color.White.copy(alpha = if (hasPageMark) 1f else 0.4f),
-                                        fontSize = 12.sp
-                                    )
-                                }
-                                TextButton(onClick = {
-                                    highlightStrokes = highlightStrokes.filter { it.page != currentPage }
-                                    saveHighlights()
-                                    annotations = annotations.filter { it.page != currentPage }
-                                    saveAnnotations()
-                                    markHistory = markHistory.filter { (_, p) -> p != currentPage }
-                                }) {
-                                    Text("مسح العلامات", color = Color.White, fontSize = 12.sp)
-                                }
-                            }
-                        }
+                        Icon(Icons.Default.Fullscreen, null, tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
 
-                // Text-highlight panel (1.2.37): the mode's hint, the
-                // saved-highlights list entry, and its off switch —
-                // mirroring the freehand panel's shape.
+                // Text-highlight panel (1.2.38): a slim overlay row
+                // under the top bar — the hint, the saved-highlights
+                // list entry, undo, and the mode's ONE exit («إنهاء ✓»
+                // → exitTextHighlightMode()).
                 if (textHighlightMode) {
-                    Column(
+                    Row(
                         Modifier
                             .fillMaxWidth()
                             .align(Alignment.TopCenter)
-                            .padding(top = 64.dp)
-                            .background(MaroonPrimary.copy(alpha = 0.9f))
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .padding(top = 48.dp)
+                            .background(MaroonPrimary.copy(alpha = 0.92f))
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Text(
+                            "اسحب فوق النص لتظليله — ولمس مظللة يحذفها",
+                            color = Color.White, fontSize = 12.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { showTextHighlights = true }) {
+                            Text("المظللات (${textHighlights.size})", color = Color.White, fontSize = 12.sp)
+                        }
+                        TextButton(onClick = { undoLastTextHighlight() }) {
                             Text(
-                                if (zoom <= 1.01f) "اسحب فوق النص لتظليله" else "صغّر إلى 100% لتظليل النص",
-                                color = Color.White, fontSize = 12.sp
+                                "تراجع",
+                                color = Color.White.copy(
+                                    alpha = if (textHighlights.any { it.page == currentPage }) 1f else 0.4f
+                                ),
+                                fontSize = 12.sp
                             )
-                            Row {
-                                TextButton(onClick = { showTextHighlights = true }) {
-                                    Text("المظللات (${textHighlights.size})", color = Color.White, fontSize = 12.sp)
-                                }
-                                // Same unified undo as the freehand
-                                // panel: pops this page's newest marking
-                                // (here: the last text highlight).
-                                TextButton(onClick = { undoLastMark() }) {
-                                    Text(
-                                        "تراجع",
-                                        color = Color.White.copy(
-                                            alpha = if (markHistory.any { (_, p) -> p == currentPage }) 1f else 0.4f
-                                        ),
-                                        fontSize = 12.sp
-                                    )
-                                }
-                                TextButton(onClick = {
-                                    textHighlightMode = false
-                                    selectionStart = null
-                                    selectionEnd = null
-                                }) {
-                                    Text("إنهاء ✓", color = GoldAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
+                        }
+                        TextButton(onClick = { exitTextHighlightMode() }) {
+                            Text("إنهاء ✓", color = GoldAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
-                Box(
+                // Slim bottom bar (1.2.38): ONE row — prev/next, the
+                // page indicator (tap = go-to-page dialog, which
+                // keeps the full remaining-pages line), the page
+                // slider, the zoom % (tap = zoom popup), and the
+                // brightness icon (tap = brightness popup). No
+                // stacked permanent sliders anymore.
+                Row(
                     Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .background(MaroonPrimary.copy(alpha = 0.9f))
-                        .padding(16.dp)
+                        .background(MaroonPrimary.copy(alpha = 0.95f))
+                        .height(52.dp)
+                        .padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = {
-                                if (currentPage > 0) coroutineScope.launch {
-                                    pagerState.animateScrollToPage(currentPage - 1)
-                                }
-                            }) {
-                                Icon(Icons.Default.ChevronLeft, null, tint = Color.White)
+                    IconButton(
+                        onClick = {
+                            if (currentPage > 0) coroutineScope.launch {
+                                pagerState.animateScrollToPage(currentPage - 1)
                             }
-                            TextButton(onClick = {
-                                goToPageText = (currentPage + 1).toString()
-                                showGoToPage = true
-                            }) {
-                                // Full progress label (1.2.37): page X
-                                // of Y, the percentage, and how many
-                                // pages remain (Arabic plural rules).
-                                val remainingPages = totalPages - currentPage - 1
-                                val remainingText = when {
-                                    remainingPages <= 0 -> "لا صفحات متبقية"
-                                    remainingPages == 1 -> "تبقّت صفحة واحدة"
-                                    remainingPages == 2 -> "تبقّت صفحتان"
-                                    remainingPages in 3..10 -> "تبقّى $remainingPages صفحات"
-                                    else -> "تبقّى $remainingPages صفحة"
-                                }
-                                Text(
-                                    "صفحة ${currentPage + 1} من $totalPages (${((currentPage + 1).toFloat() / totalPages * 100).toInt()}%) — $remainingText",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            IconButton(onClick = {
-                                if (currentPage < totalPages - 1) coroutineScope.launch {
-                                    pagerState.animateScrollToPage(currentPage + 1)
-                                }
-                            }) {
-                                Icon(Icons.Default.ChevronRight, null, tint = Color.White)
-                            }
-                        }
-
-                        // Page slider: drag to jump anywhere in the book.
-                        if (totalPages > 1) {
-                            Slider(
-                                value = sliderPos ?: currentPage.toFloat(),
-                                onValueChange = { sliderPos = it },
-                                onValueChangeFinished = {
-                                    sliderPos?.let { target ->
-                                        coroutineScope.launch {
-                                            pagerState.scrollToPage(target.roundToInt().coerceIn(0, totalPages - 1))
-                                        }
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.ChevronLeft, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    TextButton(onClick = {
+                        exitTextHighlightMode()
+                        goToPageText = (currentPage + 1).toString()
+                        showGoToPage = true
+                    }) {
+                        Text(
+                            "صفحة ${currentPage + 1} من $totalPages (${((currentPage + 1).toFloat() / totalPages * 100).toInt()}%)",
+                            color = Color.White, fontWeight = FontWeight.Medium, fontSize = 12.sp
+                        )
+                    }
+                    if (totalPages > 1) {
+                        Slider(
+                            value = sliderPos ?: currentPage.toFloat(),
+                            onValueChange = { sliderPos = it },
+                            onValueChangeFinished = {
+                                sliderPos?.let { target ->
+                                    coroutineScope.launch {
+                                        pagerState.scrollToPage(target.roundToInt().coerceIn(0, totalPages - 1))
                                     }
-                                    sliderPos = null
-                                },
-                                valueRange = 0f..(totalPages - 1).toFloat(),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = GoldAccent,
-                                    activeTrackColor = GoldAccent,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.4f)
-                                )
+                                }
+                                sliderPos = null
+                            },
+                            valueRange = 0f..(totalPages - 1).toFloat(),
+                            modifier = Modifier.weight(1f),
+                            colors = SliderDefaults.colors(
+                                thumbColor = GoldAccent,
+                                activeTrackColor = GoldAccent,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.4f)
                             )
-                        }
+                        )
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
+                    IconButton(
+                        onClick = {
+                            if (currentPage < totalPages - 1) coroutineScope.launch {
+                                pagerState.animateScrollToPage(currentPage + 1)
+                            }
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.ChevronRight, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    TextButton(onClick = {
+                        showBrightnessPopup = false
+                        showZoomPopup = !showZoomPopup
+                    }) {
+                        Text(
+                            "${(zoom * 100).toInt()}%",
+                            color = if (showZoomPopup) GoldAccent else Color.White,
+                            fontWeight = FontWeight.Medium, fontSize = 12.sp
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            showZoomPopup = false
+                            showBrightnessPopup = !showBrightnessPopup
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.BrightnessMedium, null, tint = if (showBrightnessPopup) GoldAccent else Color.White, modifier = Modifier.size(20.dp))
+                    }
+                }
 
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                // Zoom popup (1.2.38): an on-demand overlay above
+                // the bottom bar — it never pushes the page.
+                if (showZoomPopup) {
+                    Row(
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 56.dp, start = 12.dp, end = 12.dp)
+                            .background(MaroonPrimary, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        IconButton(
+                            onClick = {
+                                zoom = (zoom - 0.5f).coerceAtLeast(1f)
+                                if (zoom <= 1.01f) pan = Offset.Zero
+                            },
+                            enabled = zoom > 1.01f,
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            IconButton(
-                                onClick = {
-                                    zoom = (zoom - 0.5f).coerceAtLeast(1f)
-                                    if (zoom <= 1.01f) pan = Offset.Zero
-                                },
-                                enabled = zoom > 1.01f
-                            ) {
-                                Icon(Icons.Default.ZoomOut, null, tint = Color.White)
-                            }
-                            TextButton(onClick = {
-                                zoom = 1f
-                                pan = Offset.Zero
-                            }) {
-                                Text(
-                                    "${(zoom * 100).toInt()}%",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            IconButton(
-                                onClick = { zoom = (zoom + 0.5f).coerceAtMost(4f) },
-                                enabled = zoom < 4f
-                            ) {
-                                Icon(Icons.Default.ZoomIn, null, tint = Color.White)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Icon(Icons.Default.BrightnessLow, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                            Slider(
-                                value = brightness,
-                                onValueChange = { brightness = it },
-                                valueRange = 0.3f..1f,
-                                modifier = Modifier.weight(1f),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = GoldAccent,
-                                    activeTrackColor = GoldAccent,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.4f)
-                                )
-                            )
-                            Icon(Icons.Default.BrightnessHigh, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.ZoomOut, null, tint = Color.White, modifier = Modifier.size(20.dp))
                         }
+                        Slider(
+                            value = zoom,
+                            onValueChange = {
+                                zoom = it
+                                if (zoom <= 1.01f) pan = Offset.Zero
+                            },
+                            valueRange = 1f..4f,
+                            modifier = Modifier.width(130.dp),
+                            colors = SliderDefaults.colors(
+                                thumbColor = GoldAccent,
+                                activeTrackColor = GoldAccent,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.4f)
+                            )
+                        )
+                        IconButton(
+                            onClick = { zoom = (zoom + 0.5f).coerceAtMost(4f) },
+                            enabled = zoom < 4f,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(Icons.Default.ZoomIn, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                        TextButton(onClick = {
+                            zoom = 1f
+                            pan = Offset.Zero
+                        }) {
+                            Text("100%", color = GoldAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Brightness popup (1.2.38): same on-demand shape.
+                if (showBrightnessPopup) {
+                    Row(
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 56.dp, start = 12.dp, end = 12.dp)
+                            .background(MaroonPrimary, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(Icons.Default.BrightnessLow, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Slider(
+                            value = brightness,
+                            onValueChange = { brightness = it },
+                            valueRange = 0.3f..1f,
+                            modifier = Modifier.width(150.dp),
+                            colors = SliderDefaults.colors(
+                                thumbColor = GoldAccent,
+                                activeTrackColor = GoldAccent,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.4f)
+                            )
+                        )
+                        Icon(Icons.Default.BrightnessHigh, null, tint = Color.White, modifier = Modifier.size(18.dp))
                     }
                 }
 
@@ -1743,41 +1584,6 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         Text("خروج من ملء الشاشة", color = Color.White)
                     }
                 }
-            }
-
-            // Text-box editor: tap in TEXT mode opens it at the tap point.
-            if (showTextEditor) {
-                var textValue by remember { mutableStateOf("") }
-                AlertDialog(
-                    onDismissRequest = { showTextEditor = false; pendingTextAt = null },
-                    title = { Text("مربع نص") },
-                    text = {
-                        TextField(
-                            value = textValue,
-                            onValueChange = { textValue = it },
-                            placeholder = { Text("اكتب النص...") }
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            val at = pendingTextAt
-                            if (at != null && textValue.isNotBlank()) {
-                                annotations = annotations + PdfAnnotationDto(
-                                    page = currentPage, type = "TEXT",
-                                    x1 = at.x, y1 = at.y, x2 = at.x, y2 = at.y,
-                                    text = textValue.trim(), color = highlightColor.toArgb()
-                                )
-                                saveAnnotations()
-                                markHistory = markHistory + ("annotation" to currentPage)
-                            }
-                            showTextEditor = false
-                            pendingTextAt = null
-                        }) { Text("إضافة") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showTextEditor = false; pendingTextAt = null }) { Text("إلغاء") }
-                    }
-                )
             }
 
             // Book outline dialog (1.2.37): the PDF's own table of
@@ -1929,13 +1735,30 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     onDismissRequest = { showGoToPage = false },
                     title = { Text("اذهب إلى صفحة") },
                     text = {
-                        TextField(
-                            value = goToPageText,
-                            onValueChange = { goToPageText = it.filter { ch -> ch.isDigit() } },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            placeholder = { Text("رقم الصفحة (1-$totalPages)") }
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextField(
+                                value = goToPageText,
+                                onValueChange = { goToPageText = it.filter { ch -> ch.isDigit() } },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                placeholder = { Text("رقم الصفحة (1-$totalPages)") }
+                            )
+                            // The full remaining-pages line moved
+                            // here from the bottom bar (1.2.38 diet):
+                            // the slim bar shows page + percent only.
+                            val remainingPages = totalPages - currentPage - 1
+                            val remainingText = when {
+                                remainingPages <= 0 -> "لا صفحات متبقية"
+                                remainingPages == 1 -> "تبقّت صفحة واحدة"
+                                remainingPages == 2 -> "تبقّت صفحتان"
+                                remainingPages in 3..10 -> "تبقّى $remainingPages صفحات"
+                                else -> "تبقّى $remainingPages صفحة"
+                            }
+                            Text(
+                                "أنت في الصفحة ${currentPage + 1} — $remainingText",
+                                fontSize = 11.5.sp, color = MaroonPrimary
+                            )
+                        }
                     },
                     confirmButton = {
                         TextButton(onClick = {

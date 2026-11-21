@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -37,10 +36,16 @@ import sy.medpro.watani.ui.theme.NotoSansArabicFontFamily
 /**
  * Path screen (merge phase 5, design model 02-path): one book's
  * systems in book order, each system's units as levels with their
- * live state from [FirstAidProgress] (done / current / next /
- * locked), a booklet chip on every system that has one (always
- * available), and the path's overall progress card. On medium+
+ * live state from [FirstAidProgress], a booklet chip on every system
+ * that has one, and the path's overall progress card. On medium+
  * widths the systems flow in two columns.
+ *
+ * Build 1.2.38: NO hard locks (doctor's decision) — every level is
+ * openable on request; the book order stays visible as the suggested
+ * path («التالي المقترح» marks the first undone unit). Units beyond
+ * the free first three carry a «بالتفعيل» chip when the account is
+ * not activated; the click still routes to the host, which shows the
+ * activation dialog instead of the content.
  */
 @Composable
 fun FirstAidPathScreen(
@@ -48,7 +53,9 @@ fun FirstAidPathScreen(
     index: FirstAidIndexDto,
     onBack: () -> Unit,
     onOpenUnit: (unitId: String) -> Unit,
-    onOpenBooklet: (sy.medpro.watani.data.FirstAidBookletDto) -> Unit
+    onOpenBooklet: (sy.medpro.watani.data.FirstAidBookletDto) -> Unit,
+    activated: Boolean = true,
+    freeUnitIds: Set<String> = emptySet()
 ) {
     val context = LocalContext.current
     val units = remember(index) { index.units.orEmpty().sortedBy { it.order ?: Int.MAX_VALUE } }
@@ -61,6 +68,11 @@ fun FirstAidPathScreen(
     }
     val doneCount = remember(units) {
         pathIds.count { FirstAidProgress.isUnitDone(context, step, it) }
+    }
+    // Advisory only (1.2.38): the first undone path unit is the
+    // SUGGESTED next — it never gates anything.
+    val suggestedNextId = remember(units, doneCount) {
+        pathIds.firstOrNull { !FirstAidProgress.isUnitDone(context, step, it) }
     }
     val currentSystemAr = remember(units, doneCount) {
         val nextId = pathIds.firstOrNull { !FirstAidProgress.isUnitDone(context, step, it) }
@@ -75,7 +87,12 @@ fun FirstAidPathScreen(
         item {
             FaScreenHeader(
                 title = if (step == 2) "Step 2 — التطبيق السريري" else "Step 1 — الأساسيات",
-                subtitle = "${pathIds.size} وحدة في ${index.systems.orEmpty().size} نظامًا · بترتيب فصول الكتاب",
+                // Count reconciliation (1.2.38, item D): the path
+                // lists kind != "integration" units only; the step's
+                // package ALSO carries its integration sessions, and
+                // the two add up to the index's full unit count —
+                // Step 1: 77 + 10 = 87 · Step 2: 61 + 6 = 67.
+                subtitle = "${pathIds.size} وحدة بالمسار + ${sessionIds.size} جلسات تكامل = ${units.size} بالحزمة · ${index.systems.orEmpty().size} نظامًا بترتيب فصول الكتاب",
                 onBack = onBack
             )
         }
@@ -129,7 +146,7 @@ fun FirstAidPathScreen(
                 ) {
                     systems.chunked(2)[pairIndex].forEach { system ->
                         Box(modifier = Modifier.weight(1f)) {
-                            FaSystemBlock(step, index, system, byId, pathIds, sessionIds, onOpenUnit, onOpenBooklet)
+                            FaSystemBlock(step, index, system, byId, pathIds, sessionIds, onOpenUnit, onOpenBooklet, suggestedNextId, activated, freeUnitIds)
                         }
                     }
                     if (systems.chunked(2)[pairIndex].size == 1) {
@@ -139,16 +156,16 @@ fun FirstAidPathScreen(
             }
         } else {
             items(systems.size) { i ->
-                FaSystemBlock(step, index, systems[i], byId, pathIds, sessionIds, onOpenUnit, onOpenBooklet)
+                FaSystemBlock(step, index, systems[i], byId, pathIds, sessionIds, onOpenUnit, onOpenBooklet, suggestedNextId, activated, freeUnitIds)
             }
         }
 
         item {
             Text(
                 if (step == 2) {
-                    "يُفتح المستوى التالي بإتمام اختبار الخروج بنسبة 60% فأكثر"
+                    "ترتيب فصول الكتاب مقترح لا إلزامي — كل وحدة قابلة للفتح مباشرة، ونجاح اختبار الخروج بـ60% فأكثر يُحسب إتمامًا للوحدة"
                 } else {
-                    "يُفتح المستوى التالي بإتمام تدريب الوحدة السابقة"
+                    "ترتيب فصول الكتاب مقترح لا إلزامي — كل وحدة قابلة للفتح مباشرة، وإتمام التدريب يُحسب إتمامًا للوحدة"
                 },
                 fontFamily = NotoSansArabicFontFamily, fontSize = 10.8.sp, color = faMuted(),
                 modifier = Modifier.fillMaxWidth(),
@@ -168,7 +185,10 @@ private fun FaSystemBlock(
     pathIds: List<String>,
     sessionIds: Set<String>,
     onOpenUnit: (String) -> Unit,
-    onOpenBooklet: (sy.medpro.watani.data.FirstAidBookletDto) -> Unit
+    onOpenBooklet: (sy.medpro.watani.data.FirstAidBookletDto) -> Unit,
+    suggestedNextId: String?,
+    activated: Boolean,
+    freeUnitIds: Set<String>
 ) {
     val context = LocalContext.current
     val systemUnits = system.units.orEmpty().filter { byId[it]?.kind != "integration" }
@@ -211,7 +231,9 @@ private fun FaSystemBlock(
                 status = status,
                 exitFraction = if (step == 2) FirstAidProgress.exitBestFraction(context, unitId) else null,
                 trainDone = FirstAidProgress.isTrainingDone(context, unitId),
-                onClick = { if (status != FirstAidProgressRules.UnitStatus.LOCKED) onOpenUnit(unitId) }
+                isSuggestedNext = unitId == suggestedNextId,
+                needsActivation = !activated && unitId !in freeUnitIds,
+                onClick = { onOpenUnit(unitId) }
             )
             if (positionInSystem < systemUnits.lastIndex) {
                 // connector tick between levels (.connector)
@@ -233,12 +255,17 @@ private fun FaLevelRow(
     status: FirstAidProgressRules.UnitStatus,
     exitFraction: Double?,
     trainDone: Boolean,
+    isSuggestedNext: Boolean,
+    needsActivation: Boolean,
     onClick: () -> Unit
 ) {
     val isNow = status == FirstAidProgressRules.UnitStatus.AVAILABLE && (trainDone || exitFraction != null)
+    // 1.2.38: the row is ALWAYS clickable — no hard locks. A gated
+    // row's click reaches the host, which shows the activation
+    // dialog instead of the unit.
     FaCard(
         modifier = Modifier.fillMaxWidth(),
-        onClick = if (status == FirstAidProgressRules.UnitStatus.LOCKED) null else onClick
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
@@ -252,9 +279,8 @@ private fun FaLevelRow(
                     .background(
                         when (status) {
                             FirstAidProgressRules.UnitStatus.DONE -> FaColors.Maroon
-                            FirstAidProgressRules.UnitStatus.AVAILABLE ->
+                            else ->
                                 if (isNow) Color.White else Color(0xFFF3E9E4)
-                            FirstAidProgressRules.UnitStatus.LOCKED -> Color(0xFFF1EAE1)
                         }
                     )
                     .then(
@@ -271,11 +297,7 @@ private fun FaLevelRow(
                         Icons.Filled.Check, contentDescription = null,
                         tint = Color.White, modifier = Modifier.size(19.dp)
                     )
-                    FirstAidProgressRules.UnitStatus.LOCKED -> androidx.compose.material3.Icon(
-                        Icons.Filled.Lock, contentDescription = null,
-                        tint = Color(0xFFB4A696), modifier = Modifier.size(17.dp)
-                    )
-                    FirstAidProgressRules.UnitStatus.AVAILABLE -> Text(
+                    else -> Text(
                         "$position",
                         fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
                         fontSize = 13.5.sp, color = FaColors.Maroon
@@ -287,9 +309,7 @@ private fun FaLevelRow(
                     title,
                     fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
                     fontSize = 14.5.sp,
-                    color = if (status == FirstAidProgressRules.UnitStatus.LOCKED) {
-                        Color(0xFF9A8B7C)
-                    } else faHeading()
+                    color = faHeading()
                 )
                 Text(
                     sub,
@@ -303,16 +323,15 @@ private fun FaLevelRow(
                     )
                 }
             }
-            when (status) {
-                FirstAidProgressRules.UnitStatus.DONE ->
+            when {
+                status == FirstAidProgressRules.UnitStatus.DONE ->
                     FaChip("مكتمل", FaColors.GreenTint, FaColors.Green)
-                FirstAidProgressRules.UnitStatus.AVAILABLE ->
-                    FaChip(
-                        if (isNow) "جارٍ الآن" else "التالي",
-                        FaColors.GoldTint, FaColors.GoldText
-                    )
-                FirstAidProgressRules.UnitStatus.LOCKED ->
-                    FaChip("مقفل", Color(0xFFF5F0E9), Color(0xFFA08D78))
+                needsActivation ->
+                    FaChip("بالتفعيل", FaColors.GoldTint, FaColors.GoldText)
+                isNow ->
+                    FaChip("جارٍ الآن", FaColors.GoldTint, FaColors.GoldText)
+                isSuggestedNext ->
+                    FaChip("التالي المقترح", FaColors.GoldTint, FaColors.GoldText)
             }
         }
     }

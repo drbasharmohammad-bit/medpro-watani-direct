@@ -12,10 +12,14 @@ import com.google.firebase.auth.FirebaseAuth
  *   the pack's own passThreshold (0.6 — «خروج ≥60% يفتح التالية»).
  * - Step 1 path unit: the source packs have NO pre/exit checks at all,
  *   so DONE = the training quiz was finished (merge plan §5.2 ruling).
- * - Integration sessions (INT/RAPI, either step) are NEVER locked and
- *   complete by finishing their training quiz.
- * - A path unit is AVAILABLE when it is the first of its path or the
- *   previous path unit is DONE; otherwise LOCKED.
+ * - Integration sessions (INT/RAPI, either step) complete by
+ *   finishing their training quiz.
+ * - NO HARD LOCKS (doctor's decision, build 1.2.38): the course
+ *   order is advisory only — [status] never returns LOCKED anymore;
+ *   every unit is openable on request, and the exit ≥60% rule stays
+ *   purely the DEFINITION of Step 2 completion (progress math), not
+ *   an opening gate. The LOCKED enum value is kept for source
+ *   compatibility with older call sites but is never produced.
  */
 object FirstAidProgressRules {
 
@@ -38,15 +42,12 @@ object FirstAidProgressRules {
         doneIds: Set<String>,
         isIntegrationSession: Boolean
     ): UnitStatus {
-        if (unitId in doneIds) return UnitStatus.DONE
-        if (isIntegrationSession) return UnitStatus.AVAILABLE
-        val index = orderedPathUnitIds.indexOf(unitId)
-        if (index <= 0) return UnitStatus.AVAILABLE
-        return if (orderedPathUnitIds[index - 1] in doneIds) {
-            UnitStatus.AVAILABLE
-        } else {
-            UnitStatus.LOCKED
-        }
+        // 1.2.38: no hard locks — a unit is DONE or AVAILABLE, never
+        // LOCKED, whatever the state of its predecessors. The
+        // parameters stay so callers keep compiling unchanged.
+        @Suppress("UNUSED_PARAMETER") val advisoryOrder = orderedPathUnitIds
+        @Suppress("UNUSED_PARAMETER") val session = isIntegrationSession
+        return if (unitId in doneIds) UnitStatus.DONE else UnitStatus.AVAILABLE
     }
 }
 
@@ -113,6 +114,29 @@ object FirstAidProgress {
             }
         }
         return FirstAidProgressRules.exitPasses(correct, total)
+    }
+
+    // ---- last-opened record (1.2.38) -------------------------------------
+    //
+    // The home resume card derives from the student's OWN trail: the
+    // last unit they actually opened (step + id), stored in the same
+    // per-account prefs. Before 1.2.38 nothing recorded this, so the
+    // card fell back to a fixed course position for every student.
+
+    fun recordUnitOpened(context: Context, step: Int, unitId: String) {
+        prefs(context).edit()
+            .putInt("last_step", step)
+            .putString("last_id", unitId)
+            .apply()
+    }
+
+    /** (step, unitId) of the last opened unit, or null when the
+     * student never opened any unit on this account. */
+    fun lastOpened(context: Context): Pair<Int, String>? {
+        val p = prefs(context)
+        val id = p.getString("last_id", null)?.takeIf { it.isNotBlank() } ?: return null
+        val step = p.getInt("last_step", 0)
+        return if (step == 1 || step == 2) step to id else null
     }
 
     // ---- derived state ---------------------------------------------------

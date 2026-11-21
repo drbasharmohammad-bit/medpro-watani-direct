@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Style
@@ -56,7 +55,9 @@ import java.io.File
 /** Stages of the unit player (03-unit flow). */
 private enum class FaStage { HOME, PRECHECK, REFERENCE, TRAINING, EXIT, INTERACTIVE, FLASHCARDS, GLOSSARY }
 
-private enum class FaStepState { DONE, NOW, NEXT, LOCKED }
+// 1.2.38: LOCKED removed — no stage is ever locked (doctor's
+// no-hard-locks decision); stages are DONE or openable (NOW/NEXT).
+private enum class FaStepState { DONE, NOW, NEXT }
 
 /**
  * The unit player (merge phase 5, design models 03-unit + 04-quiz +
@@ -329,16 +330,17 @@ private fun FaUnitHome(
         )
         steps += FaStepRowData(
             FaStage.EXIT, "اختبار الخروج",
-            "${pack.exitcheck.orEmpty().size} أسئلة · موقوت ${FA_EXIT_TIME_SECONDS / 60} دقائق · يُفتح التالي بنجاح 60% فأكثر",
+            // 1.2.38: the exit check is openable directly like every
+            // stage (no hard locks); ≥60% stays the DEFINITION of
+            // completing the unit, not an opening gate.
+            "${pack.exitcheck.orEmpty().size} أسئلة · موقوت ${FA_EXIT_TIME_SECONDS / 60} دقائق · النجاح بـ60% فأكثر يُحسب إتمامًا للوحدة",
             when {
                 exitDone -> FaStepState.DONE
-                trainDone -> FaStepState.NOW
-                else -> FaStepState.LOCKED
+                else -> FaStepState.NOW
             },
             when {
                 exitDone -> "ناجح ${((exitFraction ?: 0.0) * 100).toInt()}%"
-                trainDone -> "ابدأ"
-                else -> "أنهِ التدريب أولًا"
+                else -> "ابدأ"
             }
         )
     } else {
@@ -349,7 +351,7 @@ private fun FaUnitHome(
         )
         steps += FaStepRowData(
             FaStage.TRAINING, "التدريب",
-            "${pack.quiz.orEmpty().size} سؤالًا بتغذية راجعة فورية — إتمام التدريب يُكمل الوحدة ويفتح التالية",
+            "${pack.quiz.orEmpty().size} سؤالًا بتغذية راجعة فورية — إتمام التدريب يُحسب إتمامًا للوحدة، وكل المراحل قابلة للفتح مباشرة",
             if (trainDone) FaStepState.DONE else FaStepState.NOW,
             if (trainDone) "منجز" else "ابدأ"
         )
@@ -416,7 +418,7 @@ private fun FaUnitHome(
                             number = i + 1,
                             r = row,
                             last = i == steps.lastIndex,
-                            onClick = { if (row.state != FaStepState.LOCKED) onStage(row.stage) }
+                            onClick = { onStage(row.stage) }
                         )
                     }
                 }
@@ -620,7 +622,6 @@ private fun FaFlowStep(
                             FaStepState.DONE -> FaColors.Green
                             FaStepState.NOW -> FaColors.Maroon
                             FaStepState.NEXT -> Color(0xFFF3E9E4)
-                            FaStepState.LOCKED -> Color(0xFFF1EAE1)
                         }
                     ),
                 contentAlignment = Alignment.Center
@@ -629,10 +630,6 @@ private fun FaFlowStep(
                     FaStepState.DONE -> Icon(
                         Icons.Filled.Check, contentDescription = null,
                         tint = Color.White, modifier = Modifier.size(18.dp)
-                    )
-                    FaStepState.LOCKED -> Icon(
-                        Icons.Filled.Lock, contentDescription = null,
-                        tint = Color(0xFFB4A696), modifier = Modifier.size(16.dp)
                     )
                     else -> Text(
                         "$number",
@@ -647,7 +644,7 @@ private fun FaFlowStep(
                     r.label,
                     fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
                     fontSize = 14.5.sp,
-                    color = if (r.state == FaStepState.LOCKED) Color(0xFF9A8B7C) else faHeading()
+                    color = faHeading()
                 )
                 Text(
                     r.desc,
@@ -667,13 +664,11 @@ private fun FaFlowStep(
                     FaStepState.DONE -> FaColors.GreenTint
                     FaStepState.NOW -> FaColors.ChipCodeBg
                     FaStepState.NEXT -> FaColors.ChipCodeBg
-                    FaStepState.LOCKED -> Color(0xFFF5F0E9)
                 },
                 fg = when (r.state) {
                     FaStepState.DONE -> FaColors.Green
                     FaStepState.NOW -> FaColors.Maroon
                     FaStepState.NEXT -> FaColors.Maroon
-                    FaStepState.LOCKED -> Color(0xFFA08D78)
                 },
                 modifier = Modifier.padding(top = 4.dp)
             )
