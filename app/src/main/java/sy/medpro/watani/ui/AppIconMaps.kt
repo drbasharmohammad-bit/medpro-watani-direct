@@ -68,6 +68,7 @@ object DrawerIcons {
         "القلب والإصغاء" to R.drawable.ic_drawer_heart_auscultation,
         "غرفة الطوارئ" to R.drawable.ic_drawer_emergency_room,
         "المختبرات والحاسبات" to R.drawable.ic_drawer_labs_calculators,
+        "المختبرات وغازات الدم" to R.drawable.ic_drawer_labs_calculators,
         "تسجيل الخروج" to R.drawable.ic_drawer_logout
     )
 

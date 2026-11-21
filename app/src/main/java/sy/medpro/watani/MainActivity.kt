@@ -690,7 +690,7 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier.weight(1f)
                                         ) {
                                             // تجميع 28 أكتوبر 2026 (بأمر الدكتور): كل فكرة واحدة تحت
-                                            // تبويب واحد — القلب والإصغاء، المختبرات والحاسبات،
+                                            // تبويب واحد — القلب والإصغاء، المختبرات وغازات الدم،
                                             // المراجعة الذكية، والتواصل — بلا حذف أي محتوى.
                                             val drawerItems = listOf(
                                                 "الملف الشخصي",
@@ -714,7 +714,7 @@ class MainActivity : ComponentActivity() {
                                                 "محطات OSCE",
                                                 "القلب والإصغاء",
                                                 "غرفة الطوارئ",
-                                                "المختبرات والحاسبات",
+                                                "المختبرات وغازات الدم",
                                                 "سياسة الخصوصية والشروط",
                                                 "تسجيل الخروج"
                                             )
@@ -746,7 +746,7 @@ class MainActivity : ComponentActivity() {
                                                     "محطات OSCE" -> Icons.Default.MedicalServices
                                                     "القلب والإصغاء" -> Icons.Default.MonitorHeart
                                                     "غرفة الطوارئ" -> Icons.Default.LocalHospital
-                                                    "المختبرات والحاسبات" -> Icons.Default.Science
+                                                    "المختبرات وغازات الدم" -> Icons.Default.Science
                                                     "سياسة الخصوصية والشروط" -> Icons.Default.Policy
                                                     else -> Icons.Default.Logout
                                                 }
