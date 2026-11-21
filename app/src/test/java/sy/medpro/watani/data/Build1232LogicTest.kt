@@ -34,17 +34,11 @@ class Build1232LogicTest {
     // ---------------- Trusted hosts ----------------
 
     @Test
-    fun allThreeUpdateHostsAreTrusted() {
+    fun bothUpdateHostsAreTrusted() {
         assertTrue(AppUpdate.isApkUrlAllowed(AppUpdate.FALLBACK_APK_URL))
         assertTrue(AppUpdate.isApkUrlAllowed(AppUpdate.GITHUB_APK_URL))
-        assertTrue(
-            AppUpdate.isApkUrlAllowed(
-                "https://dl.hdr-market.com/apk/watani-latest.apk"
-            )
-        )
-        assertEquals("dl.hdr-market.com", AppUpdate.CUSTOM_DOMAIN_HOST)
         assertEquals(
-            "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.38/watani-latest.apk",
+            "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.42/watani-latest.apk",
             AppUpdate.GITHUB_APK_URL
         )
     }
@@ -57,6 +51,9 @@ class Build1232LogicTest {
                 "http://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.31/watani-latest.apk"
             )
         )
+        // The custom domain was removed by the doctor's order in
+        // 1.2.42 — it is no longer a trusted update host.
+        assertFalse(AppUpdate.isApkUrlAllowed("https://dl.hdr-market.com/apk/watani-latest.apk"))
         // Foreign and look-alike hosts are refused.
         assertFalse(AppUpdate.isApkUrlAllowed("https://evil.example/apk/watani-latest.apk"))
         assertFalse(AppUpdate.isApkUrlAllowed("https://github.com.evil.example/x.apk"))
@@ -102,11 +99,7 @@ class Build1232LogicTest {
             AppUpdate.candidateUrls(AppUpdate.GITHUB_APK_URL)
         )
         assertEquals(
-            listOf(
-                "https://dl.hdr-market.com/apk/watani-latest.apk",
-                AppUpdate.FALLBACK_APK_URL,
-                AppUpdate.GITHUB_APK_URL
-            ),
+            listOf(AppUpdate.FALLBACK_APK_URL, AppUpdate.GITHUB_APK_URL),
             AppUpdate.candidateUrls("https://dl.hdr-market.com/apk/watani-latest.apk")
         )
     }

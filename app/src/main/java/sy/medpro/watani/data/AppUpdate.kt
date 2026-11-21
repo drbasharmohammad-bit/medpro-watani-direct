@@ -77,18 +77,11 @@ object AppUpdate {
      * the app repository — a different network path than the
      * content host, for networks where *.pages.dev is throttled). */
     const val GITHUB_APK_URL =
-        "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.38/watani-latest.apk"
-
-    /** Custom domain attached to the same content project
-     * (dl.hdr-market.com). Trusted since 1.2.32 so it can be
-     * adopted later by a config value alone, with no new build,
-     * once its DNS record exists; it is NOT auto-tried until then. */
-    const val CUSTOM_DOMAIN_HOST = "dl.hdr-market.com"
+        "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.42/watani-latest.apk"
 
     private val ALLOWED_HOSTS = setOf(
         "watani-content.pages.dev",
-        "github.com",
-        CUSTOM_DOMAIN_HOST
+        "github.com"
     )
 
     private const val UPDATE_DIR = "updates"
