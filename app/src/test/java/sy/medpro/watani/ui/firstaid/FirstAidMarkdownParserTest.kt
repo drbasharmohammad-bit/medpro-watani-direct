@@ -126,8 +126,23 @@ class FirstAidMarkdownParserTest {
         val blocks = FirstAidMarkdownParser.parse(md)
         val rendered = texts(blocks).joinToString("\n")
         for (line in md.lines().map { it.trim() }.filter { it.isNotEmpty() && it != "---" }) {
-            val probe = line.trim('#', '>', ' ', '*', '`')
-                .replace(Regex("^[-|]\\s*"), "")
+            // Audit classification (21 Nov 2026, CODE-001): this test
+            // was the full suite's ONLY failure, and the failure was
+            // in the PROBE, not the parser. The old probe trimmed
+            // marker characters only from the line's edges — a list
+            // line starting with "- " kept its inline "**" markers,
+            // so the probe searched the rendered text for literal
+            // markdown syntax the parser correctly consumes. The
+            // line's TEXT was always fully represented (list-item
+            // spans carry «القسم:» + «الطب الباطني»). The probe now
+            // strips block markers at the head and inline markers
+            // everywhere before probing — the contract under test is
+            // unchanged: every line's text must appear in the blocks.
+            val probe = line
+                .replace(Regex("^\\s*([#>|\\-]\\s*)+"), "")
+                .replace("*", "")
+                .replace("`", "")
+                .trim()
             if (line.startsWith("|")) {
                 for (cell in line.trim('|').split('|').map { it.trim() }) {
                     if (cell.isNotEmpty()) assertTrue("missing cell: $cell", rendered.contains(cell))

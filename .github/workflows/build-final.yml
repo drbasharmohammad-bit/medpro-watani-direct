@@ -109,7 +109,14 @@ jobs:
           keytool -list -v -keystore debug.keystore -storetype "$WATANI_KEYSTORE_TYPE" -storepass "$WATANI_KEYSTORE_PASSWORD" -alias "$WATANI_KEY_ALIAS" \
             | grep -E "SHA1:" | tee debug-sha1.txt
 
-      - name: Unit tests (unified fixes regressions)
+      # Audit change (21 Nov 2026, CODE-001): the gate used to run
+      # only 25 NAMED test classes out of 31 — the excluded ones
+      # included the hardening suites, and the full suite carried a
+      # failure nobody saw (a faulty probe in
+      # FirstAidMarkdownParserTest, classified and fixed in the same
+      # audit). The gate now runs the FULL unit-test suite; a red
+      # test anywhere blocks the build.
+      - name: Unit tests (full suite)
         env:
           WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
           WATANI_KEY_ALIAS: watani
@@ -120,7 +127,7 @@ jobs:
           # upstream 504s (GitHub Releases / Gradle CDN); Gradle caches
           # progress between attempts, so a retry usually completes.
           for attempt in 1 2 3; do
-            if gradle :app:testDebugUnitTest --tests "sy.medpro.watani.data.UnifiedFixesTest" --tests "sy.medpro.watani.data.BehavioralFixesTest" --tests "sy.medpro.watani.data.RestoreResponseTest" --tests "sy.medpro.watani.ui.ecg.EcgMathTest" --tests "sy.medpro.watani.data.SectionRefreshDecisionTest" --tests "sy.medpro.watani.data.ProfileNameStoreTest" --tests "sy.medpro.watani.ui.ecg.EcgMethodLessonsTest" --tests "sy.medpro.watani.ui.security.RootBlockDecisionTest" --tests "sy.medpro.watani.data.ConceptsLogicTest" --tests "sy.medpro.watani.data.ProgressSyncGateTest" --tests "sy.medpro.watani.data.Features1223LogicTest" --tests "sy.medpro.watani.data.DayGoalsLogicTest" --tests "sy.medpro.watani.data.WidgetV3LogicTest" --tests "sy.medpro.watani.data.FullDawraLogicTest" --tests "sy.medpro.watani.data.PerfFix1227LogicTest" --tests "sy.medpro.watani.data.Build1228LogicTest" --tests "sy.medpro.watani.data.Build1229LogicTest" --tests "sy.medpro.watani.data.Build1230LogicTest" --tests "sy.medpro.watani.data.Build1231LogicTest" --tests "sy.medpro.watani.data.Build1232LogicTest" --tests "sy.medpro.watani.data.DawraSessionFileLogicTest" --tests "sy.medpro.watani.data.PdfTextEngineTest" --tests "sy.medpro.watani.ui.firstaid.FirstAidAccessRulesTest" --tests "sy.medpro.watani.ui.firstaid.FirstAidProgressRulesTest" --tests "sy.medpro.watani.ui.library.ReaderMarkingPersistenceTest" :app:jacocoTestReport --console=plain --max-workers=2; then break; fi
+            if gradle :app:testDebugUnitTest :app:jacocoTestReport --console=plain --max-workers=2; then break; fi
             if [ "$attempt" = "3" ]; then exit 1; fi
             echo "Gradle attempt $attempt failed; retrying in 30s..."; sleep 30
           done
