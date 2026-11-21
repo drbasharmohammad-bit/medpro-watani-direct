@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.ui.theme.GoldAccentDark
 import sy.medpro.watani.ui.theme.MaroonPrimary
+import sy.medpro.watani.ui.theme.RoseOutline
 
 /**
  * One shared explanation section shown after a question is answered.
@@ -83,7 +84,7 @@ fun ExplanationSection(content: ExplanationContent?, modifier: Modifier = Modifi
             .fillMaxWidth()
             .padding(top = 12.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-            .border(BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.25f)), RoundedCornerShape(12.dp))
+            .border(BorderStroke(1.dp, RoseOutline), RoundedCornerShape(12.dp))
             .padding(14.dp)
     ) {
         // Medium-confidence badge - visible, never silent.

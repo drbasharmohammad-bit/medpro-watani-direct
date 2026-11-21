@@ -1,6 +1,5 @@
 package sy.medpro.watani.ui.home
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -22,8 +21,8 @@ import sy.medpro.watani.data.SupportFavorites
 import sy.medpro.watani.data.SupportMessages
 import sy.medpro.watani.ui.share.shareTipAsImage
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
-import sy.medpro.watani.ui.theme.MaroonPrimary
-import sy.medpro.watani.ui.theme.RoseOutline
+import sy.medpro.watani.ui.library.LibCard
+import sy.medpro.watani.ui.library.LibColors
 import sy.medpro.watani.ui.theme.ThmanyahFontFamily
 
 private const val FILTER_ALL = "الكل"
@@ -65,7 +64,7 @@ fun SupportScreen(onBack: () -> Unit) {
                             onClick = { selectedFilter = option },
                             label = { Text(option, fontSize = 12.sp, fontWeight = FontWeight.Bold) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaroonPrimary,
+                                selectedContainerColor = LibColors.Maroon,
                                 selectedLabelColor = Color.White
                             )
                         )
@@ -85,13 +84,7 @@ fun SupportScreen(onBack: () -> Unit) {
             } else {
                 items(visibleMessages, key = { it.id }) { message ->
                     val isFavorite = favorites.contains(message.id)
-                    Card(
-                        shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, RoseOutline),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    LibCard(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -99,12 +92,12 @@ fun SupportScreen(onBack: () -> Unit) {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Surface(
-                                    color = MaroonPrimary.copy(alpha = 0.1f),
+                                    color = LibColors.GoldTint,
                                     shape = MaterialTheme.shapes.extraSmall
                                 ) {
                                     Text(
                                         text = SupportMessages.categoryTitle(message.categoryId),
-                                        color = MaroonPrimary,
+                                        color = LibColors.Maroon,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -122,7 +115,8 @@ fun SupportScreen(onBack: () -> Unit) {
                                         Icon(
                                             imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                             contentDescription = if (isFavorite) "إزالة من المفضلة" else "إضافة إلى المفضلة",
-                                            tint = if (isFavorite) Color(0xFFB71C1C) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                                            tint = if (isFavorite) LibColors.Maroon else
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                                         )
                                     }
                                 }

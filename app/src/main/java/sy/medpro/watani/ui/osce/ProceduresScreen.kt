@@ -205,7 +205,7 @@ private fun ProceduresList(procedures: List<ProcedureDto>, onOpen: (ProcedureDto
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.2f)),
+                    border = BorderStroke(1.dp, RoseOutline),
                     modifier = Modifier.fillMaxWidth().clickable { onOpen(proc) }
                 ) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -410,7 +410,7 @@ private fun ProcedureOrderingTrainer(procedure: ProcedureDto, onDone: () -> Unit
                 Card(
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.08f)),
-                    border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.3f)),
+                    border = BorderStroke(1.dp, RoseOutline),
                     modifier = Modifier.fillMaxWidth().clickable {
                         placed = placed - step
                         pool = pool + step

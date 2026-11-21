@@ -13,7 +13,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -23,7 +22,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -33,7 +31,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -645,6 +642,11 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // brightness live behind these, never as stacked sliders.
             var showZoomPopup by remember { mutableStateOf(false) }
             var showBrightnessPopup by remember { mutableStateOf(false) }
+            // Premium chrome: the secondary tools (bookmark, display
+            // mode, recents, outline, fullscreen) live ONLY behind
+            // the top bar's single overflow button — this panel is
+            // composed on demand and never as permanent chrome.
+            var showToolsPanel by remember { mutableStateOf(false) }
 
             /** THE exit from text-highlight mode (1.2.38): every exit
              * path — the panel's «إنهاء ✓», the top-bar toggle,
@@ -1147,11 +1149,21 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 // shown and 100% in the default auto-hidden reading
                 // state (1.2.37: ~52% with bars shown, ~33% with a
                 // marking panel open — the doctor's screenshot).
+                // Premium chrome (this build): the top bar is now a
+                // FLOATING semi-transparent strip over the page (the
+                // pager always laid out full-size behind it) holding
+                // only back, title, the highlight pen, search and ONE
+                // overflow button; every secondary tool (bookmark
+                // toggle + list, display-mode cycle, recents,
+                // outline, fullscreen) moved into the on-demand
+                // tools panel behind that button — no other
+                // permanent chrome was added, and no reader logic
+                // (render, text highlight, save) changed.
                 Row(
                     Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
-                        .background(MaroonPrimary)
+                        .background(MaroonPrimary.copy(alpha = 0.88f))
                         .height(48.dp)
                         .padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -1164,31 +1176,16 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         modifier = Modifier.weight(1f),
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
-                    // Bookmark: tap toggles this page's bookmark
-                    // (unchanged); long-press opens the bookmarks
-                    // list panel — which shipped unreachable in
-                    // 1.2.37 (nothing ever set showBookmarks = true).
-                    Box(
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .combinedClickable(
-                                onClick = { toggleBookmark(currentPage) },
-                                onLongClick = {
-                                    exitTextHighlightMode()
-                                    showBookmarks = true
-                                }
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Bookmark, null, tint = if (currentPage in bookmarks) GoldAccent else Color.White, modifier = Modifier.size(20.dp))
-                    }
+                    // Bookmark toggle + bookmarks list moved into
+                    // the tools panel below (Premium chrome) — the
+                    // toggleBookmark/showBookmarks logic is unchanged.
                     // The pen: the reader's ONLY marking system —
                     // yellow text highlighting (the freehand mode is
                     // deleted, 1.2.38). Shown only with a text index.
                     if (textIndex != null) {
                         IconButton(
                             onClick = {
+                                showToolsPanel = false
                                 if (textHighlightMode) exitTextHighlightMode()
                                 else textHighlightMode = true
                             },
@@ -1199,6 +1196,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     }
                     IconButton(
                         onClick = {
+                            showToolsPanel = false
                             if (!showSearch) exitTextHighlightMode()
                             showSearch = !showSearch
                         },
@@ -1206,45 +1204,167 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     ) {
                         Icon(Icons.Default.Search, null, tint = if (showSearch) GoldAccent else Color.White, modifier = Modifier.size(20.dp))
                     }
-                    // One button cycles the three display modes
-                    // (normal / warm paper / night) — display modes
-                    // are untouched by this build, per the doctor's
-                    // correction to item و.
-                    IconButton(onClick = { cycleDisplayMode() }, modifier = Modifier.size(40.dp)) {
+                    // ONE overflow button for every secondary tool
+                    // (Premium chrome): bookmark, display mode,
+                    // recents, outline and fullscreen live in the
+                    // tools panel it toggles — never as permanent
+                    // top-bar icons.
+                    IconButton(
+                        onClick = { showToolsPanel = !showToolsPanel },
+                        modifier = Modifier.size(40.dp)
+                    ) {
                         Icon(
-                            when (displayMode) {
-                                "WARM" -> Icons.Default.WbSunny
-                                "NIGHT" -> Icons.Default.DarkMode
-                                else -> Icons.Default.LightMode
-                            },
-                            null, tint = if (displayMode == "NORMAL") Color.White else GoldAccent,
+                            Icons.Default.MoreVert, null,
+                            tint = if (showToolsPanel) GoldAccent else Color.White,
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    IconButton(
-                        onClick = { exitTextHighlightMode(); showRecents = true },
-                        modifier = Modifier.size(40.dp)
+                }
+
+                // Secondary tools panel (Premium chrome): composed
+                // ONLY while the overflow button has it open — a
+                // floating card under the top bar that never pushes
+                // the page. Every row calls the exact handler its
+                // old top-bar icon called; state-feedback rows
+                // (bookmark toggle, display cycle) keep the panel
+                // open, navigation rows close it first.
+                if (showToolsPanel) {
+                    Column(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 52.dp, end = 8.dp)
+                            .width(248.dp)
+                            .background(
+                                MaroonPrimary.copy(alpha = 0.97f),
+                                RoundedCornerShape(14.dp)
+                            )
+                            .padding(vertical = 6.dp)
                     ) {
-                        Icon(Icons.Default.History, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    }
-                    if (!textIndex?.outline.isNullOrEmpty()) {
-                        IconButton(
-                            onClick = { exitTextHighlightMode(); showOutline = true },
-                            modifier = Modifier.size(40.dp)
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { toggleBookmark(currentPage) }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.List, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(
+                                Icons.Default.Bookmark, null,
+                                tint = if (currentPage in bookmarks) GoldAccent else Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                if (currentPage in bookmarks) "إزالة إشارة هذه الصفحة"
+                                else "إشارة لهذه الصفحة",
+                                color = Color.White, fontSize = 13.sp
+                            )
                         }
-                    }
-                    IconButton(
-                        onClick = {
-                            exitTextHighlightMode()
-                            isFullscreen = true
-                            setSystemBarsVisible(false)
-                            showBars = false
-                        },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(Icons.Default.Fullscreen, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showToolsPanel = false
+                                    exitTextHighlightMode()
+                                    showBookmarks = true
+                                }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.MenuBook, null, tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text("قائمة الفهارس", color = Color.White, fontSize = 13.sp)
+                        }
+                        // The three display modes stay untouched —
+                        // this row is the old top-bar cycle button,
+                        // moved behind the overflow button.
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { cycleDisplayMode() }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                when (displayMode) {
+                                    "WARM" -> Icons.Default.WbSunny
+                                    "NIGHT" -> Icons.Default.DarkMode
+                                    else -> Icons.Default.LightMode
+                                },
+                                null,
+                                tint = if (displayMode == "NORMAL") Color.White else GoldAccent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                "وضع العرض: " + when (displayMode) {
+                                    "WARM" -> "دافئ"
+                                    "NIGHT" -> "ليلي"
+                                    else -> "عادي"
+                                },
+                                color = Color.White, fontSize = 13.sp
+                            )
+                        }
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showToolsPanel = false
+                                    exitTextHighlightMode()
+                                    showRecents = true
+                                }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.History, null, tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text("آخر الكتيّبات المفتوحة", color = Color.White, fontSize = 13.sp)
+                        }
+                        if (!textIndex?.outline.isNullOrEmpty()) {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showToolsPanel = false
+                                        exitTextHighlightMode()
+                                        showOutline = true
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.List, null, tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text("فهرس الكتاب", color = Color.White, fontSize = 13.sp)
+                            }
+                        }
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showToolsPanel = false
+                                    exitTextHighlightMode()
+                                    isFullscreen = true
+                                    setSystemBarsVisible(false)
+                                    showBars = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Fullscreen, null, tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text("ملء الشاشة", color = Color.White, fontSize = 13.sp)
+                        }
                     }
                 }
 
@@ -1496,6 +1616,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         Modifier
                             .fillMaxWidth(0.9f)
                             .align(Alignment.TopCenter)
+                            .padding(top = 52.dp)
                             .background(MaroonPrimary, RoundedCornerShape(8.dp))
                             .padding(12.dp)
                     ) {

@@ -615,6 +615,13 @@ internal object WidgetPhotos {
  * عبر مسار قصّ الزاوية الدائري (1.2.27 — قبلها كانت الطبقة بلا
  * أي قصّ فتخرج زواياها المربّعة عن قوس الزاوية). يُخزّن مؤقتًا
  * لكل (تعتيم، مقاس).
+ *
+ * Premium (this build): فوق ذلك كله تدرّج عنابي سفلي موحّد —
+ * من شفاف عند منتصف الارتفاع إلى عنابي داكن #42091A بألفا
+ * ثابتة [BOTTOM_GRADIENT_ALPHA] عند القاع، بدرجة واحدة لا
+ * يحرّكها منزلق الطالب ولا مقاس الويدجت (تُحسب من النسبة
+ * النسبية للارتفاع)، فيثبت تباين النص الذهبي/العاجي فوق أي
+ * صورة مهما تفاوتت إضاءتها وبكل الأحجام.
  */
 internal object WidgetOverlay {
 
@@ -624,6 +631,15 @@ internal object WidgetOverlay {
     private const val TINT_R = 0x5C
     private const val TINT_G = 0x12
     private const val TINT_B = 0x20
+
+    // Unified bottom maroon gradient (Premium): deep maroon
+    // #42091A, transparent above the vertical midpoint, reaching
+    // one fixed alpha at the very bottom for every widget size.
+    private const val DEEP_R = 0x42
+    private const val DEEP_G = 0x09
+    private const val DEEP_B = 0x1A
+    private const val GRADIENT_START = 0.5f
+    private const val BOTTOM_GRADIENT_ALPHA = 0.88f
 
     private data class Key(val dim: Int, val widthPx: Int, val heightPx: Int)
 
@@ -653,6 +669,19 @@ internal object WidgetOverlay {
                 mid + (bottom - mid) * ((t - 0.5f) * 2f)
             }
             paint.color = Color.argb((alpha * 255).toInt(), DARK_R, DARK_G, DARK_B)
+            canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, paint)
+        }
+        // Unified bottom maroon gradient (Premium): a second pass
+        // over the lower half only — transparent at the midpoint,
+        // one fixed deep-maroon alpha at the bottom edge, purely a
+        // function of the relative height so every size and every
+        // landmark photo gets the exact same grade.
+        for (y in 0 until heightPx) {
+            val t = y / (heightPx - 1).coerceAtLeast(1).toFloat()
+            if (t <= GRADIENT_START) continue
+            val local = (t - GRADIENT_START) / (1f - GRADIENT_START)
+            val alpha = BOTTOM_GRADIENT_ALPHA * local
+            paint.color = Color.argb((alpha * 255).toInt(), DEEP_R, DEEP_G, DEEP_B)
             canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, paint)
         }
         cached = bmp

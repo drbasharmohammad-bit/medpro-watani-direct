@@ -3,7 +3,6 @@ package sy.medpro.watani.ui.home
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,9 +27,13 @@ import sy.medpro.watani.data.isSectionUpToDate
 import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.cases.CasesScreen
-import sy.medpro.watani.ui.theme.GoldAccent
+import androidx.compose.ui.draw.clip
+import sy.medpro.watani.ui.library.LibCard
+import sy.medpro.watani.ui.library.LibColors
+import sy.medpro.watani.ui.library.LibGoldBar
+import sy.medpro.watani.ui.library.libInk
+import sy.medpro.watani.ui.library.libMuted
 import sy.medpro.watani.ui.theme.MaroonPrimary
-import sy.medpro.watani.ui.theme.featuredCardBackground
 import sy.medpro.watani.ui.viewmodel.AppTab
 
 val universitiesMap = mapOf(
@@ -112,7 +115,7 @@ fun HomeScreen(
             PrimaryScrollableTabRow(
                 selectedTabIndex = selectedBankSection.ordinal,
                 containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
+                contentColor = LibColors.Maroon,
                 edgePadding = 12.dp
             ) {
                 BankSection.entries.forEach { section ->
@@ -300,13 +303,10 @@ fun SectionCard(
     onDownloadClick: () -> Unit,
     onOpenClick: () -> Unit
 ) {
-    Card(
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = featuredCardBackground()),
-        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    // Approved identity (models 01/02): clean white LibCard, no
+    // coloured border; the meta line shows the question count and
+    // the download state only — the raw size line is gone for good.
+    LibCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -335,13 +335,17 @@ fun SectionCard(
                         text = displayName,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = libInk()
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "عدد الأسئلة: ${entry.count ?: 0} | الحجم: ${((entry.size ?: 0) / 1024)} كيلوبايت",
+                        text = "عدد الأسئلة: ${entry.count ?: 0}" + when {
+                            isDownloading -> " • جارٍ التحميل"
+                            isDownloaded -> " • محمّل على جهازك"
+                            else -> " • غير محمّل بعد"
+                        },
                         fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        color = libMuted()
                     )
                 }
 
@@ -350,21 +354,20 @@ fun SectionCard(
                 if (isDownloading) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         if (downloadProgress != null && downloadProgress > 0f) {
-                            LinearProgressIndicator(
-                                progress = { downloadProgress.coerceIn(0f, 1f) },
-                                modifier = Modifier.width(72.dp),
-                                color = MaterialTheme.colorScheme.primary
+                            LibGoldBar(
+                                fraction = downloadProgress.coerceIn(0f, 1f),
+                                modifier = Modifier.width(72.dp)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 "${(downloadProgress * 100).toInt()}%",
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                color = libMuted()
                             )
                         } else {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(36.dp),
-                                color = MaterialTheme.colorScheme.primary,
+                                color = LibColors.Maroon,
                                 strokeWidth = 3.dp
                             )
                         }
@@ -373,7 +376,7 @@ fun SectionCard(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Button(
                             onClick = onOpenClick,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            colors = ButtonDefaults.buttonColors(containerColor = LibColors.Maroon),
                             shape = MaterialTheme.shapes.medium) {
                             Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
@@ -381,10 +384,10 @@ fun SectionCard(
                         }
                     }
                 } else {
-                    OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary),
+                    OutlinedButton(border = BorderStroke(1.dp, LibColors.Maroon),
                         onClick = onDownloadClick,
                         shape = MaterialTheme.shapes.medium,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = LibColors.Maroon)
                     ) {
                         Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
@@ -421,20 +424,25 @@ fun UniversityTabContent(onOpenUniversity: (String, String) -> Unit) {
         }
 
         items(universitiesMap.entries.toList()) { (key, name) ->
-            Card(
-                shape = MaterialTheme.shapes.medium,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenUniversity(key, name) }
+            LibCard(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onOpenUniversity(key, name) }
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(LibColors.GoldTint),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.AccountBalance, contentDescription = null, tint = LibColors.Maroon)
+                    }
                     Spacer(modifier = Modifier.width(16.dp))
-                    Text(text = name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text(text = name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = libInk())
                 }
             }
         }
@@ -537,13 +545,9 @@ fun TopicSelectionScreen(
                     // يظهر إطلاقًا إن غابت الشاردة من الفهرس.
                     if (englishPath != null) {
                         item {
-                            Card(
-                                shape = MaterialTheme.shapes.small,
-                                colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.08f)),
-                                border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.45f)),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onOpenEnglish(englishPath) }
+                            LibCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = { onOpenEnglish(englishPath) }
                             ) {
                                 Row(
                                     modifier = Modifier.padding(16.dp),
@@ -551,14 +555,17 @@ fun TopicSelectionScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text("باللغة الإنجليزية", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                                        Text(
+                                            "باللغة الإنجليزية", fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp, color = LibColors.Maroon
+                                        )
                                         Text(
                                             "نفس أسئلة المادة بالإنجليزية (الشرح يبقى بالعربية)",
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                                         )
                                     }
-                                    Icon(Icons.Default.Language, contentDescription = null, tint = MaroonPrimary)
+                                    Icon(Icons.Default.Language, contentDescription = null, tint = LibColors.Maroon)
                                 }
                             }
                             Spacer(modifier = Modifier.height(4.dp))
@@ -611,13 +618,11 @@ fun TopicSelectionScreen(
                                 null -> ""
                                 else -> y.toString()
                             }
-                            Card(
-                                shape = MaterialTheme.shapes.small,
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            LibCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(min = 52.dp, max = 76.dp)
-                                    .clickable { onSessionClick(session.id ?: sessionName, sessionName) }
+                                    .heightIn(min = 52.dp, max = 76.dp),
+                                onClick = { onSessionClick(session.id ?: sessionName, sessionName) }
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -645,13 +650,11 @@ fun TopicSelectionScreen(
                         }
                     } else {
                     items(topics) { topic ->
-                        Card(
-                            shape = MaterialTheme.shapes.small,
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        LibCard(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = 52.dp, max = 76.dp)
-                                .clickable { onTopicClick(topic.name ?: "") }
+                                .heightIn(min = 52.dp, max = 76.dp),
+                            onClick = { onTopicClick(topic.name ?: "") }
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),

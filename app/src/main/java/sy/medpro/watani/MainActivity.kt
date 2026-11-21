@@ -27,6 +27,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -39,6 +40,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
@@ -79,8 +81,9 @@ import sy.medpro.watani.ui.reference.*
 import sy.medpro.watani.ui.osce.OsceStationsScreen
 import sy.medpro.watani.ui.features.*
 import sy.medpro.watani.ui.theme.GoldAccent
-import sy.medpro.watani.ui.theme.FeaturedContainer
 import androidx.compose.material3.ExperimentalMaterial3Api
+import sy.medpro.watani.ui.theme.MaroonDeep
+import sy.medpro.watani.ui.library.LibColors
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.WataniTheme
 import sy.medpro.watani.ui.viewmodel.AppTab
@@ -642,9 +645,21 @@ class MainActivity : ComponentActivity() {
                                             .background(MaterialTheme.colorScheme.surface)
                                             .padding(16.dp)
                                     ) {
+                                        // Premium drawer header: a maroon
+                                        // gradient band (primary -> deep)
+                                        // carrying the logo + slogan as
+                                        // before — same content, new skin.
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(vertical = 12.dp)
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(
+                                                    Brush.verticalGradient(
+                                                        listOf(MaroonPrimary, MaroonDeep)
+                                                    )
+                                                )
+                                                .padding(horizontal = 12.dp, vertical = 12.dp)
                                         ) {
                                             // شعار المنصة الرسمي مكان أيقونة الشنطة
                                             // (أمر الدكتور، بناء 1.2.17): أيقونة
@@ -677,7 +692,7 @@ class MainActivity : ComponentActivity() {
                                                 Icon(
                                                     Icons.Default.MedicalServices,
                                                     contentDescription = null,
-                                                    tint = MaroonPrimary,
+                                                    tint = GoldAccent,
                                                     modifier = Modifier.size(36.dp)
                                                 )
                                             }
@@ -687,12 +702,12 @@ class MainActivity : ComponentActivity() {
                                                     "Med Pro - وطني",
                                                     fontWeight = FontWeight.Bold,
                                                     fontSize = 18.sp,
-                                                    color = MaroonPrimary
+                                                    color = Color.White
                                                 )
                                                 Text(
                                                     "نجاحك في الوطني يبدأ من هنا",
                                                     fontSize = 11.sp,
-                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                                    color = GoldAccent
                                                 )
                                             }
                                         }
@@ -704,33 +719,60 @@ class MainActivity : ComponentActivity() {
                                             // تجميع 28 أكتوبر 2026 (بأمر الدكتور): كل فكرة واحدة تحت
                                             // تبويب واحد — القلب والإصغاء، المختبرات وغازات الدم،
                                             // المراجعة الذكية، والتواصل — بلا حذف أي محتوى.
-                                            val drawerItems = listOf(
-                                                "الملف الشخصي",
-                                                "ربط التليجرام",
-                                                "الاشتراك وتفعيل الحساب",
-                                                "المراجعة الذكية Anki",
-                                                "دليل الدراسة",
-                                                "سجل أخطائي والاختبارات",
-                                                "المريض الافتراضي",
-                                                "نقاط الضعف",
-                                                "مؤقت التركيز",
-                                                "الإنجازات والأوسمة",
-                                                "البحث الشامل",
-                                                "المفضلة",
-                                                "ملاحظاتي",
-                                                "سجلّ حالاتي",
-                                                "الإشعارات والتذكير",
-                                                "إعدادات الويدجت",
-                                                "الوضع الليلي",
-                                                "التواصل",
-                                                "محطات OSCE",
-                                                "القلب والإصغاء",
-                                                "غرفة الطوارئ",
-                                                "المختبرات وغازات الدم",
-                                                "سياسة الخصوصية والشروط",
-                                                "تسجيل الخروج"
+                                            // Premium grouping: the SAME 24
+                                            // items with the SAME titles and
+                                            // destinations, presented under
+                                            // small gold group headers
+                                            // (study / tools / account &
+                                            // support) instead of one flat
+                                            // list. No item added, removed,
+                                            // renamed or re-routed.
+                                            val drawerGroups = listOf(
+                                                "الدراسة" to listOf(
+                                                    "المراجعة الذكية Anki",
+                                                    "دليل الدراسة",
+                                                    "سجل أخطائي والاختبارات",
+                                                    "المريض الافتراضي",
+                                                    "نقاط الضعف",
+                                                    "مؤقت التركيز",
+                                                    "الإنجازات والأوسمة",
+                                                    "المفضلة",
+                                                    "ملاحظاتي",
+                                                    "سجلّ حالاتي",
+                                                    "محطات OSCE",
+                                                    "القلب والإصغاء",
+                                                    "غرفة الطوارئ",
+                                                    "المختبرات وغازات الدم"
+                                                ),
+                                                "الأدوات" to listOf(
+                                                    "البحث الشامل",
+                                                    "الإشعارات والتذكير",
+                                                    "إعدادات الويدجت",
+                                                    "الوضع الليلي"
+                                                ),
+                                                "الحساب والدعم" to listOf(
+                                                    "الملف الشخصي",
+                                                    "ربط التليجرام",
+                                                    "الاشتراك وتفعيل الحساب",
+                                                    "التواصل",
+                                                    "سياسة الخصوصية والشروط",
+                                                    "تسجيل الخروج"
+                                                )
                                             )
-                                            items(drawerItems) { title ->
+                                            drawerGroups.forEach { (groupTitle, groupItems) ->
+                                                item {
+                                                    Text(
+                                                        groupTitle,
+                                                        color = GoldAccent,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(
+                                                            start = 12.dp, end = 12.dp,
+                                                            top = 14.dp, bottom = 4.dp
+                                                        )
+                                                    )
+                                                }
+                                                items(groupItems) { title ->
                                                 // Direction-2 drawer icons (Nov 2026):
                                                 // every drawer title has a custom
                                                 // drawing; the vector below remains
@@ -824,6 +866,7 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     }
                                                 )
+                                                }
                                             }
                                         }
                                     }
@@ -957,7 +1000,7 @@ class MainActivity : ComponentActivity() {
                                             .navigationBarsPadding(),
                                         shape = MaterialTheme.shapes.extraLarge,
                                         color = MaterialTheme.colorScheme.surface,
-                                        shadowElevation = 8.dp
+                                        shadowElevation = 4.dp
                                     ) {
                                     NavigationBar(
                                         modifier = Modifier.height(72.dp),
@@ -982,7 +1025,10 @@ class MainActivity : ComponentActivity() {
                                             NavigationBarItem(
                                                 selected = selected,
                                                 colors = NavigationBarItemDefaults.colors(
-                                                    indicatorColor = FeaturedContainer
+                                                    // Approved models (01/02): no pill —
+                                                    // selection is the maroon label plus
+                                                    // a gold dot under it (label slot).
+                                                    indicatorColor = Color.Transparent
                                                 ),
                                                 // Bottom-bar fix: tapping a tab while a
                                                 // drawer screen is open used to change
@@ -1001,12 +1047,24 @@ class MainActivity : ComponentActivity() {
                                                     )
                                                 },
                                                 label = {
-                                                    Text(
-                                                        label,
-                                                        color = if (selected) MaroonPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                                        maxLines = 1
-                                                    )
+                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                        Text(
+                                                            label,
+                                                            color = if (selected) LibColors.Maroon else
+                                                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                                            maxLines = 1
+                                                        )
+                                                        if (selected) {
+                                                            Spacer(modifier = Modifier.height(2.dp))
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(5.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(LibColors.Gold)
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             )
                                         }
@@ -1170,6 +1228,7 @@ class MainActivity : ComponentActivity() {
                                                         AppTab.HOME -> {
                                                             HomeDashboardScreen(
                                                                 manifestVersion = uiState.manifestVersion,
+                                                                onOpenSearch = { drawerScreen = "البحث الشامل" },
                                                                 onOpenSupport = { drawerScreen = "الدعم النفسي" },
                                                                 onOpenFocusTimer = { drawerScreen = "مؤقت التركيز" },
                                                                 onOpenReviewDue = { openRestrictedDrawer("المراجعة الذكية Anki") },

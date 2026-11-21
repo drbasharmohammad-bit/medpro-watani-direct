@@ -3,7 +3,6 @@ package sy.medpro.watani.ui.concepts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -220,20 +219,20 @@ fun ConceptsEntryCard(
     onUpdateClick: (() -> Unit)? = null
 ) {
     val subjectsCount = subjectCount
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = MaroonDeep),
-        elevation = CardDefaults.cardElevation(2.dp),
-        shape = RoundedCornerShape(16.dp)
+    // Items 4+5 migration: LibCard surface (white, one soft shadow,
+    // no border) — foreground follows the library language (maroon
+    // heading, muted body, gold accents) instead of white-on-maroon.
+    sy.medpro.watani.ui.library.LibCard(
+        modifier = Modifier.fillMaxWidth(),
+        radius = 20.dp,
+        onClick = onClick
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.School,
                     contentDescription = null,
-                    tint = GoldAccent,
+                    tint = sy.medpro.watani.ui.library.LibColors.Gold,
                     modifier = Modifier.size(30.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -242,20 +241,20 @@ fun ConceptsEntryCard(
                         "ادرس مع ميد برو",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
-                        color = Color.White
+                        color = sy.medpro.watani.ui.library.libHeading()
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         "شرح المفاهيم الأهم في الدورات — $unitCount موضوعًا في $subjectsCount مادة، مرتّبة بأسئلة الوطني أولًا",
                         fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.85f),
+                        color = sy.medpro.watani.ui.library.libMuted(),
                         lineHeight = 17.sp
                     )
                 }
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = null,
-                    tint = GoldAccent,
+                    tint = sy.medpro.watani.ui.library.LibColors.Gold,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -265,7 +264,7 @@ fun ConceptsEntryCard(
                     Icon(
                         Icons.Default.NewReleases,
                         contentDescription = null,
-                        tint = GoldAccent,
+                        tint = sy.medpro.watani.ui.library.LibColors.Gold,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -276,7 +275,7 @@ fun ConceptsEntryCard(
                             "توجد إضافة جديدة للمحتوى",
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = sy.medpro.watani.ui.library.libHeading(),
                         modifier = Modifier.weight(1f)
                     )
                     Button(
@@ -319,18 +318,17 @@ fun ConceptsDownloadCard(
     failed: Boolean,
     onDownloadClick: () -> Unit
 ) {
-    Card(
+    // Items 4+5 migration: LibCard surface, library foreground.
+    sy.medpro.watani.ui.library.LibCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaroonDeep),
-        elevation = CardDefaults.cardElevation(2.dp),
-        shape = RoundedCornerShape(16.dp)
+        radius = 20.dp
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.School,
                     contentDescription = null,
-                    tint = GoldAccent,
+                    tint = sy.medpro.watani.ui.library.LibColors.Gold,
                     modifier = Modifier.size(30.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -339,13 +337,13 @@ fun ConceptsDownloadCard(
                         "ادرس مع ميد برو",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
-                        color = Color.White
+                        color = sy.medpro.watani.ui.library.libHeading()
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         "شرح المفاهيم الأهم في الدورات — $serverCount موضوعًا. حمّلها مرة واحدة وادرسها بعدها بلا إنترنت.",
                         fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.85f),
+                        color = sy.medpro.watani.ui.library.libMuted(),
                         lineHeight = 17.sp
                     )
                 }
@@ -378,7 +376,7 @@ fun ConceptsDownloadCard(
                 Text(
                     "تعذّر التحميل — تحقق من الاتصال وحاول مجددًا.",
                     fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.85f)
+                    color = sy.medpro.watani.ui.library.libMuted()
                 )
             }
         }
@@ -398,18 +396,17 @@ fun ConceptsDownloadCard(
 fun ConceptsUnverifiedCard(
     onRetryClick: () -> Unit
 ) {
-    Card(
+    // Items 4+5 migration: LibCard surface, library foreground.
+    sy.medpro.watani.ui.library.LibCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaroonDeep),
-        elevation = CardDefaults.cardElevation(2.dp),
-        shape = RoundedCornerShape(16.dp)
+        radius = 20.dp
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Default.School,
                     contentDescription = null,
-                    tint = GoldAccent,
+                    tint = sy.medpro.watani.ui.library.LibColors.Gold,
                     modifier = Modifier.size(30.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -418,13 +415,13 @@ fun ConceptsUnverifiedCard(
                         "ادرس مع ميد برو",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
-                        color = Color.White
+                        color = sy.medpro.watani.ui.library.libHeading()
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         "شرح المفاهيم الأهم في الدورات — تعذّر التحقق من توفر المواضيع حاليًا. تحقق من الاتصال وأعد المحاولة.",
                         fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.85f),
+                        color = sy.medpro.watani.ui.library.libMuted(),
                         lineHeight = 17.sp
                     )
                 }
@@ -783,22 +780,22 @@ private fun ConceptUnitContent(
     ) {
         // Header: subject + counts.
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaroonDeep),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
+            // Items 4+5 migration: LibCard surface, library foreground.
+            sy.medpro.watani.ui.library.LibCard(
+                modifier = Modifier.fillMaxWidth(),
+                radius = 20.dp
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         unit.subject ?: "",
-                        color = GoldAccent,
+                        color = sy.medpro.watani.ui.library.LibColors.GoldText,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         unit.topic ?: "",
-                        color = Color.White,
+                        color = sy.medpro.watani.ui.library.libHeading(),
                         fontWeight = FontWeight.Bold,
                         fontSize = 19.sp
                     )
@@ -811,7 +808,7 @@ private fun ConceptUnitContent(
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             meta.joinToString(" • "),
-                            color = Color.White.copy(alpha = 0.85f),
+                            color = sy.medpro.watani.ui.library.libMuted(),
                             fontSize = 12.sp
                         )
                     }
@@ -923,16 +920,16 @@ private fun ConceptUnitContent(
         if (mnemonic != null && (!mnemonic.body.isNullOrBlank() || !mnemonic.hook.isNullOrBlank())) {
             item { ConceptBlockTitle("حيلة الذاكرة", Icons.Default.Lightbulb) }
             item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaroonDeep),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
+                // Items 4+5 migration: LibCard surface, library foreground.
+                sy.medpro.watani.ui.library.LibCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    radius = 20.dp
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         if (!mnemonic.body.isNullOrBlank()) {
                             Text(
                                 mnemonic.body,
-                                color = Color.White.copy(alpha = 0.92f),
+                                color = sy.medpro.watani.ui.library.libInk(),
                                 fontSize = 14.sp,
                                 lineHeight = 22.sp
                             )
@@ -953,13 +950,13 @@ private fun ConceptUnitContent(
                                     Icon(
                                         Icons.Default.Lightbulb,
                                         contentDescription = null,
-                                        tint = GoldAccent,
+                                        tint = sy.medpro.watani.ui.library.LibColors.GoldText,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         mnemonic.hook,
-                                        color = GoldAccent,
+                                        color = sy.medpro.watani.ui.library.LibColors.GoldText,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 15.sp,
                                         lineHeight = 22.sp
@@ -998,11 +995,13 @@ private fun ConceptSelfTestCard(
     // so the whole card reset on return).
     var revealed by rememberSaveable(test.qid ?: "", test.text ?: "") { mutableStateOf(false) }
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth()
+    // Items 4+5 migration: LibCard surface (white, soft shadow, no
+    // border). Option rows keep a thin functional line border —
+    // LibColors.Line normally, the semantic green only once the
+    // correct answer is revealed.
+    sy.medpro.watani.ui.library.LibCard(
+        modifier = Modifier.fillMaxWidth(),
+        radius = 20.dp
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             if (!test.bank.isNullOrBlank()) {
@@ -1034,7 +1033,7 @@ private fun ConceptSelfTestCard(
                     border = BorderStroke(
                         1.dp,
                         if (isCorrect) SuccessGreen
-                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        else sy.medpro.watani.ui.library.LibColors.Line
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1066,7 +1065,7 @@ private fun ConceptSelfTestCard(
                     onClick = { revealed = true },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, MaroonPrimary),
+                    border = BorderStroke(1.dp, sy.medpro.watani.ui.library.LibColors.Line),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaroonPrimary)
                 ) {
                     Text("إظهار الجواب", fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -1110,7 +1109,7 @@ private fun ConceptDiffTable(table: ConceptDiffTableDto) {
     val scrollState = rememberScrollState()
     Surface(
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, sy.medpro.watani.ui.library.LibColors.Line),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.horizontalScroll(scrollState)) {

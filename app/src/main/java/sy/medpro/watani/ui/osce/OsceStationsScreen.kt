@@ -239,7 +239,7 @@ fun OsceStationsScreen(onBack: () -> Unit) {
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                                border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.2f)),
+                                border = BorderStroke(1.dp, RoseOutline),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { selectedStation = station }

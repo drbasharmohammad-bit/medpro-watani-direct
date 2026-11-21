@@ -22,12 +22,15 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.ClinicalCaseDto
 import sy.medpro.watani.data.WataniRepository
+import sy.medpro.watani.data.WorkerActivationApi
+import sy.medpro.watani.ui.activation.ActivationPromptDialog
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.icons.SubjectIcon
 import sy.medpro.watani.ui.icons.subjectIconRes
 import sy.medpro.watani.ui.theme.GoldAccent
 import sy.medpro.watani.ui.theme.GoldAccentDark
 import sy.medpro.watani.ui.theme.MaroonPrimary
+import sy.medpro.watani.ui.theme.RoseOutline
 
 /**
  * الحالات الألمانية — its OWN section for `v1/cases_de.json` (436
@@ -49,6 +52,31 @@ fun GermanCasesScreen(onBack: () -> Unit) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedCase by remember { mutableStateOf<ClinicalCaseDto?>(null) }
     var searchQuery by remember { mutableStateOf("") }
+
+    // ---- Unified activation gate (same pattern as FirstAidSectionScreen) ----
+    // The ONLY entitlement check is WorkerActivationApi.isActivated —
+    // the app's single unified activation state (stored token +
+    // expiry, no network), shared with CasesScreen and First Aid.
+    // The German list is ONE family: the first 10 cases in display
+    // order are free, from the 11th on activation is required
+    // (CaseAccessRules in CasesScreen.kt).
+    var activated by remember { mutableStateOf(WorkerActivationApi.isActivated(context)) }
+    var showActivation by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedCase) {
+        // Re-read on entry and on return from the player.
+        if (selectedCase == null) {
+            activated = WorkerActivationApi.isActivated(context)
+        }
+    }
+    if (showActivation) {
+        ActivationPromptDialog(
+            onDismiss = { showActivation = false },
+            onActivated = {
+                activated = true
+                showActivation = false
+            }
+        )
+    }
 
     suspend fun loadGermanCases() {
         isLoading = true
@@ -134,11 +162,14 @@ fun GermanCasesScreen(onBack: () -> Unit) {
                     }
                 }
                 else -> {
-                    val filtered = cases.filter {
+                    // Ranks on the FULL list (single family: all flags
+                    // false), so search filtering never changes a rank.
+                    val familyRanks = CaseAccessRules.familyRanks(List(cases.size) { false })
+                    val filtered = cases.withIndex().filter { (_, caseItem) ->
                         searchQuery.isBlank() ||
-                            it.title?.contains(searchQuery, ignoreCase = true) == true ||
-                            it.specialty?.contains(searchQuery, ignoreCase = true) == true ||
-                            it.presentation?.contains(searchQuery, ignoreCase = true) == true
+                            caseItem.title?.contains(searchQuery, ignoreCase = true) == true ||
+                            caseItem.specialty?.contains(searchQuery, ignoreCase = true) == true ||
+                            caseItem.presentation?.contains(searchQuery, ignoreCase = true) == true
                     }
                     Column(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -157,15 +188,27 @@ fun GermanCasesScreen(onBack: () -> Unit) {
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                             contentPadding = PaddingValues(bottom = 24.dp)
                         ) {
-                            items(filtered, key = { it.id ?: it.title ?: "" }) { caseItem ->
+                            items(filtered, key = { it.value.id ?: it.value.title ?: "" }) { indexed ->
+                                val caseItem = indexed.value
+                                val rankInFamily = familyRanks.getOrElse(indexed.index) { Int.MAX_VALUE }
+                                val locked = CaseAccessRules.isLockedRank(rankInFamily, activated)
                                 Card(
                                     shape = MaterialTheme.shapes.large,
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                                    border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.2f)),
+                                    border = BorderStroke(1.dp, RoseOutline),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { selectedCase = caseItem }
+                                        .clickable {
+                                            // Fresh read at the click (see CasesScreen).
+                                            val nowActivated = WorkerActivationApi.isActivated(context)
+                                            activated = nowActivated
+                                            if (CaseAccessRules.isFreeRank(rankInFamily, nowActivated)) {
+                                                selectedCase = caseItem
+                                            } else {
+                                                showActivation = true
+                                            }
+                                        }
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp)) {
                                         Row(
@@ -209,12 +252,24 @@ fun GermanCasesScreen(onBack: () -> Unit) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                             Column(modifier = Modifier.fillMaxWidth()) {
-                                                Text(
-                                                    text = caseItem.title ?: "Klinischer Fall",
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 16.sp,
-                                                    color = MaroonPrimary
-                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        text = caseItem.title ?: "Klinischer Fall",
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 16.sp,
+                                                        color = MaroonPrimary,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    if (locked) {
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Icon(
+                                                            imageVector = Icons.Default.Lock,
+                                                            contentDescription = "Nur für aktivierte Konten",
+                                                            tint = GoldAccent,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                }
                                                 Spacer(modifier = Modifier.height(4.dp))
                                                 Text(
                                                     text = caseItem.presentation ?: "",

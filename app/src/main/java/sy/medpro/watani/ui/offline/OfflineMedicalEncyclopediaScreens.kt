@@ -401,7 +401,7 @@ fun EponymsAtlasScreen(onBack: () -> Unit) {
                     Card(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, if (isMastered) SuccessGreen else MaroonPrimary.copy(alpha = 0.2f)),
+                        border = BorderStroke(1.dp, if (isMastered) SuccessGreen else RoseOutline),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -535,7 +535,7 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
                 Card(
                     shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8F6)),
-                    border = BorderStroke(1.5.dp, MaroonPrimary.copy(alpha = 0.45f)),
+                    border = BorderStroke(1.5.dp, RoseOutline),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -907,7 +907,7 @@ fun SmartStudyPlannerScreen(onBack: () -> Unit) {
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, if (isDone) SuccessGreen else MaroonPrimary.copy(alpha = 0.25f)),
+                    border = BorderStroke(1.dp, if (isDone) SuccessGreen else RoseOutline),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {

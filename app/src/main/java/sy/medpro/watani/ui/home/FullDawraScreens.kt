@@ -1,8 +1,6 @@
 package sy.medpro.watani.ui.home
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,9 +27,12 @@ import sy.medpro.watani.data.mergeDawraInfos
 import sy.medpro.watani.data.officialSubjectRank
 import sy.medpro.watani.data.resolveDawraInputs
 import sy.medpro.watani.ui.SlimSubBar
-import sy.medpro.watani.ui.theme.GoldAccent
-import sy.medpro.watani.ui.theme.MaroonPrimary
-import sy.medpro.watani.ui.theme.featuredCardBackground
+import sy.medpro.watani.ui.library.LibCard
+import sy.medpro.watani.ui.library.LibColors
+import sy.medpro.watani.ui.library.libBackground
+import sy.medpro.watani.ui.library.libHeading
+import sy.medpro.watani.ui.library.libMuted
+import sy.medpro.watani.ui.theme.NotoKufiFontFamily
 
 /**
  * «دورة كاملة» (build 1.2.26, doctor's order 16 Nov 2026): the
@@ -41,46 +43,58 @@ import sy.medpro.watani.ui.theme.featuredCardBackground
  * the existing quiz engine — like the real exam.
  */
 
-/** Featured entry card at the top of the وطني subject list. */
+/** Featured entry card at the top of the وطني subject list —
+ * white LibCard of the approved section model (02): ivory letter
+ * tile, title, description, short gold underline. */
 @Composable
 fun FullDawraEntryCard(onClick: () -> Unit) {
-    Card(
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaroonPrimary),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-    ) {
+    LibCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Default.WorkspacePremium,
-                contentDescription = null,
-                tint = GoldAccent,
-                modifier = Modifier.size(34.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(LibColors.GoldTint),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.WorkspacePremium,
+                    contentDescription = null,
+                    tint = LibColors.Maroon,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "دورة كاملة",
+                    fontFamily = NotoKufiFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    color = libHeading()
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     "ادرس دورة كاملة مجمّعة من كل المواد بجلسة واحدة — كالامتحان الحقيقي",
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                    color = libMuted()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .width(34.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(LibColors.Gold)
                 )
             }
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+                tint = LibColors.Chevron,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -115,7 +129,7 @@ fun FullDawraListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(MaterialTheme.colorScheme.background)
+                .background(libBackground())
                 .padding(16.dp)
         ) {
             when {
@@ -140,6 +154,53 @@ fun FullDawraListScreen(
                 else -> {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         item {
+                            // Bank hero of the approved section model
+                            // (02): white card, ivory tile, gold count.
+                            LibCard(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.padding(18.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(62.dp)
+                                            .clip(RoundedCornerShape(18.dp))
+                                            .background(LibColors.GoldTint),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "و",
+                                            fontFamily = NotoKufiFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 26.sp,
+                                            color = LibColors.MaroonDeep
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "بنك الوطني",
+                                            fontFamily = NotoKufiFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 21.sp,
+                                            color = libHeading()
+                                        )
+                                        Text(
+                                            "أسئلة الدورات كاملة… بشروحاتها",
+                                            fontSize = 13.sp,
+                                            color = libMuted()
+                                        )
+                                        Text(
+                                            "${dawrat.sumOf { it.totalQuestions }} سؤالًا",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = LibColors.GoldText
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        item {
                             Text(
                                 "اختر الدورة لدراستها كاملة:",
                                 fontWeight = FontWeight.Bold,
@@ -155,19 +216,30 @@ fun FullDawraListScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                         }
                         items(dawrat) { dawra ->
-                            Card(
-                                shape = MaterialTheme.shapes.small,
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 52.dp, max = 76.dp)
-                                    .clickable { onDawraClick(dawra.name) }
+                            LibCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = { onDawraClick(dawra.name) }
                             ) {
                                 Row(
-                                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(LibColors.GoldTint),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            dawra.name.firstOrNull()?.toString() ?: "د",
+                                            fontFamily = NotoKufiFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 20.sp,
+                                            color = LibColors.MaroonDeep
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             dawra.name,
@@ -177,20 +249,21 @@ fun FullDawraListScreen(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
-                                            when {
+                                            "${dawra.totalQuestions} سؤالًا • " + when {
                                                 dawra.standaloneFile -> "كاملة عندك بملفها المستقل"
                                                 dawra.subjectsPresent > 0 -> "من ${dawra.subjectsPresent} مادة منزّلة"
                                                 else -> "متاحة كملف دورة كامل"
                                             },
                                             fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                            color = libMuted()
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        "(${dawra.totalQuestions} سؤال)",
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = null,
+                                        tint = LibColors.Chevron,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                             }
@@ -271,35 +344,57 @@ fun FullDawraDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(MaterialTheme.colorScheme.background)
+                .background(libBackground())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                Card(
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(containerColor = featuredCardBackground()),
-                    border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "دورة $dawraName — كاملة",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            if (fromStandaloneFile) {
-                                "$totalForDawra سؤالًا من ملف الدورة المستقل عندك"
-                            } else {
-                                "$totalForDawra سؤالًا مجمّعًا من ${effectiveInputs.size} مادة منزّلة عندك"
-                            },
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
+                LibCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(LibColors.GoldTint),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                dawraName.firstOrNull()?.toString() ?: "د",
+                                fontFamily = NotoKufiFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                color = LibColors.MaroonDeep
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "دورة $dawraName — كاملة",
+                                fontFamily = NotoKufiFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                color = libHeading()
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                if (fromStandaloneFile) {
+                                    "من ملف الدورة المستقل عندك"
+                                } else {
+                                    "مجمّعة من ${effectiveInputs.size} مادة منزّلة عندك"
+                                },
+                                fontSize = 13.sp,
+                                color = libMuted()
+                            )
+                            Text(
+                                "$totalForDawra سؤالًا",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = LibColors.GoldText
+                            )
+                        }
                     }
                 }
             }
@@ -308,7 +403,7 @@ fun FullDawraDetailScreen(
                 Button(
                     onClick = onStart,
                     enabled = totalForDawra > 0,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                    colors = ButtonDefaults.buttonColors(containerColor = LibColors.Maroon),
                     shape = MaterialTheme.shapes.medium,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -324,35 +419,25 @@ fun FullDawraDetailScreen(
             // the whole dawra work offline from its own file alone.
             if (fromStandaloneFile) {
                 item {
-                    Card(
-                        shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.08f)),
-                        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.45f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    LibCard(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             "هذه الدورة عندك بملفها المستقل — كاملة وتعمل أوفلاين من ملفها وحده، بلا حاجة لأي مادة أخرى.",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = MaroonPrimary,
+                            color = LibColors.Maroon,
                             modifier = Modifier.padding(16.dp)
                         )
                     }
                 }
             } else if (sessionEntry != null && !sessionDownloaded) {
                 item {
-                    Card(
-                        shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    LibCard(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
                                 "الأسرع: ملف الدورة المستقل",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
-                                color = MaroonPrimary
+                                color = LibColors.Maroon
                             )
                             Text(
                                 "حمّل ملف هذه الدورة كاملًا بضغطة واحدة فتعمل عندك كاملة أوفلاين من ملفها وحده — بدل تحميل مواد البنك كلها.",
@@ -378,18 +463,13 @@ fun FullDawraDetailScreen(
 
             if (!fromStandaloneFile && missingPaths.isNotEmpty()) {
                 item {
-                    Card(
-                        shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.45f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    LibCard(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
                                 "الدورة مجمّعة عندك بـ$totalForDawra سؤالًا — حمّل المواد الناقصة لتكملها:",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
-                                color = MaroonPrimary
+                                color = LibColors.Maroon
                             )
                             Text(
                                 "المواد التالية غير منزّلة على جهازك، وقد تحوي أسئلة إضافية من هذه الدورة.",
@@ -416,17 +496,12 @@ fun FullDawraDetailScreen(
                 }
             } else if (!fromStandaloneFile) {
                 item {
-                    Card(
-                        shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.08f)),
-                        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.45f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    LibCard(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             "كل مواد البنك منزّلة عندك — الدورة مكتملة بـ$totalForDawra سؤالًا.",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = MaroonPrimary,
+                            color = LibColors.Maroon,
                             modifier = Modifier.padding(16.dp)
                         )
                     }
@@ -443,9 +518,7 @@ fun FullDawraDetailScreen(
                     )
                 }
                 items(perSubject) { (subjectName, count) ->
-                    Card(
-                        shape = MaterialTheme.shapes.small,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    LibCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 52.dp, max = 76.dp)

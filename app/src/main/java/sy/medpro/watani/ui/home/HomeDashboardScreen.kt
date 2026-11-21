@@ -1,11 +1,7 @@
 package sy.medpro.watani.ui.home
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -17,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -40,6 +35,15 @@ import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.SupportFavorites
 import sy.medpro.watani.data.SupportMessages
 import sy.medpro.watani.ui.share.shareTipAsImage
+import androidx.compose.ui.draw.shadow
+import sy.medpro.watani.ui.library.LibAppLogo
+import sy.medpro.watani.ui.library.LibCard
+import sy.medpro.watani.ui.library.LibColors
+import sy.medpro.watani.ui.library.LibGoldBar
+import sy.medpro.watani.ui.library.LibIconButton
+import sy.medpro.watani.ui.library.libBackground
+import sy.medpro.watani.ui.library.libHeading
+import sy.medpro.watani.ui.library.libMuted
 import sy.medpro.watani.ui.theme.*
 
 @Composable
@@ -47,10 +51,10 @@ fun HomeDashboardScreen(
     manifestVersion: String?,
     onOpenSupport: () -> Unit = {},
     onOpenFocusTimer: () -> Unit = {},
-    onOpenReviewDue: () -> Unit = {}
+    onOpenReviewDue: () -> Unit = {},
+    onOpenSearch: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    var animateIn by remember { mutableStateOf(false) }
     // بطاقة الدعم: تقديم فهرس الرسالة اليومية بذاكرة الجلسة (يُصفَّر مع
     // إعادة إنشاء الشاشة، والأساس دائمًا فهرس اليوم الحقيقي).
     var supportOffset by remember { mutableStateOf(0) }
@@ -64,60 +68,184 @@ fun HomeDashboardScreen(
         sy.medpro.watani.ui.widget.Widgets.updateAll(context)
         // وبطاقة العدّاد الدائمة على القفل معها (1.2.30).
         sy.medpro.watani.notify.StudyNotifications.refreshCountdownCard(context)
-        animateIn = true
     }
 
     val stats by OfflineStudyVault.statsFlow.collectAsState()
-    // No date anywhere (student, panel, manual) → no fake number: the
-    // ring shows a dash until the student picks his exam date.
-    val hasExamDate = stats.examDateMillis != null || stats.adminExamDateMillis != null || stats.examModeManual
-    val days = stats.examDaysRemaining
+    // Readiness for the hero bar: with no answers yet the bar keeps
+    // its small seed value and the percent label shows a dash.
     val totalAns = stats.totalAnswered
     val totalCor = stats.totalCorrect
     val accuracy = if (totalAns == 0) 0 else (totalCor * 100) / totalAns
     val progressVal = if (totalAns == 0) 0.05f else (totalCor.toFloat() / totalAns.toFloat()).coerceIn(0.05f, 1f)
 
-    val ringProgress by animateFloatAsState(
-        targetValue = if (animateIn) progressVal else 0f,
-        animationSpec = tween(durationMillis = 900),
-        label = "countdownRing"
-    )
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(libBackground())
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        // Student-set offline exam countdown — its own section directly
-        // under the top bar. The student picks the date; it ticks
-        // locally (days / hours / minutes / seconds) with no network.
+        // Slim header of the approved home model (01): logo +
+        // «وطني» + slogan + search button.
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LibAppLogo()
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "وطني",
+                        fontFamily = NotoKufiFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 19.sp,
+                        color = libHeading()
+                    )
+                    Text(
+                        "نجاحك في الوطني يبدأ من هنا",
+                        fontSize = 11.5.sp,
+                        color = libMuted()
+                    )
+                }
+                LibIconButton(
+                    icon = Icons.Default.Search,
+                    contentDescription = "البحث الشامل",
+                    onClick = onOpenSearch
+                )
+            }
+        }
+
+        // Greeting of the model: small warm line, then the big
+        // Kufi heading. The name comes from the same profile store
+        // the gate writes and the profile screen edits.
+        item {
+            val greetingName = sy.medpro.watani.data.ProfileNameStore.resolveName(
+                sy.medpro.watani.data.ProfileNameStore.savedName(
+                    context,
+                    com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                ),
+                com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.displayName
+            )
+            Column {
+                Text(
+                    text = sy.medpro.watani.data.ProfileNameStore.greetingFor(greetingName),
+                    fontSize = 13.sp,
+                    color = libMuted()
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "دراستك اليوم… خطوة أقرب للنجاح",
+                    fontFamily = NotoKufiFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp,
+                    color = libHeading()
+                )
+            }
+        }
+
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(4.dp, RoundedCornerShape(24.dp), clip = false)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(brush = LibColors.MaroonBrush)
+                    .padding(20.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Surface(
+                                color = LibColors.Gold.copy(alpha = 0.22f),
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(
+                                    text = "منصة التحضير السريري المعتمدة",
+                                    color = LibColors.GoldSoft,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "تابع من حيث توقفت",
+                                color = LibColors.GoldSoft,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "جاهزيتك للامتحان الوطني",
+                                fontFamily = NotoKufiFontFamily,
+                                color = Color.White,
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (totalAns == 0) {
+                                    "ابدأ أول جلسة اليوم — خطوة أقرب للنجاح"
+                                } else {
+                                    "أجبت عن $totalAns سؤالًا حتى الآن — واصل التقدّم"
+                                },
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 12.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(LibColors.GoldBrush),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = LibColors.LibColors.MaroonDeep,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LibGoldBar(
+                            fraction = progressVal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = if (totalAns == 0) "—" else "$accuracy%",
+                            color = LibColors.GoldSoft,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+            }
+        }
+
         item {
             ExamCountdownCard()
         }
 
-        // بطاقة «أهدافي اليوم» (1.2.24): هدف الأسئلة برقم يختاره
-        // الطالب بنفسه + أهدافه النصية لليوم، وسطر تركيز اليوم من
-        // محرك المؤقت نفسه (لا قسم مكرر). تنعكس على الويدجت مباشرة.
+
         item {
             MyDayGoalsCard()
         }
 
-        // بطاقة الدعم النفسي — أول عنصر بعد عدّاد الامتحان: رسالة اليوم
-        // من بنك الدعم v2 بتدوير epochDay، مع تقديم يدوي وقلب مفضلة.
+
         item {
             val supportMessage = SupportMessages.all[
                 (SupportMessages.dailyIndex() + supportOffset) % SupportMessages.all.size
             ]
             val supportIsFavorite = supportFavorites.contains(supportMessage.id)
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, RoseOutline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth().clickable { onOpenSupport() }
+            LibCard(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onOpenSupport() }
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -126,12 +254,12 @@ fun HomeDashboardScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            color = MaroonPrimary.copy(alpha = 0.1f),
+                            color = LibColors.GoldTint,
                             shape = MaterialTheme.shapes.small
                         ) {
                             Text(
                                 text = SupportMessages.categoryTitle(supportMessage.categoryId),
-                                color = MaroonPrimary,
+                                color = LibColors.Maroon,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -139,16 +267,20 @@ fun HomeDashboardScreen(
                         }
                         Row {
                             IconButton(onClick = { shareTipAsImage(context, supportMessage) }) {
-                                Icon(Icons.Default.Share, contentDescription = "مشاركة الرسالة كصورة", tint = MaroonPrimary)
+                                Icon(
+                                    Icons.Default.Share,
+                                    contentDescription = "مشاركة الرسالة كصورة",
+                                    tint = LibColors.Maroon
+                                )
                             }
                             IconButton(onClick = { supportOffset++ }) {
-                                Icon(Icons.Default.Refresh, contentDescription = "رسالة أخرى", tint = MaroonPrimary)
+                                Icon(Icons.Default.Refresh, contentDescription = "رسالة أخرى", tint = LibColors.Maroon)
                             }
                             IconButton(onClick = { SupportFavorites.toggle(context, supportMessage.id) }) {
                                 Icon(
                                     imageVector = if (supportIsFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                     contentDescription = if (supportIsFavorite) "إزالة من المفضلة" else "إضافة إلى المفضلة",
-                                    tint = if (supportIsFavorite) Color(0xFFB71C1C) else MaroonPrimary
+                                    tint = if (supportIsFavorite) LibColors.Maroon else LibColors.Maroon
                                 )
                             }
                         }
@@ -166,136 +298,16 @@ fun HomeDashboardScreen(
         }
 
         item {
-            Card(
-                shape = MaterialTheme.shapes.extraLarge,
-                elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(MaroonPrimary, MaroonDark, MaroonDeep)
-                            )
-                        )
-                        .padding(20.dp)
-                ) {
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Surface(
-                                    color = GoldAccent.copy(alpha = 0.22f),
-                                    shape = MaterialTheme.shapes.small
-                                ) {
-                                    Text(
-                                        text = "منصة التحضير السريري المعتمدة",
-                                        color = GoldAccent,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                // Approved greeting (build 1.2.5): «د. <الاسم>»
-                                // from the same profile store the gate writes
-                                // and the profile screen edits; the generic
-                                // fallback stays when no name exists anywhere.
-                                val greetingName = sy.medpro.watani.data.ProfileNameStore.resolveName(
-                                    sy.medpro.watani.data.ProfileNameStore.savedName(
-                                        context,
-                                        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                                    ),
-                                    com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.displayName
-                                )
-                                Text(
-                                    text = sy.medpro.watani.data.ProfileNameStore.greetingFor(greetingName),
-                                    color = Color.White,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "نجاحك في الوطني يبدأ من هنا",
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 12.sp
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.size(74.dp)
-                            ) {
-                                Canvas(modifier = Modifier.fillMaxSize()) {
-                                    drawArc(
-                                        color = Color.White.copy(alpha = 0.18f),
-                                        startAngle = -90f,
-                                        sweepAngle = 360f,
-                                        useCenter = false,
-                                        style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
-                                    )
-                                    drawArc(
-                                        color = GoldAccent,
-                                        startAngle = -90f,
-                                        sweepAngle = 360f * ringProgress,
-                                        useCenter = false,
-                                        style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
-                                    )
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(if (hasExamDate) "$days" else "—", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                    Text("يوماً", color = GoldAccent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Surface(
-                            color = Color.White.copy(alpha = 0.12f),
-                            shape = MaterialTheme.shapes.medium,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (totalAns == 0) "جاهزية البنك: مبدئي" else "جاهزية $accuracy%",
-                                    color = GoldAccent,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // بطاقة البومودورو: العدّاد الحي من محرك المؤقت المشترك نفسه.
-        item {
-            val focusAccent = Color(0xFF4527A0)
+            val focusAccent = LibColors.Maroon
             val focusState by FocusTimerEngine.state.collectAsState()
             val focusTimeText = if (focusState.isIdle) {
                 String.format("%02d:%02d", focusState.timeLeftSec / 60, focusState.timeLeftSec % 60) + " — جاهز"
             } else {
                 String.format("%02d:%02d", focusState.timeLeftSec / 60, focusState.timeLeftSec % 60)
             }
-            Card(
-                shape = MaterialTheme.shapes.large,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, RoseOutline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth().clickable { onOpenFocusTimer() }
+            LibCard(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onOpenFocusTimer() }
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
@@ -303,7 +315,7 @@ fun HomeDashboardScreen(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = focusAccent.copy(alpha = 0.12f),
+                        color = LibColors.GoldTint,
                         modifier = Modifier.size(50.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -331,18 +343,11 @@ fun HomeDashboardScreen(
             }
         }
 
-        // بطاقة المراجعة المستحقة — شرطية: لا تُرسم عند صفر العناصر.
         if (stats.savedMistakes.size + stats.wrongFlashcardIds.size > 0) {
             item {
-                val reviewAccent = Color(0xFFB71C1C)
+                val reviewAccent = LibColors.Maroon
                 val reviewCount = stats.savedMistakes.size + stats.wrongFlashcardIds.size
-                Card(
-                    shape = MaterialTheme.shapes.large,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, RoseOutline),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                LibCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.FactCheck, contentDescription = null, tint = reviewAccent, modifier = Modifier.size(22.dp))
@@ -371,21 +376,21 @@ fun HomeDashboardScreen(
         }
 
         item {
-            Card(
-                shape = MaterialTheme.shapes.medium,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, RoseOutline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
+            LibCard(modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.CloudDone, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(24.dp))
+                    Icon(
+                        Icons.Default.CloudDone, contentDescription = null,
+                        tint = LibColors.Green, modifier = Modifier.size(24.dp)
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("حالة المزامنة وقاعدة البيانات", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 14.sp)
+                        Text(
+                            "حالة المزامنة وقاعدة البيانات",
+                            fontWeight = FontWeight.Bold, color = LibColors.Maroon, fontSize = 14.sp
+                        )
                         Text(
                             // User-facing sync status only: the raw manifest
                             // version is an internal timestamp and must never
@@ -398,6 +403,27 @@ fun HomeDashboardScreen(
                 }
             }
         }
+        item {
+            Text(
+                text = "نجاحك في الوطني يبدأ من هنا",
+                fontFamily = NotoKufiFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = LibColors.GoldText,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
+        // Student-set offline exam countdown — its own section directly
+        // under the top bar. The student picks the date; it ticks
+        // locally (days / hours / minutes / seconds) with no network.
+        // بطاقة «أهدافي اليوم» (1.2.24): هدف الأسئلة برقم يختاره
+        // الطالب بنفسه + أهدافه النصية لليوم، وسطر تركيز اليوم من
+        // محرك المؤقت نفسه (لا قسم مكرر). تنعكس على الويدجت مباشرة.
+        // بطاقة الدعم النفسي — أول عنصر بعد عدّاد الامتحان: رسالة اليوم
+        // من بنك الدعم v2 بتدوير epochDay، مع تقديم يدوي وقلب مفضلة.
+        // بطاقة البومودورو: العدّاد الحي من محرك المؤقت المشترك نفسه.
+        // بطاقة المراجعة المستحقة — شرطية: لا تُرسم عند صفر العناصر.
     }
 }
 
@@ -460,23 +486,45 @@ private fun ExamCountdownCard() {
         }
     }
 
-    Card(
-        shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, RoseOutline),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    LibCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Event, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(22.dp))
-                Spacer(modifier = Modifier.width(8.dp))
+                if (target != null) {
+                    // Model (01) exam tile: the exam's day-of-month on
+                    // an ivory tile, e.g. «٢٢» for 22 December 2026.
+                    val examDay = Instant.ofEpochMilli(target).atZone(ZoneId.systemDefault())
+                        .toLocalDate().dayOfMonth
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(LibColors.GoldTint),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            examDay.toString().map { ch ->
+                                if (ch.isDigit()) "٠١٢٣٤٥٦٧٨٩"[ch - '0'] else ch
+                            }.joinToString(""),
+                            fontFamily = NotoKufiFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 19.sp,
+                            color = LibColors.LibColors.MaroonDeep
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                } else {
+                    Icon(
+                        Icons.Default.Event, contentDescription = null,
+                        tint = LibColors.Maroon, modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         "العد التنازلي للامتحان الوطني",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
-                        color = MaroonPrimary
+                        color = LibColors.Maroon
                     )
                     Text(
                         "يُحفظ على جهازك ويعمل دون إنترنت",
@@ -496,7 +544,9 @@ private fun ExamCountdownCard() {
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = { showPicker = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = MaroonDeep),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = LibColors.Gold, contentColor = LibColors.MaroonDeep
+                        ),
                         modifier = Modifier.fillMaxWidth().height(48.dp),
                         shape = MaterialTheme.shapes.medium
                     ) {
@@ -508,7 +558,7 @@ private fun ExamCountdownCard() {
                         "حان موعد الامتحان! بالتوفيق يا طبيب المستقبل",
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
-                        color = MaroonPrimary
+                        color = LibColors.Maroon
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedButton(
@@ -531,16 +581,20 @@ private fun ExamCountdownCard() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         CountdownUnit(modifier = Modifier.weight(1f), value = "$days", label = "يوماً")
-                        Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
+                        Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = LibColors.Maroon)
                         CountdownUnit(modifier = Modifier.weight(1f), value = "%02d".format(hours), label = "ساعة")
-                        Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
+                        Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = LibColors.Maroon)
                         CountdownUnit(modifier = Modifier.weight(1f), value = "%02d".format(minutes), label = "دقيقة")
-                        Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
+                        Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = LibColors.Maroon)
                         CountdownUnit(modifier = Modifier.weight(1f), value = "%02d".format(seconds), label = "ثانية")
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     val dateText = Instant.ofEpochMilli(target).atZone(ZoneId.systemDefault())
-                        .toLocalDate().toString()
+                        .toLocalDate().format(
+                            java.time.format.DateTimeFormatter.ofPattern(
+                                "d MMMM yyyy", java.util.Locale("ar")
+                            )
+                        )
                     Text(
                         "تاريخ الامتحان: $dateText",
                         fontSize = 12.sp,
@@ -653,13 +707,7 @@ private fun MyDayGoalsCard() {
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.TopCenter
     ) {
-        Card(
-            shape = MaterialTheme.shapes.large,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, RoseOutline),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            modifier = Modifier.fillMaxWidth().widthIn(max = 640.dp)
-        ) {
+        LibCard(modifier = Modifier.fillMaxWidth().widthIn(max = 640.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(76.dp)) {
@@ -668,14 +716,14 @@ private fun MyDayGoalsCard() {
                         } else 0f
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             drawArc(
-                                color = MaroonPrimary.copy(alpha = 0.15f),
+                                color = LibColors.Maroon.copy(alpha = 0.15f),
                                 startAngle = -90f,
                                 sweepAngle = 360f,
                                 useCenter = false,
                                 style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round)
                             )
                             drawArc(
-                                color = MaroonPrimary,
+                                color = LibColors.Maroon,
                                 startAngle = -90f,
                                 sweepAngle = 360f * fraction,
                                 useCenter = false,
@@ -685,7 +733,7 @@ private fun MyDayGoalsCard() {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 "${snapshot.doneToday}",
-                                fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaroonPrimary
+                                fontWeight = FontWeight.Bold, fontSize = 17.sp, color = LibColors.Maroon
                             )
                             Text(
                                 if (snapshot.hasStudentGoal) "من ${snapshot.goal}" else "اليوم",
@@ -696,7 +744,7 @@ private fun MyDayGoalsCard() {
                     }
                     Spacer(modifier = Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("أهدافي اليوم", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
+                        Text("أهدافي اليوم", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = LibColors.Maroon)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = when {
@@ -726,7 +774,7 @@ private fun MyDayGoalsCard() {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "أهداف اليوم المكتوبة",
-                        fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaroonPrimary,
+                        fontWeight = FontWeight.Bold, fontSize = 13.sp, color = LibColors.Maroon,
                         modifier = Modifier.weight(1f)
                     )
                     if (items.isNotEmpty()) {
@@ -768,7 +816,7 @@ private fun MyDayGoalsCard() {
                             DayGoalsStore.saveItems(context, DayGoalsMath.removeItem(items, item.id))
                             afterChange()
                         }) {
-                            Icon(Icons.Default.Delete, contentDescription = "حذف الهدف", tint = MaroonPrimary)
+                            Icon(Icons.Default.Delete, contentDescription = "حذف الهدف", tint = LibColors.Maroon)
                         }
                     }
                 }
@@ -794,7 +842,7 @@ private fun MyDayGoalsCard() {
                                     afterChange()
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                            colors = ButtonDefaults.buttonColors(containerColor = LibColors.Maroon),
                             shape = MaterialTheme.shapes.medium
                         ) {
                             Text("إضافة", fontSize = 13.sp)
@@ -811,7 +859,10 @@ private fun MyDayGoalsCard() {
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Timer, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(15.dp))
+                    Icon(
+                        Icons.Default.Timer, contentDescription = null,
+                        tint = LibColors.Maroon, modifier = Modifier.size(15.dp)
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         "تركيز اليوم: ${focusState.minutesToday} دقيقة · ${focusState.sessionsToday} جلسة",
@@ -827,7 +878,7 @@ private fun MyDayGoalsCard() {
 @Composable
 private fun CountdownUnit(modifier: Modifier = Modifier, value: String, label: String) {
     Surface(
-        color = MaroonPrimary.copy(alpha = 0.08f),
+        color = LibColors.GoldTint,
         shape = MaterialTheme.shapes.medium,
         modifier = modifier
     ) {
@@ -835,7 +886,7 @@ private fun CountdownUnit(modifier: Modifier = Modifier, value: String, label: S
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(vertical = 10.dp)
         ) {
-            Text(value, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaroonPrimary)
+            Text(value, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = LibColors.Maroon)
             Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
         }
     }

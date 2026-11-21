@@ -31,6 +31,7 @@ import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.quiz.QuestionCard
 import sy.medpro.watani.ui.theme.ErrorRed
 import sy.medpro.watani.ui.theme.MaroonPrimary
+import sy.medpro.watani.ui.theme.RoseOutline
 import sy.medpro.watani.ui.theme.SuccessGreen
 
 /** Arabic label for the surface a mistake came from. */
@@ -131,7 +132,7 @@ fun MistakesBankScreen(onBack: () -> Unit, autoStartReview: Boolean = false) {
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.2f)),
+                    border = BorderStroke(1.dp, RoseOutline),
                     modifier = Modifier.fillMaxWidth().padding(16.dp)
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
@@ -287,7 +288,7 @@ fun MistakesBankScreen(onBack: () -> Unit, autoStartReview: Boolean = false) {
                         Card(
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.2f)),
+                            border = BorderStroke(1.dp, RoseOutline),
                             modifier = Modifier.fillMaxWidth().clickable { startSession(listOf(entry)) }
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {

@@ -121,7 +121,7 @@ fun AbgLabScreen(onBack: () -> Unit) {
             }
 
             item {
-                Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.1f)), border = BorderStroke(1.5.dp, MaroonPrimary)) {
+                Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.1f)), border = BorderStroke(1.dp, RoseOutline)) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("التفسير السريري الفوري:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
                         Text("• الاضطراب الأولي: $primaryDisorder", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
@@ -273,7 +273,7 @@ fun NightShiftSimulatorScreen(onBack: () -> Unit) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaroonPrimary.copy(alpha = 0.06f),
-                        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.3f)),
+                        border = BorderStroke(1.dp, RoseOutline),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
@@ -671,7 +671,7 @@ private fun ScoreResultCard(scoreText: String, band: String, action: String) {
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.1f)),
-        border = BorderStroke(1.5.dp, MaroonPrimary),
+        border = BorderStroke(1.dp, RoseOutline),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1036,7 +1036,7 @@ private fun LabQuizTab(cases: List<LabQuizCase>) {
     val current = cases.getOrNull(index)
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (finished) {
-            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.1f)), border = BorderStroke(1.5.dp, MaroonPrimary), modifier = Modifier.fillMaxWidth()) {
+            Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.1f)), border = BorderStroke(1.dp, RoseOutline), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("انتهى الاختبار!", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary)
                     Text("نتيجتك: $score من ${cases.size}", fontWeight = FontWeight.Bold, fontSize = 16.sp)

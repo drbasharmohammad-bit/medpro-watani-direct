@@ -21,9 +21,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import sy.medpro.watani.data.ClinicalCaseDto
+import sy.medpro.watani.data.WorkerActivationApi
+import sy.medpro.watani.ui.activation.ActivationPromptDialog
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.icons.SubjectIcon
 import sy.medpro.watani.ui.icons.subjectIconRes
@@ -37,6 +40,55 @@ import sy.medpro.watani.ui.theme.*
 private fun ClinicalCaseDto.isUpgradedCase(): Boolean =
     schemaV2 == true && !historyBank.isNullOrEmpty() && !openingVignette.isNullOrBlank()
 
+/**
+ * Pure access rules for the case lists — kept free of Android so the
+ * JVM tests pin them exactly.
+ *
+ * Activation gate (doctor's order): the first [FREE_CASES_PER_FAMILY]
+ * cases of EACH family, in display order, are free for any signed-in
+ * student; from the 11th case on, a case opens only for an activated
+ * account (checked by the screens through the app's ONE unified
+ * entitlement, WorkerActivationApi.isActivated — the same state First
+ * Aid and every other paid surface read, stored token + expiry, so an
+ * activated account stays activated offline). There is NO sequential
+ * lock: any of the free ten opens in any order.
+ *
+ * Families in CasesScreen: the list mixes both kinds in ONE list, so
+ * each case is ranked WITHIN ITS OWN FAMILY in display order — the
+ * upgraded virtual-patient cases (schema v2, [isUpgradedCase]) form
+ * one family and the legacy clinical cases the other. The German list
+ * is a single family, so its ranks are simply its display indices
+ * (all flags false here). Ranks are computed from the FULL unfiltered
+ * list, never from a search-filtered subset, so searching can never
+ * promote a locked case into the free ten.
+ */
+object CaseAccessRules {
+
+    const val FREE_CASES_PER_FAMILY = 10
+
+    /** True when a case at 0-based [rankInFamily] may open. */
+    fun isFreeRank(rankInFamily: Int, activated: Boolean): Boolean =
+        activated || rankInFamily in 0 until FREE_CASES_PER_FAMILY
+
+    /** True when the case stays visible but locked (gold lock icon). */
+    fun isLockedRank(rankInFamily: Int, activated: Boolean): Boolean =
+        !isFreeRank(rankInFamily, activated)
+
+    /**
+     * The 0-based rank of every item WITHIN ITS OWN FAMILY, in
+     * display order: [isUpgradedFlags] marks the family of each item
+     * (true = upgraded virtual patient, false = legacy/German), and
+     * the returned list is parallel to it.
+     */
+    fun familyRanks(isUpgradedFlags: List<Boolean>): List<Int> {
+        var upgradedNext = 0
+        var legacyNext = 0
+        return isUpgradedFlags.map { upgraded ->
+            if (upgraded) upgradedNext++ else legacyNext++
+        }
+    }
+}
+
 // Text shown for a case in lists and search: upgraded cases preview
 // their opening vignette only — never the full presentation, which
 // would hand the student the whole story before playing.
@@ -45,11 +97,40 @@ private fun ClinicalCaseDto.listPreviewText(): String =
 
 @Composable
 fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> Unit) {
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
-    val filteredCases = cases.filter {
-        it.title?.contains(searchQuery, ignoreCase = true) == true ||
-        it.specialty?.contains(searchQuery, ignoreCase = true) == true ||
-        it.listPreviewText().contains(searchQuery, ignoreCase = true)
+
+    // ---- Unified activation gate (same pattern as FirstAidSectionScreen) ----
+    // The ONLY entitlement check is WorkerActivationApi.isActivated —
+    // the app's single unified activation state; it reads the stored
+    // token + expiry from persistent prefs, so no network is involved
+    // and an activated account stays activated offline.
+    var activated by remember { mutableStateOf(WorkerActivationApi.isActivated(context)) }
+    var showActivation by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // Re-read on entry (the student may have activated elsewhere).
+        activated = WorkerActivationApi.isActivated(context)
+    }
+    if (showActivation) {
+        ActivationPromptDialog(
+            onDismiss = { showActivation = false },
+            onActivated = {
+                activated = true
+                showActivation = false
+            }
+        )
+    }
+
+    // Rank of every case within its own family (upgraded v2 vs
+    // legacy), computed on the FULL list in display order — see
+    // CaseAccessRules. Search filtering below never changes a rank.
+    val familyRanks = remember(cases) {
+        CaseAccessRules.familyRanks(cases.map { it.isUpgradedCase() })
+    }
+    val filteredCases = cases.withIndex().filter { (_, caseItem) ->
+        caseItem.title?.contains(searchQuery, ignoreCase = true) == true ||
+        caseItem.specialty?.contains(searchQuery, ignoreCase = true) == true ||
+        caseItem.listPreviewText().contains(searchQuery, ignoreCase = true)
     }
 
     DrawerScreenScaffold(title = "المريض الافتراضي والحالات السريرية (${cases.size} حالة)", onBack = {}) { padding ->
@@ -75,15 +156,28 @@ fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> 
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(bottom = 24.dp)
             ) {
-                items(filteredCases, key = { it.id ?: it.title ?: "" }) { caseItem ->
+                items(filteredCases, key = { it.value.id ?: it.value.title ?: "" }) { indexed ->
+                    val caseItem = indexed.value
+                    val rankInFamily = familyRanks.getOrElse(indexed.index) { Int.MAX_VALUE }
+                    val locked = CaseAccessRules.isLockedRank(rankInFamily, activated)
                     Card(
                         shape = MaterialTheme.shapes.large,
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.2f)),
+                        border = BorderStroke(1.dp, RoseOutline),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onCaseClick(caseItem) }
+                            .clickable {
+                                // Fresh read at the click: activation may
+                                // have changed while this list was open.
+                                val nowActivated = WorkerActivationApi.isActivated(context)
+                                activated = nowActivated
+                                if (CaseAccessRules.isFreeRank(rankInFamily, nowActivated)) {
+                                    onCaseClick(caseItem)
+                                } else {
+                                    showActivation = true
+                                }
+                            }
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
@@ -125,12 +219,24 @@ fun CasesScreen(cases: List<ClinicalCaseDto>, onCaseClick: (ClinicalCaseDto) -> 
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = caseItem.title ?: "حالة سريرية إسعافية",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = MaroonPrimary
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = caseItem.title ?: "حالة سريرية إسعافية",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = MaroonPrimary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (locked) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "حالة للمفعّلين",
+                                        tint = GoldAccent,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = caseItem.listPreviewText(),
@@ -800,7 +906,7 @@ private fun CasePlayerContent(caseItem: ClinicalCaseDto, onBack: () -> Unit, ger
                                 Card(
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                     shape = MaterialTheme.shapes.medium,
-                                    border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.4f))
+                                    border = BorderStroke(1.dp, RoseOutline)
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp)) {
                                         Text(localized(de, "القصة الكاملة كما في السجل:", "Die vollständige Geschichte laut Akte:"), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)

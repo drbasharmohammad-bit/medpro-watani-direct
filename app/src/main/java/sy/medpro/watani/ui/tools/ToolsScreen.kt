@@ -16,8 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,7 +27,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import sy.medpro.watani.ui.theme.MaroonPrimary
+import sy.medpro.watani.ui.library.LibCard
+import sy.medpro.watani.ui.library.LibColors
+import sy.medpro.watani.ui.library.libBackground
 
 /**
  * Tools hub — grid redesign (Nov 2026, doctor's approved mockup):
@@ -66,62 +66,79 @@ private val TOOL_GROUPS = listOf(
     ToolGroup(
         header = "تدرّب ومهارات سريرية",
         tools = listOf(
-            ToolEntry("مدرّب التشخيص التفريقي", "رتّب التشخيصات التفريقية واكشف مراحل الحالة تدريجيًا", Icons.Default.AccountTree, Color(0xFF6A1B9A), "مدرّب التشخيص التفريقي"),
-            ToolEntry("اقلبها", "ابنِ الصورة السريرية للتشخيص، ميّز العنصر الدخيل، وأكمل العبارة الناقصة", Icons.Default.FlipCameraAndroid, Color(0xFF00897B), "اقلبها"),
-            ToolEntry("الحالات الألمانية", "حالات مريض افتراضي بالألمانية (Deutsche Fälle)", Icons.Default.Language, Color(0xFF00695C), "الحالات الألمانية"),
-            ToolEntry("غرفة الطوارئ", "مناوبة إسعافية تفاعلية بحالات متغيرة", Icons.Default.Emergency, Color(0xFFC62828), "غرفة الطوارئ"),
+            ToolEntry("مدرّب التشخيص التفريقي", "رتّب التشخيصات التفريقية واكشف مراحل الحالة تدريجيًا",
+                Icons.Default.AccountTree, LibColors.Maroon, "مدرّب التشخيص التفريقي"),
+            ToolEntry("اقلبها", "ابنِ الصورة السريرية للتشخيص، ميّز العنصر الدخيل، وأكمل العبارة الناقصة",
+                Icons.Default.FlipCameraAndroid, LibColors.Green, "اقلبها"),
+            ToolEntry("الحالات الألمانية", "حالات مريض افتراضي بالألمانية (Deutsche Fälle)",
+                Icons.Default.Language, LibColors.GoldText, "الحالات الألمانية"),
+            ToolEntry("غرفة الطوارئ", "مناوبة إسعافية تفاعلية بحالات متغيرة",
+                Icons.Default.Emergency, LibColors.MaroonDeep, "غرفة الطوارئ"),
             ToolEntry(
                 "محاكاة الامتحان", "اختبار وطني كامل بعدد الأسئلة والتوقيت الحقيقيين ونتيجة فورية",
-                Icons.Default.AssignmentTurnedIn, Color(0xFF37474F), "محاكاة الامتحان"
+                Icons.Default.AssignmentTurnedIn, LibColors.Maroon, "محاكاة الامتحان"
             ),
-            ToolEntry("محطات OSCE", "محطات فحص سريري تفاعلية", Icons.Default.FactCheck, Color(0xFF283593), "محطات OSCE"),
-            ToolEntry("مدرب الجرعات", "سيناريوهات جرعات وأدوية بجرعات موثّقة بمصادرها", Icons.Default.MedicalServices, Color(0xFFAD1457), "مدرب الجرعات"),
+            ToolEntry("محطات OSCE", "محطات فحص سريري تفاعلية", Icons.Default.FactCheck, LibColors.Green, "محطات OSCE"),
+            ToolEntry("مدرب الجرعات", "سيناريوهات جرعات وأدوية بجرعات موثّقة بمصادرها",
+                Icons.Default.MedicalServices, LibColors.GoldText, "مدرب الجرعات"),
             // Fix 1.2.2 (doctor's order): ONE tools entry — «القلب والإصغاء».
             // The ECG atlas lives inside that same screen as its own tab;
             // a separate «أطلس تخطيط القلب» entry duplicated the content.
-            ToolEntry("القلب والإصغاء", "كورس القلب المصغّر: قراءة ECG تفاعلية وفرجار قياس ومدرب إصغاء", Icons.Default.Favorite, Color(0xFFE65100), "القلب والإصغاء")
+            ToolEntry("القلب والإصغاء", "كورس القلب المصغّر: قراءة ECG تفاعلية وفرجار قياس ومدرب إصغاء",
+                Icons.Default.Favorite, LibColors.Maroon, "القلب والإصغاء")
         )
     ),
     ToolGroup(
         header = "حاسبات ومراجع سريعة",
         tools = listOf(
-            ToolEntry("الحاسبات الطبية", "الحاسبات السريرية الموسعة والجرعات والعناية والسوائل بمكان واحد", Icons.Default.Calculate, Color(0xFF1565C0), "الحاسبات الطبية"),
-            ToolEntry("المختبرات وغازات الدم", "قيم مخبرية مرجعية ومفسّر غازات الدم", Icons.Default.Science, Color(0xFF00838F), "المختبرات وغازات الدم"),
-            ToolEntry("خوارزميات التدبير", "خطوات التدبير الإسعافي والسريري المتسلسلة", Icons.Default.Schema, Color(0xFF2E7D32), "خوارزميات التدبير"),
-            ToolEntry("الخطوط العلاجية الأولى", "خط العلاج الأول لكل مرض والبديل في الحمل والحساسية", Icons.Default.Medication, Color(0xFF7B1FA2), "الخطوط العلاجية الأولى"),
-            ToolEntry("موسوعة المتلازمات", "العلامات الجراحية والباطنية والثلاثيات المسماة", Icons.Default.MenuBook, Color(0xFF5D4037), "موسوعة المتلازمات")
+            ToolEntry("الحاسبات الطبية", "الحاسبات السريرية الموسعة والجرعات والعناية والسوائل بمكان واحد",
+                Icons.Default.Calculate, LibColors.Green, "الحاسبات الطبية"),
+            ToolEntry("المختبرات وغازات الدم", "قيم مخبرية مرجعية ومفسّر غازات الدم",
+                Icons.Default.Science, LibColors.MaroonDeep, "المختبرات وغازات الدم"),
+            ToolEntry("خوارزميات التدبير", "خطوات التدبير الإسعافي والسريري المتسلسلة",
+                Icons.Default.Schema, LibColors.Green, "خوارزميات التدبير"),
+            ToolEntry("الخطوط العلاجية الأولى", "خط العلاج الأول لكل مرض والبديل في الحمل والحساسية",
+                Icons.Default.Medication, LibColors.GoldText, "الخطوط العلاجية الأولى"),
+            ToolEntry("موسوعة المتلازمات", "العلامات الجراحية والباطنية والثلاثيات المسماة",
+                Icons.Default.MenuBook, LibColors.Maroon, "موسوعة المتلازمات")
         )
     ),
     ToolGroup(
         header = "دراستي وتنظيمي",
         tools = listOf(
-            ToolEntry("المراجعة الذكية Anki", "مراجعة بطاقات Anki والأخطاء المتباعدة", Icons.Default.Style, Color(0xFF0277BD), "المراجعة الذكية Anki"),
-            ToolEntry("بنك أخطائي", "أخطاؤك من كل البنوك بمراجعة متباعدة حتى الإتقان", Icons.Default.Quiz, Color(0xFFAD1457), "بنك أخطائي"),
-            ToolEntry("دليل الدراسة", "خطة دراسة منظمة للوطني", Icons.Default.Book, Color(0xFF33691E), "دليل الدراسة"),
-            ToolEntry("مخطط جدول الدراسة", "توزيع الأيام المتبقية حسب ثقل المواد", Icons.Default.CalendarMonth, Color(0xFF455A64), "مخطط جدول الدراسة"),
-            ToolEntry("سجل أخطائي والاختبارات", "أسئلتك الخاطئة واختباراتك السابقة", Icons.Default.History, Color(0xFFB71C1C), "سجل أخطائي والاختبارات"),
-            ToolEntry("سجلّ حالاتي", "وثّق حالات مناوبتك — محفوظة بجهازك ومزامَنة مع حسابك", Icons.Default.Assignment, Color(0xFF6D4C41), "سجلّ حالاتي"),
-            ToolEntry("مؤقت التركيز", "جلسات تركيز بأسلوب بومودورو", Icons.Default.Timer, Color(0xFF4527A0), "مؤقت التركيز")
+            ToolEntry("المراجعة الذكية Anki", "مراجعة بطاقات Anki والأخطاء المتباعدة",
+                Icons.Default.Style, LibColors.MaroonDeep, "المراجعة الذكية Anki"),
+            ToolEntry("بنك أخطائي", "أخطاؤك من كل البنوك بمراجعة متباعدة حتى الإتقان",
+                Icons.Default.Quiz, LibColors.GoldText, "بنك أخطائي"),
+            ToolEntry("دليل الدراسة", "خطة دراسة منظمة للوطني", Icons.Default.Book, LibColors.GoldText, "دليل الدراسة"),
+            ToolEntry("مخطط جدول الدراسة", "توزيع الأيام المتبقية حسب ثقل المواد",
+                Icons.Default.CalendarMonth, LibColors.Maroon, "مخطط جدول الدراسة"),
+            ToolEntry("سجل أخطائي والاختبارات", "أسئلتك الخاطئة واختباراتك السابقة",
+                Icons.Default.History, LibColors.MaroonDeep, "سجل أخطائي والاختبارات"),
+            ToolEntry("سجلّ حالاتي", "وثّق حالات مناوبتك — محفوظة بجهازك ومزامَنة مع حسابك",
+                Icons.Default.Assignment, LibColors.Green, "سجلّ حالاتي"),
+            ToolEntry("مؤقت التركيز", "جلسات تركيز بأسلوب بومودورو",
+                Icons.Default.Timer, LibColors.Maroon, "مؤقت التركيز")
         )
     )
 )
 
 @Composable
 fun ToolsScreen(onToolClick: (String) -> Unit) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().background(libBackground())) {
         // Fixed global-search bar (the old «البحث الشامل» tile is gone).
-        Card(
+        LibCard(
             onClick = { onToolClick("البحث الشامل") },
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                Icon(Icons.Default.Search, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(22.dp))
+                Icon(
+                    Icons.Default.Search, contentDescription = null,
+                    tint = LibColors.Maroon, modifier = Modifier.size(22.dp)
+                )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     "البحث الشامل — ابحث بكل محتوى التطبيق",
@@ -141,7 +158,7 @@ fun ToolsScreen(onToolClick: (String) -> Unit) {
                         text = group.header,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
-                        color = MaroonPrimary,
+                        color = LibColors.Maroon,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
@@ -169,18 +186,15 @@ fun ToolsScreen(onToolClick: (String) -> Unit) {
 
 @Composable
 private fun ToolTile(tool: ToolEntry, onToolClick: (String) -> Unit, modifier: Modifier = Modifier) {
-    Card(
+    LibCard(
         onClick = { onToolClick(tool.target) },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Box(
                 modifier = Modifier
                     .size(46.dp)
-                    .background(tool.accent.copy(alpha = 0.12f), RoundedCornerShape(14.dp)),
+                    .background(LibColors.GoldTint, RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(tool.icon, contentDescription = null, tint = tool.accent, modifier = Modifier.size(26.dp))

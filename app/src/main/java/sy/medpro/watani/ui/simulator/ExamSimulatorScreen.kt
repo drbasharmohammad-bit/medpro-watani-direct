@@ -376,7 +376,7 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                     isAns -> SuccessGreen.copy(alpha = 0.2f)
                                     else -> MaterialTheme.colorScheme.surface
                                 },
-                                border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.3f)),
+                                border = BorderStroke(1.dp, RoseOutline),
                                 modifier = Modifier
                                     .size(38.dp)
                                     .clickable { currentIndex = idx }

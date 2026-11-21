@@ -57,6 +57,7 @@ import sy.medpro.watani.ui.explanation.explanationContentOf
 import sy.medpro.watani.ui.explanation.ExplanationUiState
 import sy.medpro.watani.ui.explanation.normalizeExplanationKey
 import sy.medpro.watani.ui.explanation.rememberExplanationState
+import sy.medpro.watani.ui.library.LibColors
 import sy.medpro.watani.ui.theme.*
 import kotlin.math.abs
 
@@ -220,7 +221,6 @@ fun QuizScreen(
                                 shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                 elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-                                border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.2f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(14.dp)) {
@@ -528,7 +528,6 @@ private fun DawraResultsCard(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.2f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -580,7 +579,7 @@ private fun ExplanationTabChip(
         color = if (selected) MaroonPrimary else MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             1.dp,
-            if (selected) MaroonPrimary else MaroonPrimary.copy(alpha = 0.45f)
+            if (selected) MaroonPrimary else LibColors.Line
         ),
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
@@ -788,15 +787,26 @@ fun QuestionCard(
                 val isRuledOut = ruledOutIndices.contains(optIndex) && !isAnswered
 
 
+                // Identity border language (items 4+5): a thin line
+                // border (#EFE6DA) by default; colour appears ONLY as
+                // functional state — gold/maroon for the selection,
+                // semantic green #2E7D5B for correct, quiet red for
+                // wrong — at 1.5.dp so the state stays legible.
                 val borderColor = when {
-                    isAnswered && isCorrectOpt -> SuccessGreen
+                    isAnswered && isCorrectOpt -> LibColors.Green
                     isAnswered && isSelected && !isCorrectOpt -> ErrorRed
-                    isSelected -> MaroonPrimary
-                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
+                    isSelected -> LibColors.Maroon
+                    else -> LibColors.Line
+                }
+                val borderWidth = when {
+                    isAnswered && isCorrectOpt -> 1.5.dp
+                    isAnswered && isSelected && !isCorrectOpt -> 1.5.dp
+                    isSelected -> 1.5.dp
+                    else -> 1.dp
                 }
 
                 val backgroundColor = when {
-                    isAnswered && isCorrectOpt -> SuccessGreen.copy(alpha = 0.10f)
+                    isAnswered && isCorrectOpt -> LibColors.Green.copy(alpha = 0.10f)
                     isAnswered && isSelected && !isCorrectOpt -> ErrorRed.copy(alpha = 0.10f)
                     else -> MaterialTheme.colorScheme.surface
                 }
@@ -804,7 +814,7 @@ fun QuestionCard(
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = backgroundColor,
-                    border = BorderStroke(1.5.dp, borderColor),
+                    border = BorderStroke(borderWidth, borderColor),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
@@ -844,7 +854,7 @@ fun QuestionCard(
                                 }
                             } else {
                                 if (isCorrectOpt) {
-                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen)
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = LibColors.Green)
                                 } else if (isSelected) {
                                     Icon(Icons.Default.Error, contentDescription = null, tint = ErrorRed)
                                 }
@@ -943,7 +953,6 @@ fun QuestionCard(
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.25f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -963,7 +972,6 @@ fun QuestionCard(
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, MaroonPrimary.copy(alpha = 0.25f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
@@ -1093,7 +1101,7 @@ private fun buildHighlightedClinicalStem(text: String): AnnotatedString {
                 style = SpanStyle(
                     // Keyword highlight: rose-ivory FeaturedContainer (was pale yellow) — no-yellow rule.
                     background = FeaturedContainer,
-                    color = Color(0xFF52131C),
+                    color = MaroonDark,
                     fontWeight = FontWeight.Bold
                 ),
                 start = match.range.first,
