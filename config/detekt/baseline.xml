@@ -453,7 +453,7 @@
     <ID>LongMethod:GatewayHlsDataSource.kt$GatewayHlsDataSource$override fun open(dataSpec: DataSpec): Long</ID>
     <ID>LongMethod:GermanCasesScreen.kt$@Composable fun GermanCasesScreen(onBack: () -&gt; Unit)</ID>
     <ID>LongMethod:GuidedReaderScreen.kt$@Composable fun GuidedReaderScreen( envelope: EcgEnvelope, strip: EcgStripDto, store: EcgProgressStore, onBack: () -&gt; Unit )</ID>
-    <ID>LongMethod:HomeDashboardScreen.kt$@Composable fun HomeDashboardScreen( manifestVersion: String?, onOpenSupport: () -&gt; Unit = {}, onOpenFocusTimer: () -&gt; Unit = {}, onOpenReviewDue: () -&gt; Unit = {} )</ID>
+    <ID>LongMethod:HomeDashboardScreen.kt$@Composable fun HomeDashboardScreen( manifestVersion: String?, onOpenSupport: () -&gt; Unit = {}, onOpenFocusTimer: () -&gt; Unit = {}, onOpenReviewDue: () -&gt; Unit = {}, onOpenSearch: () -&gt; Unit = {} )</ID>
     <ID>LongMethod:HomeDashboardScreen.kt$@Composable private fun MyDayGoalsCard()</ID>
     <ID>LongMethod:HomeDashboardScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable private fun ExamCountdownCard()</ID>
     <ID>LongMethod:HomeScreen.kt$@Composable fun SectionCard( path: String, displayName: String, entry: ManifestFileEntry, isDownloaded: Boolean, isDownloading: Boolean, downloadProgress: Float? = null, onDownloadClick: () -&gt; Unit, onOpenClick: () -&gt; Unit )</ID>
@@ -676,36 +676,28 @@
     <ID>MagicNumber:CasesScreen.kt$25</ID>
     <ID>MagicNumber:CasesScreen.kt$3</ID>
     <ID>MagicNumber:CasesScreen.kt$50</ID>
-    <ID>MagicNumber:Color.kt$0xFF1A0E10</ID>
-    <ID>MagicNumber:Color.kt$0xFF261518</ID>
-    <ID>MagicNumber:Color.kt$0xFF2C1518</ID>
     <ID>MagicNumber:Color.kt$0xFF2D1015</ID>
+    <ID>MagicNumber:Color.kt$0xFFF5EDE3</ID>
+    <ID>MagicNumber:Color.kt$0xFF8A7A6E</ID>
+    <ID>MagicNumber:Color.kt$0xFF2B2320</ID>
+    <ID>MagicNumber:Color.kt$0xFF6E4C55</ID>
+    <ID>MagicNumber:Color.kt$0xFF381824</ID>
+    <ID>MagicNumber:Color.kt$0xFF26101A</ID>
+    <ID>MagicNumber:Color.kt$0xFF1A0A10</ID>
+    <ID>MagicNumber:Color.kt$0xFFEFE6DA</ID>
+    <ID>MagicNumber:Color.kt$0xFFF3E9E4</ID>
+    <ID>MagicNumber:Color.kt$0xFFFAF6F0</ID>
+    <ID>MagicNumber:Color.kt$0xFF8A6D2F</ID>
+    <ID>MagicNumber:Color.kt$0xFFC2A059</ID>
+    <ID>MagicNumber:Color.kt$0xFFF7EFDC</ID>
+    <ID>MagicNumber:Color.kt$0xFF7A2233</ID>
+    <ID>MagicNumber:Color.kt$0xFF340713</ID>
+    <ID>MagicNumber:Color.kt$0xFF42091A</ID>
+    <ID>MagicNumber:Color.kt$0xFF5E1224</ID>
     <ID>MagicNumber:Color.kt$0xFF2E7D32</ID>
-    <ID>MagicNumber:Color.kt$0xFF382024</ID>
-    <ID>MagicNumber:Color.kt$0xFF3A0C13</ID>
-    <ID>MagicNumber:Color.kt$0xFF3E0A12</ID>
     <ID>MagicNumber:Color.kt$0xFF402228</ID>
-    <ID>MagicNumber:Color.kt$0xFF52131C</ID>
-    <ID>MagicNumber:Color.kt$0xFF625b71</ID>
-    <ID>MagicNumber:Color.kt$0xFF6650a4</ID>
-    <ID>MagicNumber:Color.kt$0xFF6B5357</ID>
-    <ID>MagicNumber:Color.kt$0xFF6E4C51</ID>
-    <ID>MagicNumber:Color.kt$0xFF7A1F2B</ID>
-    <ID>MagicNumber:Color.kt$0xFF7D5260</ID>
-    <ID>MagicNumber:Color.kt$0xFF8F6B3D</ID>
-    <ID>MagicNumber:Color.kt$0xFFA34855</ID>
-    <ID>MagicNumber:Color.kt$0xFFB08D57</ID>
     <ID>MagicNumber:Color.kt$0xFFC62828</ID>
-    <ID>MagicNumber:Color.kt$0xFFCCC2DC</ID>
-    <ID>MagicNumber:Color.kt$0xFFD0BCFF</ID>
-    <ID>MagicNumber:Color.kt$0xFFD6BCC0</ID>
     <ID>MagicNumber:Color.kt$0xFFEF6C00</ID>
-    <ID>MagicNumber:Color.kt$0xFFEFB8C8</ID>
-    <ID>MagicNumber:Color.kt$0xFFF4E4E6</ID>
-    <ID>MagicNumber:Color.kt$0xFFF7E6E8</ID>
-    <ID>MagicNumber:Color.kt$0xFFF7E8EA</ID>
-    <ID>MagicNumber:Color.kt$0xFFFADADD</ID>
-    <ID>MagicNumber:Color.kt$0xFFFBF3F4</ID>
     <ID>MagicNumber:Color.kt$0xFFFFFFFF</ID>
     <ID>MagicNumber:ContentEncryption.kt$ContentEncryption$1024</ID>
     <ID>MagicNumber:ContentEncryption.kt$ContentEncryption$8192</ID>
@@ -893,6 +885,8 @@
     <ID>MagicNumber:LibraryDesign.kt$10</ID>
     <ID>MagicNumber:LibraryDesign.kt$1024.0</ID>
     <ID>MagicNumber:LibraryDesign.kt$240</ID>
+    <ID>MagicNumber:ActivationPromptDialog.kt$240</ID>
+    <ID>MagicNumber:Theme.kt$0xFFD8C7B8</ID>
     <ID>MagicNumber:LibraryDesign.kt$3</ID>
     <ID>MagicNumber:LibraryDesign.kt$LibColors$0xFF2B2320</ID>
     <ID>MagicNumber:LibraryDesign.kt$LibColors$0xFF2E7D5B</ID>
@@ -4546,6 +4540,7 @@
     <ID>ReturnCount:calcCompute.kt$fun evaluateCalcSpec(specId: String, inputs: Map&lt;String, Double&gt;): CalcOutcome</ID>
     <ID>ReturnCount:scoreCompute.kt$fun evaluateScoreSpec(specId: String, selections: Map&lt;String, Int&gt;): CalcOutcome</ID>
     <ID>SwallowedException:AuscultationTrainerScreen.kt$e: Exception</ID>
+    <ID>SwallowedException:ActivationPromptDialog.kt$e: Exception</ID>
     <ID>SwallowedException:BrandIntroScreen.kt$e: Exception</ID>
     <ID>SwallowedException:ConceptsPackManager.kt$ConceptsPackManager$e: Exception</ID>
     <ID>SwallowedException:ContentEncryption.kt$ContentEncryption$e: Exception</ID>
@@ -4563,6 +4558,7 @@
     <ID>ThrowsCount:BookletData.kt$BookletDownloadManager$fun startDownload(context: Context, path: String)</ID>
     <ID>ThrowsCount:SectionVerification.kt$SectionVerification$fun verifySectionCount(path: String, jsonString: String, moshi: Moshi): Int</ID>
     <ID>TooGenericExceptionCaught:AppUpdate.kt$AppUpdate$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ActivationPromptDialog.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:AuscultationTrainerScreen.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:BookletData.kt$BookletDownloadManager$e: Exception</ID>
     <ID>TooGenericExceptionCaught:BrandIntroScreen.kt$e: Exception</ID>
