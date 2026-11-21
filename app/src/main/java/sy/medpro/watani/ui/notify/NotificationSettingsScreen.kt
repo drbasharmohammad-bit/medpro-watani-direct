@@ -295,6 +295,15 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                                 try {
                                     context.startActivity(intent)
                                 } catch (_: Exception) {
+                                    // Sweep fix L-5: the failure used to be
+                                    // swallowed, leaving a seemingly dead
+                                    // button; mirror the Toast feedback the
+                                    // share flows already use.
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "تعذّرت فتح إعدادات النظام — أعد المحاولة.",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                             },
                             modifier = Modifier.fillMaxWidth().height(48.dp),
