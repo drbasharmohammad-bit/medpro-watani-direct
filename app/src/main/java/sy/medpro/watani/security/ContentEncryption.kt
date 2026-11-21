@@ -120,7 +120,7 @@ object ContentEncryption {
             FileInputStream(encryptedFile).use { input ->
                 val iv = ByteArray(IV_SIZE)
                 if (input.read(iv) != IV_SIZE) {
-                    try { tmpFile.delete() } catch (_: Exception) { }
+                    deleteQuietly(tmpFile)
                     return false
                 }
 
@@ -137,8 +137,17 @@ object ContentEncryption {
             }
             true
         } catch (e: Exception) {
-            try { tmpFile.delete() } catch (_: Exception) { }
+            deleteQuietly(tmpFile)
             false
+        }
+    }
+
+    /** Best-effort delete that never throws (audit fix-loop,
+     * 21 Nov 2026 — also keeps decryptFile's nesting flat). */
+    private fun deleteQuietly(file: File) {
+        try {
+            file.delete()
+        } catch (_: Exception) {
         }
     }
 
