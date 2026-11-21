@@ -1099,7 +1099,24 @@ class MainActivity : ComponentActivity() {
                                                 )
                                                 "محاكاة المناوبة الليلية" -> NightShiftSimulatorScreen(onBack = { drawerScreen = "غرفة الطوارئ" })
                                                 "محاكاة الامتحان" -> ExamSimulationScreen(onBack = { drawerScreen = null })
-                                                else -> ProfileScreen(onBack = { drawerScreen = null })
+                                                else -> {
+                                                    // Sweep fix M-2: an unknown drawer title
+                                                    // used to fall through to the Profile
+                                                    // screen, silently masking any mistyped
+                                                    // or stale route from a tile, shortcut,
+                                                    // widget or notification. Now it logs
+                                                    // the offending title and shows an
+                                                    // explicit unavailable screen instead.
+                                                    android.util.Log.w("WataniDrawer", "Unknown drawer route title: $activeDrawer")
+                                                    DrawerScreenScaffold(title = activeDrawer, onBack = { drawerScreen = null }) { scaffoldPadding ->
+                                                        Box(
+                                                            modifier = Modifier.fillMaxSize().padding(scaffoldPadding),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Text("هذه الصفحة غير متاحة حاليًا")
+                                                        }
+                                                    }
+                                                }
                                             }
                                         } else {
                                             // Light motion (Nov 2026, doctor's combined
