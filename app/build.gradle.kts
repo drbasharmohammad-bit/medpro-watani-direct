@@ -285,11 +285,15 @@ tasks.register<JacocoReport>("jacocoTestReport") {
       "**/*_Factory.*", "**/*_MembersInjector.*", "**/Dagger*.*"
     )
   }
-  classDirectories.setFrom(kotlinClasses)
+  val javaClasses = fileTree("${layout.buildDirectory.get().asFile}/intermediates/javac/debug/classes") {
+    exclude("**/R.class", "**/R$*.class", "**/BuildConfig.*", "**/Manifest*.*")
+  }
+  classDirectories.setFrom(kotlinClasses, javaClasses)
   sourceDirectories.setFrom(files("src/main/java"))
+  // Any .exec the unit-test run produced, wherever this AGP/Gradle
+  // pair puts it (the first wiring guessed two exact paths and
+  // produced an empty report on CI run 44900023891 — audit phase 0).
   executionData.setFrom(
-    fileTree(layout.buildDirectory.get().asFile) {
-      include("jacoco/testDebugUnitTest.exec", "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec")
-    }
+    fileTree(layout.buildDirectory.get().asFile) { include("**/*.exec") }
   )
 }
