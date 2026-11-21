@@ -279,21 +279,28 @@ tasks.register<JacocoReport>("jacocoTestReport") {
     xml.required.set(true)
     html.required.set(true)
   }
-  val kotlinClasses = fileTree("${layout.buildDirectory.get().asFile}/tmp/kotlin-classes/debug") {
-    exclude(
-      "**/R.class", "**/R$*.class", "**/BuildConfig.*", "**/Manifest*.*",
-      "**/*_Factory.*", "**/*_MembersInjector.*", "**/Dagger*.*"
-    )
-  }
-  val javaClasses = fileTree("${layout.buildDirectory.get().asFile}/intermediates/javac/debug/classes") {
-    exclude("**/R.class", "**/R$*.class", "**/BuildConfig.*", "**/Manifest*.*")
-  }
-  classDirectories.setFrom(kotlinClasses, javaClasses)
+  // AGP 9's built-in Kotlin moves class output between releases, so
+  // instead of guessing directories: every .class under the build
+  // dir (minus generated/resource classes) and every .exec the test
+  // run produced. Two earlier exact-path wirings produced empty
+  // reports (CI runs 44900023891 / 44901131830 — audit phase 0); the
+  // doFirst diagnostic prints what was actually found.
+  classDirectories.setFrom(
+    fileTree(layout.buildDirectory.get().asFile) {
+      include("**/*.class")
+      exclude(
+        "**/R.class", "**/R$*.class", "**/BuildConfig.*", "**/Manifest*.*",
+        "**/*_Factory.*", "**/*_MembersInjector.*", "**/Dagger*.*",
+        "**/res/**", "**/tmp/**/mockable*"
+      )
+    }
+  )
   sourceDirectories.setFrom(files("src/main/java"))
-  // Any .exec the unit-test run produced, wherever this AGP/Gradle
-  // pair puts it (the first wiring guessed two exact paths and
-  // produced an empty report on CI run 44900023891 — audit phase 0).
   executionData.setFrom(
     fileTree(layout.buildDirectory.get().asFile) { include("**/*.exec") }
   )
+  doFirst {
+    println("JaCoCo audit diagnostic: exec files = ${executionData.files}")
+    println("JaCoCo audit diagnostic: class files found = ${classDirectories.files.size}")
+  }
 }
