@@ -205,7 +205,7 @@ fun HomeDashboardScreen(
                             Icon(
                                 Icons.Default.PlayArrow,
                                 contentDescription = null,
-                                tint = LibColors.LibColors.MaroonDeep,
+                                tint = LibColors.MaroonDeep,
                                 modifier = Modifier.size(30.dp)
                             )
                         }
@@ -508,7 +508,7 @@ private fun ExamCountdownCard() {
                             fontFamily = NotoKufiFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 19.sp,
-                            color = LibColors.LibColors.MaroonDeep
+                            color = LibColors.MaroonDeep
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
