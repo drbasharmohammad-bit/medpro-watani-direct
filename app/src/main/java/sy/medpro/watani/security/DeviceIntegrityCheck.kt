@@ -55,12 +55,13 @@ object DeviceIntegrityCheck {
             }
         }
 
-        return try {
-            Runtime.getRuntime().exec("su").inputStream.close()
-            true
-        } catch (e: Exception) {
-            false
-        }
+        // Audit fix (21 Nov 2026, SEC-C6): the old fallback EXECUTED
+        // `su` — on devices with an interactive root manager that
+        // could hang the library download or pop a root prompt from
+        // an education app, and it contradicted the documented
+        // RootBlock doctrine («never EXECUTES su»). File indicators
+        // above are the whole check now.
+        return false
     }
 
     private fun hasAttachedDebugger(): Boolean {
@@ -68,8 +69,11 @@ object DeviceIntegrityCheck {
     }
 
     private fun isSignatureValid(context: Context): Boolean {
-        // Presence-only: CI keystores rotate per build, so a pinned fingerprint would break legitimate builds.
-        // We only assert the app carries some signature; we do not claim mismatch detection.
+        // Presence-only LOCAL check (the real pinned-signature
+        // verification lives in TamperCheck, whose pin was filled by
+        // the 21 Nov 2026 audit from the stable release cert —
+        // ApkSigningPin). This legacy helper only asserts the app
+        // carries some signature.
         return try {
             val packageManager = context.packageManager
             val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

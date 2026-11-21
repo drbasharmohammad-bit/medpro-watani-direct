@@ -58,6 +58,11 @@ class StudyAlarmActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Audit fix (21 Nov 2026, SEC-S10/SEC-R5): FLAG_SECURE was set
+        // on MainActivity only; this lock-screen activity gets the
+        // same screenshot/recents protection (window-only install —
+        // no temp sweep from here).
+        sy.medpro.watani.ui.security.SecurityChecks.install(window)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)

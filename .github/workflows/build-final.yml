@@ -207,6 +207,26 @@ jobs:
           done
           cp app/build/outputs/apk/release/app-release.apk medpro.apk
 
+      # Audit gate (21 Nov 2026, SEC-R2): the built APK's signing
+      # certificate MUST be the pinned 1.2.x release certificate.
+      # If the keystore restore or the WATANI_* secrets ever go
+      # missing, signing silently falls back to default/debug
+      # credentials in gradle — this step makes that failure LOUD:
+      # a wrongly-signed APK can never leave CI green (it would not
+      # install over students' copies anyway, and shipping it would
+      # burn a whole release cycle).
+      - name: Verify release signature matches the pinned certificate
+        run: |
+          APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$APKSIGNER" ]; then echo "::error::apksigner not found on runner"; exit 1; fi
+          CERT_SHA256="$("$APKSIGNER" verify --print-certs medpro.apk | grep -i "SHA-256 digest" | head -1 | sed 's/.*: //' | tr -d ' :' | tr 'A-F' 'a-f')"
+          echo "Built APK signer SHA-256: $CERT_SHA256"
+          if [ "$CERT_SHA256" != "be41d53fcdb0e96739bb445efdf0c453d7fd0957888567dc5a92aea1b189c1b2" ]; then
+            echo "::error::APK is NOT signed with the pinned release certificate (expected be41d53f...) — refusing to ship. Check the keystore restore step and WATANI_* secrets."
+            exit 1
+          fi
+          echo "Signature matches the pinned release certificate."
+
       - name: Show stable SHA-1 (registered in Firebase once)
         run: |
           {

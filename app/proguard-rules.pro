@@ -87,3 +87,15 @@
 # the reader renders with PdfRenderer and only extracts text), so
 # the warning is suppressed exactly as R8's missing_rules suggests.
 -dontwarn com.gemalto.jp2.JP2Decoder
+
+# ── Release log stripping (full audit 21 Nov 2026, SEC-S9/SEC-C3) ──
+# Debug/verbose android.util.Log calls are removed from release
+# builds: activation-flow Log.d lines printed raw server error
+# strings and sign-in error details to logcat. Warning/error logs
+# are kept (Crashlytics breadcrumbs value, no content in them).
+-assumenosideeffects class android.util.Log {
+    public static int d(java.lang.String, java.lang.String);
+    public static int d(java.lang.String, java.lang.String, java.lang.Throwable);
+    public static int v(java.lang.String, java.lang.String);
+    public static int v(java.lang.String, java.lang.String, java.lang.Throwable);
+}
