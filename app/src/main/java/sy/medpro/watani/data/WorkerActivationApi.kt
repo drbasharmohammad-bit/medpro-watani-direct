@@ -417,6 +417,7 @@ object WorkerActivationApi {
             "bad_request" -> "طلب تفعيل غير صالح — أعد المحاولة."
             "server_misconfigured" -> "خطأ في إعدادات الخادم — أبلغ الإدارة."
             "auth" -> "تعذر التحقق من الحساب — سجّل الدخول ثم أعد المحاولة."
+            "uid_only_disabled" -> "تعذر التحقق من الحساب — سجّل الدخول من جديد ثم أعد المحاولة."
             else -> if (httpCode == 401 || httpCode == 403) {
                 "انتهى التفعيل على هذا الجهاز — أعد إدخال كود التفعيل."
             } else {
@@ -548,13 +549,29 @@ object WorkerActivationApi {
                 } catch (_: Exception) {
                     null
                 }
+                // Audit fix (21 Nov 2026, SEC-A1): FAIL CLOSED. The old
+                // code swallowed a getIdToken failure and sent the
+                // activation WITHOUT the token, which dropped the
+                // request onto the gateway's legacy uid-only shape —
+                // identity by self-declared uid. The neighbouring
+                // restore/register calls already refuse to send
+                // tokenless; activation now does the same. Without a
+                // verified identity there is no activation attempt at
+                // all (and this is what makes switching the gateway's
+                // uid-only flag off safe for real students).
+                if (idToken.isNullOrBlank()) {
+                    return@withContext Pair(
+                        false,
+                        "تعذر التحقق من الحساب — تحقق من الاتصال ثم أعد المحاولة."
+                    )
+                }
                 val bodyJson = JSONObject().apply {
                     put("code", trimmed)
                     put("uid", user.uid)
                     put("email", user.email ?: "")
                     put("displayName", user.displayName ?: "")
                     put("deviceId", deviceId(context))
-                    if (!idToken.isNullOrBlank()) put("idToken", idToken)
+                    put("idToken", idToken)
                 }.toString()
                 val request = Request.Builder()
                     .url("$WORKER_BASE/v1/activate")

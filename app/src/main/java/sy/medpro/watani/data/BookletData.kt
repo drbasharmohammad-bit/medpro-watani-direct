@@ -240,10 +240,17 @@ object BookletDownloadManager {
     private val calls = ConcurrentHashMap<String, Call>()
     private val tempFiles = ConcurrentHashMap<String, File>()
 
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+    // Audit fix (21 Nov 2026, SEC-N1): this was the one content
+    // client built WITHOUT the SPKI pinning every other client
+    // applies (WataniRepository, WorkerActivationApi, gateway HLS).
+    // Booklets are fetched from the pinned content host, so the
+    // pinner applies cleanly; hosts outside the pin set are
+    // unaffected by CertificatePinner.
+    private val client: OkHttpClient = sy.medpro.watani.security.NetworkPinning.apply(
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+    ).build()
 
     private fun setState(path: String, state: BookletDlState) {
         _states.update { it + (path to state) }
