@@ -128,20 +128,7 @@ object ContentEncryption {
                 val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
                 cipher.init(Cipher.DECRYPT_MODE, key, spec)
 
-                FileOutputStream(tmpFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        val decrypted = cipher.update(buffer, 0, bytesRead)
-                        if (decrypted != null) {
-                            output.write(decrypted)
-                        }
-                    }
-                    val finalBytes = cipher.doFinal()
-                    if (finalBytes != null) {
-                        output.write(finalBytes)
-                    }
-                }
+                streamDecryptToFile(input, tmpFile, cipher)
             }
             if (outputFile.exists()) outputFile.delete()
             if (!tmpFile.renameTo(outputFile)) {
@@ -152,6 +139,28 @@ object ContentEncryption {
         } catch (e: Exception) {
             try { tmpFile.delete() } catch (_: Exception) { }
             false
+        }
+    }
+
+    /** Streams [input] through [cipher] into [tmpFile]; the GCM tag
+     * is verified by doFinal() before this returns, so a tampered
+     * ciphertext throws here and the caller deletes the temp.
+     * Extracted from decryptFile (audit fix-loop, 21 Nov 2026) so
+     * the decrypt flow itself stays flat and auditable. */
+    private fun streamDecryptToFile(input: FileInputStream, tmpFile: File, cipher: Cipher) {
+        FileOutputStream(tmpFile).use { output ->
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                val decrypted = cipher.update(buffer, 0, bytesRead)
+                if (decrypted != null) {
+                    output.write(decrypted)
+                }
+            }
+            val finalBytes = cipher.doFinal()
+            if (finalBytes != null) {
+                output.write(finalBytes)
+            }
         }
     }
 

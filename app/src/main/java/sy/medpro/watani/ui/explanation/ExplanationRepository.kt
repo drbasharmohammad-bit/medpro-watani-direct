@@ -345,14 +345,8 @@ class ExplanationRepository(
         // current index declares; otherwise it is dropped and the
         // shard is re-downloaded below.
         val expectedFingerprint = indexFingerprintOf(shardName)
-        shardCache[shardName]?.let { cached ->
-            if (expectedFingerprint == null ||
-                shardCacheFingerprints[shardName] == expectedFingerprint
-            ) {
-                return Result.success(cached)
-            }
-            shardCache.remove(shardName)
-            shardCacheFingerprints.remove(shardName)
+        memoryCachedShard(shardName, expectedFingerprint)?.let { cached ->
+            return Result.success(cached)
         }
         cleanupLegacyCache()
 
@@ -422,14 +416,35 @@ class ExplanationRepository(
      * declared values — the bytes themselves were never hashed, so
      * a substituted body with a parseable shape passed. */
     private fun shardBytesMismatch(shardName: String, text: String): String? {
-        val entry = cachedIndex?.files?.get(shardName) ?: return null
-        if (entry.hash.isNullOrBlank() && entry.size == null) return null
-        return sy.medpro.watani.data.SectionVerification.manifestMismatch(
-            "explanations/$shardName",
-            text.toByteArray(Charsets.UTF_8),
-            entry.size,
-            entry.hash
-        )
+        val entry = cachedIndex?.files?.get(shardName)
+        return if (entry == null || (entry.hash.isNullOrBlank() && entry.size == null)) {
+            null
+        } else {
+            sy.medpro.watani.data.SectionVerification.manifestMismatch(
+                "explanations/$shardName",
+                text.toByteArray(Charsets.UTF_8),
+                entry.size,
+                entry.hash
+            )
+        }
+    }
+
+    /** The in-memory copy of a shard, served only while its stored
+     * fingerprint matches the one the current index declares; a
+     * stale copy is dropped here so the caller re-downloads.
+     * Extracted from loadShard (audit fix-loop, 21 Nov 2026). */
+    private fun memoryCachedShard(
+        shardName: String,
+        expectedFingerprint: String?
+    ): List<ExplanationRecordDto>? {
+        val cached = shardCache[shardName]
+        val fresh = cached != null &&
+            (expectedFingerprint == null || shardCacheFingerprints[shardName] == expectedFingerprint)
+        if (cached != null && !fresh) {
+            shardCache.remove(shardName)
+            shardCacheFingerprints.remove(shardName)
+        }
+        return if (fresh) cached else null
     }
 
     /**
