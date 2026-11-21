@@ -306,7 +306,7 @@ private fun FaUnitHome(
     if (isSession) {
         steps += FaStepRowData(
             FaStage.TRAINING, "اختبار الجلسة",
-            "${pack.quiz.orEmpty().size} سؤالًا — جلسة تكامل بلا قفل",
+            "${pack.quiz.orEmpty().size} سؤالًا — جلسة تكامل للمفعّلين بالكود",
             if (trainDone) FaStepState.DONE else FaStepState.NOW,
             if (trainDone) "منجزة" else "ابدأ"
         )

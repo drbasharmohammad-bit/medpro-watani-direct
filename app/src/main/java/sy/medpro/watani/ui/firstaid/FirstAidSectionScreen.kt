@@ -694,7 +694,7 @@ private fun FaHome(
                         Text(
                             "$linkCount رابط مواضيع موثّقًا + " +
                                 "${integration.integrationSessions?.step1.orEmpty().size} جلسة Step 1 و" +
-                                "${integration.integrationSessions?.step2.orEmpty().size} جلسات Step 2 — كلها قابلة للعب بلا قفل.",
+                                "${integration.integrationSessions?.step2.orEmpty().size} جلسات Step 2 — جلسات التكامل للمفعّلين بالكود.",
                             fontFamily = NotoSansArabicFontFamily,
                             fontSize = 11.3.sp, lineHeight = 18.sp, color = Color(0xFF97824F)
                         )
@@ -751,13 +751,13 @@ private fun FaHome(
             }
         }
 
-        // Booklet catalog: always available.
+        // Booklet catalog: opening follows each booklet's unit gate.
         val booklets = (index1?.booklets.orEmpty().map { 1 to it } +
             index2?.booklets.orEmpty().map { 2 to it })
         if (booklets.isNotEmpty()) {
             item {
                 Text(
-                    "الكتيّبات (PDF — متاحة دائمًا)",
+                    "الكتيّبات (PDF — تُفتح حسب بوابة وحدتها)",
                     fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
                     fontSize = 15.5.sp, color = faHeading(),
                     modifier = Modifier.padding(top = 4.dp)
@@ -878,7 +878,7 @@ private fun FaIntegrationScreen(
     Column(modifier = Modifier.fillMaxSize().background(faBackground())) {
         FaScreenHeader(
             title = "طبقة التكامل",
-            subtitle = "روابط مواضيع موثّقة بين الكتابين وجلسات تكامل بلا قفل",
+            subtitle = "روابط مواضيع موثّقة بين الكتابين — وجلسات التكامل للمفعّلين بالكود",
             onBack = onBack
         )
         if (integration == null) {
@@ -898,7 +898,7 @@ private fun FaIntegrationScreen(
             if (sessions1.isNotEmpty() || sessions2.isNotEmpty()) {
                 item {
                     Text(
-                        "جلسات التكامل (اختبار 25 سؤالًا — بلا قفل)",
+                        "جلسات التكامل (اختبار 25 سؤالًا — للمفعّلين بالكود)",
                         fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 14.5.sp, color = faHeading(),
                         modifier = Modifier.padding(top = 6.dp)
@@ -940,20 +940,12 @@ private fun FaIntegrationScreen(
                                 FaChip("عابر للأنظمة", FaColors.GoldTint, FaColors.GoldText)
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             link.step1Unit?.let { id ->
-                                FaChip(
-                                    "Step 1: ${unitTitleOf(1, id) ?: id}",
-                                    FaColors.ChipCodeBg, FaColors.Maroon,
-                                    modifier = Modifier.clickable { onOpenLinkedUnit(1, id) }
-                                )
+                                FaUnitLinkRow(1, unitTitleOf(1, id) ?: id) { onOpenLinkedUnit(1, id) }
                             }
                             link.step2Unit?.let { id ->
-                                FaChip(
-                                    "Step 2: ${unitTitleOf(2, id) ?: id}",
-                                    FaColors.GoldTint, FaColors.GoldText,
-                                    modifier = Modifier.clickable { onOpenLinkedUnit(2, id) }
-                                )
+                                FaUnitLinkRow(2, unitTitleOf(2, id) ?: id) { onOpenLinkedUnit(2, id) }
                             }
                         }
                     }
@@ -984,6 +976,41 @@ private fun FaSessionRow(stepLabel: String, id: String, title: String?, onClick:
                 fontSize = 11.sp, color = faMuted()
             )
         }
+    }
+}
+
+@Composable
+private fun FaUnitLinkRow(step: Int, title: String, onClick: () -> Unit) {
+    val isStep1 = step == 1
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isStep1) FaColors.ChipCodeBg else FaColors.GoldTint)
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(if (isStep1) FaColors.Maroon else FaColors.GoldText)
+                .padding(horizontal = 9.dp, vertical = 3.dp)
+        ) {
+            Text(
+                "Step $step",
+                fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
+                fontSize = 10.5.sp, color = Color.White
+            )
+        }
+        Text(
+            title,
+            fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
+            fontSize = 12.5.sp, lineHeight = 19.sp,
+            color = if (isStep1) FaColors.Maroon else FaColors.GoldText,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
