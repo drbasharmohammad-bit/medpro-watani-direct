@@ -44,7 +44,7 @@ class Build1232LogicTest {
         )
         assertEquals("dl.hdr-market.com", AppUpdate.CUSTOM_DOMAIN_HOST)
         assertEquals(
-            "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.31/watani-latest.apk",
+            "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.38/watani-latest.apk",
             AppUpdate.GITHUB_APK_URL
         )
     }
@@ -73,6 +73,24 @@ class Build1232LogicTest {
         assertFalse(AppUpdate.isApkUrlAllowed(null))
         assertFalse(AppUpdate.isApkUrlAllowed(""))
         assertFalse(AppUpdate.isApkUrlAllowed("file:///sdcard/x.apk"))
+        // Audit SEC-N2 (21 Nov 2026): userinfo must never smuggle a
+        // trusted-looking prefix past the host check — the real
+        // host of these URLs is the attacker's.
+        assertFalse(
+            AppUpdate.isApkUrlAllowed(
+                "https://github.com:443@evil.example/x.apk"
+            )
+        )
+        assertFalse(
+            AppUpdate.isApkUrlAllowed(
+                "https://watani-content.pages.dev@evil.example/x.apk"
+            )
+        )
+        assertFalse(
+            AppUpdate.isApkUrlAllowed(
+                "https://user:pass@github.com/x.apk"
+            )
+        )
     }
 
     // ---------------- Candidate ordering ----------------

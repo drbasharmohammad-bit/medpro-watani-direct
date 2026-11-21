@@ -15,9 +15,11 @@ import java.security.MessageDigest
  *  2. Signature presence / consistency — BLOCKS when no signing certificate
  *     can be read at all. Presence-only: it proves the APK is signed, not
  *     that it is OUR signature (see pinned-signature limit below).
- *  3. Pinned signature — BLOCKS on mismatch ONLY once a stable release
- *     keystore exists and [PINNED_SIGNATURE_SHA256] is filled in. Today it
- *     is empty, so this check reports UNCONFIGURED and never blocks.
+ *  3. Pinned signature — BLOCKS on mismatch against
+ *     [PINNED_SIGNATURE_SHA256]. The pin was filled in by the
+ *     21 Nov 2026 full audit (SEC-R1/SEC-C7): the 1.2.x line DOES
+ *     have a stable release keystore, and the pinned digest was
+ *     verified from the published 74312 binary itself.
  *  4. Installer source — WARNING ONLY, never blocks. The doctor distributes
  *     builds directly (e.g. via Telegram), so a null installer is a
  *     legitimate install here, not evidence of tampering.
@@ -27,15 +29,15 @@ import java.security.MessageDigest
  *     RestrictedContentGate.
  *
  * HONEST LIMIT — READ BEFORE RELYING ON THIS FILE:
- * Full signature pinning against a hardcoded hash is NOT possible yet.
- * CI builds use an ephemeral debug keystore per build, so the signing
- * certificate changes on every build and any pinned hash would break
- * legitimate builds. The pinned-signature hook below ([PINNED_SIGNATURE_SHA256]
- * + [isPinnedSignatureMatch]) is implemented and ready: the day a stable
- * release keystore exists, fill in the SHA-256 of its certificate and this
- * check starts blocking repacks signed with any other key. Until then, a
- * repack signed with the attacker's own key PASSES the presence check —
- * this layer catches package-id reuse and unsigned builds only.
+ * The pin below was filled in on 21 Nov 2026 (full audit, SEC-R1):
+ * the earlier "ephemeral CI keystore" premise no longer holds — the
+ * 1.2.x release line is signed with one stable keystore, and the
+ * pinned SHA-256 was extracted from the published 74312 APK's own
+ * signature block. A repack signed with the attacker's own key now
+ * FAILS this check (pin MISMATCH blocks). Local/CI builds signed
+ * with any other key (e.g. a debug keystore) also report MISMATCH
+ * and are blocked from restricted content by the gate — intended:
+ * only the release key opens restricted content.
  * Nothing here is "unhackable": a repacker who also patches this check out
  * of the client bypasses it entirely; server-side checks would be needed
  * for stronger guarantees, and they are out of scope for this branch.
@@ -46,12 +48,14 @@ import java.security.MessageDigest
 object TamperCheck {
 
     /**
-     * SHA-256 (lowercase hex) of the release signing certificate.
-     * EMPTY = not configured (current state: ephemeral CI debug keystore).
-     * Fill this in only when a stable release keystore exists, and only
-     * with the release certificate — never a debug certificate.
+     * SHA-256 (lowercase hex) of the release signing certificate —
+     * the single source of truth is [sy.medpro.watani.security.ApkSigningPin]
+     * (verified from the published 74312 binary, 21 Nov 2026 audit).
+     * An empty value would mean UNCONFIGURED (never blocks); the pin
+     * is filled, so a mismatch BLOCKS.
      */
-    const val PINNED_SIGNATURE_SHA256: String = ""
+    const val PINNED_SIGNATURE_SHA256: String =
+        sy.medpro.watani.security.ApkSigningPin.SHA256
 
     enum class PinStatus { UNCONFIGURED, MATCH, MISMATCH, ABSENT }
 

@@ -9,8 +9,12 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import sy.medpro.watani.security.ApkSigningPin
+import android.content.pm.PackageManager
+import java.security.MessageDigest
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -54,6 +58,14 @@ import java.util.concurrent.TimeUnit
  * followed by OkHttp as usual (github.com release links redirect
  * to GitHub's own asset host); the pin is on the initial host,
  * exactly like a browser trusting the link it was given.
+ *
+ * Audit hardening (21 Nov 2026, SEC-N2 + SEC-C1): the initial-host
+ * check now uses OkHttp's own URL parser and refuses userinfo
+ * URLs, and — decisively — a completed download is handed to the
+ * installer ONLY when its signing certificate matches the pinned
+ * release certificate ([ApkSigningPin]); a mismatch deletes the
+ * file. The host allowlist decides where a download may START;
+ * the certificate decides what may INSTALL.
  */
 object AppUpdate {
 
@@ -65,7 +77,7 @@ object AppUpdate {
      * the app repository — a different network path than the
      * content host, for networks where *.pages.dev is throttled). */
     const val GITHUB_APK_URL =
-        "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.31/watani-latest.apk"
+        "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.38/watani-latest.apk"
 
     /** Custom domain attached to the same content project
      * (dl.hdr-market.com). Trusted since 1.2.32 so it can be
@@ -98,14 +110,22 @@ object AppUpdate {
         .build()
 
     /** Pure (unit-tested): only an https URL whose host is exactly
-     * one of the trusted update hosts is installable. */
+     * one of the trusted update hosts is installable.
+     *
+     * Audit fix (21 Nov 2026, SEC-N2): the host is now taken from a
+     * real URL parse (OkHttp HttpUrl — the same parser the download
+     * itself uses), not from string surgery. The old string split
+     * read «github.com» out of `https://github.com:443@evil/…`
+     * while OkHttp would have connected to the userinfo host
+     * (evil). Any URL carrying userinfo (user@host) is refused
+     * outright, and the compared host is the parser's host. */
     fun isApkUrlAllowed(url: String?): Boolean {
         val u = url?.trim().orEmpty()
-        if (!u.startsWith("https://")) return false
-        val host = u.removePrefix("https://")
-            .substringBefore('/')
-            .substringBefore(':')
-        return host in ALLOWED_HOSTS
+        if (u.isEmpty()) return false
+        val parsed = u.toHttpUrlOrNull() ?: return false
+        if (parsed.scheme != "https") return false
+        if (parsed.username.isNotEmpty() || parsed.password.isNotEmpty()) return false
+        return parsed.host in ALLOWED_HOSTS
     }
 
     /** Pure (unit-tested): the config value when it is trustworthy,
@@ -220,7 +240,22 @@ object AppUpdate {
             for (attempt in 0 until MAX_ATTEMPTS_PER_URL) {
                 try {
                     if (downloadOnce(context, url, onProgress)) {
-                        return@withContext updateFile(context)
+                        // Audit fix (21 Nov 2026, SEC-C1): a completed
+                        // download is verified against the pinned
+                        // release certificate BEFORE it can be handed
+                        // to the installer. A mismatch (poisoned mirror,
+                        // swapped file) deletes the file and moves on
+                        // to the next candidate address; no candidate
+                        // may install an APK signed by anyone else.
+                        val file = updateFile(context)
+                        if (isTrustedApk(context, file)) {
+                            return@withContext file
+                        }
+                        file.delete()
+                        lastError = SecurityException(
+                            "update apk signature mismatch"
+                        )
+                        break
                     }
                 } catch (e: Exception) {
                     lastError = e
@@ -232,6 +267,55 @@ object AppUpdate {
         }
         throw lastError ?: IllegalStateException("update download failed")
     }
+
+    /** SHA-256 (lowercase hex) of the signing certificate of an APK
+     * file on disk, read through PackageManager's archive info;
+     * null when the file is not a readable APK or carries no
+     * signature. */
+    fun archiveCertSha256(context: Context, apk: File): String? {
+        return try {
+            val pm = context.packageManager
+            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                pm.getPackageArchiveInfo(
+                    apk.absolutePath,
+                    PackageManager.PackageInfoFlags.of(
+                        PackageManager.GET_SIGNING_CERTIFICATES.toLong()
+                    )
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                @Suppress("DEPRECATION")
+                pm.getPackageArchiveInfo(
+                    apk.absolutePath,
+                    PackageManager.GET_SIGNING_CERTIFICATES
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                pm.getPackageArchiveInfo(
+                    apk.absolutePath,
+                    PackageManager.GET_SIGNATURES
+                )
+            } ?: return null
+            val certs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.signingInfo?.apkContentsSigners
+            } else {
+                @Suppress("DEPRECATION")
+                info.signatures
+            }
+            val first = certs?.firstOrNull() ?: return null
+            MessageDigest.getInstance("SHA-256")
+                .digest(first.toByteArray())
+                .joinToString("") { "%02x".format(it) }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** True only when [apk] is signed with the pinned release
+     * certificate ([ApkSigningPin]). An unreadable or unsigned file
+     * is NOT trusted. */
+    fun isTrustedApk(context: Context, apk: File): Boolean =
+        archiveCertSha256(context, apk)
+            ?.equals(ApkSigningPin.SHA256, ignoreCase = true) == true
 
     /** One download attempt against [url], resuming the kept
      * partial when it provably belongs to this URL. Returns true
