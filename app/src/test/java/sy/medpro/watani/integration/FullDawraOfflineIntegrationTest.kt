@@ -146,10 +146,12 @@ class FullDawraOfflineIntegrationTest {
             composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q3_WRONG_OPTION)
                 .performSemanticsAction(SemanticsActions.OnClick)
             pumpClock()
-            composeRule.onNodeWithText("المُنجز: 2 / 4").assertExists()
-            composeRule.onNodeWithText("الدقة: 50% (1 صحيحة)").assertExists()
-            // Back to the top: the live header must DISPLAY the
-            // final counters (1 correct of 2 answered = 50%).
+            // The counters live in the header card (lazy item 0),
+            // which leaves composition while scrolled down — so
+            // they can only be asserted after scrolling back to
+            // the top. (Asserting them mid-scroll failed in runs
+            // 45021121525/45022411093: the text was not missing
+            // from the app, it was uncomposed.)
             composeRule.onNode(hasScrollAction()).performScrollToIndex(0)
             pumpClock()
             composeRule.onNodeWithText("المُنجز: 2 / 4").assertIsDisplayed()
