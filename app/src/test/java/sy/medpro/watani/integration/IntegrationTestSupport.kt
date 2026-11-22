@@ -62,11 +62,21 @@ object IntegrationTestSupport {
 
     /** Wipes the local state the flows under test read: the
      * activation store, the consent store, the app settings, the
-     * section-cache crypto store, and every cached section file. */
+     * section-cache crypto store, and every cached section file.
+     * Belt and braces: the in-memory clear is paired with deleting
+     * the shared_prefs files themselves, because the production
+     * activation store is an EncryptedSharedPreferences whose
+     * instance is cached per process — a plain-instance clear was
+     * observed in CI not to reset it inside a shared Robolectric
+     * sandbox. */
     fun clearLocalState(context: Context) {
         for (name in PREFS_TO_CLEAR) {
             context.getSharedPreferences(name, Context.MODE_PRIVATE)
                 .edit().clear().commit()
+        }
+        val prefsDir = File(context.dataDir, "shared_prefs")
+        prefsDir.listFiles()?.forEach { file ->
+            if (PREFS_TO_CLEAR.any { file.name.startsWith(it) }) file.delete()
         }
         File(context.filesDir, "sections_cache").deleteRecursively()
     }

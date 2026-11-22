@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
@@ -116,9 +117,15 @@ class FullDawraOfflineIntegrationTest {
             // Subject span headers render over the flat list.
             composeRule.onNodeWithText("القلبية", substring = true).assertExists()
             composeRule.onNodeWithText("المُنجز: 0 / 4").assertIsDisplayed()
-            // Q1: tap the correct option.
+            // Q1: tap the correct option. Post-tap assertions wait
+            // for the counter text to actually land in the tree —
+            // under Robolectric the tap's state update and the
+            // assertion race on the main looper, and a bare assert
+            // proved flaky across CI runs (45014209532 vs
+            // 45017411012 failed on adjacent lines).
             composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q1_CORRECT_OPTION)
                 .performClick()
+            waitForText("المُنجز: 1 / 4")
             composeRule.onNodeWithText("المُنجز: 1 / 4").assertIsDisplayed()
             composeRule.onNodeWithText("الدقة: 100% (1 صحيحة)").assertExists()
             // Q3 (list item 3: header card, Q1, Q2, Q3): scroll it
@@ -126,6 +133,7 @@ class FullDawraOfflineIntegrationTest {
             composeRule.onNode(hasScrollAction()).performScrollToIndex(Q3_ITEM_INDEX)
             composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q3_WRONG_OPTION)
                 .performClick()
+            waitForText("المُنجز: 2 / 4")
             composeRule.onNodeWithText("المُنجز: 2 / 4").assertExists()
             composeRule.onNodeWithText("الدقة: 50% (1 صحيحة)").assertExists()
             // Back to the top: the live header must DISPLAY the
@@ -136,7 +144,17 @@ class FullDawraOfflineIntegrationTest {
         }
     }
 
+    /** Polls the semantics tree (pumping the main looper) until
+     * [text] exists — the deterministic form of a post-action
+     * assertion under Robolectric. */
+    private fun waitForText(text: String) {
+        composeRule.waitUntil(timeoutMillis = WAIT_MS) {
+            composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
     private companion object {
+        const val WAIT_MS = 15_000L
         const val EXPECTED_QUESTIONS = 4
         const val EXPECTED_SUBJECTS = 2
         const val EXPECTED_PER_SUBJECT = 2
