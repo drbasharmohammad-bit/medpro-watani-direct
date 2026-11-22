@@ -2,6 +2,7 @@ package sy.medpro.watani.integration
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -14,14 +15,25 @@ import sy.medpro.watani.data.WorkerActivationApi
 
 /**
  * Layer 3 — the activation journey up to the boundary the
- * production code guarantees OFFLINE. WorkerActivationApi fails
- * closed (SEC-A1) before any network or storage write when the
- * code is blank or when there is no signed-in user to bind the
- * activation to: both journeys are exercised here against the
- * real API and the real (encrypted) store, and the store's
- * offline read/write round trip — the same store the update gate
- * and the activation state are read back from — is proven through
- * its public surface.
+ * production code guarantees OFFLINE. WorkerActivationApi.activate
+ * takes the signed-in FirebaseUser explicitly and fails closed
+ * (SEC-A1) before any network call or storage write when the code
+ * is blank or when the user's ID token cannot be minted; both
+ * legs are exercised here against the real API and the real
+ * (encrypted) store, and the store's offline read/write round
+ * trip — the same store the activation state and the update gate
+ * are read back from — is proven through its public surface.
+ *
+ * The user double is the Firebase SDK's own concrete FirebaseUser
+ * implementation (com.google.firebase.auth.internal.zzad in
+ * firebase-auth 24.2.0), allocated WITHOUT a constructor via
+ * Unsafe: it carries no account state, so its token can never be
+ * minted — exactly the SEC-A1 precondition. (A hand-written
+ * subclass is impossible from test source: FirebaseUser's public
+ * abstract surface includes methods whose types live in the
+ * hyphenated internal GMS package
+ * com.google.android.gms.internal.firebase-auth-api, which
+ * Kotlin/Java source cannot name — verified against the AAR.)
  *
  * The remaining leg (a gateway round trip: right code -> stored
  * activation, wrong code -> server rejection) cannot run in this
@@ -44,22 +56,37 @@ class ActivationJourneyIntegrationTest {
         IntegrationTestSupport.clearLocalState(context)
     }
 
+    /** A FirebaseUser with no account state behind it (see the
+     * class doc): every token request fails, which is precisely
+     * the state the SEC-A1 fail-closed branch exists for. */
+    private fun statelessUser(): FirebaseUser {
+        val unsafeClass = Class.forName("sun.misc.Unsafe")
+        val theUnsafe = unsafeClass.getDeclaredField("theUnsafe")
+            .apply { isAccessible = true }.get(null)
+        val allocate = unsafeClass.getMethod("allocateInstance", Class::class.java)
+        val impl = Class.forName("com.google.firebase.auth.internal.zzad")
+        return allocate.invoke(theUnsafe, impl) as FirebaseUser
+    }
+
     @Test
     fun blankCodeFailsClosedAndStoresNothing() = runBlocking {
-        val result = WorkerActivationApi.activate(context, "   ")
-        assertTrue(result.isFailure)
+        val (ok, message) = WorkerActivationApi.activate(context, statelessUser(), "   ")
+        assertFalse(ok)
+        assertEquals("يرجى إدخال كود تفعيل صالح.", message)
         assertFalse(WorkerActivationApi.isActivated(context))
         assertFalse(WorkerActivationApi.hasExpiredToken(context))
     }
 
     @Test
-    fun signedOutActivationFailsClosedAndStoresNothing() = runBlocking {
-        // A well-formed-looking code, but no signed-in user exists
-        // for the activation to bind to (dummy Firebase app, no
-        // session): production must refuse before any gateway call
-        // or storage write.
-        val result = WorkerActivationApi.activate(context, PLAUSIBLE_CODE)
-        assertTrue(result.isFailure)
+    fun unmintableTokenFailsClosedBeforeAnyGatewayCall() = runBlocking {
+        // A well-formed-looking code and a user object whose ID
+        // token cannot be minted: SEC-A1 must refuse BEFORE the
+        // gateway is contacted and before anything is stored.
+        val (ok, message) = WorkerActivationApi.activate(
+            context, statelessUser(), PLAUSIBLE_CODE
+        )
+        assertFalse(ok)
+        assertEquals("تعذر التحقق من الحساب — تحقق من الاتصال ثم أعد المحاولة.", message)
         assertFalse(WorkerActivationApi.isActivated(context))
         val stored = context.getSharedPreferences(
             WorkerActivationApi.PREFS_NAME, Context.MODE_PRIVATE
