@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
@@ -99,9 +98,15 @@ class FullDawraOfflineIntegrationTest {
                 .getDawraSessionRecords(IntegrationTestSupport.DAWRA_PATH)
             assertNotNull(records)
             val quiz = buildDawraQuizFromRecords(records!!)
-            // The per-question timer loop never idles; freeze the
-            // test clock so idle-waiting does not try to
-            // fast-forward it.
+            // The per-question timer loop never idles on its own;
+            // freeze the test clock and pump virtual time MANUALLY
+            // after every step. (Bare assertions raced the tap's
+            // state update on Robolectric's looper — adjacent
+            // assertion lines failed in successive CI runs — and a
+            // waitUntil does not advance a frozen clock, so the
+            // deterministic primitive here is advanceBy: it runs
+            // the pending frames and applies the pending state
+            // before anything is asserted.)
             composeRule.mainClock.autoAdvance = false
             composeRule.setContent {
                 WataniTheme(darkTheme = false) {
@@ -114,47 +119,44 @@ class FullDawraOfflineIntegrationTest {
                     )
                 }
             }
+            pumpClock()
             // Subject span headers render over the flat list.
             composeRule.onNodeWithText("القلبية", substring = true).assertExists()
             composeRule.onNodeWithText("المُنجز: 0 / 4").assertIsDisplayed()
-            // Q1: tap the correct option. Post-tap assertions wait
-            // for the counter text to actually land in the tree —
-            // under Robolectric the tap's state update and the
-            // assertion race on the main looper, and a bare assert
-            // proved flaky across CI runs (45014209532 vs
-            // 45017411012 failed on adjacent lines).
+            // Q1: tap the correct option, pump, then read the
+            // live counters.
             composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q1_CORRECT_OPTION)
                 .performClick()
-            waitForText("المُنجز: 1 / 4")
+            pumpClock()
             composeRule.onNodeWithText("المُنجز: 1 / 4").assertIsDisplayed()
             composeRule.onNodeWithText("الدقة: 100% (1 صحيحة)").assertExists()
             // Q3 (list item 3: header card, Q1, Q2, Q3): scroll it
             // into composition and tap a wrong option.
             composeRule.onNode(hasScrollAction()).performScrollToIndex(Q3_ITEM_INDEX)
+            pumpClock()
             composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q3_WRONG_OPTION)
                 .performClick()
-            waitForText("المُنجز: 2 / 4")
+            pumpClock()
             composeRule.onNodeWithText("المُنجز: 2 / 4").assertExists()
             composeRule.onNodeWithText("الدقة: 50% (1 صحيحة)").assertExists()
             // Back to the top: the live header must DISPLAY the
             // final counters (1 correct of 2 answered = 50%).
             composeRule.onNode(hasScrollAction()).performScrollToIndex(0)
+            pumpClock()
             composeRule.onNodeWithText("المُنجز: 2 / 4").assertIsDisplayed()
             composeRule.onNodeWithText("الدقة: 50% (1 صحيحة)").assertIsDisplayed()
         }
     }
 
-    /** Polls the semantics tree (pumping the main looper) until
-     * [text] exists — the deterministic form of a post-action
-     * assertion under Robolectric. */
-    private fun waitForText(text: String) {
-        composeRule.waitUntil(timeoutMillis = WAIT_MS) {
-            composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
-        }
+    /** Advances the frozen test clock past a full timer tick, so
+     * every frame and state update pending from the previous step
+     * is applied before the next assertion. */
+    private fun pumpClock() {
+        composeRule.mainClock.advanceBy(SETTLE_MS)
     }
 
     private companion object {
-        const val WAIT_MS = 15_000L
+        const val SETTLE_MS = 1_100L
         const val EXPECTED_QUESTIONS = 4
         const val EXPECTED_SUBJECTS = 2
         const val EXPECTED_PER_SUBJECT = 2

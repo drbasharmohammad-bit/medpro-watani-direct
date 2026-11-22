@@ -63,22 +63,52 @@ object IntegrationTestSupport {
     /** Wipes the local state the flows under test read: the
      * activation store, the consent store, the app settings, the
      * section-cache crypto store, and every cached section file.
-     * Belt and braces: the in-memory clear is paired with deleting
-     * the shared_prefs files themselves, because the production
-     * activation store is an EncryptedSharedPreferences whose
-     * instance is cached per process — a plain-instance clear was
-     * observed in CI not to reset it inside a shared Robolectric
-     * sandbox. */
+     *
+     * The activation store needs a special path: production caches
+     * its EncryptedSharedPreferences instances per process
+     * (WorkerActivationApi.encryptedPrefsCache), and under
+     * Robolectric a clear issued through a NEW plain instance of
+     * the same file does not reach the state the cached instance
+     * reads — CI proved it twice (a sibling test's saved value,
+     * 74317 then 999999, survived the plain clear across methods
+     * AND across classes sharing a sandbox). So the store is also
+     * cleared THROUGH the production instances themselves,
+     * reached reflectively from the test side only; production
+     * code is untouched. */
     fun clearLocalState(context: Context) {
         for (name in PREFS_TO_CLEAR) {
             context.getSharedPreferences(name, Context.MODE_PRIVATE)
                 .edit().clear().commit()
         }
+        clearProductionActivationStore()
         val prefsDir = File(context.dataDir, "shared_prefs")
         prefsDir.listFiles()?.forEach { file ->
             if (PREFS_TO_CLEAR.any { file.name.startsWith(it) }) file.delete()
         }
         File(context.filesDir, "sections_cache").deleteRecursively()
+    }
+
+    /** Clears every SharedPreferences instance the production
+     * activation API has cached in this process, through those
+     * very instances (see clearLocalState's doc). Best effort: if
+     * the cache field ever changes shape, the plain clears above
+     * still apply. */
+    private fun clearProductionActivationStore() {
+        try {
+            val apiClass = Class.forName("sy.medpro.watani.data.WorkerActivationApi")
+            // A Kotlin object: the state lives on the INSTANCE
+            // singleton, not on the class.
+            val instance = apiClass.getDeclaredField("INSTANCE").get(null)
+            val field = apiClass.getDeclaredField("encryptedPrefsCache")
+            field.isAccessible = true
+            val cache = field.get(instance) as? Map<*, *> ?: return
+            for (prefs in cache.values) {
+                (prefs as? android.content.SharedPreferences)
+                    ?.edit()?.clear()?.commit()
+            }
+        } catch (_: Exception) {
+            // Best effort only — see the doc above.
+        }
     }
 
     /** Seeds one content section into the app's own cache, at the
