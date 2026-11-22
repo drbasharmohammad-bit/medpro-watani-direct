@@ -142,6 +142,40 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      # Layer 3 of the AI-code review methodology (adopted
+      # 22 Nov 2026, docs/RELEASE_CHECKLIST.md): integration /
+      # end-to-end tests over the critical flows (launch gate,
+      # update gate, offline full-dawra, cases gate, First Aid
+      # gate, activation fail-closed journey, navigation state).
+      # The full-suite step above already executes them; this named
+      # step re-runs ONLY the integration package so a layer-3
+      # failure is attributable at a glance, and publishes its
+      # reports as their own artifact. Same retry pattern as the
+      # other Gradle steps.
+      - name: Layer 3 — integration tests (critical flows)
+        env:
+          WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
+          WATANI_KEY_ALIAS: watani
+          WATANI_KEY_PASSWORD: ${{ secrets.WATANI_KEY_PASSWORD }}
+          WATANI_KEYSTORE_TYPE: PKCS12
+        run: |
+          for attempt in 1 2 3; do
+            if gradle :app:testDebugUnitTest --tests "sy.medpro.watani.integration.*" --console=plain --max-workers=2; then break; fi
+            if [ "$attempt" = "3" ]; then exit 1; fi
+            echo "Gradle attempt $attempt failed; retrying in 30s..."; sleep 30
+          done
+
+      - name: Upload integration test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest
+            app/build/test-results/testDebugUnitTest
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Lint (new errors fail; legacy errors are baselined)
         env:
           WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
