@@ -120,7 +120,7 @@ class FullDawraOfflineIntegrationTest {
             composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q1_CORRECT_OPTION)
                 .performClick()
             composeRule.onNodeWithText("المُنجز: 1 / 4").assertIsDisplayed()
-            composeRule.onNodeWithText("الدقة: 100% (1 صحيحة)").assertIsDisplayed()
+            composeRule.onNodeWithText("الدقة: 100% (1 صحيحة)").assertExists()
             // Q3 (list item 3: header card, Q1, Q2, Q3): scroll it
             // into composition and tap a wrong option.
             composeRule.onNode(hasScrollAction()).performScrollToIndex(Q3_ITEM_INDEX)
@@ -128,6 +128,11 @@ class FullDawraOfflineIntegrationTest {
                 .performClick()
             composeRule.onNodeWithText("المُنجز: 2 / 4").assertExists()
             composeRule.onNodeWithText("الدقة: 50% (1 صحيحة)").assertExists()
+            // Back to the top: the live header must DISPLAY the
+            // final counters (1 correct of 2 answered = 50%).
+            composeRule.onNode(hasScrollAction()).performScrollToIndex(0)
+            composeRule.onNodeWithText("المُنجز: 2 / 4").assertIsDisplayed()
+            composeRule.onNodeWithText("الدقة: 50% (1 صحيحة)").assertIsDisplayed()
         }
     }
 

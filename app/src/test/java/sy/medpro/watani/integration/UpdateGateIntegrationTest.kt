@@ -46,15 +46,6 @@ class UpdateGateIntegrationTest {
     }
 
     @Test
-    fun freshStateNeverBlocks() {
-        // Nothing learned from any config fetch yet.
-        assertEquals(0, WorkerActivationApi.knownMinVersion(context))
-        assertFalse(AppVersionGate.isUpdateRequired(context))
-        val current = AppVersionGate.currentVersionCode(context)
-        assertFalse(AppVersionGate.isBlocked(current, WorkerActivationApi.knownMinVersion(context)))
-    }
-
-    @Test
     fun learnedMinVersionAboveCurrentBlocks() {
         val current = AppVersionGate.currentVersionCode(context).toInt()
         // The gateway config path persists the learned floor

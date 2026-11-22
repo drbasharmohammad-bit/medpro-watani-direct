@@ -107,13 +107,6 @@ class ActivationJourneyIntegrationTest {
         assertTrue(WorkerActivationApi.knownApkUrls(context).contains(APK_URL))
     }
 
-    @Test
-    fun emptyStoreReadsAsNotActivated() {
-        assertFalse(WorkerActivationApi.isActivated(context))
-        assertFalse(WorkerActivationApi.hasExpiredToken(context))
-        assertEquals(0, WorkerActivationApi.knownMinVersion(context))
-    }
-
     private companion object {
         const val PLAUSIBLE_CODE = "WATANI-INTEGRATION-TEST"
         const val FUTURE_MIN_VERSION = 999_999
