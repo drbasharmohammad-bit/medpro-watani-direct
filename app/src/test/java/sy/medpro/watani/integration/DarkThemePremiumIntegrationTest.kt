@@ -91,10 +91,10 @@ class DarkThemePremiumIntegrationTest {
         assertEquals(Color(0xFF1A0A10), c.faBg) // DarkMaroonBackground
         assertEquals(Color(0xFF26101A), c.faSurface) // DarkMaroonSurface
         assertEquals(Color(0xFFF5EDE3), c.faHeading) // TextOnDark
-        assertEquals(Color(0xFF4A3418), c.faGoldTint) // dark gold tint
+        assertEquals(DarkFeaturedContainer, c.faGoldTint) // dark gold tint
         assertEquals(Color(0xFF1A0A10), c.libBg)
         assertEquals(Color(0xFF26101A), c.libSurface)
-        assertEquals(Color(0xFF4A3418), c.libGoldTint)
+        assertEquals(DarkFeaturedContainer, c.libGoldTint)
         assertEquals(DarkFeaturedContainer, c.featured)
     }
 

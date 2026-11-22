@@ -110,7 +110,7 @@ fun faMuted(): Color =
 
 @Composable
 fun faGoldTint(): Color =
-    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF4A3418) else FaColors.GoldTint
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) sy.medpro.watani.ui.theme.DarkFeaturedContainer else FaColors.GoldTint
 
 @Composable
 fun faGoldText(): Color =
@@ -122,7 +122,7 @@ fun faGoldDeepText(): Color =
 
 @Composable
 fun faChipCodeBg(): Color =
-    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF381824) else FaColors.ChipCodeBg
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) sy.medpro.watani.ui.theme.DarkMaroonSurfaceVariant else FaColors.ChipCodeBg
 
 /** Text on [faChipCodeBg] (unit-code chips): maroon on the light tint,
  * gold-soft on the dark tint. */
@@ -130,35 +130,40 @@ fun faChipCodeBg(): Color =
 fun faCodeText(): Color =
     if (sy.medpro.watani.ui.theme.wataniDarkTheme()) FaColors.GoldSoft else FaColors.Maroon
 
+@Suppress("MagicNumber") // the literal IS the design token this helper names
 @Composable
 fun faGreenTint(): Color =
     if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF143327) else FaColors.GreenTint
 
+@Suppress("MagicNumber") // the literal IS the design token this helper names
 @Composable
 fun faGreenText(): Color =
     if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF8FD0AB) else FaColors.Green
 
+@Suppress("MagicNumber") // the literal IS the design token this helper names
 @Composable
 fun faRedTint(): Color =
     if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF3D1D16) else FaColors.RedTint
 
+@Suppress("MagicNumber") // the literal IS the design token this helper names
 @Composable
 fun faRedText(): Color =
     if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFFF2A794) else FaColors.Red
 
 @Composable
 fun faLine(): Color =
-    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF6E4C55) else FaColors.Line
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) sy.medpro.watani.ui.theme.DarkMaroonOutline else FaColors.Line
 
 /** Progress-bar track: warm ivory in light mode, dark surface-variant
  * in dark mode. */
 @Composable
 fun faTrack(): Color =
-    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF381824) else Color(0xFFF0E7DB)
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) sy.medpro.watani.ui.theme.DarkMaroonSurfaceVariant else Color(0xFFF0E7DB)
 
 /** Emphasis text in the maroon family (labels, values, bold spans on
  * cards): the design's maroon in light mode; a light dusty rose in
  * dark mode — #5E1224 itself is unreadable on the dark surfaces. */
+@Suppress("MagicNumber") // the literal IS the design token this helper names
 @Composable
 fun faAccentText(): Color =
     if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFFE3B7C2) else FaColors.Maroon
@@ -167,7 +172,7 @@ fun faAccentText(): Color =
  * surface-variant in dark mode. */
 @Composable
 fun faNeutralOptionBg(): Color =
-    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF381824) else Color(0xFFFBF8F3)
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) sy.medpro.watani.ui.theme.DarkMaroonSurfaceVariant else Color(0xFFFBF8F3)
 
 /** The design's clean card: radius 22, one soft shadow, no border.
  * Built on Box (not Material3's clickable Card, experimental in the

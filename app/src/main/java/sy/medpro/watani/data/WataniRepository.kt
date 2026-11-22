@@ -407,16 +407,16 @@ class WataniRepository(private val context: Context) {
     private suspend fun fetchManifestForRefresh(): ManifestResponse? {
         val now = System.currentTimeMillis()
         val snapshot = refreshManifestCache
-        if (snapshot != null && now - refreshManifestCacheAt < REFRESH_MANIFEST_TTL_MS) {
-            return snapshot
+        val fresh = if (snapshot != null && now - refreshManifestCacheAt < REFRESH_MANIFEST_TTL_MS) {
+            null
+        } else {
+            fetchManifest().getOrNull()
         }
-        val fresh = fetchManifest().getOrNull()
         if (fresh != null) {
             refreshManifestCache = fresh
             refreshManifestCacheAt = now
-            return fresh
         }
-        return snapshot
+        return fresh ?: snapshot
     }
 
     suspend fun refreshSectionIfStale(path: String): Boolean {
@@ -797,9 +797,8 @@ class WataniRepository(private val context: Context) {
      * section cache. Only when NO cache file exists yet: a real
      * downloaded copy is never overwritten by the older seed. */
     private fun seedFirstAidSection(path: String): Boolean {
-        val asset = FIRST_AID_SEED_ASSETS[path] ?: return false
-        if (getSectionFile(path).exists()) return false
-        return try {
+        val asset = FIRST_AID_SEED_ASSETS[path]
+        return asset != null && !getSectionFile(path).exists() && try {
             val text = context.assets.open(asset)
                 .bufferedReader(Charsets.UTF_8).use { it.readText() }
             writeSectionText(path, text)
@@ -841,22 +840,28 @@ class WataniRepository(private val context: Context) {
                     scheduleFirstAidRefresh(path)
                     return@withContext parsed
                 }
-                // Nothing cached and no seed: the one genuine network
-                // path — pull the file once through the manifest.
-                val manifest = fetchManifest().getOrNull() ?: return@withContext null
-                val entry = manifest.files?.get(path) ?: return@withContext null
-                if (downloadSection(path, entry).isFailure) return@withContext null
-                val freshText = readSectionText(path) ?: return@withContext null
-                val fresh = moshi.adapter(clazz).fromJson(freshText)
-                    ?: return@withContext null
-                firstAidFileStamp(path)?.let {
-                    sharedFirstAidCache.put(path, it, freshText.length, fresh as Any)
-                }
-                fresh
+                // Nothing cached and no seed: the one genuine
+                // network path — pull the file once (extracted
+                // helper; this getter sits at the complexity gate).
+                fetchFirstAidSectionFresh(path, clazz)
             } catch (e: Exception) {
                 null
             }
         }
+
+    /** The network tail of [getFirstAidSection]: manifest → download
+     * → parse → memory-cache. Null on any failure. */
+    private suspend fun <T> fetchFirstAidSectionFresh(path: String, clazz: Class<T>): T? {
+        val manifest = fetchManifest().getOrNull() ?: return null
+        val entry = manifest.files?.get(path) ?: return null
+        if (downloadSection(path, entry).isFailure) return null
+        val freshText = readSectionText(path) ?: return null
+        val fresh = moshi.adapter(clazz).fromJson(freshText) ?: return null
+        firstAidFileStamp(path)?.let {
+            sharedFirstAidCache.put(path, it, freshText.length, fresh as Any)
+        }
+        return fresh
+    }
 
     /** Step index (1 or 2): systems in book order + per-unit summaries
      * + booklet catalog. Path: "firstaid/index_step<step>.json". */

@@ -102,20 +102,21 @@ fun libMuted(): Color =
 
 @Composable
 fun libGoldTint(): Color =
-    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF4A3418) else LibColors.GoldTint
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) sy.medpro.watani.ui.theme.DarkFeaturedContainer else LibColors.GoldTint
 
 @Composable
 fun libLine(): Color =
-    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF6E4C55) else LibColors.Line
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) sy.medpro.watani.ui.theme.DarkMaroonOutline else LibColors.Line
 
 @Composable
 fun libPlayTint(): Color =
-    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF381824) else LibColors.PlayTint
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) sy.medpro.watani.ui.theme.DarkMaroonSurfaceVariant else LibColors.PlayTint
 
 @Composable
 fun libVidLinkBg(): Color =
-    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF26101A) else LibColors.VidLinkBg
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) sy.medpro.watani.ui.theme.DarkMaroonSurface else LibColors.VidLinkBg
 
+@Suppress("MagicNumber") // the literal IS the design token this helper names
 @Composable
 fun libBarLabel(): Color =
     if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFFCBBBA6) else LibColors.BarLabel
