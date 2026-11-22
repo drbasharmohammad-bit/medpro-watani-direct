@@ -322,34 +322,6 @@ private fun FaOptionRow(letter: String, text: String, state: FaOptionState, onCl
 /** The design's feedback card: gold gradient panel with «لماذا الصح»
  * and «لماذا الخطأ» rows sourced from option_explanations, plus the
  * general explanation. Unkeyed items get an honest no-grading note. */
-/** Body ink of the feedback panel: the design's warm brown on the
- * pale gold panel in light mode, gold-soft on the dark tint. */
-@Composable
-private fun faFeedbackInk(): Color =
-    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) FaColors.GoldSoft else Color(0xFF5C4A33)
-
-/** The feedback panel's verdict line (extracted 1.2.43 — the panel
- * itself sat exactly at the LongMethod gate after the dark-mode
- * background expressions landed). */
-@Composable
-private fun FaFeedbackVerdict(item: FaQuizItem, selected: Int) {
-    val ci = item.correctIndex
-    Text(
-        when {
-            ci == null -> "سؤال بلا مفتاح مطبوع"
-            selected == ci -> "إجابة صحيحة"
-            else -> "إجابة غير صحيحة"
-        },
-        fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
-        fontSize = 12.8.sp,
-        color = when {
-            ci == null -> faGoldDeepText()
-            selected == ci -> faGreenText()
-            else -> faRedText()
-        }
-    )
-}
-
 @Composable
 private fun FaFeedbackPanel(item: FaQuizItem, selected: Int) {
     val ci = item.correctIndex

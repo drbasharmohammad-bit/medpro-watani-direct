@@ -170,6 +170,7 @@ fun faAccentText(): Color =
 
 /** Neutral quiz-option face: near-white in light mode, the dark
  * surface-variant in dark mode. */
+@Suppress("MagicNumber") // the literal IS the design token this helper names
 @Composable
 fun faNeutralOptionBg(): Color =
     if (sy.medpro.watani.ui.theme.wataniDarkTheme()) sy.medpro.watani.ui.theme.DarkMaroonSurfaceVariant else Color(0xFFFBF8F3)
@@ -308,3 +309,33 @@ fun FaReadingColumn(modifier: Modifier = Modifier, content: @Composable () -> Un
 val FA_OPTION_LETTERS = listOf("أ", "ب", "ج", "د", "هـ", "و", "ز", "ح", "ط", "ي")
 
 fun faOptionLetter(index: Int): String = FA_OPTION_LETTERS.getOrElse(index) { "${index + 1}" }
+
+/** Body ink of the feedback panel: the design's warm brown on the
+ * pale gold panel in light mode, gold-soft on the dark tint. */
+@Suppress("MagicNumber") // the literal IS the design token this helper names
+@Composable
+fun faFeedbackInk(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) FaColors.GoldSoft else Color(0xFF5C4A33)
+
+/** The feedback panel's verdict line (extracted 1.2.43 — the panel
+ * itself sat exactly at the LongMethod gate after the dark-mode
+ * background expressions landed). */
+@Composable
+fun FaFeedbackVerdict(item: FaQuizItem, selected: Int) {
+    val ci = item.correctIndex
+    Text(
+        when {
+            ci == null -> "سؤال بلا مفتاح مطبوع"
+            selected == ci -> "إجابة صحيحة"
+            else -> "إجابة غير صحيحة"
+        },
+        fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
+        fontSize = 12.8.sp,
+        color = when {
+            ci == null -> faGoldDeepText()
+            selected == ci -> faGreenText()
+            else -> faRedText()
+        }
+    )
+}
+

@@ -852,13 +852,17 @@ class WataniRepository(private val context: Context) {
     /** The network tail of [getFirstAidSection]: manifest → download
      * → parse → memory-cache. Null on any failure. */
     private suspend fun <T> fetchFirstAidSectionFresh(path: String, clazz: Class<T>): T? {
-        val manifest = fetchManifest().getOrNull() ?: return null
-        val entry = manifest.files?.get(path) ?: return null
-        if (downloadSection(path, entry).isFailure) return null
-        val freshText = readSectionText(path) ?: return null
-        val fresh = moshi.adapter(clazz).fromJson(freshText) ?: return null
-        firstAidFileStamp(path)?.let {
-            sharedFirstAidCache.put(path, it, freshText.length, fresh as Any)
+        val entry = fetchManifest().getOrNull()?.files?.get(path)
+        val freshText = if (entry != null && downloadSection(path, entry).isSuccess) {
+            readSectionText(path)
+        } else {
+            null
+        }
+        val fresh = freshText?.let { moshi.adapter(clazz).fromJson(it) }
+        if (fresh != null) {
+            firstAidFileStamp(path)?.let {
+                sharedFirstAidCache.put(path, it, freshText?.length ?: 0, fresh as Any)
+            }
         }
         return fresh
     }
