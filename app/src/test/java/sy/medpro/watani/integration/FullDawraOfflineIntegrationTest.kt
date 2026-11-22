@@ -4,10 +4,12 @@ import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -124,9 +126,14 @@ class FullDawraOfflineIntegrationTest {
             composeRule.onNodeWithText("القلبية", substring = true).assertExists()
             composeRule.onNodeWithText("المُنجز: 0 / 4").assertIsDisplayed()
             // Q1: tap the correct option, pump, then read the
-            // live counters.
+            // live counters. Option taps go through the node's own
+            // OnClick semantics action: the production handler is
+            // what is under test, while raw coordinate dispatch
+            // into a partially-scrolled lazy row proved unreliable
+            // under Robolectric (the Q3 tap missed in run
+            // 45021121525 after the scroll).
             composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q1_CORRECT_OPTION)
-                .performClick()
+                .performSemanticsAction(SemanticsActions.OnClick)
             pumpClock()
             composeRule.onNodeWithText("المُنجز: 1 / 4").assertIsDisplayed()
             composeRule.onNodeWithText("الدقة: 100% (1 صحيحة)").assertExists()
@@ -135,7 +142,9 @@ class FullDawraOfflineIntegrationTest {
             composeRule.onNode(hasScrollAction()).performScrollToIndex(Q3_ITEM_INDEX)
             pumpClock()
             composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q3_WRONG_OPTION)
-                .performClick()
+                .performScrollTo()
+            composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q3_WRONG_OPTION)
+                .performSemanticsAction(SemanticsActions.OnClick)
             pumpClock()
             composeRule.onNodeWithText("المُنجز: 2 / 4").assertExists()
             composeRule.onNodeWithText("الدقة: 50% (1 صحيحة)").assertExists()
