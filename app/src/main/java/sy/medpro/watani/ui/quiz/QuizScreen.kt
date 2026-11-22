@@ -1,4 +1,5 @@
 package sy.medpro.watani.ui.quiz
+import sy.medpro.watani.ui.library.libLine
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -579,7 +580,7 @@ private fun ExplanationTabChip(
         color = if (selected) MaroonPrimary else MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             1.dp,
-            if (selected) MaroonPrimary else LibColors.Line
+            if (selected) MaroonPrimary else libLine()
         ),
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
@@ -796,7 +797,7 @@ fun QuestionCard(
                     isAnswered && isCorrectOpt -> LibColors.Green
                     isAnswered && isSelected && !isCorrectOpt -> ErrorRed
                     isSelected -> LibColors.Maroon
-                    else -> LibColors.Line
+                    else -> libLine()
                 }
                 val borderWidth = when {
                     isAnswered && isCorrectOpt -> 1.5.dp

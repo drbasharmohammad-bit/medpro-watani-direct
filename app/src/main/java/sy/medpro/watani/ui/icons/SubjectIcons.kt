@@ -96,6 +96,9 @@ private val SUBJECT_ICON_RES: Map<String, Int> = mapOf(
     "جراحة بولية" to R.drawable.ic_subject_urology_surgery,
     "جراحة تجميلية" to R.drawable.ic_subject_plastic_surgery,
     "جراحة صدرية" to R.drawable.ic_subject_thoracic_surgery,
+    // «جراحة صدر» — جذع ملف دمشق الفعلي (أُضيف 1.2.43 بعد قياس جذوع
+    // ملفات dawrat_jami3at الـ139 كلها مقابل هذه الخريطة).
+    "جراحة صدر" to R.drawable.ic_subject_thoracic_surgery,
     "جراحة عامة" to R.drawable.ic_subject_general_surgery,
     "جراحة عصبية" to R.drawable.ic_subject_neurosurgery,
     "جراحة عظمية" to R.drawable.ic_subject_orthopedic_surgery,

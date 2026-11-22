@@ -136,7 +136,7 @@ fun FirstAidUnitPlayer(
                         fontFamily = NotoSansArabicFontFamily, fontSize = 13.5.sp, color = faMuted()
                     )
                 } else {
-                    CircularProgressIndicator(color = FaColors.Maroon)
+                    CircularProgressIndicator(color = faAccentText())
                 }
             }
         }
@@ -401,11 +401,11 @@ private fun FaUnitHome(
                 modifier = Modifier.padding(top = 9.dp),
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                FaChip(meta?.code ?: unitId, FaColors.ChipCodeBg, FaColors.Maroon)
+                FaChip(meta?.code ?: unitId, faChipCodeBg(), faCodeText())
                 if (pack.flashcards.orEmpty().isNotEmpty()) {
-                    FaChip("${pack.flashcards.orEmpty().size} بطاقة", FaColors.GoldTint, FaColors.GoldText)
+                    FaChip("${pack.flashcards.orEmpty().size} بطاقة", faGoldTint(), faGoldText())
                 }
-                FaChip("تعمل دون اتصال", FaColors.GreenTint, FaColors.Green)
+                FaChip("تعمل دون اتصال", faGreenTint(), faGreenText())
             }
         }
 
@@ -484,12 +484,12 @@ private fun FaUnitHome(
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(13.dp))
-                                .background(FaColors.GoldTint),
+                                .background(faGoldTint()),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Filled.Style, contentDescription = null,
-                                tint = FaColors.GoldText, modifier = Modifier.size(21.dp)
+                                tint = faGoldText(), modifier = Modifier.size(21.dp)
                             )
                         }
                         Column(modifier = Modifier.weight(1f)) {
@@ -538,7 +538,7 @@ private fun FaUnitHome(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(13.dp))
-                                .background(FaColors.GoldTint)
+                                .background(faGoldTint())
                                 .clickable { onOpenUnit(targetStep, targetId, false) }
                                 .padding(horizontal = 13.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -552,7 +552,7 @@ private fun FaUnitHome(
                                 Text(
                                     link.topicAr ?: link.topicEn ?: targetId,
                                     fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                                    fontSize = 12.3.sp, color = FaColors.Maroon
+                                    fontSize = 12.3.sp, color = faAccentText()
                                 )
                                 Text(
                                     "Step $targetStep — ${unitTitleOf(targetStep, targetId) ?: targetId}",
@@ -661,14 +661,14 @@ private fun FaFlowStep(
             FaChip(
                 r.stateLabel,
                 bg = when (r.state) {
-                    FaStepState.DONE -> FaColors.GreenTint
-                    FaStepState.NOW -> FaColors.ChipCodeBg
-                    FaStepState.NEXT -> FaColors.ChipCodeBg
+                    FaStepState.DONE -> faGreenTint()
+                    FaStepState.NOW -> faChipCodeBg()
+                    FaStepState.NEXT -> faChipCodeBg()
                 },
                 fg = when (r.state) {
-                    FaStepState.DONE -> FaColors.Green
-                    FaStepState.NOW -> FaColors.Maroon
-                    FaStepState.NEXT -> FaColors.Maroon
+                    FaStepState.DONE -> faGreenText()
+                    FaStepState.NOW -> faCodeText()
+                    FaStepState.NEXT -> faCodeText()
                 },
                 modifier = Modifier.padding(top = 4.dp)
             )

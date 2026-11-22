@@ -546,7 +546,7 @@ private fun ConceptSubjectGridCard(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(sy.medpro.watani.ui.library.LibColors.GoldTint),
+                        .background(sy.medpro.watani.ui.library.libGoldTint()),
                     contentAlignment = Alignment.Center
                 ) {
                     if (sy.medpro.watani.ui.icons.librarySubjectIconRes(null, group.subject) != null) {
@@ -579,7 +579,7 @@ private fun ConceptSubjectGridCard(
             Text(
                 "وزن المادة في أسئلة الوطني",
                 fontFamily = NotoSansArabicFontFamily,
-                fontSize = 10.5.sp, color = sy.medpro.watani.ui.library.LibColors.BarLabel,
+                fontSize = 10.5.sp, color = sy.medpro.watani.ui.library.libBarLabel(),
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
@@ -642,7 +642,7 @@ fun ConceptsTopicsScreen(
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(sy.medpro.watani.ui.library.LibColors.GoldTint),
+                                .background(sy.medpro.watani.ui.library.libGoldTint()),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -997,7 +997,7 @@ private fun ConceptSelfTestCard(
 
     // Items 4+5 migration: LibCard surface (white, soft shadow, no
     // border). Option rows keep a thin functional line border —
-    // LibColors.Line normally, the semantic green only once the
+    // libLine() normally, the semantic green only once the
     // correct answer is revealed.
     sy.medpro.watani.ui.library.LibCard(
         modifier = Modifier.fillMaxWidth(),
@@ -1033,7 +1033,7 @@ private fun ConceptSelfTestCard(
                     border = BorderStroke(
                         1.dp,
                         if (isCorrect) SuccessGreen
-                        else sy.medpro.watani.ui.library.LibColors.Line
+                        else sy.medpro.watani.ui.library.libLine()
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1065,7 +1065,7 @@ private fun ConceptSelfTestCard(
                     onClick = { revealed = true },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, sy.medpro.watani.ui.library.LibColors.Line),
+                    border = BorderStroke(1.dp, sy.medpro.watani.ui.library.libLine()),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaroonPrimary)
                 ) {
                     Text("إظهار الجواب", fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -1109,7 +1109,7 @@ private fun ConceptDiffTable(table: ConceptDiffTableDto) {
     val scrollState = rememberScrollState()
     Surface(
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, sy.medpro.watani.ui.library.LibColors.Line),
+        border = BorderStroke(1.dp, sy.medpro.watani.ui.library.libLine()),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.horizontalScroll(scrollState)) {

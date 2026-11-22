@@ -1,4 +1,5 @@
 package sy.medpro.watani.ui.tools
+import sy.medpro.watani.ui.library.libGoldTint
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -194,7 +195,7 @@ private fun ToolTile(tool: ToolEntry, onToolClick: (String) -> Unit, modifier: M
             Box(
                 modifier = Modifier
                     .size(46.dp)
-                    .background(LibColors.GoldTint, RoundedCornerShape(14.dp)),
+                    .background(libGoldTint(), RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(tool.icon, contentDescription = null, tint = tool.accent, modifier = Modifier.size(26.dp))

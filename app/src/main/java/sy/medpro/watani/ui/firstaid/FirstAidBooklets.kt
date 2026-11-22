@@ -161,7 +161,7 @@ fun BookletRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FaChip("PDF", FaColors.GoldTint, FaColors.GoldText)
+            FaChip("PDF", faGoldTint(), faGoldText())
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     fileName.removeSuffix(".pdf"),

@@ -4,7 +4,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -79,23 +78,47 @@ object LibColors {
 
 @Composable
 fun libBackground(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.background else LibColors.Bg
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) MaterialTheme.colorScheme.background else LibColors.Bg
 
 @Composable
 fun libSurface(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surface else Color.White
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) MaterialTheme.colorScheme.surface else Color.White
 
 @Composable
 fun libHeading(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurface else LibColors.MaroonDeep
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) MaterialTheme.colorScheme.onSurface else LibColors.MaroonDeep
 
 @Composable
 fun libInk(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurface else LibColors.Ink
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) MaterialTheme.colorScheme.onSurface else LibColors.Ink
 
 @Composable
 fun libMuted(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else LibColors.Muted
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else LibColors.Muted
+
+// ---- Dark-adapted tints (1.2.43, mirroring the Fa* helpers) ----------
+// Light tokens return EXACTLY in light mode; dark mode gets the deep
+// same-family tint so tiles/dividers stop glaring on dark surfaces.
+
+@Composable
+fun libGoldTint(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF4A3418) else LibColors.GoldTint
+
+@Composable
+fun libLine(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF6E4C55) else LibColors.Line
+
+@Composable
+fun libPlayTint(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF381824) else LibColors.PlayTint
+
+@Composable
+fun libVidLinkBg(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF26101A) else LibColors.VidLinkBg
+
+@Composable
+fun libBarLabel(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFFCBBBA6) else LibColors.BarLabel
 
 /** The design's clean card (.card/.subj/.vrow): white surface, one
  * soft shadow, no border. Box-based like FaCard (the pinned BOM's

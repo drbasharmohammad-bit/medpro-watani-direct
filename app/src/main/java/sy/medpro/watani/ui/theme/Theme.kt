@@ -10,6 +10,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -72,6 +73,21 @@ val WataniShapes = Shapes(
     extraLarge = RoundedCornerShape(24.dp)
 )
 
+/**
+ * The app's OWN dark-mode state (the «dark» setting toggled in-app),
+ * provided by [WataniTheme] to the whole tree. Design-token helpers
+ * (First Aid Fa*, Library lib*, featured cards) MUST read this —
+ * never `isSystemInDarkTheme()`: the phone's system setting and the
+ * in-app toggle are independent, and reading the system flag was the
+ * 1.2.43 root cause of «الوضع الليلي لا يعمل على الواجهة الجديدة»
+ * (Premium surfaces stayed light while MaterialTheme went dark).
+ */
+val LocalWataniDarkTheme = staticCompositionLocalOf { false }
+
+/** True when the app itself is in dark mode (see [LocalWataniDarkTheme]). */
+@Composable
+fun wataniDarkTheme(): Boolean = LocalWataniDarkTheme.current
+
 @Composable
 fun WataniTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -90,7 +106,10 @@ fun WataniTheme(
         }
     }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+    CompositionLocalProvider(
+        LocalLayoutDirection provides LayoutDirection.Rtl,
+        LocalWataniDarkTheme provides darkTheme
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,

@@ -1,4 +1,6 @@
 package sy.medpro.watani.ui.activation
+import sy.medpro.watani.ui.library.libGoldTint
+import sy.medpro.watani.ui.library.libLine
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -264,7 +266,7 @@ fun ActivationPromptDialog(
                         focusedContainerColor = libSurface(),
                         unfocusedContainerColor = libSurface(),
                         focusedBorderColor = LibColors.Gold,
-                        unfocusedBorderColor = LibColors.Line,
+                        unfocusedBorderColor = libLine(),
                         focusedTextColor = libInk(),
                         unfocusedTextColor = libInk()
                     )
@@ -345,7 +347,7 @@ private fun ActivationFeatureRow(text: String) {
                 modifier = Modifier
                     .size(30.dp)
                     .clip(CircleShape)
-                    .background(LibColors.GoldTint),
+                    .background(libGoldTint()),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

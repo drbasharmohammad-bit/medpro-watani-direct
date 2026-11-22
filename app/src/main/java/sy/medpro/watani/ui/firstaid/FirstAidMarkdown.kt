@@ -273,7 +273,7 @@ private fun List<FaInlineSpan>.toAnnotated(
             fontStyle = if (span.italic) FontStyle.Italic else null,
             fontFamily = if (span.code) FontFamily.Monospace else baseFamily,
             color = if (span.bold && boldColor != null) boldColor else Color.Unspecified,
-            background = if (span.code) FaColors.GoldTint else Color.Unspecified
+            background = if (span.code) faGoldTint() else Color.Unspecified
         )
         withStyle(style) { append(span.text) }
     }
@@ -292,7 +292,7 @@ fun FirstAidReferenceView(
             when (block) {
                 is FaMdBlock.Heading -> FaMdHeading(block)
                 is FaMdBlock.Paragraph -> Text(
-                    block.spans.toAnnotated(boldColor = FaColors.Maroon),
+                    block.spans.toAnnotated(boldColor = faAccentText()),
                     fontFamily = NotoSansArabicFontFamily,
                     fontSize = 13.5.sp, lineHeight = 24.sp, color = faInk()
                 )
@@ -303,7 +303,7 @@ fun FirstAidReferenceView(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(FaColors.ChipCodeBg)
+                        .background(faChipCodeBg())
                         .padding(12.dp)
                 ) {
                     Text(
@@ -313,7 +313,7 @@ fun FirstAidReferenceView(
                     )
                 }
                 is FaMdBlock.Figure -> FaFigure(block, figureFile, figureCaption)
-                FaMdBlock.Divider -> HorizontalDivider(color = FaColors.Line)
+                FaMdBlock.Divider -> HorizontalDivider(color = faLine())
             }
         }
     }
@@ -343,10 +343,10 @@ private fun FaMdList(block: FaMdBlock.ListBlock) {
                 Text(
                     if (item.ordered) "${item.number ?: ""}. " else "•  ",
                     fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 13.5.sp, color = FaColors.Maroon
+                    fontSize = 13.5.sp, color = faAccentText()
                 )
                 Text(
-                    item.spans.toAnnotated(boldColor = FaColors.Maroon),
+                    item.spans.toAnnotated(boldColor = faAccentText()),
                     fontFamily = NotoSansArabicFontFamily,
                     fontSize = 13.5.sp, lineHeight = 23.sp, color = faInk()
                 )
@@ -380,14 +380,14 @@ private fun FaSimpleBox(block: FaMdBlock.SimpleBox) {
         ) {
             Icon(
                 Icons.Filled.Lightbulb, contentDescription = null,
-                tint = FaColors.GoldText, modifier = Modifier.size(19.dp)
+                tint = faGoldText(), modifier = Modifier.size(19.dp)
             )
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 block.title.toAnnotated(baseFamily = NotoKufiFontFamily),
                 fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
-                fontSize = 12.8.sp, color = FaColors.GoldDeepText
+                fontSize = 12.8.sp, color = faGoldDeepText()
             )
             if (block.body.isNotEmpty()) {
                 Text(
@@ -501,7 +501,7 @@ private fun FaFigure(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(FaColors.ChipCodeBg)
+                    .background(faChipCodeBg())
                     .padding(14.dp),
                 contentAlignment = Alignment.Center
             ) {

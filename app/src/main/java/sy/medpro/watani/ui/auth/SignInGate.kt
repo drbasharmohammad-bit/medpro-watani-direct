@@ -8,7 +8,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -142,7 +141,7 @@ fun SignInGate(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val dark = isSystemInDarkTheme()
+    val dark = sy.medpro.watani.ui.theme.wataniDarkTheme()
     // Privacy/terms screen (build 1.2.19): opened from the consent
     // links under the sign-in button, scrolled to the tapped part
     // (0 privacy / 1 terms / 2 medical disclaimer); a local swap

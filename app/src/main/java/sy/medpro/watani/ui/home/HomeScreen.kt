@@ -1,4 +1,5 @@
 package sy.medpro.watani.ui.home
+import sy.medpro.watani.ui.library.libGoldTint
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -317,19 +318,30 @@ fun SectionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Direction-2 subject icons (Nov 2026): subjects with a
-                // custom drawing (SubjectIcons, keyed by the Arabic
-                // subject name = file stem) lead the card; sections
-                // without a mapping render exactly as before.
-                val subjectIconRes = sy.medpro.watani.ui.SubjectIcons.forName(displayName)
+                // Direction-2 subject icons: resolved through the ONE
+                // canonical resolver (ui.icons.subjectIconRes — full
+                // university-variant coverage with name normalization).
+                // 1.2.43 fix: this card previously consulted the small
+                // 29-key map in ui/AppIconMaps, so 66 of the 139
+                // university files rendered name-only rows. A name the
+                // resolver still doesn't know gets the unified fallback
+                // glyph — a section row NEVER renders iconless.
+                val subjectIconRes = sy.medpro.watani.ui.icons.subjectIconRes(displayName)
                 if (subjectIconRes != null) {
                     Image(
                         painter = painterResource(subjectIconRes),
                         contentDescription = null,
                         modifier = Modifier.size(44.dp)
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
+                } else {
+                    Icon(
+                        Icons.Default.MenuBook,
+                        contentDescription = null,
+                        tint = LibColors.Maroon,
+                        modifier = Modifier.size(44.dp)
+                    )
                 }
+                Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = displayName,
@@ -436,7 +448,7 @@ fun UniversityTabContent(onOpenUniversity: (String, String) -> Unit) {
                         modifier = Modifier
                             .size(46.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(LibColors.GoldTint),
+                            .background(libGoldTint()),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.AccountBalance, contentDescription = null, tint = LibColors.Maroon)
@@ -479,15 +491,24 @@ fun TopicSelectionScreen(
             // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
             SlimSubBar(onBack = onBack, containerColor = MaterialTheme.colorScheme.primary) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val titleIconRes = sy.medpro.watani.ui.SubjectIcons.forName(subjectName)
+                    // Same canonical resolver as SectionCard (1.2.43)
+                    // + the same unified fallback — the subject title
+                    // bar never renders iconless either.
+                    val titleIconRes = sy.medpro.watani.ui.icons.subjectIconRes(subjectName)
                     if (titleIconRes != null) {
                         Image(
                             painter = painterResource(titleIconRes),
                             contentDescription = null,
                             modifier = Modifier.size(24.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                    } else {
+                        Icon(
+                            Icons.Default.MenuBook,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(if (showYears) "جلسات: $subjectName" else "مواضيع: $subjectName", fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 }
             }

@@ -3,7 +3,6 @@ package sy.medpro.watani.ui.library
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -675,7 +674,7 @@ private fun LibrarySearchField(
             focusedContainerColor = libSurface(),
             unfocusedContainerColor = libSurface(),
             focusedBorderColor = LibColors.Gold,
-            unfocusedBorderColor = LibColors.Line,
+            unfocusedBorderColor = libLine(),
             focusedTextColor = libInk(),
             unfocusedTextColor = libInk()
         ),
@@ -783,7 +782,7 @@ private fun SubjectsGridScreen(
                                 modifier = Modifier
                                     .size(46.dp)
                                     .clip(CircleShape)
-                                    .background(LibColors.PlayTint),
+                                    .background(libPlayTint()),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -927,7 +926,7 @@ private fun SubjectGridCard(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(LibColors.GoldTint),
+                        .background(libGoldTint()),
                     contentAlignment = Alignment.Center
                 ) {
                     if (librarySubjectIconRes(subject.id, subject.name) != null) {
@@ -973,7 +972,7 @@ private fun SubjectGridCard(
             Text(
                 if (fraction <= 0f) "لم تبدأ بعد" else "تقدّم المشاهدة",
                 fontFamily = NotoSansArabicFontFamily,
-                fontSize = 10.5.sp, color = LibColors.BarLabel,
+                fontSize = 10.5.sp, color = libBarLabel(),
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
@@ -1024,7 +1023,7 @@ private fun LibraryGroupLabel(text: String, countText: String? = null) {
         Box(
             Modifier
                 .weight(1f).height(1.dp)
-                .background(LibColors.Line)
+                .background(libLine())
         )
         if (countText != null) {
             Text(
@@ -1272,7 +1271,7 @@ private fun LibraryVideoRow(
                     modifier = Modifier
                         .size(46.dp)
                         .clip(CircleShape)
-                        .background(if (isDownloaded) LibColors.Maroon else LibColors.PlayTint)
+                        .background(if (isDownloaded) LibColors.Maroon else libPlayTint())
                         .clickable {
                             when {
                                 isDownloaded -> openDownloaded()
@@ -1365,7 +1364,7 @@ private fun LibraryVideoRow(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(LibColors.GoldTint)
+                            .background(libGoldTint())
                             .clickable { viewModel.downloadItem(item) },
                         contentAlignment = Alignment.Center
                     ) {
@@ -1394,7 +1393,7 @@ private fun LibraryVideoRow(
                     Modifier
                         .fillMaxWidth().padding(top = 10.dp)
                         .height(1.dp)
-                        .background(LibColors.Line)
+                        .background(libLine())
                 )
                 Row(
                     Modifier
@@ -1409,7 +1408,7 @@ private fun LibraryVideoRow(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(RoundedCornerShape(11.dp))
-                                .background(LibColors.GoldTint),
+                                .background(libGoldTint()),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -1585,7 +1584,7 @@ private fun LibraryEmptyState(onReload: () -> Unit) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.LibraryBooks, null,
-                        tint = if (isSystemInDarkTheme()) GoldAccent else MaroonPrimary,
+                        tint = if (sy.medpro.watani.ui.theme.wataniDarkTheme()) GoldAccent else MaroonPrimary,
                         modifier = Modifier.size(48.dp)
                     )
                 }

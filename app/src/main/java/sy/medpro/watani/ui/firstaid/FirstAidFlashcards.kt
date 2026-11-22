@@ -123,7 +123,7 @@ fun FirstAidFlashcardsPlayer(
                     ) {
                         FaChip(
                             if (flipped) "الإجابة" else "السؤال — انقر لقلب البطاقة",
-                            FaColors.GoldTint, FaColors.GoldText
+                            faGoldTint(), faGoldText()
                         )
                         Text(
                             if (flipped) card.back else card.front,
@@ -139,12 +139,12 @@ fun FirstAidFlashcardsPlayer(
                     ) {
                         FaGradeButton(
                             text = "لا أعرفها",
-                            container = FaColors.RedTint, fg = FaColors.Red,
+                            container = faRedTint(), fg = faRedText(),
                             modifier = Modifier.weight(1f)
                         ) { grade(correct = false) }
                         FaGradeButton(
                             text = "أعرفها",
-                            container = FaColors.GreenTint, fg = FaColors.Green,
+                            container = faGreenTint(), fg = faGreenText(),
                             modifier = Modifier.weight(1f)
                         ) { grade(correct = true) }
                     }
@@ -199,7 +199,7 @@ fun FirstAidGlossaryScreen(
                             Text(
                                 term.ar.orEmpty(),
                                 fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp, color = FaColors.Maroon
+                                fontSize = 14.sp, color = faAccentText()
                             )
                             if (!term.en.isNullOrBlank()) {
                                 Text(

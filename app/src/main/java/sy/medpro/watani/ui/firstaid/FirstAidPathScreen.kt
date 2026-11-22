@@ -129,7 +129,7 @@ fun FirstAidPathScreen(
                     Text(
                         "${if (pathIds.isEmpty()) 0 else (doneCount * 100) / pathIds.size}%",
                         fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
-                        fontSize = 18.sp, color = FaColors.Maroon
+                        fontSize = 18.sp, color = faAccentText()
                     )
                 }
             }
@@ -213,7 +213,7 @@ private fun FaSystemBlock(
                 fontFamily = NotoSansArabicFontFamily, fontSize = 11.sp, color = faMuted()
             )
             if (booklet != null) {
-                FaChip("كتيّب PDF", FaColors.GoldTint, FaColors.GoldText)
+                FaChip("كتيّب PDF", faGoldTint(), faGoldText())
             }
         }
         if (booklet != null) {
@@ -300,7 +300,7 @@ private fun FaLevelRow(
                     else -> Text(
                         "$position",
                         fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
-                        fontSize = 13.5.sp, color = FaColors.Maroon
+                        fontSize = 13.5.sp, color = faAccentText()
                     )
                 }
             }
@@ -325,13 +325,13 @@ private fun FaLevelRow(
             }
             when {
                 status == FirstAidProgressRules.UnitStatus.DONE ->
-                    FaChip("مكتمل", FaColors.GreenTint, FaColors.Green)
+                    FaChip("مكتمل", faGreenTint(), faGreenText())
                 needsActivation ->
-                    FaChip("بالتفعيل", FaColors.GoldTint, FaColors.GoldText)
+                    FaChip("بالتفعيل", faGoldTint(), faGoldText())
                 isNow ->
-                    FaChip("جارٍ الآن", FaColors.GoldTint, FaColors.GoldText)
+                    FaChip("جارٍ الآن", faGoldTint(), faGoldText())
                 isSuggestedNext ->
-                    FaChip("التالي المقترح", FaColors.GoldTint, FaColors.GoldText)
+                    FaChip("التالي المقترح", faGoldTint(), faGoldText())
             }
         }
     }

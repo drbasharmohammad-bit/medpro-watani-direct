@@ -157,13 +157,13 @@ fun FirstAidQuizPlayer(
             Text(
                 "السؤال ${index + 1} من ${items.size}",
                 fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                fontSize = 11.5.sp, color = FaColors.Maroon
+                fontSize = 11.5.sp, color = faAccentText()
             )
             if (timedSeconds != null) {
                 FaChip(
                     text = "%d:%02d".format(remaining / 60, remaining % 60),
-                    bg = if (remaining <= 60) FaColors.RedTint else FaColors.GoldTint,
-                    fg = if (remaining <= 60) FaColors.Red else FaColors.GoldText
+                    bg = if (remaining <= 60) faRedTint() else faGoldTint(),
+                    fg = if (remaining <= 60) faRedText() else faGoldText()
                 )
             }
         }
@@ -176,7 +176,7 @@ fun FirstAidQuizPlayer(
                 FaCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp)) {
                         if (!item.tag.isNullOrBlank()) {
-                            FaChip(item.tag, FaColors.GoldTint, FaColors.GoldText)
+                            FaChip(item.tag, faGoldTint(), faGoldText())
                         }
                         Text(
                             item.stem,
@@ -255,10 +255,10 @@ private fun optionState(item: FaQuizItem, selected: Int?, optIndex: Int): FaOpti
 @Composable
 private fun FaOptionRow(letter: String, text: String, state: FaOptionState, onClick: () -> Unit) {
     val (bg, borderColor, letterBg, letterFg) = when (state) {
-        FaOptionState.CORRECT -> listOf(FaColors.GreenTint, Color(0xFFBFE0CF), FaColors.Green, Color.White)
-        FaOptionState.WRONG -> listOf(FaColors.RedTint, Color(0xFFEFC9BF), FaColors.Red, Color.White)
-        FaOptionState.CHOSEN -> listOf(FaColors.GoldTint, FaColors.Gold, FaColors.Gold, Color.White)
-        else -> listOf(Color(0xFFFBF8F3), FaColors.Line, Color.White, faMuted())
+        FaOptionState.CORRECT -> listOf(faGreenTint(), Color(0xFFBFE0CF), FaColors.Green, Color.White)
+        FaOptionState.WRONG -> listOf(faRedTint(), Color(0xFFEFC9BF), FaColors.Red, Color.White)
+        FaOptionState.CHOSEN -> listOf(faGoldTint(), FaColors.Gold, FaColors.Gold, Color.White)
+        else -> listOf(faNeutralOptionBg(), faLine(), Color.White, faMuted())
     }
     Row(
         modifier = Modifier
@@ -316,8 +316,11 @@ private fun FaFeedbackPanel(item: FaQuizItem, selected: Int) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(19.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFFFFFDF6), Color(0xFFFBF4E2))))
-            .border(1.dp, Color(0xFFEDDFC0), RoundedCornerShape(19.dp))
+            .background(
+                if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Brush.linearGradient(listOf(faGoldTint(), faGoldTint()))
+                else Brush.linearGradient(listOf(Color(0xFFFFFDF6), Color(0xFFFBF4E2)))
+            )
+            .border(1.dp, if (sy.medpro.watani.ui.theme.wataniDarkTheme()) faLine() else Color(0xFFEDDFC0), RoundedCornerShape(19.dp))
             .padding(horizontal = 15.dp, vertical = 11.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -330,9 +333,9 @@ private fun FaFeedbackPanel(item: FaQuizItem, selected: Int) {
             fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
             fontSize = 12.8.sp,
             color = when {
-                ci == null -> FaColors.GoldDeepText
-                selected == ci -> FaColors.Green
-                else -> FaColors.Red
+                ci == null -> faGoldDeepText()
+                selected == ci -> faGreenText()
+                else -> faRedText()
             }
         )
         if (ci == null) {
@@ -423,7 +426,7 @@ private fun FaQuizResult(
                     Text(
                         "انتهى الوقت المخصص — سُجّلت نتيجتك كما هي.",
                         fontFamily = NotoSansArabicFontFamily,
-                        fontSize = 12.5.sp, color = FaColors.Red
+                        fontSize = 12.5.sp, color = faRedText()
                     )
                 }
                 if (keyedTotal > 0) {
@@ -431,7 +434,7 @@ private fun FaQuizResult(
                     Text(
                         "$correct من $keyedTotal إجابة صحيحة ($pct%)",
                         fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
-                        fontSize = 20.sp, color = FaColors.Maroon
+                        fontSize = 20.sp, color = faAccentText()
                     )
                     FaProgressBar(fraction = correct.toFloat() / keyedTotal.toFloat())
                 }

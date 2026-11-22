@@ -5,6 +5,7 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -178,6 +179,60 @@ class WataniRepository(private val context: Context) {
          * the class body — audit item Z, 21 Nov 2026). */
         private val sharedConceptsEnvelopeCache = EnvelopeCache<ConceptsEnvelope>()
 
+        // ── First Aid load-path repair (1.2.43, doctor's device
+        // report: section jank + «الواجهة الثابتة تكون عند الطالب من
+        // تحميل التطبيق») ──────────────────────────────────────────
+        // Before 1.2.43 every First Aid getter AWAITED a full manifest
+        // network fetch inline before returning even a warm cached
+        // copy (refreshSectionIfStale → fetchManifest, no TTL), the
+        // section host awaited four such loads sequentially behind a
+        // spinner, tab switches destroyed the composition and repeated
+        // the whole chain, and nothing was parsed-cached in memory.
+        // The pieces below implement the mandated shape: cache-first
+        // with INSTANT return, refresh in the background (throttled),
+        // a process-wide parsed cache stamped by the cache file's own
+        // (mtime, length) so a refreshed file invalidates itself, a
+        // 60-second TTL on the manifest used by refresh checks, and
+        // bundled STRUCTURE seeds for the two step indexes.
+        private val sharedFirstAidCache = EnvelopeCache<Any>()
+
+        private val firstAidRefreshScope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + Dispatchers.IO
+        )
+
+        private val firstAidRefreshStamps =
+            java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+        private const val FIRST_AID_REFRESH_MIN_INTERVAL_MS = 5 * 60 * 1000L
+
+        /** Bundled seeds: ONLY the two step indexes — the section's
+         * navigation skeleton (system names, unit titles, counts).
+         * No questions, no explanations, no unit content: those keep
+         * flowing through the normal download path (the doctor's
+         * standing rule against embedding valuable content in the
+         * APK stands). The seed installs into the encrypted section
+         * cache on first use and is then silently refreshed like any
+         * cached copy, so a fresh install shows the section's full
+         * structure instantly, offline. */
+        private val FIRST_AID_SEED_ASSETS: Map<String, String> = mapOf(
+            "firstaid/index_step1.json" to "firstaid/index_step1.json",
+            "firstaid/index_step2.json" to "firstaid/index_step2.json"
+        )
+
+        /** Manifest snapshot reused by refresh checks for 60 s
+         * (1.2.43): collapses the burst of manifest fetches that
+         * every section open used to fire (one per getter) into at
+         * most one per minute. Refresh checks are best-effort and
+         * hash-compare against this snapshot; explicit downloads keep
+         * using [fetchManifest] directly. */
+        @Volatile
+        private var refreshManifestCache: ManifestResponse? = null
+
+        @Volatile
+        private var refreshManifestCacheAt: Long = 0L
+
+        private const val REFRESH_MANIFEST_TTL_MS = 60_000L
+
         // ── Concepts pack summary (audit item Z, 21 Nov 2026) ──
         // The doctor's mechanism for «ادرس مع ميد برو»: the pack is a
         // PERMANENT on-device cache — downloaded once through the
@@ -345,9 +400,28 @@ class WataniRepository(private val context: Context) {
      * so callers can invoke it inside their existing load flow with
      * no error surfacing and no UI flicker.
      */
+    /** The manifest for refresh checks: a process-wide snapshot is
+     * reused for [REFRESH_MANIFEST_TTL_MS] before a fresh fetch
+     * (1.2.43 — see the companion note). Failure serves the snapshot
+     * when one exists, else null. */
+    private suspend fun fetchManifestForRefresh(): ManifestResponse? {
+        val now = System.currentTimeMillis()
+        val snapshot = refreshManifestCache
+        if (snapshot != null && now - refreshManifestCacheAt < REFRESH_MANIFEST_TTL_MS) {
+            return snapshot
+        }
+        val fresh = fetchManifest().getOrNull()
+        if (fresh != null) {
+            refreshManifestCache = fresh
+            refreshManifestCacheAt = now
+            return fresh
+        }
+        return snapshot
+    }
+
     suspend fun refreshSectionIfStale(path: String): Boolean {
         return try {
-            val manifest = fetchManifest().getOrNull() ?: return false
+            val manifest = fetchManifestForRefresh() ?: return false
             val entry = manifest.files?.get(path) ?: return false
             val entity = _downloadedSectionsFlow.value
                 .firstOrNull { it.sectionPath == path }
@@ -699,24 +773,86 @@ class WataniRepository(private val context: Context) {
     // once through fetchManifest + downloadSection. Null on any failure —
     // the section screen owns the retry/empty states.
 
+    /** Background stale-refresh for a First Aid path (1.2.43):
+     * fire-and-forget on the process scope, throttled per path to
+     * one attempt per [FIRST_AID_REFRESH_MIN_INTERVAL_MS] so tab
+     * re-entries and unit opens never storm the network. A refresh
+     * that installs a newer file changes the cache file's stamp, so
+     * the in-memory parsed entry invalidates itself on next read. */
+    private fun scheduleFirstAidRefresh(path: String) {
+        val now = System.currentTimeMillis()
+        val last = firstAidRefreshStamps[path] ?: 0L
+        if (now - last < FIRST_AID_REFRESH_MIN_INTERVAL_MS) return
+        firstAidRefreshStamps[path] = now
+        firstAidRefreshScope.launch {
+            try {
+                refreshSectionIfStale(path)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** Installs the bundled structure seed for [path] (the two step
+     * indexes only — see FIRST_AID_SEED_ASSETS) into the encrypted
+     * section cache. Only when NO cache file exists yet: a real
+     * downloaded copy is never overwritten by the older seed. */
+    private fun seedFirstAidSection(path: String): Boolean {
+        val asset = FIRST_AID_SEED_ASSETS[path] ?: return false
+        if (getSectionFile(path).exists()) return false
+        return try {
+            val text = context.assets.open(asset)
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
+            writeSectionText(path, text)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun firstAidFileStamp(path: String): String? {
+        val file = getSectionFile(path)
+        return if (file.exists()) "${file.lastModified()}:${file.length()}" else null
+    }
+
     private suspend fun <T> getFirstAidSection(path: String, clazz: Class<T>): T? =
         withContext(Dispatchers.IO) {
             try {
-                val cached = readSectionText(path)
-                    ?.let { moshi.adapter(clazz).fromJson(it) }
-                if (cached != null) {
-                    if (refreshSectionIfStale(path)) {
-                        readSectionText(path)
-                            ?.let { moshi.adapter(clazz).fromJson(it) } ?: cached
-                    } else {
-                        cached
+                // 1.2.43 cache-first contract (doctor's order): a
+                // parsed in-memory copy or the on-disk cache returns
+                // IMMEDIATELY — the stale-refresh runs in the
+                // background and never blocks the first draw again.
+                val stamp = firstAidFileStamp(path)
+                if (stamp != null) {
+                    @Suppress("UNCHECKED_CAST")
+                    val hit = sharedFirstAidCache.get(path, stamp) as? T
+                    if (hit != null) {
+                        scheduleFirstAidRefresh(path)
+                        return@withContext hit
                     }
-                } else {
-                    val manifest = fetchManifest().getOrNull() ?: return@withContext null
-                    val entry = manifest.files?.get(path) ?: return@withContext null
-                    if (downloadSection(path, entry).isFailure) return@withContext null
-                    readSectionText(path)?.let { moshi.adapter(clazz).fromJson(it) }
                 }
+                var text = readSectionText(path)
+                if (text == null && seedFirstAidSection(path)) {
+                    text = readSectionText(path)
+                }
+                val parsed = text?.let { moshi.adapter(clazz).fromJson(it) }
+                if (parsed != null) {
+                    firstAidFileStamp(path)?.let {
+                        sharedFirstAidCache.put(path, it, text.length, parsed as Any)
+                    }
+                    scheduleFirstAidRefresh(path)
+                    return@withContext parsed
+                }
+                // Nothing cached and no seed: the one genuine network
+                // path — pull the file once through the manifest.
+                val manifest = fetchManifest().getOrNull() ?: return@withContext null
+                val entry = manifest.files?.get(path) ?: return@withContext null
+                if (downloadSection(path, entry).isFailure) return@withContext null
+                val freshText = readSectionText(path) ?: return@withContext null
+                val fresh = moshi.adapter(clazz).fromJson(freshText)
+                    ?: return@withContext null
+                firstAidFileStamp(path)?.let {
+                    sharedFirstAidCache.put(path, it, freshText.length, fresh as Any)
+                }
+                fresh
             } catch (e: Exception) {
                 null
             }

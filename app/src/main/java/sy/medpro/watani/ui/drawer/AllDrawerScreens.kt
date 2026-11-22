@@ -6,7 +6,6 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -652,7 +651,7 @@ fun WrongAnswersScreen(onBack: () -> Unit, onOpenAnkiWrong: (() -> Unit)? = null
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     Icons.Default.CheckCircle, contentDescription = null,
-                                    tint = if (isSystemInDarkTheme()) GoldAccent else MaroonPrimary,
+                                    tint = if (sy.medpro.watani.ui.theme.wataniDarkTheme()) GoldAccent else MaroonPrimary,
                                     modifier = Modifier.size(48.dp)
                                 )
                             }
@@ -898,7 +897,7 @@ fun FavoritesScreen(onBack: () -> Unit) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Favorite, contentDescription = null,
-                                tint = if (isSystemInDarkTheme()) GoldAccent else MaroonPrimary,
+                                tint = if (sy.medpro.watani.ui.theme.wataniDarkTheme()) GoldAccent else MaroonPrimary,
                                 modifier = Modifier.size(48.dp)
                             )
                         }

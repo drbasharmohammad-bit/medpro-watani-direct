@@ -1,4 +1,5 @@
 package sy.medpro.watani.ui.home
+import sy.medpro.watani.ui.library.libGoldTint
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -92,7 +93,7 @@ fun SupportScreen(onBack: () -> Unit) {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Surface(
-                                    color = LibColors.GoldTint,
+                                    color = libGoldTint(),
                                     shape = MaterialTheme.shapes.extraSmall
                                 ) {
                                     Text(

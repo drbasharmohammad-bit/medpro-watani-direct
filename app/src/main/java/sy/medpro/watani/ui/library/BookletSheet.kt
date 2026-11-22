@@ -143,7 +143,7 @@ fun BookletSheet(
                     modifier = Modifier
                         .size(58.dp)
                         .clip(RoundedCornerShape(17.dp))
-                        .background(LibColors.GoldTint),
+                        .background(libGoldTint()),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -185,10 +185,10 @@ fun BookletSheet(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(15.dp))
                     .background(
-                        if (androidx.compose.foundation.isSystemInDarkTheme()) {
+                        if (sy.medpro.watani.ui.theme.wataniDarkTheme()) {
                             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         } else {
-                            LibColors.VidLinkBg
+                            libVidLinkBg()
                         }
                     )
                     .padding(horizontal = 13.dp, vertical = 11.dp),

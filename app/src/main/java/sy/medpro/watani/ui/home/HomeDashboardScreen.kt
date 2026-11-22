@@ -1,4 +1,5 @@
 package sy.medpro.watani.ui.home
+import sy.medpro.watani.ui.library.libGoldTint
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -254,7 +255,7 @@ fun HomeDashboardScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            color = LibColors.GoldTint,
+                            color = libGoldTint(),
                             shape = MaterialTheme.shapes.small
                         ) {
                             Text(
@@ -315,7 +316,7 @@ fun HomeDashboardScreen(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = LibColors.GoldTint,
+                        color = libGoldTint(),
                         modifier = Modifier.size(50.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -498,7 +499,7 @@ private fun ExamCountdownCard() {
                         modifier = Modifier
                             .size(52.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(LibColors.GoldTint),
+                            .background(libGoldTint()),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -878,7 +879,7 @@ private fun MyDayGoalsCard() {
 @Composable
 private fun CountdownUnit(modifier: Modifier = Modifier, value: String, label: String) {
     Surface(
-        color = LibColors.GoldTint,
+        color = libGoldTint(),
         shape = MaterialTheme.shapes.medium,
         modifier = modifier
     ) {

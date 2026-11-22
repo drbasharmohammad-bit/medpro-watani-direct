@@ -1,4 +1,5 @@
 package sy.medpro.watani.ui.home
+import sy.medpro.watani.ui.library.libGoldTint
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -57,7 +58,7 @@ fun FullDawraEntryCard(onClick: () -> Unit) {
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(LibColors.GoldTint),
+                    .background(libGoldTint()),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -165,7 +166,7 @@ fun FullDawraListScreen(
                                         modifier = Modifier
                                             .size(62.dp)
                                             .clip(RoundedCornerShape(18.dp))
-                                            .background(LibColors.GoldTint),
+                                            .background(libGoldTint()),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -228,7 +229,7 @@ fun FullDawraListScreen(
                                         modifier = Modifier
                                             .size(52.dp)
                                             .clip(RoundedCornerShape(16.dp))
-                                            .background(LibColors.GoldTint),
+                                            .background(libGoldTint()),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -358,7 +359,7 @@ fun FullDawraDetailScreen(
                             modifier = Modifier
                                 .size(52.dp)
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(LibColors.GoldTint),
+                                .background(libGoldTint()),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(

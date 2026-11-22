@@ -1,15 +1,14 @@
 package sy.medpro.watani.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 /** Featured/call-to-action card background: gold-tint ivory in light
- *  mode (Premium identity, LibColors.GoldTint), dark maroon in dark mode,
+ *  mode (Premium identity, libGoldTint()), dark maroon in dark mode,
  *  so onSurface text stays readable in both. */
 @Composable
 fun featuredCardBackground(): Color =
-    if (isSystemInDarkTheme()) DarkFeaturedContainer else FeaturedContainer
+    if (wataniDarkTheme()) DarkFeaturedContainer else FeaturedContainer
 
 // Brand Primary Maroon Family
 // Launcher/logo ink: the official app icon's own background (#2D1015 in
@@ -28,7 +27,7 @@ val OnMaroonContainer = Color(0xFF42091A)
 val GoldAccent = Color(0xFFC2A059)
 val GoldAccentDark = Color(0xFF8A6D2F)
 // Featured container family: gold-tint ivory of the Premium identity
-// (LibColors.GoldTint) in light mode.
+// (libGoldTint()) in light mode.
 val FeaturedContainer = Color(0xFFF7EFDC)
 val OnFeaturedContainer = Color(0xFF42091A)
 // Dark-mode counterpart of FeaturedContainer: a dark maroon so featured

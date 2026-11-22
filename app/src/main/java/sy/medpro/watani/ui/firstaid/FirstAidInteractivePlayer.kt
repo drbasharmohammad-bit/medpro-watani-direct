@@ -92,7 +92,7 @@ private fun FaBranchingCase(case: FirstAidBranchingCaseDto) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            FaChip("حالة متفرعة", FaColors.GoldTint, FaColors.GoldText)
+            FaChip("حالة متفرعة", faGoldTint(), faGoldText())
             Text(
                 case.title ?: "حالة سريرية",
                 fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
@@ -108,14 +108,14 @@ private fun FaBranchingCase(case: FirstAidBranchingCaseDto) {
                 Text(
                     "أكملت الحالة — كل الخطوات صحيحة.",
                     fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp, color = FaColors.Green
+                    fontSize = 13.sp, color = faGreenText()
                 )
             } else {
             val step = steps[stepIndex]
             Text(
                 "الخطوة ${step.step ?: stepIndex + 1} من ${steps.size}",
                 fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                fontSize = 11.5.sp, color = FaColors.GoldText
+                fontSize = 11.5.sp, color = faGoldText()
             )
             Text(
                 step.prompt.orEmpty(),
@@ -126,14 +126,14 @@ private fun FaBranchingCase(case: FirstAidBranchingCaseDto) {
             options.forEachIndexed { i, option ->
                 val isPicked = picked == i
                 val border = when {
-                    isPicked && option.correct == true -> FaColors.Green
-                    isPicked -> FaColors.Red
-                    else -> FaColors.Line
+                    isPicked && option.correct == true -> faGreenText()
+                    isPicked -> faRedText()
+                    else -> faLine()
                 }
                 val bg = when {
-                    isPicked && option.correct == true -> FaColors.GreenTint
-                    isPicked -> FaColors.RedTint
-                    else -> Color(0xFFFBF8F3)
+                    isPicked && option.correct == true -> faGreenTint()
+                    isPicked -> faRedTint()
+                    else -> faNeutralOptionBg()
                 }
                 Column(
                     modifier = Modifier
@@ -155,7 +155,7 @@ private fun FaBranchingCase(case: FirstAidBranchingCaseDto) {
                             option.feedback,
                             fontFamily = NotoSansArabicFontFamily,
                             fontSize = 12.3.sp, lineHeight = 21.sp,
-                            color = if (option.correct == true) FaColors.Green else FaColors.Red
+                            color = if (option.correct == true) faGreenText() else faRedText()
                         )
                     }
                 }
@@ -166,7 +166,7 @@ private fun FaBranchingCase(case: FirstAidBranchingCaseDto) {
                     Text(
                         step.feedbackCorrect,
                         fontFamily = NotoSansArabicFontFamily,
-                        fontSize = 12.3.sp, lineHeight = 21.sp, color = FaColors.Green
+                        fontSize = 12.3.sp, lineHeight = 21.sp, color = faGreenText()
                     )
                 }
                 FaPrimaryButton(
@@ -199,7 +199,7 @@ private fun FaOrderingExercise(exercise: FirstAidOrderingDto) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            FaChip("تمرين ترتيب", FaColors.GoldTint, FaColors.GoldText)
+            FaChip("تمرين ترتيب", faGoldTint(), faGoldText())
             Text(
                 exercise.title ?: "رتّب الخطوات",
                 fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
@@ -215,21 +215,21 @@ private fun FaOrderingExercise(exercise: FirstAidOrderingDto) {
                 Text(
                     "ترتيبك الحالي (انقر خطوة لإزالتها):",
                     fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp, color = FaColors.Maroon
+                    fontSize = 12.sp, color = faAccentText()
                 )
                 chosen.forEachIndexed { i, stepText ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(FaColors.ChipCodeBg)
+                            .background(faChipCodeBg())
                             .clickable { chosen = chosen - stepText; verdict = null }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(9.dp)
                     ) {
                         Text(
                             "${i + 1}.", fontFamily = NotoSansArabicFontFamily,
-                            fontWeight = FontWeight.Bold, fontSize = 13.sp, color = FaColors.Maroon
+                            fontWeight = FontWeight.Bold, fontSize = 13.sp, color = faAccentText()
                         )
                         Text(
                             stepText, fontFamily = NotoSansArabicFontFamily,
@@ -243,7 +243,7 @@ private fun FaOrderingExercise(exercise: FirstAidOrderingDto) {
                 Text(
                     "اختر الخطوة التالية:",
                     fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp, color = FaColors.Maroon
+                    fontSize = 12.sp, color = faAccentText()
                 )
                 remaining.forEach { stepText ->
                     Box2StepOption(stepText) {
@@ -262,12 +262,12 @@ private fun FaOrderingExercise(exercise: FirstAidOrderingDto) {
                 true -> Text(
                     "ترتيب صحيح — أحسنت.",
                     fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp, color = FaColors.Green
+                    fontSize = 13.sp, color = faGreenText()
                 )
                 false -> Text(
                     "الترتيب غير صحيح — راجع الخطوات وحاول مجددًا.",
                     fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp, color = FaColors.Red
+                    fontSize = 13.sp, color = faRedText()
                 )
                 null -> Unit
             }
@@ -284,8 +284,8 @@ private fun Box2StepOption(text: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFFBF8F3))
-            .border(1.5.dp, FaColors.Line, RoundedCornerShape(12.dp))
+            .background(faNeutralOptionBg())
+            .border(1.5.dp, faLine(), RoundedCornerShape(12.dp))
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 9.dp)
     )
@@ -297,7 +297,7 @@ private fun Box2StepOption(text: String, onClick: () -> Unit) {
 private fun FaComparisonTable(table: FirstAidComparisonTableDto) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FaChip("جدول مقارنة", FaColors.GoldTint, FaColors.GoldText)
+            FaChip("جدول مقارنة", faGoldTint(), faGoldText())
             Text(
                 table.title.orEmpty(),
                 fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,

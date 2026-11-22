@@ -112,15 +112,33 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
     val bookletOpener = rememberBookletOpener(repo) { file, title -> push(FaDest.Pdf(file, title)) }
 
     val srsChanges by FirstAidSrs.changes.collectAsState()
-    val dueToday = remember(srsChanges) { FirstAidSrs.dueCountAll(context) }
+    // 1.2.43: the due count parses every stored card state — it used
+    // to run synchronously inside composition on the main thread.
+    // Now computed on IO into state (0 until the first count lands).
+    var dueToday by remember { mutableStateOf(0) }
+    LaunchedEffect(srsChanges) {
+        dueToday = withContext(Dispatchers.IO) { FirstAidSrs.dueCountAll(context) }
+    }
 
+    // 1.2.43 load shape (doctor's order — structure first, instantly):
+    // the four loads run in PARALLEL (they used to be sequential),
+    // and the spinner gate releases as soon as the two step INDEXES
+    // resolve — the section's structure — while the integration
+    // layer and the printed banks land in the background and fill
+    // their cards in (both are null-guarded at every read site).
     LaunchedEffect(Unit) {
-        index1 = repo.getFirstAidIndex(1)
-        index2 = repo.getFirstAidIndex(2)
-        integration = repo.getFirstAidIntegration()
-        banks = repo.getFirstAidBanks()
-        failed = index1 == null && index2 == null
-        loading = false
+        kotlinx.coroutines.coroutineScope {
+            val dIntegration = kotlinx.coroutines.async { repo.getFirstAidIntegration() }
+            val dBanks = kotlinx.coroutines.async { repo.getFirstAidBanks() }
+            val d1 = kotlinx.coroutines.async { repo.getFirstAidIndex(1) }
+            val d2 = kotlinx.coroutines.async { repo.getFirstAidIndex(2) }
+            index1 = d1.await()
+            index2 = d2.await()
+            failed = index1 == null && index2 == null
+            loading = false
+            integration = dIntegration.await()
+            banks = dBanks.await()
+        }
     }
 
     // The unit player registers its own BackHandler for its inner
@@ -209,7 +227,7 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
     Box(modifier = Modifier.fillMaxSize().background(faBackground())) {
         when {
             loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = FaColors.Maroon)
+                CircularProgressIndicator(color = faAccentText())
             }
 
             failed -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -309,7 +327,7 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = FaColors.Maroon)
+                            CircularProgressIndicator(color = faAccentText())
                         }
                     }
                 } else {
@@ -677,7 +695,8 @@ private fun FaHome(
                         .clip(RoundedCornerShape(20.dp))
                         .background(
                             androidx.compose.ui.graphics.Brush.linearGradient(
-                                listOf(Color(0xFFFBF4E2), FaColors.GoldTint)
+                                if (sy.medpro.watani.ui.theme.wataniDarkTheme()) listOf(faGoldTint(), faGoldTint())
+                                else listOf(Color(0xFFFBF4E2), faGoldTint())
                             )
                         )
                         .clickable { onOpenIntegration() }
@@ -689,17 +708,18 @@ private fun FaHome(
                         Text(
                             "طبقة التكامل بين الكتابين",
                             fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
-                            fontSize = 13.5.sp, color = FaColors.GoldDeepText
+                            fontSize = 13.5.sp, color = faGoldDeepText()
                         )
                         Text(
                             "$linkCount رابط مواضيع موثّقًا + " +
                                 "${integration.integrationSessions?.step1.orEmpty().size} جلسة Step 1 و" +
                                 "${integration.integrationSessions?.step2.orEmpty().size} جلسات Step 2 — جلسات التكامل للمفعّلين بالكود.",
                             fontFamily = NotoSansArabicFontFamily,
-                            fontSize = 11.3.sp, lineHeight = 18.sp, color = Color(0xFF97824F)
+                            fontSize = 11.3.sp, lineHeight = 18.sp,
+                            color = if (sy.medpro.watani.ui.theme.wataniDarkTheme()) faGoldDeepText() else Color(0xFF97824F)
                         )
                     }
-                    FaChip("افتح", Color.White, FaColors.GoldText)
+                    FaChip("افتح", Color.White, faGoldText())
                 }
             }
         }
@@ -725,7 +745,7 @@ private fun FaHome(
                                 fontSize = 11.3.sp, color = faMuted()
                             )
                         }
-                        FaChip("ابدأ المراجعة", FaColors.GoldTint, FaColors.GoldText)
+                        FaChip("ابدأ المراجعة", faGoldTint(), faGoldText())
                     }
                 }
             }
@@ -847,14 +867,14 @@ private fun FaPathCard(
                     Text(
                         "أُنجز $done",
                         fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp, color = FaColors.Maroon
+                        fontSize = 11.sp, color = faAccentText()
                     )
                 }
                 if (gateNote != null) {
                     Text(
                         gateNote,
                         fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                        fontSize = 10.5.sp, color = FaColors.GoldText,
+                        fontSize = 10.5.sp, color = faGoldText(),
                         modifier = Modifier.padding(top = 5.dp)
                     )
                 }
@@ -933,11 +953,11 @@ private fun FaIntegrationScreen(
                             Text(
                                 link.topicAr ?: link.topicEn ?: "",
                                 fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp, color = FaColors.Maroon,
+                                fontSize = 13.sp, color = faAccentText(),
                                 modifier = Modifier.weight(1f)
                             )
                             if (link.crossSystem == true) {
-                                FaChip("عابر للأنظمة", FaColors.GoldTint, FaColors.GoldText)
+                                FaChip("عابر للأنظمة", faGoldTint(), faGoldText())
                             }
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -964,7 +984,7 @@ private fun FaSessionRow(stepLabel: String, id: String, title: String?, onClick:
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FaChip(stepLabel, FaColors.GoldTint, FaColors.GoldText)
+            FaChip(stepLabel, faGoldTint(), faGoldText())
             Text(
                 title ?: id,
                 fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
@@ -986,7 +1006,7 @@ private fun FaUnitLinkRow(step: Int, title: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(if (isStep1) FaColors.ChipCodeBg else FaColors.GoldTint)
+            .background(if (isStep1) faChipCodeBg() else faGoldTint())
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1008,7 +1028,7 @@ private fun FaUnitLinkRow(step: Int, title: String, onClick: () -> Unit) {
             title,
             fontFamily = NotoSansArabicFontFamily, fontWeight = FontWeight.Bold,
             fontSize = 12.5.sp, lineHeight = 19.sp,
-            color = if (isStep1) FaColors.Maroon else FaColors.GoldText,
+            color = if (isStep1) faCodeText() else faGoldText(),
             modifier = Modifier.weight(1f)
         )
     }
@@ -1097,7 +1117,7 @@ private fun FaDueReview(
             Box(
                 modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
                 contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator(color = FaColors.Maroon) }
+            ) { CircularProgressIndicator(color = faAccentText()) }
         }
     } else {
         FirstAidFlashcardsPlayer(

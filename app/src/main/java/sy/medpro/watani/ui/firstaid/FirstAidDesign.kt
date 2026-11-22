@@ -2,7 +2,6 @@ package sy.medpro.watani.ui.firstaid
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,28 +77,97 @@ object FaColors {
  * own background in dark mode. */
 @Composable
 fun faBackground(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.background else FaColors.Bg
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) MaterialTheme.colorScheme.background else FaColors.Bg
 
 /** Card surface: white per the design in light mode; theme surface in dark. */
 @Composable
 fun faSurface(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surface else Color.White
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) MaterialTheme.colorScheme.surface else Color.White
 
 /** Primary ink for headings: maroon-deep in light mode per the design,
  * theme onSurface in dark mode (maroon-deep is unreadable on dark). */
 @Composable
 fun faHeading(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurface else FaColors.MaroonDeep
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) MaterialTheme.colorScheme.onSurface else FaColors.MaroonDeep
 
 /** Body ink. */
 @Composable
 fun faInk(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurface else FaColors.Ink
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) MaterialTheme.colorScheme.onSurface else FaColors.Ink
 
 /** Secondary text: the design's warm muted in light mode. */
 @Composable
 fun faMuted(): Color =
-    if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else FaColors.Muted
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else FaColors.Muted
+
+// ---- Dark-adapted tints (1.2.43) -------------------------------------
+// The design's tint pills (gold/green/red) and hairlines are light-only
+// values in FaColors; used raw they glare on dark cards and their
+// paired text colours lose contrast. These helpers return the EXACT
+// light token in light mode (the approved design is untouched) and a
+// deep, same-family tint in dark mode, paired with a lightened text
+// colour so every pill keeps its bg/fg contrast in both modes.
+
+@Composable
+fun faGoldTint(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF4A3418) else FaColors.GoldTint
+
+@Composable
+fun faGoldText(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) FaColors.Gold else FaColors.GoldText
+
+@Composable
+fun faGoldDeepText(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) FaColors.GoldSoft else FaColors.GoldDeepText
+
+@Composable
+fun faChipCodeBg(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF381824) else FaColors.ChipCodeBg
+
+/** Text on [faChipCodeBg] (unit-code chips): maroon on the light tint,
+ * gold-soft on the dark tint. */
+@Composable
+fun faCodeText(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) FaColors.GoldSoft else FaColors.Maroon
+
+@Composable
+fun faGreenTint(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF143327) else FaColors.GreenTint
+
+@Composable
+fun faGreenText(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF8FD0AB) else FaColors.Green
+
+@Composable
+fun faRedTint(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF3D1D16) else FaColors.RedTint
+
+@Composable
+fun faRedText(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFFF2A794) else FaColors.Red
+
+@Composable
+fun faLine(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF6E4C55) else FaColors.Line
+
+/** Progress-bar track: warm ivory in light mode, dark surface-variant
+ * in dark mode. */
+@Composable
+fun faTrack(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF381824) else Color(0xFFF0E7DB)
+
+/** Emphasis text in the maroon family (labels, values, bold spans on
+ * cards): the design's maroon in light mode; a light dusty rose in
+ * dark mode — #5E1224 itself is unreadable on the dark surfaces. */
+@Composable
+fun faAccentText(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFFE3B7C2) else FaColors.Maroon
+
+/** Neutral quiz-option face: near-white in light mode, the dark
+ * surface-variant in dark mode. */
+@Composable
+fun faNeutralOptionBg(): Color =
+    if (sy.medpro.watani.ui.theme.wataniDarkTheme()) Color(0xFF381824) else Color(0xFFFBF8F3)
 
 /** The design's clean card: radius 22, one soft shadow, no border.
  * Built on Box (not Material3's clickable Card, experimental in the
@@ -143,7 +211,7 @@ fun FaProgressBar(fraction: Float, gold: Boolean = false, modifier: Modifier = M
             .fillMaxWidth()
             .height(7.dp)
             .clip(RoundedCornerShape(99.dp))
-            .background(Color(0xFFF0E7DB))
+            .background(faTrack())
     ) {
         val f = fraction.coerceIn(0f, 1f)
         if (f > 0f) {
@@ -180,7 +248,7 @@ fun FaScreenHeader(title: String, subtitle: String? = null, onBack: (() -> Unit)
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "رجوع",
-                    tint = FaColors.Maroon,
+                    tint = faAccentText(),
                     modifier = Modifier.size(20.dp)
                 )
             }
