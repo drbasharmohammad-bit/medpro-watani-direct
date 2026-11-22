@@ -64,6 +64,30 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Pre-fetch Robolectric android-all (SDK 34) into the local Maven repo
+        run: |
+          # Robolectric resolves its android-all jar from Maven at
+          # TEST RUNTIME, outside Gradle's download retry/caching:
+          # a flaky fetch there fails whole test classes at sandbox
+          # creation (seen 22 Nov 2026, run 45015082846 — every
+          # Robolectric class died on the fetch, no test ran). Seed
+          # the local Maven repository up front with the same retry
+          # discipline as the Gradle download step; the resolver
+          # then finds the artifact locally and never touches the
+          # network for it.
+          ver=14-robolectric-10818077-i7
+          dir="$HOME/.m2/repository/org/robolectric/android-all-instrumented/$ver"
+          mkdir -p "$dir"
+          for f in "android-all-instrumented-$ver.jar" "android-all-instrumented-$ver.pom"; do
+            ok=""
+            for attempt in 1 2 3; do
+              if curl -fsSL --retry 2 "https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/$ver/$f" -o "$dir/$f"; then ok=1; break; fi
+              echo "Fetch of $f (attempt $attempt) failed; retrying..."; sleep 8
+            done
+            if [ -z "$ok" ]; then echo "ERROR: could not pre-fetch $f" >&2; exit 1; fi
+          done
+          ls -la "$dir"
+
       - name: Verify preinstalled Android SDK
         run: |
           if [ -z "${ANDROID_HOME:-}" ]; then
