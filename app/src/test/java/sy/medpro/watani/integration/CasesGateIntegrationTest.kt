@@ -34,7 +34,7 @@ import sy.medpro.watani.ui.theme.WataniTheme
  * pinned by the layer-2 CaseAccessRulesTest.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(qualifiers = "w800dp-h2400dp")
+@Config(sdk = [34], qualifiers = "w800dp-h2400dp")
 class CasesGateIntegrationTest {
 
     @get:Rule

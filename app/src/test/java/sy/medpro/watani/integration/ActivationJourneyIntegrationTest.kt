@@ -46,6 +46,7 @@ import sy.medpro.watani.data.WorkerActivationApi
  * — the half that protects students — is fully covered here.
  */
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [34])
 class ActivationJourneyIntegrationTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

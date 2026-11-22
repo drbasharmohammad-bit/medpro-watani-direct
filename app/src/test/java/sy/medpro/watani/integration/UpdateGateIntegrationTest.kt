@@ -31,6 +31,7 @@ import sy.medpro.watani.ui.theme.WataniTheme
  * never locked out.
  */
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [34])
 class UpdateGateIntegrationTest {
 
     @get:Rule

@@ -30,6 +30,7 @@ import sy.medpro.watani.ui.viewmodel.ScreenState
  * known gap in docs/RELEASE_CHECKLIST.md.
  */
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [34])
 class NavigationStateIntegrationTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()

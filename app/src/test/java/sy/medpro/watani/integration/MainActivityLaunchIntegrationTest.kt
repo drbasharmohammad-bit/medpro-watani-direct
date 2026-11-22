@@ -26,6 +26,7 @@ import sy.medpro.watani.MainActivity
  * network-shaped state is faked anywhere in this flow.
  */
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [34])
 class MainActivityLaunchIntegrationTest {
 
     @get:Rule

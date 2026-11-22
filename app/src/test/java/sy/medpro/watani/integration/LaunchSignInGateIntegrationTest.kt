@@ -31,6 +31,7 @@ import sy.medpro.watani.ui.theme.WataniTheme
  * with the box ticked and the button enabled.
  */
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [34])
 class LaunchSignInGateIntegrationTest {
 
     @get:Rule

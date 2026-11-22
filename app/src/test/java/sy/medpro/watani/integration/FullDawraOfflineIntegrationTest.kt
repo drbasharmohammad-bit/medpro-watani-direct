@@ -34,7 +34,7 @@ import sy.medpro.watani.ui.theme.WataniTheme
  * anywhere in the flow.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(qualifiers = "w800dp-h1280dp")
+@Config(sdk = [34], qualifiers = "w800dp-h1280dp")
 class FullDawraOfflineIntegrationTest {
 
     @get:Rule
@@ -54,68 +54,81 @@ class FullDawraOfflineIntegrationTest {
     }
 
     @Test
-    fun repositoryReadsSeededSessionFileOffline() = runBlocking {
-        val records = WataniRepository(context)
-            .getDawraSessionRecords(IntegrationTestSupport.DAWRA_PATH)
-        assertNotNull(records)
-        assertEquals(EXPECTED_QUESTIONS, records!!.size)
-        assertEquals("TST-Q1", records[0].id)
-        assertEquals("القلبية", records[0].subject)
-        assertEquals("الهضمية والكبد", records[EXPECTED_QUESTIONS - 1].subject)
-    }
-
-    @Test
-    fun assemblyGroupsIntoSubjectSpansWithKeys() = runBlocking {
-        val records = WataniRepository(context)
-            .getDawraSessionRecords(IntegrationTestSupport.DAWRA_PATH)
-        assertNotNull(records)
-        val quiz = buildDawraQuizFromRecords(records!!)
-        assertEquals(EXPECTED_QUESTIONS, quiz.questions.size)
-        assertEquals(EXPECTED_SUBJECTS, quiz.sections.size)
-        assertEquals("القلبية", quiz.sections[0].subjectName)
-        assertEquals(EXPECTED_PER_SUBJECT, quiz.sections[0].count)
-        assertEquals("الهضمية والكبد", quiz.sections[1].subjectName)
-        assertEquals(EXPECTED_PER_SUBJECT, quiz.sections[1].startIndex)
-        // The key of each question survives the record -> DTO map.
-        assertEquals(listOf(0), quiz.questions[0].correctIndices?.map { (it as Number).toInt() })
-        assertEquals(listOf(2), quiz.questions[2].correctIndices?.map { (it as Number).toInt() })
-    }
-
-    @Test
-    fun quizScreenScoresOneCorrectAndOneWrong() = runBlocking {
-        val records = WataniRepository(context)
-            .getDawraSessionRecords(IntegrationTestSupport.DAWRA_PATH)
-        assertNotNull(records)
-        val quiz = buildDawraQuizFromRecords(records!!)
-        // The per-question timer loop never idles; freeze the test
-        // clock so idle-waiting does not try to fast-forward it.
-        composeRule.mainClock.autoAdvance = false
-        composeRule.setContent {
-            WataniTheme(darkTheme = false) {
-                QuizScreen(
-                    title = "دورة اختبار التكامل",
-                    questions = quiz.questions,
-                    onBack = {},
-                    sourcePath = IntegrationTestSupport.DAWRA_PATH,
-                    sections = quiz.sections
-                )
-            }
+    fun repositoryReadsSeededSessionFileOffline() {
+        runBlocking {
+            val records = WataniRepository(context)
+                .getDawraSessionRecords(IntegrationTestSupport.DAWRA_PATH)
+            assertNotNull(records)
+            assertEquals(EXPECTED_QUESTIONS, records!!.size)
+            assertEquals("TST-Q1", records[0].id)
+            assertEquals("القلبية", records[0].subject)
+            assertEquals("الهضمية والكبد", records[EXPECTED_QUESTIONS - 1].subject)
         }
-        // Subject span headers render over the flat list.
-        composeRule.onNodeWithText("القلبية", substring = true).assertExists()
-        composeRule.onNodeWithText("المُنجز: 0 / 4").assertIsDisplayed()
-        // Q1: tap the correct option.
-        composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q1_CORRECT_OPTION)
-            .performClick()
-        composeRule.onNodeWithText("المُنجز: 1 / 4").assertIsDisplayed()
-        composeRule.onNodeWithText("الدقة: 100% (1 صحيحة)").assertIsDisplayed()
-        // Q3 (list item 3: header card, Q1, Q2, Q3): scroll it into
-        // composition and tap a wrong option.
-        composeRule.onNode(hasScrollAction()).performScrollToIndex(Q3_ITEM_INDEX)
-        composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q3_WRONG_OPTION)
-            .performClick()
-        composeRule.onNodeWithText("المُنجز: 2 / 4").assertExists()
-        composeRule.onNodeWithText("الدقة: 50% (1 صحيحة)").assertExists()
+    }
+
+    @Test
+    fun assemblyGroupsIntoSubjectSpansWithKeys() {
+        runBlocking {
+            val records = WataniRepository(context)
+                .getDawraSessionRecords(IntegrationTestSupport.DAWRA_PATH)
+            assertNotNull(records)
+            val quiz = buildDawraQuizFromRecords(records!!)
+            assertEquals(EXPECTED_QUESTIONS, quiz.questions.size)
+            assertEquals(EXPECTED_SUBJECTS, quiz.sections.size)
+            assertEquals("القلبية", quiz.sections[0].subjectName)
+            assertEquals(EXPECTED_PER_SUBJECT, quiz.sections[0].count)
+            assertEquals("الهضمية والكبد", quiz.sections[1].subjectName)
+            assertEquals(EXPECTED_PER_SUBJECT, quiz.sections[1].startIndex)
+            // The key of each question survives the record -> DTO map.
+            assertEquals(
+                listOf(0),
+                quiz.questions[0].correctIndices?.map { (it as Number).toInt() }
+            )
+            assertEquals(
+                listOf(2),
+                quiz.questions[2].correctIndices?.map { (it as Number).toInt() }
+            )
+        }
+    }
+
+    @Test
+    fun quizScreenScoresOneCorrectAndOneWrong() {
+        runBlocking {
+            val records = WataniRepository(context)
+                .getDawraSessionRecords(IntegrationTestSupport.DAWRA_PATH)
+            assertNotNull(records)
+            val quiz = buildDawraQuizFromRecords(records!!)
+            // The per-question timer loop never idles; freeze the
+            // test clock so idle-waiting does not try to
+            // fast-forward it.
+            composeRule.mainClock.autoAdvance = false
+            composeRule.setContent {
+                WataniTheme(darkTheme = false) {
+                    QuizScreen(
+                        title = "دورة اختبار التكامل",
+                        questions = quiz.questions,
+                        onBack = {},
+                        sourcePath = IntegrationTestSupport.DAWRA_PATH,
+                        sections = quiz.sections
+                    )
+                }
+            }
+            // Subject span headers render over the flat list.
+            composeRule.onNodeWithText("القلبية", substring = true).assertExists()
+            composeRule.onNodeWithText("المُنجز: 0 / 4").assertIsDisplayed()
+            // Q1: tap the correct option.
+            composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q1_CORRECT_OPTION)
+                .performClick()
+            composeRule.onNodeWithText("المُنجز: 1 / 4").assertIsDisplayed()
+            composeRule.onNodeWithText("الدقة: 100% (1 صحيحة)").assertIsDisplayed()
+            // Q3 (list item 3: header card, Q1, Q2, Q3): scroll it
+            // into composition and tap a wrong option.
+            composeRule.onNode(hasScrollAction()).performScrollToIndex(Q3_ITEM_INDEX)
+            composeRule.onNodeWithText(IntegrationTestSupport.DAWRA_Q3_WRONG_OPTION)
+                .performClick()
+            composeRule.onNodeWithText("المُنجز: 2 / 4").assertExists()
+            composeRule.onNodeWithText("الدقة: 50% (1 صحيحة)").assertExists()
+        }
     }
 
     private companion object {

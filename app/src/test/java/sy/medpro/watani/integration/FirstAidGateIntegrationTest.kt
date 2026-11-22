@@ -32,7 +32,7 @@ import sy.medpro.watani.ui.theme.WataniTheme
  * is pinned by the layer-2 FirstAidAccessRulesTest.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(qualifiers = "w800dp-h1600dp")
+@Config(sdk = [34], qualifiers = "w800dp-h1600dp")
 class FirstAidGateIntegrationTest {
 
     @get:Rule
