@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import sy.medpro.watani.data.FirstAidBanksDto
 import sy.medpro.watani.data.FirstAidBookletDto
@@ -128,10 +129,10 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
     // their cards in (both are null-guarded at every read site).
     LaunchedEffect(Unit) {
         kotlinx.coroutines.coroutineScope {
-            val dIntegration = kotlinx.coroutines.async { repo.getFirstAidIntegration() }
-            val dBanks = kotlinx.coroutines.async { repo.getFirstAidBanks() }
-            val d1 = kotlinx.coroutines.async { repo.getFirstAidIndex(1) }
-            val d2 = kotlinx.coroutines.async { repo.getFirstAidIndex(2) }
+            val dIntegration = async { repo.getFirstAidIntegration() }
+            val dBanks = async { repo.getFirstAidBanks() }
+            val d1 = async { repo.getFirstAidIndex(1) }
+            val d2 = async { repo.getFirstAidIndex(2) }
             index1 = d1.await()
             index2 = d2.await()
             failed = index1 == null && index2 == null
