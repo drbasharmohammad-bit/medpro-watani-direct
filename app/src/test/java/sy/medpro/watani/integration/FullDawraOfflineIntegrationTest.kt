@@ -152,7 +152,7 @@ class FullDawraOfflineIntegrationTest {
      * every frame and state update pending from the previous step
      * is applied before the next assertion. */
     private fun pumpClock() {
-        composeRule.mainClock.advanceBy(SETTLE_MS)
+        composeRule.mainClock.advanceTimeBy(SETTLE_MS)
     }
 
     private companion object {
