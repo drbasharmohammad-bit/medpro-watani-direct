@@ -78,13 +78,24 @@ jobs:
           ver=14-robolectric-10818077-i7
           dir="$HOME/.m2/repository/org/robolectric/android-all-instrumented/$ver"
           mkdir -p "$dir"
+          # Mirror rotation + stall detection: repo1.maven.org
+          # crawled at ~100KB/s from a runner on the first attempt
+          # (run 45016011258, cancelled after 16 min in this step),
+          # so try Google's Maven Central mirror first, resume
+          # partial downloads (-C -), and abandon any attempt that
+          # stalls below 100KB/s for 30s instead of riding it.
+          mirrors="https://maven-central.storage-download.googleapis.com/maven2 https://repo1.maven.org/maven2 https://repo.maven.apache.org/maven2"
           for f in "android-all-instrumented-$ver.jar" "android-all-instrumented-$ver.pom"; do
             ok=""
-            for attempt in 1 2 3; do
-              if curl -fsSL --retry 2 "https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/$ver/$f" -o "$dir/$f"; then ok=1; break; fi
-              echo "Fetch of $f (attempt $attempt) failed; retrying..."; sleep 8
+            for base in $mirrors; do
+              for attempt in 1 2; do
+                if curl -fsSL -C - --speed-limit 102400 --speed-time 30 "$base/org/robolectric/android-all-instrumented/$ver/$f" -o "$dir/$f"; then ok=1; break; fi
+                echo "Fetch of $f from $base (attempt $attempt) failed/stalled; retrying..."
+                sleep 5
+              done
+              if [ -n "$ok" ]; then break; fi
             done
-            if [ -z "$ok" ]; then echo "ERROR: could not pre-fetch $f" >&2; exit 1; fi
+            if [ -z "$ok" ]; then echo "ERROR: could not pre-fetch $f from any mirror" >&2; exit 1; fi
           done
           ls -la "$dir"
 
