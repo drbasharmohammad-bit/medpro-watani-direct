@@ -217,6 +217,48 @@ object IntegrationTestSupport {
          "quiz":[],"flashcards":[],"glossary":[]}
     """.trimIndent()
 
+    const val UNI_SUBJECT_PATH = "dawrat_jami3at/damascus/أذنية.json"
+    const val UNI_YEARS_PATH = "dawrat_jami3at/damascus_years/أذنية.json"
+    const val UNI_YEAR_ROW = "دمشق 2026"
+
+    /** University subject shard fixture (SubjectEnvelope shape):
+     * one topic with two questions — the «حسب المواضيع» view. */
+    fun universitySubjectJson(): String = """
+        {"version":"test","subject_id":"أذنية","subject_name":"أذنية",
+         "university":"damascus","university_name":"جامعة دمشق","count":2,
+         "topics":[
+           {"id":"T1","name":"التهاب الأذن الوسطى",
+            "questions":[
+              {"id":"S-1","text":"سؤال موضوع أول","options":["أ","ب"],"correct":"أ"},
+              {"id":"S-2","text":"سؤال موضوع ثانٍ","options":["أ","ب"],"correct":"ب"}
+            ]}
+         ]}
+    """.trimIndent()
+
+    /** Years-file fixture in the FROZEN published schema: two
+     * years (2026 with three questions, 2025 with two), each
+     * year's questions DIRECTLY under it as one flat list — no
+     * topics level inside years (doctor's correction 23 Nov
+     * 2026) — questions in the shard QuestionDto shape. */
+    fun universityYearsJson(): String = """
+        {"version":"damascus-years-2026-11-23","subject_id":"أذنية",
+         "subject_name":"أذنية","university":"damascus",
+         "university_name":"جامعة دمشق","count":5,
+         "years":[
+           {"year":2026,"name":"دمشق 2026","count":3,
+            "questions":[
+              {"id":"Y26-1","text":"سؤال سنة أول","options":["أ","ب"],"correct":"أ"},
+              {"id":"Y26-2","text":"سؤال سنة ثانٍ","options":["أ","ب"],"correct":"ب"},
+              {"id":"Y26-3","text":"سؤال سنة ثالث","options":["أ","ب"],"correct":"أ"}
+            ]},
+           {"year":2025,"name":"دمشق 2025","count":2,
+            "questions":[
+              {"id":"Y25-1","text":"سؤال سنة رابع","options":["أ","ب"],"correct":"ب"},
+              {"id":"Y25-2","text":"سؤال سنة خامس","options":["أ","ب"],"correct":"أ"}
+            ]}
+         ]}
+    """.trimIndent()
+
     /** Seeds the complete First Aid fixture set the section screen
      * loads at entry: both step indexes, the integration layer, the
      * printed banks, and the free unit's package. */

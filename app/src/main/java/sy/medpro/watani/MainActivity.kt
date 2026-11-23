@@ -532,6 +532,11 @@ class MainActivity : ComponentActivity() {
 
                     var casesList by remember { mutableStateOf<List<ClinicalCaseDto>>(emptyList()) }
                     var activeSubjectEnvelope by remember { mutableStateOf<SubjectEnvelope?>(null) }
+                    // «حسب السنوات»: the open subject's years envelope
+                    // and the path it was loaded from (so a stale
+                    // envelope of a previous subject is never shown).
+                    var activeYearsEnvelope by remember { mutableStateOf<sy.medpro.watani.data.YearsEnvelope?>(null) }
+                    var activeYearsPath by remember { mutableStateOf<String?>(null) }
                     var drawerScreen by remember { mutableStateOf<String?>(null) }
                     // 1.2.30: توجيه «ابدأ المراجعة» من تنبيه الأخطاء
                     // المستحقة — يفتح «بنك أخطائي» ويبدأ جلسته تلقائيًا
@@ -1570,12 +1575,28 @@ class MainActivity : ComponentActivity() {
                                                     // falls back to the download prompt below instead
                                                     // of opening outdated content. Without an entry,
                                                     // keep the previous presence-only verdict.
-                                                    val topicEntry = uiState.files[screen.path]
-                                                    val topicEntity = downloadedSections.firstOrNull { it.sectionPath == screen.path }
-                                                    val isDownloaded = if (topicEntry != null) {
-                                                        sy.medpro.watani.data.isSectionUpToDate(topicEntity, topicEntry)
-                                                    } else {
-                                                        topicEntity != null
+                                                    // Unified pair verdict (doctor's spec
+                                                    // 23 Nov 2026, all-or-nothing): a
+                                                    // university subject with a years twin
+                                                    // in the manifest is "downloaded" only
+                                                    // when BOTH files are present and
+                                                    // current (isSectionPairUpToDate
+                                                    // mirrors the old single-file verdict
+                                                    // exactly for twin-less paths).
+                                                    val isDownloaded = sy.medpro.watani.data.isSectionPairUpToDate(
+                                                        screen.path, uiState.files, downloadedSections
+                                                    )
+                                                    // «حسب السنوات»: the years twin the
+                                                    // ViewModel resolved for this subject
+                                                    // (null for every other family and
+                                                    // for subjects without a years file).
+                                                    val yearsPath = uiState.subjectYearsPath
+                                                        ?.takeIf { it == sy.medpro.watani.data.yearsPathFor(screen.path) }
+                                                    LaunchedEffect(yearsPath, isDownloaded) {
+                                                        if (isDownloaded && yearsPath != null && activeYearsPath != yearsPath) {
+                                                            activeYearsEnvelope = viewModel.getYearsEnvelope(yearsPath)
+                                                            activeYearsPath = yearsPath
+                                                        }
                                                     }
                                                     // Fix 1.2.1: a section downloaded from INSIDE
                                                     // this screen (the English twin is the main
@@ -1603,6 +1624,19 @@ class MainActivity : ComponentActivity() {
                                                         },
                                                         onSessionClick = { sessionKey, sessionName ->
                                                             viewModel.openSessionQuiz(screen.path, sessionKey, sessionName, screen.subjectName)
+                                                        },
+                                                        // وضع «حسب السنوات» من ملف السنوات
+                                                        // المستقل: صفّ السنة يفتح كويز
+                                                        // أسئلة السنة المسطّح مباشرة
+                                                        // (بلا مواضيع — تصحيح الدكتور
+                                                        // 23 Nov 2026).
+                                                        yearsEnvelope = activeYearsEnvelope.takeIf { yearsPath != null && activeYearsPath == yearsPath },
+                                                        onYearClick = { year, yearName ->
+                                                            if (yearsPath != null) {
+                                                                viewModel.openYearQuiz(
+                                                                    yearsPath, year, yearName
+                                                                )
+                                                            }
                                                         },
                                                         onBack = { viewModel.goBack() },
                                                         // المدخل الثالث «باللغة الإنجليزية»: توأم
@@ -1633,6 +1667,13 @@ class MainActivity : ComponentActivity() {
                                                         onOpenSubject = { path, name ->
                                                             coroutineScope.launch {
                                                                 activeSubjectEnvelope = viewModel.getSubjectEnvelope(path)
+                                                                // «حسب السنوات»: warm the years
+                                                                // envelope of the same subject
+                                                                // alongside its subject envelope.
+                                                                val twin = sy.medpro.watani.data.yearsPathFor(path)
+                                                                    ?.takeIf { uiState.files.containsKey(it) }
+                                                                activeYearsEnvelope = twin?.let { viewModel.getYearsEnvelope(it) }
+                                                                activeYearsPath = twin
                                                                 viewModel.openSubject(path, name, AppTab.UNIVERSITIES)
                                                             }
                                                         },

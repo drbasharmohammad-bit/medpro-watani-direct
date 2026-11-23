@@ -474,7 +474,16 @@ fun TopicSelectionScreen(
     englishPath: String? = null,
     onOpenEnglish: (String) -> Unit = {},
     isDownloading: Boolean = false,
-    downloadProgress: Float = 0f
+    downloadProgress: Float = 0f,
+    // «حسب السنوات» لمواد الجامعات (مواصفة الدكتور 23 Nov 2026):
+    // مغلف سنوات المادة من ملفها المستقل
+    // (dawrat_jami3at/<uni>_years/<subject>.json)، يُغذّي وضع
+    // «حسب السنوات» بالمبدّل القائم نفسه. المعاملات اختيارية
+    // افتراضية: غلاف null ⇒ لا وضع سنوات من هذا المصدر إطلاقًا
+    // وسلوك الشاشة كما كان حرفيًا. لا تحميل منفصل للسنوات:
+    // تنزيل المادة موحّد كل-أو-لا-شيء (الملفان معًا).
+    yearsEnvelope: sy.medpro.watani.data.YearsEnvelope? = null,
+    onYearClick: (Int, String) -> Unit = { _, _ -> }
 ) {
     // «حسب السنوات» (مواصفة الدكتور 21:51): المواد التي تحمل sessions[]
     // بالشاردة المنزّلة تعرض مبدّلًا بين عرض المواضيع (الأصلي، لا يتغير)
@@ -485,7 +494,15 @@ fun TopicSelectionScreen(
     // the student who came from «حسب السنوات» landed back on the
     // topics view (a lost step state).
     var byYears by androidx.compose.runtime.saveable.rememberSaveable(subjectName) { mutableStateOf(false) }
-    val showYears = byYears && sessions.isNotEmpty()
+    // مصدرا وضع «حسب السنوات» بالمبدّل نفسه: جلسات الشاردة
+    // (sessions[] — مواد الوطني) أو سنوات ملف السنوات المستقل
+    // (مواد الجامعات). عند توفر سنوات الملف المستقل تُعرَض هي
+    // (صفّ السنة يفتح كويز أسئلتها المسطّح مباشرة — بلا مواضيع
+    // داخل السنوات، تصحيح الدكتور 23 Nov 2026)، وإلا صفوف
+    // الجلسات المسطّحة كما كانت. لا مصدر ⇒ لا مبدّل إطلاقًا.
+    val yearSummaries = sy.medpro.watani.data.yearSummaries(yearsEnvelope)
+    val hasYearsView = sessions.isNotEmpty() || yearSummaries.isNotEmpty()
+    val showYears = byYears && hasYearsView
     Scaffold(
         topBar = {
             // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
@@ -509,7 +526,14 @@ fun TopicSelectionScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (showYears) "جلسات: $subjectName" else "مواضيع: $subjectName", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    Text(
+                        when {
+                            showYears && yearSummaries.isNotEmpty() -> "سنوات: $subjectName"
+                            showYears -> "جلسات: $subjectName"
+                            else -> "مواضيع: $subjectName"
+                        },
+                        fontWeight = FontWeight.Bold, fontSize = 17.sp
+                    )
                 }
             }
         }
@@ -592,7 +616,7 @@ fun TopicSelectionScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                         }
                     }
-                    if (sessions.isNotEmpty()) {
+                    if (hasYearsView) {
                         item {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 FilterChip(
@@ -611,7 +635,11 @@ fun TopicSelectionScreen(
                     }
                     item {
                         Text(
-                            if (showYears) "اختر الجلسة للبدء بالأسئلة:" else "اختر الموضوع للبدء بالأسئلة:",
+                            when {
+                                showYears && yearSummaries.isNotEmpty() -> "اختر السنة للبدء بالأسئلة:"
+                                showYears -> "اختر الجلسة للبدء بالأسئلة:"
+                                else -> "اختر الموضوع للبدء بالأسئلة:"
+                            },
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.primary
@@ -631,7 +659,35 @@ fun TopicSelectionScreen(
                     // empty squares filling the screen (two topics per
                     // screen). The explicit bound makes that layout
                     // impossible regardless of ancestor measurement.
-                    if (showYears) {
+                    if (showYears && yearSummaries.isNotEmpty()) {
+                        // سنوات ملف السنوات المستقل (مواد الجامعات):
+                        // تنازليًا، وصفّ السنة يعرض اسمها كما بالملف
+                        // («دمشق 2026») وعدد أسئلتها، ويفتح كويز
+                        // أسئلة السنة كاملة مباشرة — بنفس صفوف
+                        // الجلسات المحدودة الارتفاع (52–76dp).
+                        items(yearSummaries.sortedByDescending { it.year }) { summary ->
+                            LibCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 52.dp, max = 76.dp),
+                                onClick = { onYearClick(summary.year, summary.name) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(summary.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        "(${summary.count} سؤال)",
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
+                    } else if (showYears) {
                         items(orderedSessions) { session ->
                             val sessionName = session.name ?: "جلسة"
                             val yearText = when (val y = session.year) {
@@ -719,7 +775,6 @@ fun UniversitySubjectsScreen(
     LaunchedEffect(universityKey) { onBankSectionsShown() }
     val prefix = "dawrat_jami3at/$universityKey/"
     val univFiles = files.filterKeys { it.startsWith(prefix) && it.endsWith(".json") }
-    val downloadedMap = downloadedSections.associateBy { it.sectionPath }
 
     Scaffold(
         topBar = {
@@ -747,8 +802,13 @@ fun UniversitySubjectsScreen(
                 Spacer(modifier = Modifier.height(4.dp))
             }
             items(univFiles.entries.toList()) { (path, entry) ->
-                val downloadedEntity = downloadedMap[path]
-                val isDownloaded = isSectionUpToDate(downloadedEntity, entry)
+                // Unified pair verdict (doctor's spec 23 Nov 2026):
+                // a subject with a years twin in the manifest counts
+                // as downloaded only when BOTH files are present and
+                // current — never on the subject file alone.
+                val isDownloaded = sy.medpro.watani.data.isSectionPairUpToDate(
+                    path, files, downloadedSections
+                )
                 val isDownloading = downloadingPaths.contains(path)
                 val subjectName = path.substringAfterLast("/").substringBeforeLast(".json")
 

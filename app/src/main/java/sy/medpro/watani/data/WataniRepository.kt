@@ -700,6 +700,27 @@ class WataniRepository(private val context: Context) {
             }
         }
 
+    /**
+     * «حسب السنوات» لمواد الجامعات: غلاف ملف السنوات المستقل
+     * (`dawrat_jami3at/<uni>_years/<subject>.json`). مرآة
+     * [getSubjectEnvelope]: بوابة الإيجار المنتهي أولًا للمسارات
+     * المقيدة (مسارات الجامعات مقيدة، فالغلاف المحفوظ لا يُقدَّم
+     * أبدًا بعد انتهاء الإيجار), ثم القراءة عبر [readSectionText]
+     * (الكاش المشفّر) وتحليل Moshi. null عند غياب الملف أو فساد
+     * تحليله — الشاشة تعرض عندها قائمة فارغة ولا تنهار.
+     */
+    suspend fun getYearsEnvelope(path: String): YearsEnvelope? = withContext(Dispatchers.IO) {
+        try {
+            if (WorkerActivationApi.isRestrictedPath(path) &&
+                WorkerActivationApi.isRestrictedLeaseExpired(context)
+            ) return@withContext null
+            val jsonString = readSectionText(path) ?: return@withContext null
+            moshi.adapter(YearsEnvelope::class.java).fromJson(jsonString)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun getCasesEnvelope(): CasesEnvelope? = withContext(Dispatchers.IO) {
         try {
             val jsonString = readSectionText("cases.json") ?: return@withContext null

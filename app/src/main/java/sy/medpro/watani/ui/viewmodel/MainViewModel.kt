@@ -101,6 +101,11 @@ data class UiState(
      * device from its own file alone. */
     val fullDawraFileInputs: List<DawraSubjectSessions> = emptyList(),
     val fullDawraLoading: Boolean = false,
+    /** «حسب السنوات»: مسار ملف سنوات المادة المفتوحة حاليًا، محسوب
+     * عند فتح المادة من مسار شاردتها (yearsPathFor) ولا يُعرَض إلا
+     * إن وُجد الملف بالمانيفست فعلًا — null لكل مادة بلا ملف سنوات
+     * ولكل العائلات الأخرى، فلا وضع «حسب السنوات» عندها إطلاقًا. */
+    val subjectYearsPath: String? = null,
     val screenState: ScreenState = ScreenState.Home
 )
 
@@ -169,20 +174,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setTab(tab: AppTab) {
-        _uiState.update { it.copy(currentTab = tab, backStack = emptyList(), screenState = ScreenState.Home) }
+        _uiState.update {
+            it.copy(
+                currentTab = tab,
+                backStack = emptyList(),
+                screenState = ScreenState.Home,
+                subjectYearsPath = null
+            )
+        }
     }
 
     fun downloadSection(path: String, entry: ManifestFileEntry) {
+        // Unified pair download (doctor's spec 23 Nov 2026,
+        // all-or-nothing): a university subject whose years twin
+        // exists in the manifest downloads BOTH files as ONE
+        // operation — the twin is pulled automatically in the same
+        // call, and any twin failure fails the whole download, so
+        // no surface can ever present a half-downloaded subject
+        // (see isSectionPairUpToDate). Every other path keeps the
+        // exact single-file behaviour (yearsPathFor is null outside
+        // the university family, and null for the years file itself).
+        val twinPath = yearsPathFor(path)
+        val twinEntry = twinPath?.let { _uiState.value.files[it] }
+        val twin: Pair<String, ManifestFileEntry>? =
+            if (twinPath != null && twinEntry != null) twinPath to twinEntry else null
+        val activePaths: Set<String> = setOfNotNull(path, twin?.first)
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
-                    downloadingPaths = it.downloadingPaths + path,
-                    downloadingProgress = it.downloadingProgress + (path to 0f),
+                    downloadingPaths = it.downloadingPaths + activePaths,
+                    downloadingProgress = it.downloadingProgress +
+                        activePaths.associateWith { 0f },
                     downloadError = null
                 )
             }
-            val result = repository.downloadSection(path, entry) { p ->
+            var result = repository.downloadSection(path, entry) { p ->
                 _uiState.update { st -> st.copy(downloadingProgress = st.downloadingProgress + (path to p)) }
+            }
+            if (result.isSuccess && twin != null) {
+                result = repository.downloadSection(twin.first, twin.second) { p ->
+                    _uiState.update { st ->
+                        st.copy(downloadingProgress = st.downloadingProgress + (twin.first to p))
+                    }
+                }
             }
             result.fold(
                 onSuccess = { _ ->
@@ -191,8 +225,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val prefetchError = prefetchExplanations(path)
                     _uiState.update { st ->
                         st.copy(
-                            downloadingPaths = st.downloadingPaths - path,
-                            downloadingProgress = st.downloadingProgress - path,
+                            downloadingPaths = st.downloadingPaths - activePaths,
+                            downloadingProgress = st.downloadingProgress - activePaths,
                             downloadError = if (prefetchError != null) prefetchError
                                 else if (st.explanationFailedPath == path) null else st.downloadError,
                             explanationFailedPath = if (prefetchError != null) path
@@ -203,8 +237,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onFailure = { error ->
                     _uiState.update {
                         it.copy(
-                            downloadingPaths = it.downloadingPaths - path,
-                            downloadingProgress = it.downloadingProgress - path,
+                            downloadingPaths = it.downloadingPaths - activePaths,
+                            downloadingProgress = it.downloadingProgress - activePaths,
                             // M3: revocation text stands alone (Arabic,
                             // no "download failed" prefix); the prompt
                             // itself fires from the repository event.
@@ -355,10 +389,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun navigateToHome() {
-        _uiState.update { it.copy(backStack = emptyList(), screenState = ScreenState.Home) }
+        _uiState.update {
+            it.copy(backStack = emptyList(), screenState = ScreenState.Home, subjectYearsPath = null)
+        }
     }
 
     fun openSubject(path: String, subjectName: String, tab: AppTab) {
+        // «حسب السنوات»: مسار ملف سنوات المادة يُحسب من مسار
+        // شاردتها ويُعرَض بالحالة فقط إن وُجد بالمانيفست — لغير
+        // عائلة الجامعات يرجع yearsPathFor بـnull فلا أثر إطلاقًا.
+        val yearsPath = yearsPathFor(path)?.takeIf { _uiState.value.files.containsKey(it) }
+        _uiState.update { it.copy(subjectYearsPath = yearsPath) }
         viewModelScope.launch {
             navigateTo(ScreenState.TopicSelection(path, subjectName))
         }
@@ -469,6 +510,60 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
         }
+    }
+
+    /**
+     * «حسب السنوات»: فتح كويز سنة كاملة من ملف السنوات المستقل —
+     * أسئلة السنة كما هي قائمة واحدة مباشرة، بلا مستوى مواضيع
+     * (تصحيح الدكتور 23 Nov 2026 10:33). مرآة [openSessionQuiz]
+     * حرفيًا بالبوابات ذاتها وبنفس الترتيب (بوابة الجهاز للمحتوى
+     * المقيد، ثم التفعيل، ثم الإيجار المنتهي), والتنقّل إلى نفس
+     * ScreenState.Quiz لكن بـsourcePath = مسار ملف السنوات لا
+     * شاردة المادة، وعنوان الكويز هو اسم السنة كما بالملف.
+     */
+    fun openYearQuiz(
+        yearsPath: String,
+        year: Int,
+        yearName: String
+    ) {
+        viewModelScope.launch {
+            if (WorkerActivationApi.isRestrictedPath(yearsPath)) {
+                val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(
+                    getApplication<Application>().applicationContext
+                )
+                if (!gate.allowed) {
+                    _uiState.update { it.copy(gateMessage = gate.userMessage) }
+                    return@launch
+                }
+                if (!WorkerActivationApi.isActivated(getApplication<Application>().applicationContext)) {
+                    _activationPromptRequests.tryEmit(Unit)
+                    return@launch
+                }
+                // Phase-2 gentle lease: >30 days without a successful
+                // server verification — downloaded restricted sections
+                // are treated as unavailable until one online check.
+                // Downloads are NOT deleted by this path.
+                if (WorkerActivationApi.isRestrictedLeaseExpired(getApplication<Application>().applicationContext)) {
+                    _uiState.update { it.copy(gateMessage = WorkerActivationApi.LEASE_EXPIRED_MESSAGE) }
+                    return@launch
+                }
+            }
+            val envelope = repository.getYearsEnvelope(yearsPath)
+            val questions = questionsForYear(envelope, year)
+            navigateTo(
+                ScreenState.Quiz(
+                    yearName,
+                    questions,
+                    sourcePath = yearsPath,
+                    subjectName = envelope?.subjectName,
+                    ltr = yearsPath.startsWith("questions_en/")
+                )
+            )
+        }
+    }
+
+    suspend fun getYearsEnvelope(path: String): YearsEnvelope? {
+        return repository.getYearsEnvelope(path)
     }
 
     fun openFullDawraList() {
