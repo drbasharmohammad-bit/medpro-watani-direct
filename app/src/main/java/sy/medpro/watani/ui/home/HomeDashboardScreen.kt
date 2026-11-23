@@ -46,6 +46,9 @@ import sy.medpro.watani.ui.library.libHeading
 import sy.medpro.watani.ui.library.libMuted
 import sy.medpro.watani.ui.theme.*
 
+// Legacy home hub: one long declarative composition, kept as a
+// single function by design (same scoped suppression as HomeScreen).
+@Suppress("LongMethod")
 @Composable
 fun HomeDashboardScreen(
     manifestVersion: String?,

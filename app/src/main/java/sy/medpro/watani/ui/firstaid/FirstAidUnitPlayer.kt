@@ -290,17 +290,25 @@ fun FirstAidUnitPlayer(
  * colour — with a small spinner and caption, so the wait reads as the
  * unit arriving, not as an empty screen.
  */
+// Skeleton proportions as named design constants (values unchanged
+// from the drawn design; named in the 1.2.45 detekt pass).
+private const val SKELETON_TITLE_FRACTION = 0.55f
+private const val SKELETON_HEADING_FRACTION = 0.85f
+private const val SKELETON_ROW_TITLE_FRACTION = 0.5f
+private const val SKELETON_ROW_SUBTITLE_FRACTION = 0.75f
+private const val SKELETON_ROW_COUNT = 3
+
 @Composable
 private fun FaUnitLoadingSkeleton() {
     Column(modifier = Modifier.padding(top = 8.dp)) {
         Box(
-            modifier = Modifier.fillMaxWidth(0.55f).height(15.dp)
+            modifier = Modifier.fillMaxWidth(SKELETON_TITLE_FRACTION).height(15.dp)
                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(7.dp))
                 .background(faTrack())
         )
         Spacer(modifier = Modifier.height(9.dp))
         Box(
-            modifier = Modifier.fillMaxWidth(0.85f).height(24.dp)
+            modifier = Modifier.fillMaxWidth(SKELETON_HEADING_FRACTION).height(24.dp)
                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
                 .background(faTrack())
         )
@@ -309,31 +317,7 @@ private fun FaUnitLoadingSkeleton() {
                 modifier = Modifier.padding(horizontal = 15.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(15.dp)
             ) {
-                repeat(3) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier.size(38.dp).clip(CircleShape).background(faTrack())
-                        )
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth(0.5f).height(13.dp)
-                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
-                                    .background(faTrack())
-                            )
-                            Box(
-                                modifier = Modifier.fillMaxWidth(0.75f).height(10.dp)
-                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp))
-                                    .background(faTrack())
-                            )
-                        }
-                    }
-                }
+                repeat(SKELETON_ROW_COUNT) { FaUnitLoadingSkeletonRow() }
             }
         }
         Row(
@@ -348,6 +332,33 @@ private fun FaUnitLoadingSkeleton() {
             Text(
                 "جارٍ تحميل الوحدة…",
                 fontFamily = NotoSansArabicFontFamily, fontSize = 12.5.sp, color = faMuted()
+            )
+        }
+    }
+}
+
+@Composable
+private fun FaUnitLoadingSkeletonRow() {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(38.dp).clip(CircleShape).background(faTrack())
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxWidth(SKELETON_ROW_TITLE_FRACTION).height(13.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                    .background(faTrack())
+            )
+            Box(
+                modifier = Modifier.fillMaxWidth(SKELETON_ROW_SUBTITLE_FRACTION).height(10.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp))
+                    .background(faTrack())
             )
         }
     }
