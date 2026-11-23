@@ -17,7 +17,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import sy.medpro.watani.data.SectionCacheCrypto
 import sy.medpro.watani.data.SectionVerification
 import sy.medpro.watani.data.WataniRepository
 import sy.medpro.watani.ui.library.LibraryViewModel
@@ -79,12 +78,17 @@ class CacheProfessionalIntegrationTest {
               "dawrat_jami3at/damascus/أذنية.json":{"hash":"h2","size":200,"count":2,"version":"1"}
             }}
         """.trimIndent()
-        val written = SectionCacheCrypto.writeText(
-            context,
-            File(context.filesDir, WataniRepository.MANIFEST_CACHE_FILENAME),
-            manifestJson
-        )
-        assertTrue("the manifest cache fixture must be written", written)
+        // Seeded in the LEGACY PLAINTEXT form with the fixture
+        // mtime the support seeds use (1 s after epoch): the
+        // encrypted write path needs the Android Keystore, which
+        // Robolectric does not provide, while the repository's
+        // read path accepts a pre-hardening plaintext cache and
+        // migrates it — exactly what an upgraded install's first
+        // cold start sees.
+        val cacheFile = File(context.filesDir, WataniRepository.MANIFEST_CACHE_FILENAME)
+        cacheFile.writeText(manifestJson, Charsets.UTF_8)
+        cacheFile.setLastModified(1_000L)
+        assertTrue("the manifest cache fixture must exist", cacheFile.exists())
 
         val viewModel = MainViewModel(application)
 
