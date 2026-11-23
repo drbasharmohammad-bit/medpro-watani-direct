@@ -64,15 +64,17 @@ object PackDownloadManager {
         if (!markStarted(path)) return
         val appContext = context.applicationContext
         scope.launch {
-            val ok = try {
+            // runCatching, not a swallowed catch: fetchManifest and
+            // downloadSection already report their own failures as
+            // Result; anything escaping them (construction, IO) is
+            // simply this pack's failure mark.
+            val ok = runCatching {
                 val repo = WataniRepository(appContext)
                 val entry = repo.fetchManifest().getOrNull()?.files?.get(path)
                 entry != null && repo.downloadSection(path, entry) { p ->
                     markProgress(path, p)
                 }.isSuccess
-            } catch (e: Exception) {
-                false
-            }
+            }.getOrDefault(false)
             markFinished(path, ok)
         }
     }

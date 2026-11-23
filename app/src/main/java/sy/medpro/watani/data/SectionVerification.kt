@@ -117,7 +117,13 @@ object SectionVerification {
      * uworld/, and the non-years files of dawrat_jami3at/). Anything
      * else is UNKNOWN — never a silent subject fall-through.
      */
-    fun familyOf(path: String): SectionFamily = when {
+    fun familyOf(path: String): SectionFamily =
+        rootPackFamily(path) ?: familyByPrefix(path)
+
+    /** The root self-loading packs, by exact file name (plus the
+     * cases contains-check the historical branch order starts
+     * with). Null when [path] is not one of them. */
+    private fun rootPackFamily(path: String): SectionFamily? = when {
         path.contains("cases.json") || path == "cases_de.json" -> SectionFamily.CASES
         path == "guide.json" -> SectionFamily.GUIDE
         path == "ddx.json" -> SectionFamily.DDX
@@ -128,6 +134,13 @@ object SectionVerification {
         path == "dosing_drills.json" -> SectionFamily.DOSING_DRILLS
         path == "concepts.json" -> SectionFamily.CONCEPTS
         path == "reverse.json" -> SectionFamily.REVERSE
+        else -> null
+    }
+
+    /** The prefix families: First Aid, the standalone dawrat, the
+     * years twins, and — positively — the subject banks; anything
+     * else is UNKNOWN. */
+    private fun familyByPrefix(path: String): SectionFamily = when {
         path.startsWith("firstaid/") -> SectionFamily.FIRST_AID
         path.startsWith("dawrat_sessions/") -> SectionFamily.DAWRA_SESSIONS
         isYearsFilePath(path) -> SectionFamily.YEARS
@@ -137,263 +150,28 @@ object SectionVerification {
         else -> SectionFamily.UNKNOWN
     }
 
-    /** F-02/F-03/F-04: parse + declared-count verification. */
+    /** F-02/F-03/F-04: parse + declared-count verification. The
+     * per-family checks live in [SectionCountChecks] (root packs)
+     * and [SectionBankCounts] (bank-shaped families). */
     fun verifySectionCount(path: String, jsonString: String, moshi: Moshi): Int {
         return when (familyOf(path)) {
-            SectionFamily.CASES -> verifyCasesCount(jsonString, moshi)
-            SectionFamily.GUIDE -> verifyGuideCount(jsonString, moshi)
-            SectionFamily.DDX -> verifyDdxCount(jsonString, moshi)
-            SectionFamily.AUSCULTATION -> verifyAuscultationCount(jsonString, moshi)
-            SectionFamily.OSCE -> verifyOsceCount(jsonString, moshi)
-            SectionFamily.ECG -> verifyEcgCount(jsonString, moshi)
-            SectionFamily.OSCE_PROCEDURES -> verifyProceduresCount(jsonString, moshi)
-            SectionFamily.DOSING_DRILLS -> verifyDosingDrillsCount(jsonString, moshi)
-            SectionFamily.CONCEPTS -> verifyConceptsCount(jsonString, moshi)
-            SectionFamily.REVERSE -> verifyReverseCount(jsonString, moshi)
-            SectionFamily.FIRST_AID -> verifyFirstAidCount(path, jsonString, moshi)
-            SectionFamily.DAWRA_SESSIONS -> verifyDawraSessionsCount(jsonString, moshi)
-            SectionFamily.YEARS -> verifyYearsCount(jsonString, moshi)
-            SectionFamily.SUBJECT -> verifySubjectCount(jsonString, moshi)
-            SectionFamily.UNKNOWN -> throw IllegalStateException(
+            SectionFamily.CASES -> SectionCountChecks.verifyCasesCount(jsonString, moshi)
+            SectionFamily.GUIDE -> SectionCountChecks.verifyGuideCount(jsonString, moshi)
+            SectionFamily.DDX -> SectionCountChecks.verifyDdxCount(jsonString, moshi)
+            SectionFamily.AUSCULTATION -> SectionCountChecks.verifyAuscultationCount(jsonString, moshi)
+            SectionFamily.OSCE -> SectionCountChecks.verifyOsceCount(jsonString, moshi)
+            SectionFamily.ECG -> SectionCountChecks.verifyEcgCount(jsonString, moshi)
+            SectionFamily.OSCE_PROCEDURES -> SectionCountChecks.verifyProceduresCount(jsonString, moshi)
+            SectionFamily.DOSING_DRILLS -> SectionCountChecks.verifyDosingDrillsCount(jsonString, moshi)
+            SectionFamily.CONCEPTS -> SectionCountChecks.verifyConceptsCount(jsonString, moshi)
+            SectionFamily.REVERSE -> SectionCountChecks.verifyReverseCount(jsonString, moshi)
+            SectionFamily.FIRST_AID -> SectionBankCounts.verifyFirstAidCount(path, jsonString, moshi)
+            SectionFamily.DAWRA_SESSIONS -> SectionBankCounts.verifyDawraSessionsCount(jsonString, moshi)
+            SectionFamily.YEARS -> SectionBankCounts.verifyYearsCount(jsonString, moshi)
+            SectionFamily.SUBJECT -> SectionBankCounts.verifySubjectCount(jsonString, moshi)
+            SectionFamily.UNKNOWN -> error(
                 "عائلة ملف غير معروفة لهذا القسم — أعد التحميل."
             )
         }
-    }
-
-    private fun verifyCasesCount(jsonString: String, moshi: Moshi): Int {
-        val casesEnv = moshi.adapter(CasesEnvelope::class.java).fromJson(jsonString)
-        val declaredCount = casesEnv?.count
-        val actualCount = casesEnv?.cases?.size ?: 0
-        if (casesEnv == null || declaredCount == null || actualCount != declaredCount) {
-            throw IllegalStateException("خطأ في تطابق عدد الحالات الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
-        }
-        return actualCount
-    }
-
-    private fun verifyGuideCount(jsonString: String, moshi: Moshi): Int {
-        val guideEnv = moshi.adapter(GuideEnvelope::class.java).fromJson(jsonString)
-            ?: throw IllegalStateException("ملف الدليل غير صالح — أعد التحميل.")
-        val actualCount = guideEnv.groups?.size ?: 0
-        if (actualCount == 0) {
-            throw IllegalStateException("ملف الدليل بلا مجموعات — أعد التحميل.")
-        }
-        return actualCount
-    }
-
-    private fun verifyDdxCount(jsonString: String, moshi: Moshi): Int {
-        val ddxEnv = moshi.adapter(DdxEnvelope::class.java).fromJson(jsonString)
-        val declaredCount = ddxEnv?.count ?: 0
-        val actualCount = ddxEnv?.cases?.size ?: 0
-        if (ddxEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد حالات التشخيص التفريقي الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
-        }
-        return actualCount
-    }
-
-    private fun verifyAuscultationCount(jsonString: String, moshi: Moshi): Int {
-        // Fix 1.2.1: the auscultation pack is a clips envelope, not a
-        // subject envelope — before this branch existed it fell into
-        // the subject check below, counted 0 questions and EVERY pack
-        // download was deleted as "corrupt" (doctor's device report,
-        // 10 Nov 2026). Declared count vs actual clips, same honesty
-        // rule as the other envelopes.
-        val auscEnv = moshi.adapter(AuscultationEnvelope::class.java).fromJson(jsonString)
-        val declaredCount = auscEnv?.count ?: 0
-        val actualCount = auscEnv?.clips?.size ?: 0
-        if (auscEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد مقاطع الإصغاء الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
-        }
-        return actualCount
-    }
-
-    private fun verifyOsceCount(jsonString: String, moshi: Moshi): Int {
-        // Fix 1.2.1: same defect class as auscultation — a stations
-        // envelope fell into the subject check and could never pass.
-        val osceEnv = moshi.adapter(OsceEnvelope::class.java).fromJson(jsonString)
-        val declaredCount = osceEnv?.count ?: 0
-        val actualCount = osceEnv?.stations?.size ?: 0
-        if (osceEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد محطات الأوسكي الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
-        }
-        return actualCount
-    }
-
-    private fun verifyEcgCount(jsonString: String, moshi: Moshi): Int {
-        // Build 1.2.4: the ECG course pack is a method/patterns/
-        // strips envelope with NO declared count field in its
-        // contract — without this branch it would fall into the
-        // subject check, count 0 and never download (the exact
-        // 1.2.1 defect class). Honest check: the pack must parse
-        // and carry teaching content (patterns or strips); the
-        // returned count is the number of strips, or patterns
-        // when the pack ships patterns ahead of strips.
-        val ecgEnv = moshi.adapter(EcgEnvelope::class.java).fromJson(jsonString)
-            ?: throw IllegalStateException("ملف كورس تخطيط القلب غير صالح — أعد التحميل.")
-        val patternCount = ecgEnv.patterns?.size ?: 0
-        val stripCount = ecgEnv.strips?.size ?: 0
-        if (patternCount == 0 && stripCount == 0) {
-            throw IllegalStateException("ملف كورس تخطيط القلب بلا أنماط أو شرائط — أعد التحميل.")
-        }
-        return if (stripCount > 0) stripCount else patternCount
-    }
-
-    private fun verifyProceduresCount(jsonString: String, moshi: Moshi): Int {
-        // Build 1.2.6: the OSCE procedures pack is a BARE ARRAY of
-        // procedures (no envelope, no declared count) — without this
-        // branch it would fall into the subject check, count 0 and
-        // never download (the exact 1.2.1 defect class). Honest
-        // check: the array must parse and be non-empty; the returned
-        // count is the real number of procedures.
-        val listType = com.squareup.moshi.Types.newParameterizedType(
-            List::class.java, ProcedureDto::class.java
-        )
-        val procedures = moshi.adapter<List<ProcedureDto>>(listType).fromJson(jsonString)
-        val actualCount = procedures?.size ?: 0
-        if (procedures == null || actualCount == 0) {
-            throw IllegalStateException("ملف إجراءات الأوسكي بلا إجراءات — أعد التحميل.")
-        }
-        return actualCount
-    }
-
-    private fun verifyDosingDrillsCount(jsonString: String, moshi: Moshi): Int {
-        // Build 1.2.6: same bare-array shape as osce_procedures —
-        // the dosing drills pack must parse and be non-empty; the
-        // returned count is the real number of drills.
-        val listType = com.squareup.moshi.Types.newParameterizedType(
-            List::class.java, DosingDrillDto::class.java
-        )
-        val drills = moshi.adapter<List<DosingDrillDto>>(listType).fromJson(jsonString)
-        val actualCount = drills?.size ?: 0
-        if (drills == null || actualCount == 0) {
-            throw IllegalStateException("ملف تدريبات الجرعات بلا تدريبات — أعد التحميل.")
-        }
-        return actualCount
-    }
-
-    private fun verifyConceptsCount(jsonString: String, moshi: Moshi): Int {
-        // Build 1.2.13: the «ادرس مع ميد برو» pack is a units
-        // envelope with NO declared count field in its contract —
-        // without this branch it would fall into the subject check,
-        // count 0 and never download (the exact 1.2.1 defect
-        // class). Honest check: the pack must parse and carry at
-        // least one unit; the returned count is the real number
-        // of units (the manifest entry's count is built from it).
-        val conceptsEnv = moshi.adapter(ConceptsEnvelope::class.java).fromJson(jsonString)
-        val actualCount = conceptsEnv?.units?.size ?: 0
-        if (conceptsEnv == null || actualCount == 0) {
-            throw IllegalStateException("ملف مفاهيم «ادرس مع ميد برو» بلا وحدات — أعد التحميل.")
-        }
-        return actualCount
-    }
-
-    private fun verifyReverseCount(jsonString: String, moshi: Moshi): Int {
-        val revEnv = moshi.adapter(ReverseEnvelope::class.java).fromJson(jsonString)
-        val declaredCount = revEnv?.count ?: 0
-        val actualCount = revEnv?.rounds?.size ?: 0
-        if (revEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد جولات اقلبها الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
-        }
-        return actualCount
-    }
-
-    private fun verifyFirstAidCount(path: String, jsonString: String, moshi: Moshi): Int {
-        // Build 1.2.36: the First Aid family — without this branch
-        // every firstaid file would fall into the subject check
-        // below, count 0 and never download (the exact 1.2.1 defect
-        // class). Honest per-file checks against each file's OWN
-        // declared count where one exists; unit packages carry no
-        // declared count, so their real quiz size is returned (the
-        // manifest entry's count is built from it — verified
-        // against all 154 published packages at merge time).
-        if (path.endsWith("index_step1.json") || path.endsWith("index_step2.json")) {
-            val idx = moshi.adapter(FirstAidIndexDto::class.java).fromJson(jsonString)
-            val declaredCount = idx?.count ?: 0
-            val actualCount = idx?.units?.size ?: 0
-            if (idx == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-                throw IllegalStateException("خطأ في تطابق عدد وحدات فهرس First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
-            }
-            return actualCount
-        }
-        if (path == "firstaid/integration.json") {
-            val integ = moshi.adapter(FirstAidIntegrationDto::class.java).fromJson(jsonString)
-            val declaredCount = integ?.count ?: 0
-            val actualCount = integ?.links?.size ?: 0
-            if (integ == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-                throw IllegalStateException("خطأ في تطابق عدد روابط تكامل First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
-            }
-            return actualCount
-        }
-        if (path == "firstaid/banks_step2.json") {
-            val banks = moshi.adapter(FirstAidBanksDto::class.java).fromJson(jsonString)
-            val declaredCount = banks?.count ?: 0
-            val actualCount = banks?.tests?.sumOf { it.questions?.size ?: 0 } ?: 0
-            if (banks == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-                throw IllegalStateException("خطأ في تطابق عدد أسئلة بنوك First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
-            }
-            return actualCount
-        }
-        val pkg = moshi.adapter(FirstAidUnitPackageDto::class.java).fromJson(jsonString)
-        val actualCount = pkg?.quiz?.size ?: 0
-        if (pkg == null || actualCount == 0) {
-            throw IllegalStateException("حزمة وحدة First Aid بلا أسئلة تدريب — أعد التحميل.")
-        }
-        return actualCount
-    }
-
-    private fun verifyDawraSessionsCount(jsonString: String, moshi: Moshi): Int {
-        // Build 1.2.32: a standalone dawra file is a BARE ARRAY of
-        // unified-schema question records (no envelope, no declared
-        // count) — without this branch it would fall into the subject
-        // check, count 0 and never download (the exact 1.2.1 defect
-        // class). Honest check: the array must parse as dawra records
-        // and be non-empty; the returned count is the real number of
-        // questions in the file.
-        val listType = com.squareup.moshi.Types.newParameterizedType(
-            List::class.java, DawraSessionQuestionDto::class.java
-        )
-        val records = moshi.adapter<List<DawraSessionQuestionDto>>(listType).fromJson(jsonString)
-        val actualCount = records?.size ?: 0
-        if (records == null || actualCount == 0) {
-            throw IllegalStateException("ملف الدورة المستقل بلا أسئلة — أعد التحميل.")
-        }
-        return actualCount
-    }
-
-    private fun verifyYearsCount(jsonString: String, moshi: Moshi): Int {
-        // Build 1.2.45 fix: the «حسب السنوات» twin file is a
-        // years envelope ({count, years: [{questions}]}) — in
-        // 1.2.44 it had NO branch here, fell into the subject
-        // check below, counted 0 (no topics/sessions) against
-        // its own declared count and could NEVER download
-        // (doctor's device report 23 Nov 2026 — the exact 1.2
-        // defect class this file's header warns about). Honest
-        // check: the actual count is the sum of the years'
-        // question lists, compared with the file's own declared
-        // count exactly like the other envelopes.
-        val yearsEnv = moshi.adapter(YearsEnvelope::class.java).fromJson(jsonString)
-        val declaredCount = yearsEnv?.count ?: 0
-        val actualCount = yearsEnv?.years?.sumOf { it.questions?.size ?: 0 } ?: 0
-        // check() throws IllegalStateException with this exact
-        // message — the type downloadSection catches — same
-        // contract as the explicit throws in the other branches.
-        check(actualCount > 0) {
-            "خطأ في تطابق عدد أسئلة السنوات الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
-        }
-        check(declaredCount <= 0 || actualCount == declaredCount) {
-            "خطأ في تطابق عدد أسئلة السنوات الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
-        }
-        return actualCount
-    }
-
-    private fun verifySubjectCount(jsonString: String, moshi: Moshi): Int {
-        val subjEnv = moshi.adapter(SubjectEnvelope::class.java).fromJson(jsonString)
-        val declaredCount = subjEnv?.count ?: 0
-        val tCount = subjEnv?.topics?.sumOf { it.questions?.size ?: 0 } ?: 0
-        val sCount = subjEnv?.sessions?.sumOf { it.questions?.size ?: 0 } ?: 0
-        val actualCount = if (tCount > 0) tCount else sCount
-        if (subjEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد أسئلة القسم الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
-        }
-        return actualCount
     }
 }

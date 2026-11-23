@@ -638,85 +638,11 @@ class WataniRepository(private val context: Context) {
         onProgress: (Float) -> Unit = {}
     ): Result<StagedSectionDownload> = withContext(Dispatchers.IO) {
         try {
-            // M8: device-integrity gate at the restricted-download entry.
-            // Blocked devices never reach the gateway (and never get a
-            // partial file to keep).
-            if (WorkerActivationApi.isRestrictedPath(path)) {
-                val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
-                if (!gate.allowed) {
-                    return@withContext Result.failure(Exception(gate.userMessage))
-                }
-            }
             val file = getSectionFile(path)
             val tempFile = File(file.parentFile, "${file.name}.tmp")
 
-            val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
-            // THE fetch-layer switch point (Team 1): restricted paths
-            // (questions/, dawrat/, dawrat_jami3at/, uworld/,
-            // explanations/, books/, library.json) are fetched via the
-            // Worker gateway with the activation token; free paths keep
-            // fetching directly from Pages, unchanged. Null = restricted
-            // but no usable token -> activation prompt, never a direct fetch.
-            val baseRequest = WorkerActivationApi.contentRequest(context, path)
-                ?: return@withContext Result.failure(
-                    Exception("هذا القسم يحتاج كود تفعيل — فعّل حسابك من نافذة التفعيل أولاً.")
-                )
-            val requestBuilder = baseRequest.newBuilder()
-            if (existingBytes > 0) {
-                requestBuilder.header("Range", "bytes=$existingBytes-")
-            }
-
-            var resp = client.newCall(requestBuilder.build()).execute()
-            if (resp.code == 416) {
-                // Detector fix (b5): a stale Range (temp longer than a
-                // shrunk origin file) must restart from zero, not loop
-                // on the same bad Range forever (the gateway now passes
-                // 416 through instead of masking it as 502).
-                if (tempFile.exists()) tempFile.delete()
-                resp.close()
-                resp = client.newCall(baseRequest).execute()
-            }
-            // F-13: the response and both streams are closed on EVERY
-            // exit path from here on (use{}), including the early
-            // 401/403 and HTTP-failure returns below — an interrupted
-            // download on a weak network must not leak connections or
-            // leave the resume temp file unflushed.
-            resp.use {
-            if (resp.code == 401 || resp.code == 403) {
-                // M3: no generic HTTP message, no cached fallback —
-                // activation is lost (cleared + wiped + prompt event).
-                return@withContext Result.failure(gatewayAuthFailure(context))
-            }
-            if (!resp.isSuccessful && resp.code != 206) {
-                return@withContext Result.failure(Exception("فشل التحميل — تأكد من اتصال الإنترنت أو صحة الرابط."))
-            }
-
-            // A1: Resume safety - if server answered HTTP 200 instead of 206 with full body, discard partial temp file
-            val isPartial = (resp.code == 206)
-            val actualExistingBytes = if (isPartial) existingBytes else {
-                if (tempFile.exists()) tempFile.delete()
-                0L
-            }
-
-            val body = resp.body ?: return@withContext Result.failure(Exception("استجابة فارغة من الخادم."))
-            val contentLength = body.contentLength()
-            val totalBytes = if (contentLength > 0) contentLength + actualExistingBytes else (entry.size ?: 1L)
-
-            body.byteStream().use { inputStream ->
-                java.io.FileOutputStream(tempFile, actualExistingBytes > 0).use { outputStream ->
-                    val buffer = ByteArray(8192)
-                    var bytesCopied = actualExistingBytes
-                    var read: Int
-                    while (inputStream.read(buffer).also { read = it } != -1) {
-                        outputStream.write(buffer, 0, read)
-                        bytesCopied += read
-                        val progress = (bytesCopied.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
-                        onProgress(progress)
-                    }
-                    outputStream.flush()
-                }
-            }
-            } // resp.use (F-13)
+            fetchSectionToTemp(path, entry, tempFile, onProgress)
+                .getOrElse { return@withContext Result.failure(it) }
 
             // Phase-2 hardening (Nov 2026) — verification order is
             // UNCHANGED, only the final persisted form changed:
@@ -768,6 +694,110 @@ class WataniRepository(private val context: Context) {
                 Result.failure(Exception("تعذر التحميل — تحقق من اتصال الإنترنت وحاول مجددًا.", e))
             }
         }
+    }
+
+    /**
+     * The fetch half of staging: device gate, gateway/Pages request
+     * (Range-resumed against the temp file), auth/status checks and
+     * the body copy into [tempFile]. Failures are the historical
+     * download failures, unchanged; exceptions propagate to the
+     * caller's catch (which wraps them, M3).
+     */
+    private fun fetchSectionToTemp(
+        path: String,
+        entry: ManifestFileEntry,
+        tempFile: File,
+        onProgress: (Float) -> Unit
+    ): Result<Unit> {
+        // M8: device-integrity gate at the restricted-download entry.
+        // Blocked devices never reach the gateway (and never get a
+        // partial file to keep).
+        if (WorkerActivationApi.isRestrictedPath(path)) {
+            val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
+            if (!gate.allowed) {
+                return Result.failure(Exception(gate.userMessage))
+            }
+        }
+        val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
+        // THE fetch-layer switch point (Team 1): restricted paths
+        // (questions/, dawrat/, dawrat_jami3at/, uworld/,
+        // explanations/, books/, library.json) are fetched via the
+        // Worker gateway with the activation token; free paths keep
+        // fetching directly from Pages, unchanged. Null = restricted
+        // but no usable token -> activation prompt, never a direct fetch.
+        val baseRequest = WorkerActivationApi.contentRequest(context, path)
+            ?: return Result.failure(
+                Exception("هذا القسم يحتاج كود تفعيل — فعّل حسابك من نافذة التفعيل أولاً.")
+            )
+        val requestBuilder = baseRequest.newBuilder()
+        if (existingBytes > 0) {
+            requestBuilder.header("Range", "bytes=$existingBytes-")
+        }
+
+        var resp = client.newCall(requestBuilder.build()).execute()
+        if (resp.code == 416) {
+            // Detector fix (b5): a stale Range (temp longer than a
+            // shrunk origin file) must restart from zero, not loop
+            // on the same bad Range forever (the gateway now passes
+            // 416 through instead of masking it as 502).
+            if (tempFile.exists()) tempFile.delete()
+            resp.close()
+            resp = client.newCall(baseRequest).execute()
+        }
+        // F-13: the response and both streams are closed on EVERY
+        // exit path from here on (use{}), including the early
+        // 401/403 and HTTP-failure returns below — an interrupted
+        // download on a weak network must not leak connections or
+        // leave the resume temp file unflushed.
+        resp.use {
+            if (resp.code == 401 || resp.code == 403) {
+                // M3: no generic HTTP message, no cached fallback —
+                // activation is lost (cleared + wiped + prompt event).
+                return Result.failure(gatewayAuthFailure(context))
+            }
+            if (!resp.isSuccessful && resp.code != 206) {
+                return Result.failure(Exception("فشل التحميل — تأكد من اتصال الإنترنت أو صحة الرابط."))
+            }
+            return copySectionBodyToTemp(resp, tempFile, existingBytes, entry, onProgress)
+        }
+    }
+
+    /** Streams a section response body into [tempFile], resuming
+     * from [existingBytes] when the server answered 206 (A1: a 200
+     * answer discards the partial temp and restarts from zero). */
+    private fun copySectionBodyToTemp(
+        resp: okhttp3.Response,
+        tempFile: File,
+        existingBytes: Long,
+        entry: ManifestFileEntry,
+        onProgress: (Float) -> Unit
+    ): Result<Unit> {
+        // A1: Resume safety - if server answered HTTP 200 instead of 206 with full body, discard partial temp file
+        val isPartial = (resp.code == 206)
+        val actualExistingBytes = if (isPartial) existingBytes else {
+            if (tempFile.exists()) tempFile.delete()
+            0L
+        }
+
+        val body = resp.body ?: return Result.failure(Exception("استجابة فارغة من الخادم."))
+        val contentLength = body.contentLength()
+        val totalBytes = if (contentLength > 0) contentLength + actualExistingBytes else (entry.size ?: 1L)
+
+        body.byteStream().use { inputStream ->
+            java.io.FileOutputStream(tempFile, actualExistingBytes > 0).use { outputStream ->
+                val buffer = ByteArray(8192)
+                var bytesCopied = actualExistingBytes
+                var read: Int
+                while (inputStream.read(buffer).also { read = it } != -1) {
+                    outputStream.write(buffer, 0, read)
+                    bytesCopied += read
+                    val progress = (bytesCopied.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                    onProgress(progress)
+                }
+                outputStream.flush()
+            }
+        }
+        return Result.success(Unit)
     }
 
     /**

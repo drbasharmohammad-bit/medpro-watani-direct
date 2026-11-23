@@ -213,6 +213,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return if (twinPath != null && twinEntry != null) twinPath to twinEntry else null
     }
 
+    /**
+     * The repository call behind [downloadSection]: with a years
+     * twin, the pair downloads ATOMICALLY via downloadSectionPair
+     * (cache audit fix F4, 1.2.45) — both files are staged and
+     * fully verified before either is installed, so a twin failure
+     * no longer leaves a NEW subject file beside an OLD years file;
+     * the working pair on disk stays exactly as it was. The pair
+     * progress (subject half, then twin half) is split back onto
+     * the two per-path progress slots.
+     */
+    private suspend fun runSectionDownload(
+        path: String,
+        entry: ManifestFileEntry,
+        twin: Pair<String, ManifestFileEntry>?
+    ): Result<Int> {
+        return if (twin != null) {
+            repository.downloadSectionPair(path, entry, twin.first, twin.second) { p ->
+                _uiState.update { st ->
+                    st.copy(
+                        downloadingProgress = st.downloadingProgress +
+                            (path to (p * 2f).coerceAtMost(1f)) +
+                            (twin.first to ((p - 0.5f) * 2f).coerceIn(0f, 1f))
+                    )
+                }
+            }
+        } else {
+            repository.downloadSection(path, entry) { p ->
+                _uiState.update { st -> st.copy(downloadingProgress = st.downloadingProgress + (path to p)) }
+            }
+        }
+    }
+
     fun downloadSection(path: String, entry: ManifestFileEntry) {
         // Unified pair download (doctor's spec 23 Nov 2026,
         // all-or-nothing): a university subject whose years twin
@@ -234,29 +266,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     downloadError = null
                 )
             }
-            // Cache audit fix F4 (1.2.45): when a years twin exists
-            // the pair downloads ATOMICALLY via downloadSectionPair
-            // — both files are staged and fully verified before
-            // either is installed, so a twin failure no longer
-            // leaves a NEW subject file beside an OLD years file;
-            // the working pair on disk stays exactly as it was. The
-            // pair progress (subject half, then twin half) is split
-            // back onto the two per-path progress slots.
-            val result = if (twin != null) {
-                repository.downloadSectionPair(path, entry, twin.first, twin.second) { p ->
-                    _uiState.update { st ->
-                        st.copy(
-                            downloadingProgress = st.downloadingProgress +
-                                (path to (p * 2f).coerceAtMost(1f)) +
-                                (twin.first to ((p - 0.5f) * 2f).coerceIn(0f, 1f))
-                        )
-                    }
-                }
-            } else {
-                repository.downloadSection(path, entry) { p ->
-                    _uiState.update { st -> st.copy(downloadingProgress = st.downloadingProgress + (path to p)) }
-                }
-            }
+            val result = runSectionDownload(path, entry, twin)
             result.fold(
                 onSuccess = { _ ->
                     // Bundle rule: a section download is not complete until
