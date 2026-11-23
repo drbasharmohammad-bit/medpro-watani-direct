@@ -184,6 +184,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * توأم السنوات لقسم جامعي كما يظهر بالمانيفست الحي (مسار +
+     * مدخل)، أو null: لا توأم للعائلات الأخرى ولا لملف السنوات
+     * نفسه، ولا توأم ما دام مدخله غائبًا عن المانيفست.
+     */
+    private fun yearsTwinOf(path: String): Pair<String, ManifestFileEntry>? {
+        val twinPath = yearsPathFor(path)
+        val twinEntry = twinPath?.let { _uiState.value.files[it] }
+        return if (twinPath != null && twinEntry != null) twinPath to twinEntry else null
+    }
+
     fun downloadSection(path: String, entry: ManifestFileEntry) {
         // Unified pair download (doctor's spec 23 Nov 2026,
         // all-or-nothing): a university subject whose years twin
@@ -194,10 +205,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // (see isSectionPairUpToDate). Every other path keeps the
         // exact single-file behaviour (yearsPathFor is null outside
         // the university family, and null for the years file itself).
-        val twinPath = yearsPathFor(path)
-        val twinEntry = twinPath?.let { _uiState.value.files[it] }
-        val twin: Pair<String, ManifestFileEntry>? =
-            if (twinPath != null && twinEntry != null) twinPath to twinEntry else null
+        val twin = yearsTwinOf(path)
         val activePaths: Set<String> = setOfNotNull(path, twin?.first)
         viewModelScope.launch {
             _uiState.update {

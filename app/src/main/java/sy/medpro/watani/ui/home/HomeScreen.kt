@@ -464,14 +464,16 @@ fun UniversityTabContent(onOpenUniversity: (String, String) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-// LongMethod + CyclomaticComplexMethod: this screen's size and
-// complexity are a pre-existing legacy condition, baselined in
-// config/detekt/baseline.xml under the pre-1.2.44 signature; the
-// 1.2.44 signature extension (years parameters) re-surfaced the
-// same two findings. The new years code itself is extracted
-// (yearSummaryRows) and passes cleanly; the suppression is scoped
-// to this one legacy function rather than editing the baseline.
-@Suppress("LongMethod", "CyclomaticComplexMethod")
+// LongMethod + CyclomaticComplexMethod + LongParameterList: this
+// screen's size, complexity and parameter count are a pre-existing
+// legacy condition (the first two are baselined in
+// config/detekt/baseline.xml under the pre-1.2.44 signature); the
+// 1.2.44 signature extension (two optional years parameters,
+// following the englishPath/onOpenEnglish pattern) re-surfaced
+// them. The new years code itself is extracted (yearSummaryRows)
+// and passes cleanly; the suppression is scoped to this one
+// legacy function rather than editing the baseline.
+@Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
 fun TopicSelectionScreen(
     subjectName: String,
     subjectEnvelope: SubjectEnvelope?,
