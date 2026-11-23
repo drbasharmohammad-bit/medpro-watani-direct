@@ -59,16 +59,17 @@ private const val UNIVERSITY_FAMILY_PREFIX = "dawrat_jami3at/"
  * دالة نقية — تُختبر وحدويًا وتُستخدم من الـViewModel والواجهة.
  */
 fun yearsPathFor(subjectPath: String): String? {
-    if (!subjectPath.startsWith(UNIVERSITY_FAMILY_PREFIX)) return null
-    if (!subjectPath.endsWith(".json")) return null
-    val rest = subjectPath.removePrefix(UNIVERSITY_FAMILY_PREFIX)
-    val parts = rest.split("/")
-    if (parts.size != 2) return null
-    val university = parts[0]
-    val file = parts[1]
-    if (university.isBlank() || file.isBlank()) return null
-    if (university.endsWith("_years")) return null
-    return "$UNIVERSITY_FAMILY_PREFIX${university}_years/$file"
+    val parts = subjectPath.removePrefix(UNIVERSITY_FAMILY_PREFIX).split("/")
+    val isSubjectShard = subjectPath.startsWith(UNIVERSITY_FAMILY_PREFIX) &&
+        subjectPath.endsWith(".json") &&
+        parts.size == 2 &&
+        parts[0].isNotBlank() && parts[1].isNotBlank() &&
+        !parts[0].endsWith("_years")
+    return if (isSubjectShard) {
+        "$UNIVERSITY_FAMILY_PREFIX${parts[0]}_years/${parts[1]}"
+    } else {
+        null
+    }
 }
 
 /** ملخّص سنة واحدة لقائمة السنوات: الاسم المعروض وعدد الأسئلة. */
@@ -105,10 +106,9 @@ fun isSectionPairUpToDate(
         val entry = files[p]
         return if (entry != null) isSectionUpToDate(entity, entry) else entity != null
     }
-    if (!upToDate(path)) return false
-    val twin = yearsPathFor(path) ?: return true
-    if (!files.containsKey(twin)) return true
-    return upToDate(twin)
+    val twin = yearsPathFor(path)
+    return upToDate(path) &&
+        (twin == null || !files.containsKey(twin) || upToDate(twin))
 }
 
 /** عدد أسئلة سنة: حقل count المنشور أولًا، وإلا عدد أسئلتها المباشرة. */
