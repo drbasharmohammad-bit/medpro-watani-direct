@@ -53,22 +53,6 @@ fun ProceduresWingScreen(onBack: () -> Unit) {
     var selected by remember { mutableStateOf<ProcedureDto?>(null) }
     var mode by remember { mutableStateOf(ProcedureMode.LIST) }
 
-    // Entry point (cache audit fix F6, 1.2.45): with no pack on
-    // disk, the first download is handed to the process-level
-    // PackDownloadManager and the screen stays in its loading
-    // state — leaving the screen no longer kills the transfer,
-    // and the observers below reload from disk when it lands.
-    suspend fun loadProcedures() {
-        val repo = WataniRepository(context)
-        if (repo.getOsceProcedures().isNullOrEmpty()) {
-            isLoading = true
-            errorMessage = null
-            PackDownloadManager.startDownload(context, "osce_procedures.json")
-        } else {
-            reloadProcedures()
-        }
-    }
-
     // Disk-only reload (F6): reads the installed pack, silently
     // refreshes it if stale, falls back to the bundled procedures,
     // and settles the screen state. NEVER starts a download — a
@@ -97,6 +81,22 @@ fun ProceduresWingScreen(onBack: () -> Unit) {
             errorMessage = "خطأ في الاتصال: ${e.localizedMessage ?: "تأكد من اتصالك بالإنترنت"}"
         } finally {
             isLoading = false
+        }
+    }
+
+    // Entry point (cache audit fix F6, 1.2.45): with no pack on
+    // disk, the first download is handed to the process-level
+    // PackDownloadManager and the screen stays in its loading
+    // state — leaving the screen no longer kills the transfer,
+    // and the observers below reload from disk when it lands.
+    suspend fun loadProcedures() {
+        val repo = WataniRepository(context)
+        if (repo.getOsceProcedures().isNullOrEmpty()) {
+            isLoading = true
+            errorMessage = null
+            PackDownloadManager.startDownload(context, "osce_procedures.json")
+        } else {
+            reloadProcedures()
         }
     }
 

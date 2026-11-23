@@ -54,22 +54,6 @@ fun DosingDrillsScreen(onBack: () -> Unit) {
     var chosen by remember { mutableStateOf<Int?>(null) }
     var answers by remember { mutableStateOf<List<DrillAnswer>>(emptyList()) }
 
-    // Entry point (cache audit fix F6, 1.2.45): with no pack on
-    // disk, the first download is handed to the process-level
-    // PackDownloadManager and the screen stays in its loading
-    // state — leaving the screen no longer kills the transfer,
-    // and the observers below reload from disk when it lands.
-    suspend fun loadDrills() {
-        val repo = WataniRepository(context)
-        if (repo.getDosingDrills().isNullOrEmpty()) {
-            isLoading = true
-            errorMessage = null
-            PackDownloadManager.startDownload(context, "dosing_drills.json")
-        } else {
-            reloadDrills()
-        }
-    }
-
     // Disk-only reload (F6): reads the installed pack, silently
     // refreshes it if stale, falls back to the bundled drills, and
     // settles the screen state. NEVER starts a download — a reload
@@ -101,6 +85,22 @@ fun DosingDrillsScreen(onBack: () -> Unit) {
             errorMessage = "خطأ في الاتصال: ${e.localizedMessage ?: "تأكد من اتصالك بالإنترنت"}"
         } finally {
             isLoading = false
+        }
+    }
+
+    // Entry point (cache audit fix F6, 1.2.45): with no pack on
+    // disk, the first download is handed to the process-level
+    // PackDownloadManager and the screen stays in its loading
+    // state — leaving the screen no longer kills the transfer,
+    // and the observers below reload from disk when it lands.
+    suspend fun loadDrills() {
+        val repo = WataniRepository(context)
+        if (repo.getDosingDrills().isNullOrEmpty()) {
+            isLoading = true
+            errorMessage = null
+            PackDownloadManager.startDownload(context, "dosing_drills.json")
+        } else {
+            reloadDrills()
         }
     }
 

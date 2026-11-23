@@ -79,22 +79,6 @@ fun GermanCasesScreen(onBack: () -> Unit) {
         )
     }
 
-    // Entry point (cache audit fix F6, 1.2.45): with no pack on
-    // disk, the first download is handed to the process-level
-    // PackDownloadManager and the screen stays in its loading
-    // state — leaving the screen no longer kills the transfer,
-    // and the observers below reload from disk when it lands.
-    suspend fun loadGermanCases() {
-        val repo = WataniRepository(context)
-        if (repo.getCasesDeEnvelope() == null) {
-            isLoading = true
-            errorMessage = null
-            PackDownloadManager.startDownload(context, "cases_de.json")
-        } else {
-            reloadGermanCases()
-        }
-    }
-
     // Disk-only reload (F6): reads the installed pack, silently
     // refreshes it if stale, and settles the screen state. NEVER
     // starts a download — a reload that did would loop on the
@@ -119,6 +103,22 @@ fun GermanCasesScreen(onBack: () -> Unit) {
             errorMessage = "خطأ في الاتصال: ${e.localizedMessage ?: "تأكد من اتصالك بالإنترنت"}"
         } finally {
             isLoading = false
+        }
+    }
+
+    // Entry point (cache audit fix F6, 1.2.45): with no pack on
+    // disk, the first download is handed to the process-level
+    // PackDownloadManager and the screen stays in its loading
+    // state — leaving the screen no longer kills the transfer,
+    // and the observers below reload from disk when it lands.
+    suspend fun loadGermanCases() {
+        val repo = WataniRepository(context)
+        if (repo.getCasesDeEnvelope() == null) {
+            isLoading = true
+            errorMessage = null
+            PackDownloadManager.startDownload(context, "cases_de.json")
+        } else {
+            reloadGermanCases()
         }
     }
 
