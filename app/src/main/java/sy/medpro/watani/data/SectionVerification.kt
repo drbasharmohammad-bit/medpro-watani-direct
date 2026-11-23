@@ -68,11 +68,14 @@ object SectionVerification {
      */
     fun isYearsFilePath(path: String): Boolean {
         val parts = path.split("/")
-        return parts.size == 3 &&
+        return parts.size == YEARS_PATH_SEGMENT_COUNT &&
             parts[0] == "dawrat_jami3at" &&
             parts[1].endsWith("_years") &&
             parts[2].endsWith(".json")
     }
+
+    /** Segment count of `dawrat_jami3at/<uni>_years/<file>.json`. */
+    private const val YEARS_PATH_SEGMENT_COUNT = 3
 
     /** F-02/F-03/F-04: parse + declared-count verification. */
     fun verifySectionCount(path: String, jsonString: String, moshi: Moshi): Int {
@@ -277,8 +280,14 @@ object SectionVerification {
             val yearsEnv = moshi.adapter(YearsEnvelope::class.java).fromJson(jsonString)
             val declaredCount = yearsEnv?.count ?: 0
             val actualCount = yearsEnv?.years?.sumOf { it.questions?.size ?: 0 } ?: 0
-            if (yearsEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-                throw IllegalStateException("خطأ في تطابق عدد أسئلة السنوات الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+            // check() throws IllegalStateException with this exact
+            // message — the type downloadSection catches — same
+            // contract as the explicit throws in the other branches.
+            check(actualCount > 0) {
+                "خطأ في تطابق عدد أسئلة السنوات الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
+            }
+            check(declaredCount <= 0 || actualCount == declaredCount) {
+                "خطأ في تطابق عدد أسئلة السنوات الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
             }
             return actualCount
         }
