@@ -617,6 +617,23 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(downloadedSections) {
                         val casesEnv = viewModel.getCasesEnvelope()
                         casesList = casesEnv?.cases ?: emptyList()
+                        // Cache audit fix F7 (1.2.45): the cases list
+                        // was the one surface with NO background
+                        // refresh — it re-read the on-disk envelope
+                        // on every registry change but never checked
+                        // whether cases.json itself had been updated
+                        // on the server, so new cases only appeared
+                        // after an unrelated section download. Now a
+                        // successful cached read fires the standard
+                        // silent refresh in the background and the
+                        // list reloads only when it actually changed.
+                        if (casesEnv != null) {
+                            launch {
+                                if (viewModel.refreshSectionIfStale("cases.json")) {
+                                    casesList = viewModel.getCasesEnvelope()?.cases ?: casesList
+                                }
+                            }
+                        }
                     }
 
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {

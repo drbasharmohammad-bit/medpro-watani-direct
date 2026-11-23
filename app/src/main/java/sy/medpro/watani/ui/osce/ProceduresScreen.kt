@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import sy.medpro.watani.data.PackDownloadManager
 import sy.medpro.watani.data.ProcedureDto
 import sy.medpro.watani.data.ProcedureStepDto
 import sy.medpro.watani.data.WataniRepository
@@ -52,22 +53,33 @@ fun ProceduresWingScreen(onBack: () -> Unit) {
     var selected by remember { mutableStateOf<ProcedureDto?>(null) }
     var mode by remember { mutableStateOf(ProcedureMode.LIST) }
 
+    // Entry point (cache audit fix F6, 1.2.45): with no pack on
+    // disk, the first download is handed to the process-level
+    // PackDownloadManager and the screen stays in its loading
+    // state — leaving the screen no longer kills the transfer,
+    // and the observers below reload from disk when it lands.
     suspend fun loadProcedures() {
+        val repo = WataniRepository(context)
+        if (repo.getOsceProcedures().isNullOrEmpty()) {
+            isLoading = true
+            errorMessage = null
+            PackDownloadManager.startDownload(context, "osce_procedures.json")
+        } else {
+            reloadProcedures()
+        }
+    }
+
+    // Disk-only reload (F6): reads the installed pack, silently
+    // refreshes it if stale, falls back to the bundled procedures,
+    // and settles the screen state. NEVER starts a download — a
+    // reload that did would loop on the manager's completion
+    // signal.
+    suspend fun reloadProcedures() {
         isLoading = true
         errorMessage = null
         try {
             val repo = WataniRepository(context)
             var list = repo.getOsceProcedures()
-            if (list.isNullOrEmpty()) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val entry = manifestRes.getOrNull()?.files?.get("osce_procedures.json")
-                    if (entry != null) {
-                        repo.downloadSection("osce_procedures.json", entry)
-                        list = repo.getOsceProcedures()
-                    }
-                }
-            }
             // 1.2.6: silently refresh a stale local pack (see
             // WataniRepository.refreshSectionIfStale).
             if (!list.isNullOrEmpty() && repo.refreshSectionIfStale("osce_procedures.json")) {
@@ -89,6 +101,25 @@ fun ProceduresWingScreen(onBack: () -> Unit) {
     }
 
     LaunchedEffect(Unit) { loadProcedures() }
+
+    // F6: the manager announces the pack's fate — completion
+    // reloads from disk; failure also reloads, which settles the
+    // screen through the bundled fallback (or the error text).
+    val packState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(packState.completedRuns["osce_procedures.json"]) {
+        if (procedures.isEmpty() &&
+            (packState.completedRuns["osce_procedures.json"] ?: 0) > 0
+        ) {
+            reloadProcedures()
+        }
+    }
+    LaunchedEffect(packState.failed, packState.downloading) {
+        if ("osce_procedures.json" in packState.failed &&
+            "osce_procedures.json" !in packState.downloading && procedures.isEmpty()
+        ) {
+            reloadProcedures()
+        }
+    }
 
     fun goBack() {
         when (mode) {

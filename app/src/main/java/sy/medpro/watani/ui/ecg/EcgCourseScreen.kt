@@ -43,6 +43,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.EcgEnvelope
 import sy.medpro.watani.data.EcgPatternDto
+import sy.medpro.watani.data.PackDownloadManager
 import sy.medpro.watani.data.WataniRepository
 import sy.medpro.watani.ui.SlimSubBar
 import sy.medpro.watani.ui.WidthBreakpoints
@@ -150,8 +152,9 @@ private fun EcgUnitCard(
  * Course home of the cardiology mini-course (build 1.2.4), the new
  * target of the «القلب والإصغاء» entry. Content loads exactly like
  * the auscultation pack: downloaded ecg.json section file first, then
- * a manifest-driven downloadSection, then the bundled sample pack as
- * a last resort so the course is never a dead screen.
+ * the PackDownloadManager-owned first download (1.2.45, cache audit
+ * fix F6), then the bundled sample pack as a last resort so the
+ * course is never a dead screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -187,16 +190,15 @@ fun EcgCourseScreen(onBack: () -> Unit) {
         navStack = navStack + EcgNavEntry(d, patternId, stripId)
     }
 
-    LaunchedEffect(Unit) {
+    // Disk-only reload (cache audit fix F6, 1.2.45): reads the
+    // installed pack, silently refreshes it if stale, falls back
+    // to the bundled sample, and settles the screen state. NEVER
+    // starts a download — the first download belongs to
+    // PackDownloadManager (below), so it survives leaving this
+    // screen; a reload that itself started downloads would loop
+    // on the manager's completion signal.
+    suspend fun reloadEcg() {
         var env = repo.getEcgEnvelope()
-        if (env == null) {
-            val manifestRes = repo.fetchManifest()
-            val entry = manifestRes.getOrNull()?.files?.get("ecg.json")
-            if (entry != null) {
-                repo.downloadSection("ecg.json", entry)
-                env = repo.getEcgEnvelope()
-            }
-        }
         // 1.2.6: a local pack is no longer the end of the story — if
         // the server republished ecg.json, silently swap in the new
         // file before first paint (any failure keeps the local copy).
@@ -209,6 +211,33 @@ fun EcgCourseScreen(onBack: () -> Unit) {
         }
         envelope = env
         isLoading = false
+    }
+
+    LaunchedEffect(Unit) {
+        if (repo.getEcgEnvelope() == null) {
+            // F6: hand the first download to the process-level
+            // manager and stay in the loading state — the observers
+            // below reload from disk the moment it lands (or settle
+            // through the bundled sample on failure).
+            PackDownloadManager.startDownload(context, "ecg.json")
+        } else {
+            reloadEcg()
+        }
+    }
+
+    // F6: the manager announces the pack's fate.
+    val packState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(packState.completedRuns["ecg.json"]) {
+        if (envelope == null && (packState.completedRuns["ecg.json"] ?: 0) > 0) {
+            reloadEcg()
+        }
+    }
+    LaunchedEffect(packState.failed, packState.downloading) {
+        if ("ecg.json" in packState.failed && "ecg.json" !in packState.downloading &&
+            envelope == null
+        ) {
+            reloadEcg()
+        }
     }
 
     // One step back (1.2.22): shared by every sub-screen's top-bar

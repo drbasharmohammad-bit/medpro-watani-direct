@@ -103,21 +103,19 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
         }
     }
 
-    val loadPack: () -> Unit = {
+    // Disk-only reload (cache audit fix F6, 1.2.45): reads the
+    // installed pack, silently refreshes it if stale, and settles
+    // the screen state. NEVER starts the pack download — the first
+    // download belongs to PackDownloadManager (below), so it
+    // survives leaving this screen; a reload that itself started
+    // downloads would loop on the manager's completion signal.
+    // (The optional Arabic layer below keeps its own direct,
+    // silent download exactly as before — audit F6 leaves it.)
+    val reloadPack: () -> Unit = {
         scope.launch {
             isLoading = true
             val repo = WataniRepository(context)
             var env = repo.getAuscultationEnvelope()
-            if (env == null) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val entry = manifestRes.getOrNull()?.files?.get("auscultation.json")
-                    if (entry != null) {
-                        repo.downloadSection("auscultation.json", entry) { prog -> downloadProgress = prog }
-                        env = repo.getAuscultationEnvelope()
-                    }
-                }
-            }
             // 1.2.6: silently refresh a stale local pack (see
             // WataniRepository.refreshSectionIfStale).
             if (env != null && repo.refreshSectionIfStale("auscultation.json")) {
@@ -142,8 +140,47 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
         }
     }
 
+    val loadPack: () -> Unit = {
+        scope.launch {
+            val repo = WataniRepository(context)
+            if (repo.getAuscultationEnvelope() == null) {
+                // F6: hand the first download to the process-level
+                // manager and stay in the loading state — the
+                // observers below reload from disk the moment it
+                // lands (or settle the failure state), and leaving
+                // this screen no longer kills the transfer.
+                isLoading = true
+                PackDownloadManager.startDownload(context, "auscultation.json")
+            } else {
+                reloadPack()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         loadPack()
+    }
+
+    // F6: the manager announces the pack's fate — a finished
+    // download reloads the screen from disk, a failed one settles
+    // the loading state, and the live progress feeds the bar.
+    val packState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(packState.completedRuns["auscultation.json"]) {
+        if (auscultationEnvelope == null &&
+            (packState.completedRuns["auscultation.json"] ?: 0) > 0
+        ) {
+            reloadPack()
+        }
+    }
+    LaunchedEffect(packState.failed, packState.downloading) {
+        if ("auscultation.json" in packState.failed &&
+            "auscultation.json" !in packState.downloading && auscultationEnvelope == null
+        ) {
+            isLoading = false
+        }
+    }
+    LaunchedEffect(packState.progress["auscultation.json"]) {
+        packState.progress["auscultation.json"]?.let { downloadProgress = it }
     }
 
     DisposableEffect(Unit) {

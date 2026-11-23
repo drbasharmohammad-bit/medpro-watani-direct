@@ -532,22 +532,17 @@ fun StudyGuideScreen(onBack: () -> Unit) {
     var isLoading by remember { mutableStateOf(true) }
     var selectedGroup by remember { mutableStateOf<GuideGroupDto?>(null) }
 
-    fun loadGuide() {
+    // Disk-only reload (cache audit fix F6, 1.2.45): reads the
+    // installed guide, silently refreshes it if stale, and settles
+    // the screen state. NEVER starts a download — the first
+    // download belongs to PackDownloadManager (below), so it
+    // survives leaving this screen; a reload that itself started
+    // downloads would loop on the manager's completion signal.
+    fun reloadGuide() {
         scope.launch {
             isLoading = true
             val repo = WataniRepository(context)
             var env = repo.getGuideEnvelope()
-            if (env == null) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val files = manifestRes.getOrNull()?.files
-                    val guideEntry = files?.get("guide.json")
-                    if (guideEntry != null) {
-                        repo.downloadSection("guide.json", guideEntry)
-                        env = repo.getGuideEnvelope()
-                    }
-                }
-            }
             // 1.2.6: silently refresh a stale local pack (see
             // WataniRepository.refreshSectionIfStale).
             if (env != null && repo.refreshSectionIfStale("guide.json")) {
@@ -558,7 +553,39 @@ fun StudyGuideScreen(onBack: () -> Unit) {
         }
     }
 
+    fun loadGuide() {
+        scope.launch {
+            val repo = WataniRepository(context)
+            if (repo.getGuideEnvelope() == null) {
+                // F6: hand the first download to the process-level
+                // manager and stay in the loading state — the
+                // observers below reload from disk when it lands.
+                isLoading = true
+                PackDownloadManager.startDownload(context, "guide.json")
+            } else {
+                reloadGuide()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) { loadGuide() }
+
+    // F6: the manager announces the pack's fate — a finished
+    // download reloads the screen from disk, a failed one settles
+    // the loading state.
+    val packState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(packState.completedRuns["guide.json"]) {
+        if (guideEnvelope == null && (packState.completedRuns["guide.json"] ?: 0) > 0) {
+            reloadGuide()
+        }
+    }
+    LaunchedEffect(packState.failed, packState.downloading) {
+        if ("guide.json" in packState.failed && "guide.json" !in packState.downloading &&
+            guideEnvelope == null
+        ) {
+            isLoading = false
+        }
+    }
 
     DrawerScreenScaffold(title = "دليل الدراسة", onBack = { if (selectedGroup != null) selectedGroup = null else onBack() }) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -956,21 +983,16 @@ fun ContactScreen(onBack: () -> Unit) {
     val noPrimaryLinks = contactLinks.supportBot.isBlank() && contactLinks.wataniChannel.isBlank()
     val noSocialLinks = contactLinks.medproChannel.isBlank() && contactLinks.instagram.isBlank()
 
-    fun loadGuide() {
+    // Disk-only reload (cache audit fix F6, 1.2.45): reads the
+    // installed guide, silently refreshes it if stale, and settles
+    // the card state. NEVER starts a download — the first download
+    // belongs to PackDownloadManager (below), so it survives
+    // leaving this screen; a reload that itself started downloads
+    // would loop on the manager's completion signal.
+    fun reloadGuide() {
         scope.launch {
             val repo = WataniRepository(context)
             var env = repo.getGuideEnvelope()
-            if (env == null) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val files = manifestRes.getOrNull()?.files
-                    val guideEntry = files?.get("guide.json")
-                    if (guideEntry != null) {
-                        repo.downloadSection("guide.json", guideEntry)
-                        env = repo.getGuideEnvelope()
-                    }
-                }
-            }
             // 1.2.6: silently refresh a stale local pack (see
             // WataniRepository.refreshSectionIfStale).
             if (env != null && repo.refreshSectionIfStale("guide.json")) {
@@ -981,9 +1003,40 @@ fun ContactScreen(onBack: () -> Unit) {
         }
     }
 
+    fun loadGuide() {
+        scope.launch {
+            val repo = WataniRepository(context)
+            if (repo.getGuideEnvelope() == null) {
+                // F6: hand the first download to the process-level
+                // manager — the observers below reload the card
+                // from disk the moment it lands (or settle the
+                // failure flag), and leaving this screen no longer
+                // kills the transfer.
+                PackDownloadManager.startDownload(context, "guide.json")
+            } else {
+                reloadGuide()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         ContactLinksStore.refresh(context)
         loadGuide()
+    }
+
+    // F6: the manager announces the pack's fate.
+    val guidePackState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(guidePackState.completedRuns["guide.json"]) {
+        if (guideEnvelope == null && (guidePackState.completedRuns["guide.json"] ?: 0) > 0) {
+            reloadGuide()
+        }
+    }
+    LaunchedEffect(guidePackState.failed, guidePackState.downloading) {
+        if ("guide.json" in guidePackState.failed &&
+            "guide.json" !in guidePackState.downloading && guideEnvelope == null
+        ) {
+            guideLoadFailed = true
+        }
     }
 
     fun openLink(url: String) {

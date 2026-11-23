@@ -30,6 +30,14 @@ class WataniRepository(private val context: Context) {
         OkHttpClient.Builder()
             .connectTimeout(60, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
+            // Cache audit fix F2 (1.2.45): an OVERALL call deadline.
+            // Connect/read timeouts alone let a connection that
+            // trickles one byte at a time hang a call for minutes
+            // (the First Aid unit first-open spinner the doctor
+            // photographed) — the cap turns any such hang into a
+            // settled, retryable failure. Section downloads resume
+            // via Range, so a capped call never loses real progress.
+            .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.NONE
             })
@@ -55,6 +63,20 @@ class WataniRepository(private val context: Context) {
     // from, so a re-download (new hash) invalidates automatically;
     // saveDownloadedSection also evicts explicitly.
     private val subjectEnvelopeCache = EnvelopeCache<SubjectEnvelope>()
+
+    // Parsed years-envelope cache (cache audit fix F5, 1.2.45):
+    // getYearsEnvelope used to re-read, re-decrypt and re-parse the
+    // whole years file on EVERY call — every university subject
+    // open and every year-quiz open paid the full parse of a file
+    // up to megabytes. Same registry-hash stamping as the subject
+    // cache: a re-download swaps the registry hash and the stale
+    // parse can never be served.
+    private val yearsEnvelopeCache = EnvelopeCache<YearsEnvelope>()
+
+    // Parsed standalone-dawra records cache (cache audit fix F5,
+    // same shape as the years cache): getDawraSessionRecords
+    // re-parsed the whole session file per call.
+    private val dawraRecordsCache = EnvelopeCache<List<DawraSessionQuestionDto>>()
 
     // Parsed-concepts cache (1.2.31): getConcepts used to re-read,
     // re-decrypt and re-parse the whole pack on EVERY call, and the
@@ -119,6 +141,8 @@ class WataniRepository(private val context: Context) {
         // Fresh bytes on disk: any envelope parsed from the previous
         // download of this section is stale (1.2.27 cache).
         subjectEnvelopeCache.evict(entity.sectionPath)
+        yearsEnvelopeCache.evict(entity.sectionPath)
+        dawraRecordsCache.evict(entity.sectionPath)
         conceptsEnvelopeCache.evict(entity.sectionPath)
         // The registry fingerprint guard would catch this anyway;
         // dropping eagerly keeps a stale id->path map from ever
@@ -174,6 +198,13 @@ class WataniRepository(private val context: Context) {
          * proven revocation: a stale copy would keep listing restricted
          * sections after the activation ended. */
         const val MANIFEST_CACHE_FILENAME = "manifest_cache.json"
+
+        /** Overall deadline of one HTTP call on the shared client
+         * (cache audit fix F2, 1.2.45 — see the client builder). */
+        private const val CALL_TIMEOUT_SECONDS = 120L
+
+        /** Each half of a pair download's progress range (F4). */
+        private const val PAIR_PROGRESS_HALF = 0.5f
 
         /** Process-wide parsed-concepts cache (see the field note in
          * the class body — audit item Z, 21 Nov 2026). */
@@ -362,6 +393,18 @@ class WataniRepository(private val context: Context) {
         }
     }
 
+    /**
+     * The on-disk manifest cache, synchronously (cache audit fix
+     * F1, 1.2.45): MainViewModel seeds its section lists from this
+     * at construction, so a cold start renders the sections from
+     * the complete signed manifest already on the device instead
+     * of sitting behind the «جاري جلب الفهرس» spinner until the
+     * network answers — the fetch then runs as a background
+     * refresh whose success replaces the seed and whose failure
+     * leaves it standing. Null when no cache was ever written.
+     */
+    fun cachedManifest(): ManifestResponse? = loadManifestCache()
+
     suspend fun fetchManifest(): Result<ManifestResponse> = withContext(Dispatchers.IO) {
         try {
             val response = api.getManifest()
@@ -500,6 +543,100 @@ class WataniRepository(private val context: Context) {
         entry: ManifestFileEntry,
         onProgress: (Float) -> Unit = {}
     ): Result<Int> = withContext(Dispatchers.IO) {
+        val staged = stageSectionDownload(path, entry, onProgress)
+            .getOrElse { return@withContext Result.failure(it) }
+        installStagedSectionDownload(staged)
+    }
+
+    /**
+     * Pair-atomic download of a university subject and its «حسب
+     * السنوات» twin (cache audit fix F4, 1.2.45). Before this, the
+     * pair was downloaded as two sequential single downloads from
+     * the view model: a twin failure left the NEW subject file
+     * installed beside the OLD years file (version skew inside the
+     * pair), and a first download that died between the two left a
+     * subject file installed that no surface may present (the
+     * pair-up-to-date verdict hides it — no data loss, but the
+     * atomicity of بند 4 was incomplete).
+     *
+     * Both files are now STAGED first — fetched to their temp
+     * files and fully verified (size + family hash + real count
+     * via [SectionVerification]) — and only when BOTH verifications
+     * pass is either file written and registered. Any failure
+     * before the writes deletes both temps and leaves the working
+     * pair exactly as it was. Progress is reported across the pair
+     * (subject half, then twin half).
+     */
+    suspend fun downloadSectionPair(
+        path: String,
+        entry: ManifestFileEntry,
+        twinPath: String,
+        twinEntry: ManifestFileEntry,
+        onProgress: (Float) -> Unit = {}
+    ): Result<Int> = withContext(Dispatchers.IO) {
+        // The pair's temp files (the staging discipline of
+        // stageSectionDownload): any failure BEFORE the installs
+        // deletes both, so no half-staged pair ever survives.
+        val subjectFile = getSectionFile(path)
+        val subjectTemp = File(subjectFile.parentFile, "${subjectFile.name}.tmp")
+        val twinFile = getSectionFile(twinPath)
+        val twinTemp = File(twinFile.parentFile, "${twinFile.name}.tmp")
+        val stagedSubject = stageSectionDownload(path, entry) { p ->
+            onProgress(p * PAIR_PROGRESS_HALF)
+        }.getOrElse {
+            subjectTemp.delete()
+            twinTemp.delete()
+            return@withContext Result.failure(it)
+        }
+        val stagedTwin = stageSectionDownload(twinPath, twinEntry) { p ->
+            onProgress(PAIR_PROGRESS_HALF + p * PAIR_PROGRESS_HALF)
+        }.getOrElse {
+            stagedSubject.tempFile.delete()
+            twinTemp.delete()
+            return@withContext Result.failure(it)
+        }
+        val installed = installStagedSectionDownload(stagedSubject)
+        if (installed.isFailure) {
+            stagedTwin.tempFile.delete()
+            return@withContext installed
+        }
+        installStagedSectionDownload(stagedTwin)
+    }
+
+    /** One fully downloaded + verified section file, staged in its
+     * temp file and ready to install (see [stageSectionDownload]).
+     * [computedHash] and [actualCount] are derived from the staged
+     * plaintext during verification — the registry never stores a
+     * verbatim copy of the manifest's declared values (F-01). */
+    private class StagedSectionDownload(
+        val path: String,
+        val entry: ManifestFileEntry,
+        val tempFile: File,
+        val bytes: ByteArray,
+        val computedHash: String,
+        val actualCount: Int
+    )
+
+    /**
+     * The fetch + verify half of a section download: device gate,
+     * gateway/Pages fetch into the temp file (Range-resumed), then
+     * F-01/F-02 verification of the staged plaintext (manifest size
+     * + family hash, then the real parsed count via
+     * [SectionVerification]). NOTHING is written to the section
+     * cache and nothing is registered here — that is
+     * [installStagedSectionDownload], so [downloadSectionPair] can
+     * stage two files and install them only when both verify.
+     *
+     * Temp-file discipline matches the historical single download:
+     * a verification failure deletes the temp (its bytes are proven
+     * wrong); a network/auth failure KEEPS it, so a later attempt
+     * resumes via Range instead of restarting.
+     */
+    private suspend fun stageSectionDownload(
+        path: String,
+        entry: ManifestFileEntry,
+        onProgress: (Float) -> Unit = {}
+    ): Result<StagedSectionDownload> = withContext(Dispatchers.IO) {
         try {
             // M8: device-integrity gate at the restricted-download entry.
             // Blocked devices never reach the gateway (and never get a
@@ -612,30 +749,16 @@ class WataniRepository(private val context: Context) {
                 return@withContext Result.failure(Exception(e.message))
             }
 
-            if (!writeSectionBytes(path, installedBytes)) {
-                tempFile.delete()
-                return@withContext Result.failure(Exception("تعذر حفظ ملف القسم على الجهاز — أعد المحاولة."))
-            }
-            tempFile.delete()
-
-            // F-01: the registry stores the hash COMPUTED from the
-            // verified plaintext (never a verbatim copy of entry.hash),
-            // so isSectionUpToDate compares two independently derived
-            // values and a swapped/corrupt file cannot look current.
-            val entity = DownloadedSectionEntity(
-                sectionPath = path,
-                version = entry.version ?: "1.0",
-                hash = computedHash,
-                count = actualCount,
-                downloadedAt = System.currentTimeMillis()
+            Result.success(
+                StagedSectionDownload(
+                    path = path,
+                    entry = entry,
+                    tempFile = tempFile,
+                    bytes = installedBytes,
+                    computedHash = computedHash,
+                    actualCount = actualCount
+                )
             )
-            saveDownloadedSection(entity)
-            // Gentle lease: a successful restricted download is a
-            // successful server verification.
-            if (WorkerActivationApi.isRestrictedPath(path)) {
-                WorkerActivationApi.noteServerVerified(context)
-            }
-            Result.success(actualCount)
         } catch (e: Exception) {
             // Typed revocation passes through unwrapped (M3): callers
             // distinguish it from ordinary download failures.
@@ -645,6 +768,41 @@ class WataniRepository(private val context: Context) {
                 Result.failure(Exception("تعذر التحميل — تحقق من اتصال الإنترنت وحاول مجددًا.", e))
             }
         }
+    }
+
+    /**
+     * The install half of a section download: the staged, verified
+     * plaintext is stored ENCRYPTED through the central write point,
+     * the temp is deleted, and the section is registered with the
+     * hash/count computed during verification. A failed write
+     * deletes the temp and leaves the previously installed copy
+     * untouched.
+     */
+    private fun installStagedSectionDownload(staged: StagedSectionDownload): Result<Int> {
+        if (!writeSectionBytes(staged.path, staged.bytes)) {
+            staged.tempFile.delete()
+            return Result.failure(Exception("تعذر حفظ ملف القسم على الجهاز — أعد المحاولة."))
+        }
+        staged.tempFile.delete()
+
+        // F-01: the registry stores the hash COMPUTED from the
+        // verified plaintext (never a verbatim copy of entry.hash),
+        // so isSectionUpToDate compares two independently derived
+        // values and a swapped/corrupt file cannot look current.
+        val entity = DownloadedSectionEntity(
+            sectionPath = staged.path,
+            version = staged.entry.version ?: "1.0",
+            hash = staged.computedHash,
+            count = staged.actualCount,
+            downloadedAt = System.currentTimeMillis()
+        )
+        saveDownloadedSection(entity)
+        // Gentle lease: a successful restricted download is a
+        // successful server verification.
+        if (WorkerActivationApi.isRestrictedPath(staged.path)) {
+            WorkerActivationApi.noteServerVerified(context)
+        }
+        return Result.success(staged.actualCount)
     }
 
     suspend fun getSubjectEnvelope(path: String): SubjectEnvelope? = withContext(Dispatchers.IO) {
@@ -690,11 +848,24 @@ class WataniRepository(private val context: Context) {
                 if (WorkerActivationApi.isRestrictedPath(path) &&
                     WorkerActivationApi.isRestrictedLeaseExpired(context)
                 ) return@withContext null
+                // Parse cache (F5, 1.2.45): same registry-hash guard
+                // as getSubjectEnvelope — served only when parsed
+                // from bytes with the registry's current hash.
+                val registryHash = _downloadedSectionsFlow.value
+                    .firstOrNull { it.sectionPath == path }?.hash
+                if (registryHash != null) {
+                    dawraRecordsCache.get(path, registryHash)?.let { return@withContext it }
+                }
                 val jsonString = readSectionText(path) ?: return@withContext null
                 val listType = com.squareup.moshi.Types.newParameterizedType(
                     List::class.java, DawraSessionQuestionDto::class.java
                 )
-                moshi.adapter<List<DawraSessionQuestionDto>>(listType).fromJson(jsonString)
+                val parsed = moshi.adapter<List<DawraSessionQuestionDto>>(listType)
+                    .fromJson(jsonString)
+                if (parsed != null && registryHash != null) {
+                    dawraRecordsCache.put(path, registryHash, jsonString.length, parsed)
+                }
+                parsed
             } catch (e: Exception) {
                 null
             }
@@ -714,8 +885,22 @@ class WataniRepository(private val context: Context) {
             if (WorkerActivationApi.isRestrictedPath(path) &&
                 WorkerActivationApi.isRestrictedLeaseExpired(context)
             ) return@withContext null
+            // Parse cache (cache audit fix F5, 1.2.45): mirror of
+            // getSubjectEnvelope — served only when the registry
+            // holds this path AND the entry was parsed from bytes
+            // with the registry's current hash; a re-download swaps
+            // the hash and the stale parse is dropped inside get().
+            val registryHash = _downloadedSectionsFlow.value
+                .firstOrNull { it.sectionPath == path }?.hash
+            if (registryHash != null) {
+                yearsEnvelopeCache.get(path, registryHash)?.let { return@withContext it }
+            }
             val jsonString = readSectionText(path) ?: return@withContext null
-            moshi.adapter(YearsEnvelope::class.java).fromJson(jsonString)
+            val parsed = moshi.adapter(YearsEnvelope::class.java).fromJson(jsonString)
+            if (parsed != null && registryHash != null) {
+                yearsEnvelopeCache.put(path, registryHash, jsonString.length, parsed)
+            }
+            parsed
         } catch (e: Exception) {
             null
         }
@@ -873,7 +1058,12 @@ class WataniRepository(private val context: Context) {
     /** The network tail of [getFirstAidSection]: manifest → download
      * → parse → memory-cache. Null on any failure. */
     private suspend fun <T> fetchFirstAidSectionFresh(path: String, clazz: Class<T>): T? {
-        val entry = fetchManifest().getOrNull()?.files?.get(path)
+        // Cache audit fix F2 (1.2.45, بند 6): the section screen
+        // fires four of these loads in parallel at first open; each
+        // used to fetch the manifest independently. The refresh
+        // snapshot (60-second TTL) collapses the burst into one
+        // shared fetch, exactly like every other refresh check.
+        val entry = fetchManifestForRefresh()?.files?.get(path)
         val freshText = if (entry != null && downloadSection(path, entry).isSuccess) {
             readSectionText(path)
         } else {
@@ -1538,6 +1728,27 @@ class WataniRepository(private val context: Context) {
     }
 
     suspend fun fetchLibrary(retries: Int = 3): Result<LibraryEnvelope?> = withContext(Dispatchers.IO) {
+        // Cache audit fix F3 (1.2.45): freshness short-circuit —
+        // before this, EVERY library entry re-downloaded the whole
+        // index even when the copy on disk was already the
+        // manifest's current one. The stored copy's hash (computed
+        // from its own bytes with the family algorithm) is compared
+        // with the manifest entry through the same TTL snapshot the
+        // refresh checks use; a match serves the disk copy with no
+        // download at all. Any doubt (no snapshot, no stored copy,
+        // no declared hash) falls through to the full fetch below.
+        val snapshotEntry = fetchManifestForRefresh()?.files?.get("library.json")
+        if (snapshotEntry != null) {
+            val storedText = readSectionText("library.json")
+            val storedHash = storedText?.let {
+                SectionVerification.manifestHashHex("library.json", it.toByteArray(Charsets.UTF_8))
+            }
+            if (storedHash != null &&
+                storedHash.equals(snapshotEntry.hash?.trim().orEmpty(), ignoreCase = true)
+            ) {
+                getLibraryEnvelope()?.let { return@withContext Result.success(it) }
+            }
+        }
         // library.json is a restricted path (contract): via the Worker
         // gateway with the activation token. Null = not activated.
         val libraryRequest = WorkerActivationApi.contentRequest(context, "library.json")

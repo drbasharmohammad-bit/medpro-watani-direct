@@ -123,6 +123,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
 
     init {
+        // Cache-first manifest seed (cache audit fix F1, 1.2.45):
+        // the signed manifest cached on disk from the last session
+        // fills the section lists SYNCHRONOUSLY, before any network
+        // answer — a cold start on a black network no longer sits
+        // behind the «جاري جلب الفهرس» spinner for up to the 60 s
+        // connect timeout while a complete manifest sits on disk.
+        // The fetch below still runs as the background refresh: its
+        // success replaces the seed, its failure leaves it standing
+        // (and the failure path's registry fallback only applies
+        // when files are still empty, i.e. no seed existed).
+        repository.cachedManifest()?.let { cached ->
+            _uiState.update {
+                it.copy(
+                    manifestVersion = cached.version,
+                    files = cached.files ?: emptyMap()
+                )
+            }
+        }
         fetchManifest()
     }
 
@@ -216,14 +234,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     downloadError = null
                 )
             }
-            var result = repository.downloadSection(path, entry) { p ->
-                _uiState.update { st -> st.copy(downloadingProgress = st.downloadingProgress + (path to p)) }
-            }
-            if (result.isSuccess && twin != null) {
-                result = repository.downloadSection(twin.first, twin.second) { p ->
+            // Cache audit fix F4 (1.2.45): when a years twin exists
+            // the pair downloads ATOMICALLY via downloadSectionPair
+            // — both files are staged and fully verified before
+            // either is installed, so a twin failure no longer
+            // leaves a NEW subject file beside an OLD years file;
+            // the working pair on disk stays exactly as it was. The
+            // pair progress (subject half, then twin half) is split
+            // back onto the two per-path progress slots.
+            val result = if (twin != null) {
+                repository.downloadSectionPair(path, entry, twin.first, twin.second) { p ->
                     _uiState.update { st ->
-                        st.copy(downloadingProgress = st.downloadingProgress + (twin.first to p))
+                        st.copy(
+                            downloadingProgress = st.downloadingProgress +
+                                (path to (p * 2f).coerceAtMost(1f)) +
+                                (twin.first to ((p - 0.5f) * 2f).coerceIn(0f, 1f))
+                        )
                     }
+                }
+            } else {
+                repository.downloadSection(path, entry) { p ->
+                    _uiState.update { st -> st.copy(downloadingProgress = st.downloadingProgress + (path to p)) }
                 }
             }
             result.fold(
@@ -818,5 +849,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun getCasesEnvelope(): CasesEnvelope? {
         return repository.getCasesEnvelope()
+    }
+
+    /** Silent background refresh of one installed section (cache
+     * audit fix F7, 1.2.45): true when a newer copy was downloaded
+     * and installed. Used by the cases list, which previously
+     * re-read its on-disk envelope on every registry change but
+     * never asked the network whether cases.json had moved on —
+     * the German cases screen already refreshed its own file the
+     * same way. */
+    suspend fun refreshSectionIfStale(path: String): Boolean {
+        return repository.refreshSectionIfStale(path)
     }
 }

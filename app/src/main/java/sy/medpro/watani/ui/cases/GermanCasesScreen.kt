@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.ClinicalCaseDto
+import sy.medpro.watani.data.PackDownloadManager
 import sy.medpro.watani.data.WataniRepository
 import sy.medpro.watani.data.WorkerActivationApi
 import sy.medpro.watani.ui.activation.ActivationPromptDialog
@@ -78,22 +79,32 @@ fun GermanCasesScreen(onBack: () -> Unit) {
         )
     }
 
+    // Entry point (cache audit fix F6, 1.2.45): with no pack on
+    // disk, the first download is handed to the process-level
+    // PackDownloadManager and the screen stays in its loading
+    // state — leaving the screen no longer kills the transfer,
+    // and the observers below reload from disk when it lands.
     suspend fun loadGermanCases() {
+        val repo = WataniRepository(context)
+        if (repo.getCasesDeEnvelope() == null) {
+            isLoading = true
+            errorMessage = null
+            PackDownloadManager.startDownload(context, "cases_de.json")
+        } else {
+            reloadGermanCases()
+        }
+    }
+
+    // Disk-only reload (F6): reads the installed pack, silently
+    // refreshes it if stale, and settles the screen state. NEVER
+    // starts a download — a reload that did would loop on the
+    // manager's completion signal.
+    suspend fun reloadGermanCases() {
         isLoading = true
         errorMessage = null
         try {
             val repo = WataniRepository(context)
             var env = repo.getCasesDeEnvelope()
-            if (env == null) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val entry = manifestRes.getOrNull()?.files?.get("cases_de.json")
-                    if (entry != null) {
-                        repo.downloadSection("cases_de.json", entry)
-                        env = repo.getCasesDeEnvelope()
-                    }
-                }
-            }
             // 1.2.6: silently refresh a stale local pack (see
             // WataniRepository.refreshSectionIfStale).
             if (env != null && repo.refreshSectionIfStale("cases_de.json")) {
@@ -112,6 +123,23 @@ fun GermanCasesScreen(onBack: () -> Unit) {
     }
 
     LaunchedEffect(Unit) { loadGermanCases() }
+
+    // F6: the manager announces the pack's fate — completion
+    // reloads from disk; failure also reloads, which settles the
+    // screen with its error text (the retry calls loadGermanCases).
+    val packState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(packState.completedRuns["cases_de.json"]) {
+        if (cases.isEmpty() && (packState.completedRuns["cases_de.json"] ?: 0) > 0) {
+            reloadGermanCases()
+        }
+    }
+    LaunchedEffect(packState.failed, packState.downloading) {
+        if ("cases_de.json" in packState.failed &&
+            "cases_de.json" !in packState.downloading && cases.isEmpty()
+        ) {
+            reloadGermanCases()
+        }
+    }
 
     if (selectedCase != null) {
         CasePlayerScreen(caseItem = selectedCase!!, onBack = { selectedCase = null }, german = true)

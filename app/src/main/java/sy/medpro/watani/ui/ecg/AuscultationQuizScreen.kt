@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.AuscultationClipDto
+import sy.medpro.watani.data.PackDownloadManager
 import sy.medpro.watani.data.WataniRepository
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.RoseSurfaceVariant
@@ -105,16 +107,15 @@ fun AuscultationQuizScreen(store: EcgProgressStore, onBack: () -> Unit) {
         picked = null
     }
 
-    LaunchedEffect(Unit) {
+    // Disk-only reload (cache audit fix F6, 1.2.45): reads the
+    // installed pack, silently refreshes it if stale, and settles
+    // the quiz state. NEVER starts a download — the first download
+    // belongs to PackDownloadManager (shared with the auscultation
+    // trainer, same pack), so it survives leaving this screen; a
+    // reload that itself started downloads would loop on the
+    // manager's completion signal.
+    suspend fun reloadQuiz() {
         var env = repo.getAuscultationEnvelope()
-        if (env == null) {
-            val manifestRes = repo.fetchManifest()
-            val entry = manifestRes.getOrNull()?.files?.get("auscultation.json")
-            if (entry != null) {
-                repo.downloadSection("auscultation.json", entry)
-                env = repo.getAuscultationEnvelope()
-            }
-        }
         // 1.2.6: silently refresh a stale local pack (see
         // WataniRepository.refreshSectionIfStale).
         if (env != null && repo.refreshSectionIfStale("auscultation.json")) {
@@ -132,6 +133,34 @@ fun AuscultationQuizScreen(store: EcgProgressStore, onBack: () -> Unit) {
             loadFailed = true
         } else {
             nextRound()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (repo.getAuscultationEnvelope() == null) {
+            // F6: hand the first download to the process-level
+            // manager and stay in the loading state — the observers
+            // below reload from disk the moment it lands (or settle
+            // the failure state), and leaving this screen no longer
+            // kills the transfer.
+            PackDownloadManager.startDownload(context, "auscultation.json")
+        } else {
+            reloadQuiz()
+        }
+    }
+
+    // F6: the manager announces the pack's fate.
+    val packState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(packState.completedRuns["auscultation.json"]) {
+        if (clips.isEmpty() && (packState.completedRuns["auscultation.json"] ?: 0) > 0) {
+            reloadQuiz()
+        }
+    }
+    LaunchedEffect(packState.failed, packState.downloading) {
+        if ("auscultation.json" in packState.failed &&
+            "auscultation.json" !in packState.downloading && clips.isEmpty()
+        ) {
+            reloadQuiz()
         }
     }
 

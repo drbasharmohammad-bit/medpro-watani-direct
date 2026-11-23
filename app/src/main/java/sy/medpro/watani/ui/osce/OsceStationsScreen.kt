@@ -27,6 +27,7 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.GET
 import sy.medpro.watani.data.OsceEnvelope
 import sy.medpro.watani.data.OsceStation
+import sy.medpro.watani.data.PackDownloadManager
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.theme.*
 import com.squareup.moshi.Moshi
@@ -52,23 +53,32 @@ fun OsceStationsScreen(onBack: () -> Unit) {
 
     val coroutineScope = rememberCoroutineScope()
 
+    // Entry point (cache audit fix F6, 1.2.45): with no pack on
+    // disk, the first download is handed to the process-level
+    // PackDownloadManager and the screen stays in its loading
+    // state — leaving the screen no longer kills the transfer,
+    // and the observers below reload from disk when it lands.
     suspend fun loadOsce() {
+        val repo = WataniRepository(context)
+        if (repo.getOsceEnvelope() == null) {
+            isLoading = true
+            errorMessage = null
+            PackDownloadManager.startDownload(context, "osce.json")
+        } else {
+            reloadOsce()
+        }
+    }
+
+    // Disk-only reload (F6): reads the installed pack, silently
+    // refreshes it if stale, and settles the screen state. NEVER
+    // starts a download — a reload that did would loop on the
+    // manager's completion signal.
+    suspend fun reloadOsce() {
         isLoading = true
         errorMessage = null
         try {
             val repo = WataniRepository(context)
             var env = repo.getOsceEnvelope()
-            if (env == null) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val files = manifestRes.getOrNull()?.files
-                    val osceEntry = files?.get("osce.json")
-                    if (osceEntry != null) {
-                        repo.downloadSection("osce.json", osceEntry)
-                        env = repo.getOsceEnvelope()
-                    }
-                }
-            }
             // 1.2.6: silently refresh a stale local pack (see
             // WataniRepository.refreshSectionIfStale).
             if (env != null && repo.refreshSectionIfStale("osce.json")) {
@@ -88,6 +98,23 @@ fun OsceStationsScreen(onBack: () -> Unit) {
 
     LaunchedEffect(Unit) {
         loadOsce()
+    }
+
+    // F6: the manager announces the pack's fate — completion
+    // reloads from disk; failure also reloads, which settles the
+    // screen with its error text (the retry calls loadOsce again).
+    val packState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(packState.completedRuns["osce.json"]) {
+        if (stations.isEmpty() && (packState.completedRuns["osce.json"] ?: 0) > 0) {
+            reloadOsce()
+        }
+    }
+    LaunchedEffect(packState.failed, packState.downloading) {
+        if ("osce.json" in packState.failed && "osce.json" !in packState.downloading &&
+            stations.isEmpty()
+        ) {
+            reloadOsce()
+        }
     }
 
     // Back-navigation fix (1.2.22): ONE stepping lambda for both

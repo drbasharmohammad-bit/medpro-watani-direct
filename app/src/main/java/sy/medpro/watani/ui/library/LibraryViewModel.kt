@@ -36,6 +36,19 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun loadLibrary() {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
+            // Cache-first (cache audit fix F3, 1.2.45): a stored
+            // library.json is served IMMEDIATELY — the tab used to
+            // sit behind a full-screen spinner while fetchLibrary
+            // burned three network attempts with backoff before
+            // ever reading the disk copy, although a complete index
+            // was already on the device. The fetch below then runs
+            // as the background refresh: its success replaces the
+            // cached copy, its failure stays silent while one is
+            // on screen (the error wall only appears with no cache).
+            val cached = repository.getLibraryEnvelope()
+            if (cached != null) {
+                _state.update { it.copy(isLoading = false, library = cached) }
+            }
             val result = repository.fetchLibrary()
             result.fold(
                 onSuccess = { envelope ->
@@ -56,7 +69,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     }
                 },
                 onFailure = { error ->
-                    _state.update { it.copy(isLoading = false, error = error.localizedMessage ?: "تعذر تحميل المكتبة") }
+                    // Silent while a cached index is on screen (F3):
+                    // a failed background refresh never replaces
+                    // working content with an error wall.
+                    if (_state.value.library == null) {
+                        _state.update { it.copy(isLoading = false, error = error.localizedMessage ?: "تعذر تحميل المكتبة") }
+                    }
                 }
             )
         }

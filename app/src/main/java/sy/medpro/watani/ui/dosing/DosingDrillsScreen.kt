@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.DosingDrillDto
+import sy.medpro.watani.data.PackDownloadManager
 import sy.medpro.watani.data.WataniRepository
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
 import sy.medpro.watani.ui.skills.SkillsProgress
@@ -53,22 +54,32 @@ fun DosingDrillsScreen(onBack: () -> Unit) {
     var chosen by remember { mutableStateOf<Int?>(null) }
     var answers by remember { mutableStateOf<List<DrillAnswer>>(emptyList()) }
 
+    // Entry point (cache audit fix F6, 1.2.45): with no pack on
+    // disk, the first download is handed to the process-level
+    // PackDownloadManager and the screen stays in its loading
+    // state — leaving the screen no longer kills the transfer,
+    // and the observers below reload from disk when it lands.
     suspend fun loadDrills() {
+        val repo = WataniRepository(context)
+        if (repo.getDosingDrills().isNullOrEmpty()) {
+            isLoading = true
+            errorMessage = null
+            PackDownloadManager.startDownload(context, "dosing_drills.json")
+        } else {
+            reloadDrills()
+        }
+    }
+
+    // Disk-only reload (F6): reads the installed pack, silently
+    // refreshes it if stale, falls back to the bundled drills, and
+    // settles the screen state. NEVER starts a download — a reload
+    // that did would loop on the manager's completion signal.
+    suspend fun reloadDrills() {
         isLoading = true
         errorMessage = null
         try {
             val repo = WataniRepository(context)
             var list = repo.getDosingDrills()
-            if (list.isNullOrEmpty()) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val entry = manifestRes.getOrNull()?.files?.get("dosing_drills.json")
-                    if (entry != null) {
-                        repo.downloadSection("dosing_drills.json", entry)
-                        list = repo.getDosingDrills()
-                    }
-                }
-            }
             // 1.2.6: silently refresh a stale local pack (see
             // WataniRepository.refreshSectionIfStale).
             if (!list.isNullOrEmpty() && repo.refreshSectionIfStale("dosing_drills.json")) {
@@ -94,6 +105,23 @@ fun DosingDrillsScreen(onBack: () -> Unit) {
     }
 
     LaunchedEffect(Unit) { loadDrills() }
+
+    // F6: the manager announces the pack's fate — completion
+    // reloads from disk; failure also reloads, which settles the
+    // screen through the bundled fallback (or the error text).
+    val packState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(packState.completedRuns["dosing_drills.json"]) {
+        if (drills.isEmpty() && (packState.completedRuns["dosing_drills.json"] ?: 0) > 0) {
+            reloadDrills()
+        }
+    }
+    LaunchedEffect(packState.failed, packState.downloading) {
+        if ("dosing_drills.json" in packState.failed &&
+            "dosing_drills.json" !in packState.downloading && drills.isEmpty()
+        ) {
+            reloadDrills()
+        }
+    }
 
     fun startSession(pool: List<DosingDrillDto>) {
         sessionDrills = pool.shuffled()

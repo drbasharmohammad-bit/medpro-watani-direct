@@ -86,21 +86,17 @@ fun ReverseTrainerScreen(onBack: () -> Unit) {
     var intruderStreak by remember { mutableIntStateOf(0) }
     var intruderBestStreak by remember { mutableIntStateOf(0) }
 
-    val loadPack: () -> Unit = {
+    // Disk-only reload (cache audit fix F6, 1.2.45): reads the
+    // installed pack, silently refreshes it if stale, and settles
+    // the screen state. NEVER starts a download — the first
+    // download belongs to PackDownloadManager (below), so it
+    // survives leaving this screen; a reload that itself started
+    // downloads would loop on the manager's completion signal.
+    val reloadPack: () -> Unit = {
         scope.launch {
             isLoading = true
             val repo = WataniRepository(context)
             var env = repo.getReverseEnvelope()
-            if (env == null) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val entry = manifestRes.getOrNull()?.files?.get("reverse.json")
-                    if (entry != null) {
-                        repo.downloadSection("reverse.json", entry) { prog -> downloadProgress = prog }
-                        env = repo.getReverseEnvelope()
-                    }
-                }
-            }
             // 1.2.6: silently refresh a stale local pack (see
             // WataniRepository.refreshSectionIfStale).
             if (env != null && repo.refreshSectionIfStale("reverse.json")) {
@@ -116,8 +112,45 @@ fun ReverseTrainerScreen(onBack: () -> Unit) {
         }
     }
 
+    val loadPack: () -> Unit = {
+        scope.launch {
+            val repo = WataniRepository(context)
+            if (repo.getReverseEnvelope() == null) {
+                // F6: hand the first download to the process-level
+                // manager and stay in the loading state — the
+                // observers below reload from disk the moment it
+                // lands (or settle the failure state), and leaving
+                // this screen no longer kills the transfer.
+                isLoading = true
+                PackDownloadManager.startDownload(context, "reverse.json")
+            } else {
+                reloadPack()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         loadPack()
+    }
+
+    // F6: the manager announces the pack's fate — a finished
+    // download reloads the screen from disk, a failed one settles
+    // the loading state, and the live progress feeds the bar.
+    val packState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(packState.completedRuns["reverse.json"]) {
+        if (reverseEnvelope == null && (packState.completedRuns["reverse.json"] ?: 0) > 0) {
+            reloadPack()
+        }
+    }
+    LaunchedEffect(packState.failed, packState.downloading) {
+        if ("reverse.json" in packState.failed && "reverse.json" !in packState.downloading &&
+            reverseEnvelope == null
+        ) {
+            isLoading = false
+        }
+    }
+    LaunchedEffect(packState.progress["reverse.json"]) {
+        packState.progress["reverse.json"]?.let { downloadProgress = it }
     }
 
     val onRoundFinished: (ReverseRoundDto, Int, Int) -> Unit = { round, score, max ->

@@ -137,8 +137,8 @@ private fun ddxSexLabel(sex: String?): String = when (sex) {
 
 // ---------------------------------------------------------------------------
 // Screen root: self-contained hosting and loading, mirroring
-// AuscultationTrainerScreen (fetchManifest, manifest entry for ddx.json,
-// downloadSection with progress, then getDdxEnvelope).
+// AuscultationTrainerScreen (disk copy first; the first download is
+// owned by PackDownloadManager since 1.2.45 — cache audit fix F6).
 // ---------------------------------------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -157,21 +157,17 @@ fun DdxTrainerScreen(onBack: () -> Unit) {
     var systemFilter by remember { mutableStateOf<String?>(null) }
     var difficultyFilter by remember { mutableStateOf<String?>(null) }
 
-    val loadPack: () -> Unit = {
+    // Disk-only reload (cache audit fix F6, 1.2.45): reads the
+    // installed pack, silently refreshes it if stale, and settles
+    // the screen state. NEVER starts a download — the first
+    // download belongs to PackDownloadManager (below), so it
+    // survives leaving this screen; a reload that itself started
+    // downloads would loop on the manager's completion signal.
+    val reloadPack: () -> Unit = {
         scope.launch {
             isLoading = true
             val repo = WataniRepository(context)
             var env = repo.getDdxEnvelope()
-            if (env == null) {
-                val manifestRes = repo.fetchManifest()
-                if (manifestRes.isSuccess) {
-                    val entry = manifestRes.getOrNull()?.files?.get("ddx.json")
-                    if (entry != null) {
-                        repo.downloadSection("ddx.json", entry) { prog -> downloadProgress = prog }
-                        env = repo.getDdxEnvelope()
-                    }
-                }
-            }
             // 1.2.6: silently refresh a stale local pack (see
             // WataniRepository.refreshSectionIfStale).
             if (env != null && repo.refreshSectionIfStale("ddx.json")) {
@@ -183,8 +179,46 @@ fun DdxTrainerScreen(onBack: () -> Unit) {
         }
     }
 
+    val loadPack: () -> Unit = {
+        scope.launch {
+            val repo = WataniRepository(context)
+            if (repo.getDdxEnvelope() == null) {
+                // F6: hand the first download to the process-level
+                // manager and stay in the loading state — the
+                // observers below reload from disk the moment it
+                // lands (or settle the failure state), and leaving
+                // this screen no longer kills the transfer.
+                isLoading = true
+                PackDownloadManager.startDownload(context, "ddx.json")
+            } else {
+                reloadPack()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         loadPack()
+    }
+
+    // F6: the manager announces the pack's fate — a finished
+    // download reloads the screen from disk, a failed one settles
+    // the loading state (the empty state offers the retry), and
+    // the live progress feeds the download bar.
+    val packState by PackDownloadManager.state.collectAsState()
+    LaunchedEffect(packState.completedRuns["ddx.json"]) {
+        if (ddxEnvelope == null && (packState.completedRuns["ddx.json"] ?: 0) > 0) {
+            reloadPack()
+        }
+    }
+    LaunchedEffect(packState.failed, packState.downloading) {
+        if ("ddx.json" in packState.failed && "ddx.json" !in packState.downloading &&
+            ddxEnvelope == null
+        ) {
+            isLoading = false
+        }
+    }
+    LaunchedEffect(packState.progress["ddx.json"]) {
+        packState.progress["ddx.json"]?.let { downloadProgress = it }
     }
 
     val cases = ddxEnvelope?.cases.orEmpty()
