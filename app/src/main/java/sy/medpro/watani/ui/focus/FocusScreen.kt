@@ -65,6 +65,9 @@ private const val FOCUS_DIGITS_MAX_SP = 56f
 /** ما يُحجز من ارتفاع اللوحة اليسرى فوق الحلقة لعنوان المرحلة والمادة. */
 private const val FOCUS_RING_HEADER_RESERVE_DP = 76
 
+/** وزن لوحة التحكّم الأفقية مقابل لوحة الحلقة (أوسع قليلًا لأزرارها). */
+private const val FOCUS_CONTROLS_PANE_WEIGHT = 1.15f
+
 /**
  * شاشة التركيز (ترقية 1.2.23 لمؤقت البومودورو القائم، وإعادة بناء
  * 1.2.46 البصرية والتخطيطية).
@@ -139,7 +142,7 @@ fun FocusScreen() {
                 Spacer(modifier = Modifier.width(28.dp))
                 Column(
                     modifier = Modifier
-                        .weight(1.15f)
+                        .weight(FOCUS_CONTROLS_PANE_WEIGHT)
                         .fillMaxHeight()
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -151,7 +154,6 @@ fun FocusScreen() {
                     if (state.isIdle) {
                         FocusIdleSettings(
                             state = state,
-                            context = context,
                             selectedSubject = selectedSubject,
                             onSubjectSelected = { selectedSubject = it },
                             startEarly = true,
@@ -190,7 +192,6 @@ fun FocusScreen() {
                 if (state.isIdle) {
                     FocusIdleSettings(
                         state = state,
-                        context = context,
                         selectedSubject = selectedSubject,
                         onSubjectSelected = { selectedSubject = it },
                         startEarly = false,
@@ -243,8 +244,14 @@ private fun FocusTimerHero(state: FocusTimerState, isBreak: Boolean, progress: F
             val trackColor = MaterialTheme.colorScheme.surfaceVariant
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val stroke = Stroke(width = 12.dp.toPx(), cap = StrokeCap.Round)
-                drawArc(trackColor, -90f, 360f, false, style = stroke)
-                drawArc(GoldAccent, -90f, 360f * progress.coerceIn(0f, 1f), false, style = stroke)
+                drawArc(color = trackColor, startAngle = -90f, sweepAngle = 360f, useCenter = false, style = stroke)
+                drawArc(
+                    color = GoldAccent,
+                    startAngle = -90f,
+                    sweepAngle = 360f * progress.coerceIn(0f, 1f),
+                    useCenter = false,
+                    style = stroke
+                )
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -334,11 +341,29 @@ private fun FocusModePicker(state: FocusTimerState, context: Context) {
     }
 }
 
-/** اختيار مادة الجلسة (أو دراسة عامة) بشرائح قابلة للتمرير. */
+/**
+ * إعداد ما قبل البدء كاملًا: النمط، مادة الجلسة، الإضاءة، وزر
+ * البدء العنابي. بالطول يأتي البدء أخيرًا بعد اكتمال الإعداد،
+ * وبالعرض ([startEarly]) يتقدّم زر البدء وكتلة الإضاءة فوق قائمة
+ * المواد الطويلة حتى يظهر زر البدء في اللوحة القصيرة بلا تمرير.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun FocusSubjectPicker(selectedSubject: String?, onSubjectSelected: (String?) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+private fun FocusIdleSettings(
+    state: FocusTimerState,
+    selectedSubject: String?,
+    onSubjectSelected: (String?) -> Unit,
+    startEarly: Boolean,
+    onStart: () -> Unit
+) {
+    val context = LocalContext.current
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        FocusModePicker(state = state, context = context)
+        if (startEarly) {
+            Spacer(modifier = Modifier.height(18.dp))
+            FocusStartBlock(state = state, context = context, onStart = onStart)
+            Spacer(modifier = Modifier.height(18.dp))
+        }
         Text(
             "ماذا ستدرس في هذه الجلسة؟",
             color = MaterialTheme.colorScheme.onBackground,
@@ -367,33 +392,6 @@ private fun FocusSubjectPicker(selectedSubject: String?, onSubjectSelected: (Str
                 )
             }
         }
-    }
-}
-
-/**
- * إعداد ما قبل البدء كاملًا: النمط، المادة، الإضاءة، وزر البدء
- * العنابي. بالطول يأتي البدء أخيرًا بعد اكتمال الإعداد، وبالعرض
- * ([startEarly]) يتقدّم زر البدء وكتلة الإضاءة فوق قائمة المواد
- * الطويلة حتى يظهر زر البدء في اللوحة القصيرة بلا تمرير.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun FocusIdleSettings(
-    state: FocusTimerState,
-    context: Context,
-    selectedSubject: String?,
-    onSubjectSelected: (String?) -> Unit,
-    startEarly: Boolean,
-    onStart: () -> Unit
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        FocusModePicker(state = state, context = context)
-        if (startEarly) {
-            Spacer(modifier = Modifier.height(18.dp))
-            FocusStartBlock(state = state, context = context, onStart = onStart)
-            Spacer(modifier = Modifier.height(18.dp))
-        }
-        FocusSubjectPicker(selectedSubject = selectedSubject, onSubjectSelected = onSubjectSelected)
         if (!startEarly) {
             Spacer(modifier = Modifier.height(18.dp))
             FocusStartBlock(state = state, context = context, onStart = onStart)
