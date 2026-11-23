@@ -26,7 +26,13 @@ import java.io.File
  *    library ciphertext and, after the pending repository swap,
  *    restricted section ciphertext — nothing free).
  *  - explanation_layers (explanation shard cache: M3 "no cache display"
- *    for revoked activation).
+ *    for revoked activation) — since 1.2.47 selectively: the free-bank
+ *    subjects' shards and the layer index survive (free content).
+ *  - 1.2.47 exemption (the doctor's free-subjects policy): downloads
+ *    of the three free subjects (القلبية / التوليد / الكلية والشوارد —
+ *    [FreeBankSubjects]) are free content, not restricted content:
+ *    their section files, registry entries and explanation shards
+ *    are never wiped, on any path that runs this inventory.
  *  - All registered decrypt temps (TempDecryptedFiles sweep).
  *  - The manifest disk cache (manifest_cache.json): it lists restricted
  *    sections, so a stale copy must not survive a revocation.
@@ -63,8 +69,12 @@ object RestrictedInventory {
      * Detector fix (b2): library.json is matched by PREFIX, not exact
      * name — getSectionFile appends ".json", so the stored file is
      * "library.json.json", which the exact match missed and the wipe
-     * left behind (with its prefs entries deleted, looking wiped). */
+     * left behind (with its prefs entries deleted, looking wiped).
+     * 1.2.47: the free-bank subjects' files are NOT restricted for
+     * the wipe — they are free content ([FreeBankSubjects]) and a
+     * revocation must never confiscate them. */
     fun isRestrictedSectionFile(fileName: String): Boolean {
+        if (FreeBankSubjects.isFreeBankCacheFile(fileName)) return false
         val base = fileName.removeSuffix(".tmp")
         if (base.startsWith("library.json")) return true
         return SECTION_PREFIXES.any { base.startsWith(it) }
@@ -82,14 +92,16 @@ object RestrictedInventory {
                 }
             }
         }
-        // 2. Downloaded-sections prefs: drop restricted path entries.
+        // 2. Downloaded-sections prefs: drop restricted path entries
+        // (1.2.47: free-bank entries stay — requiresActivation is
+        // false for them, so their downloads stay listed and usable).
         val dlPrefs = context.getSharedPreferences(
             "watani_downloaded_sections",
             Context.MODE_PRIVATE
         )
         val editor = dlPrefs.edit()
         for (key in dlPrefs.all.keys) {
-            if (WorkerActivationApi.isRestrictedPath(key)) editor.remove(key)
+            if (WorkerActivationApi.requiresActivation(key)) editor.remove(key)
         }
         try {
             editor.apply()
@@ -104,8 +116,13 @@ object RestrictedInventory {
             )
         } catch (_: Exception) {
         }
-        // 4. Explanation shard cache.
-        deleteDirContents(File(context.filesDir, "explanation_layers"))
+        // 4. Explanation shard cache — selective since 1.2.47: the
+        // free subjects' shards and the layer index are free content
+        // (they re-serve any signed-in student) and survive; every
+        // other shard is wiped as before.
+        deleteDirContentsExcept(
+            File(context.filesDir, "explanation_layers")
+        ) { name -> FreeBankSubjects.isFreeExplanationCacheFile(name) }
         // 5. Decrypt temps (tracked + stale legacy names).
         try {
             TempDecryptedFiles.deleteAll(context)
@@ -132,6 +149,32 @@ object RestrictedInventory {
         deleteDirContents(File(context.filesDir, "firstaid_booklets"))
         deleteDirContents(File(context.filesDir, "firstaid_media"))
         deleteDirContents(File(context.filesDir, "auscultation_clips"))
+    }
+
+    /**
+     * Like [deleteDirContents] but keeps files whose NAME satisfies
+     * [keep] (top level only — the explanation cache is flat; any
+     * unexpected subdirectory is still swept in full).
+     */
+    private fun deleteDirContentsExcept(dir: File, keep: (String) -> Boolean) {
+        try {
+            dir.listFiles()?.forEach { file ->
+                try {
+                    if (file.isDirectory) {
+                        deleteDirContents(file)
+                        if (!file.delete()) Log.w("RestrictedInventory", "could not delete dir ${file.name}")
+                    } else if (keep(file.name)) {
+                        // Free content — survives the wipe by design.
+                    } else if (!file.delete()) {
+                        Log.w("RestrictedInventory", "could not delete ${file.name}")
+                    }
+                } catch (e: Exception) {
+                    Log.w("RestrictedInventory", "delete failed for ${file.name}", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("RestrictedInventory", "sweep failed for ${dir.name}", e)
+        }
     }
 
     /**

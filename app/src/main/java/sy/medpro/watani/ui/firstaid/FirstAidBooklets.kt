@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.FirstAidBookletDto
 import sy.medpro.watani.data.FirstAidIndexDto
+import sy.medpro.watani.data.FirstAidSystemDto
 import sy.medpro.watani.data.WataniRepository
 import sy.medpro.watani.ui.theme.NotoSansArabicFontFamily
 import java.io.File
@@ -54,6 +55,57 @@ fun bookletForSystem(index: FirstAidIndexDto, systemCode: String?, sectionEn: St
     return booklets.firstOrNull { b -> norm(b.file.orEmpty()).contains(enNorm) }
 }
 
+/**
+ * The display title of a booklet (build 1.2.47 — the doctor's
+ * device report: the reader showed the RAW FILE NAME, truncated
+ * mid-word, as the book's title). The index carries no title
+ * field for booklets (file + size only), so the title is derived
+ * from the booklet's own system — matched with the same rules as
+ * [bookletForSystem] — and reads «كتيّب <system in Arabic>», like
+ * the catalog titles the library's booklets carry. A booklet no
+ * system claims falls back to a HUMANIZED file name
+ * ("FirstAid-Abbreviations-Booklet-Mobile.pdf" → "Abbreviations")
+ * — never the raw name, never an extension.
+ */
+fun bookletDisplayTitle(booklet: FirstAidBookletDto, systems: List<FirstAidSystemDto>): String {
+    val file = booklet.file.orEmpty()
+    val base = file.substringAfterLast('/')
+    // Letters/digits only: "Hematology & Oncology" and the file's
+    // "HematologyOncology" must meet, and a file core that is the
+    // head of a longer system name ("Neurology" inside "Neurology
+    // & Special Senses", "PublicHealth" inside "Public Health
+    // Sciences") must match it — exact containment alone missed
+    // five of the thirty-four live booklets.
+    fun norm(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
+    val core = norm(humanizedBookletFileTitle(base))
+    val matched = systems.firstOrNull { system ->
+        val code = system.code?.takeIf { it.isNotBlank() }
+        val byCode = code != null &&
+            (base.contains("-$code-", ignoreCase = true) || base.contains("_$code.", ignoreCase = true))
+        val enNorm = norm(system.sectionEn.orEmpty())
+        val byName = enNorm.isNotEmpty() && core.isNotEmpty() &&
+            (norm(file).contains(enNorm) || enNorm.startsWith(core) || core.startsWith(enNorm))
+        byCode || byName
+    }
+    val arabic = matched?.sectionAr?.takeIf { it.isNotBlank() }
+    if (arabic != null) return "كتيّب $arabic"
+    return humanizedBookletFileTitle(base)
+}
+
+/** Humanized fallback title from a booklet file name: strips the
+ * First Aid prefixes/suffixes and the extension, spaces the words
+ * (dashes and CamelCase boundaries alike). */
+fun humanizedBookletFileTitle(fileName: String): String {
+    var name = fileName.substringAfterLast('/').removeSuffix(".pdf")
+    name = name.removePrefix("FirstAid-").removePrefix("FirstAid_")
+    name = name.removePrefix("Step2-").removePrefix("Step1-")
+    name = name.removeSuffix("-Booklet-Mobile").removeSuffix("-Booklet")
+    name = name.replace('-', ' ').replace('_', ' ')
+        .replace(Regex("(?<=[a-z])(?=[A-Z])"), " ")
+        .replace(Regex("\\s+"), " ").trim()
+    return name.ifBlank { "كتيّب First Aid" }
+}
+
 /** Download/open state holder for booklets, shared by every screen
  * that offers a booklet button. */
 class FirstAidBookletOpener(
@@ -65,20 +117,29 @@ class FirstAidBookletOpener(
     var error by mutableStateOf<String?>(null)
         private set
 
+    /** The systems of the host's loaded indexes, used only to title
+     * booklets ([bookletDisplayTitle]). Hosts assign it whenever
+     * their indexes land; empty simply means the humanized fallback. */
+    var systems: List<FirstAidSystemDto> = emptyList()
+
     suspend fun open(booklet: FirstAidBookletDto) {
         val file = booklet.file?.takeIf { it.isNotBlank() } ?: return
         val relativePath = "firstaid/$file"
         val expected = booklet.size ?: 0L
+        // 1.2.47: the reader's title is the booklet's display title,
+        // never the raw file name (the doctor's screenshot showed
+        // «FirstAi…iochemistry-Bookl…» over the biochemistry book).
+        val title = bookletDisplayTitle(booklet, systems)
         val local = repo.getFirstAidBookletFile(relativePath)
         if (local.exists() && local.length() > 0 && (expected <= 0 || local.length() == expected)) {
-            onOpenPdf(local, file.substringAfterLast('/'))
+            onOpenPdf(local, title)
             return
         }
         progress = 0f
         val result = repo.downloadFirstAidBooklet(relativePath, expected) { p -> progress = p }
         progress = null
         result.fold(
-            onSuccess = { onOpenPdf(it, file.substringAfterLast('/')) },
+            onSuccess = { onOpenPdf(it, title) },
             onFailure = { error = it.message ?: "تعذّر تحميل الكتيّب" }
         )
     }
@@ -145,6 +206,7 @@ fun FirstAidBookletOpener.RenderDialogs() {
 fun BookletRow(
     step: Int,
     booklet: FirstAidBookletDto,
+    title: String? = null,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -164,7 +226,9 @@ fun BookletRow(
             FaChip("PDF", faGoldTint(), faGoldText())
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    fileName.removeSuffix(".pdf"),
+                    // 1.2.47: the row shows the same display title
+                    // the reader will carry — never the raw file name.
+                    title ?: humanizedBookletFileTitle(fileName),
                     fontFamily = NotoSansArabicFontFamily, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     fontSize = 13.sp, color = faHeading()
                 )

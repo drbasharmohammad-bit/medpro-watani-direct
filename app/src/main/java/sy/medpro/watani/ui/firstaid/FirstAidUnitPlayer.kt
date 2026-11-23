@@ -93,6 +93,8 @@ fun FirstAidUnitPlayer(
     val repo = remember { WataniRepository(context) }
     val scope = rememberCoroutineScope()
     val bookletOpener = rememberBookletOpener(repo, onOpenBookletPdf)
+    // 1.2.47: booklet titles derive from this step's systems.
+    bookletOpener.systems = index.systems.orEmpty()
 
     var pkg by remember(unitId) { mutableStateOf<FirstAidUnitPackageDto?>(null) }
     var loadFailed by remember(unitId) { mutableStateOf(false) }

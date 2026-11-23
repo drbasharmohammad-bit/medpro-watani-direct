@@ -911,6 +911,24 @@ object WorkerActivationApi {
         return RESTRICTED_PREFIXES.any { rel.startsWith(it) }
     }
 
+    /**
+     * True when opening/fetching [path] requires an ACTIVATION
+     * (build 1.2.47, the doctor's free-subjects policy): restricted
+     * paths are activation-gated EXCEPT the free-bank subjects
+     * ([FreeBankSubjects] — القلبية / التوليد / الكلية والشوارد in
+     * every bank plus their explanation shards), which any
+     * SIGNED-IN student may open and download with no activation.
+     * Every consumer that used to ask [isRestrictedPath] to decide
+     * "must this student be activated?" asks this instead; the
+     * places that classify content for STORAGE (encryption at rest)
+     * keep [isRestrictedPath] — free files stay encrypted on the
+     * device exactly like the rest of the bank.
+     */
+    fun requiresActivation(path: String): Boolean {
+        val rel = normalizeRelativePath(path)
+        return isRestrictedPath(rel) && !FreeBankSubjects.isFreeBankPath(rel)
+    }
+
     private fun encodeRelativePath(rel: String): String =
         rel.split("/").joinToString("/") { seg ->
             URLEncoder.encode(seg, "UTF-8").replace("+", "%20")
@@ -948,6 +966,9 @@ object WorkerActivationApi {
      * Returns null ONLY when the path is restricted and no usable token
      * exists (expired + refresh failed, or never activated) — callers
      * must then show the activation prompt instead of fetching.
+     * Exception (1.2.47): the free-bank subjects ([FreeBankSubjects])
+     * fall back to the signed-in student's Firebase ID token when no
+     * activation token exists, and return null only when signed out.
      *
      * Call only from a background thread: a restricted fetch with an
      * expired token performs one blocking refresh here.
@@ -957,11 +978,47 @@ object WorkerActivationApi {
         if (!isRestrictedPath(rel)) {
             return Request.Builder().url("${WataniApi.BASE_URL}${encodeRelativePath(rel)}").build()
         }
-        val token = validTokenOrRefresh(context) ?: return null
-        return Request.Builder()
-            .url(buildGatewayUrl(rel))
-            .header("Authorization", "Bearer $token")
-            .build()
+        val token = validTokenOrRefresh(context)
+        if (token != null) {
+            return Request.Builder()
+                .url(buildGatewayUrl(rel))
+                .header("Authorization", "Bearer $token")
+                .build()
+        }
+        // Free-bank subjects (1.2.47): no activation token — a
+        // signed-in student's Firebase ID token is the credential
+        // instead. The gateway's /v1/content accepts it ONLY for
+        // the FreeBankSubjects paths (its own mirror list); for
+        // every other restricted path a missing activation token
+        // still returns null here and the caller prompts. A
+        // signed-OUT student gets null on free paths too: the free
+        // subjects are for registered students, per the order.
+        if (FreeBankSubjects.isFreeBankPath(rel)) {
+            val idToken = firebaseIdTokenBlocking() ?: return null
+            return Request.Builder()
+                .url(buildGatewayUrl(rel))
+                .header("Authorization", "Bearer $idToken")
+                .build()
+        }
+        return null
+    }
+
+    /**
+     * Blocking Firebase ID-token read for [contentRequest]'s
+     * free-bank branch (contentRequest is a background-thread API;
+     * its restricted branch already blocks on a token refresh).
+     * Time-bounded exactly like the suspending [googleIdToken]
+     * (hotfix 1.2.34): a stalled refresh returns null and the
+     * caller degrades to the sign-in/activation prompt at once.
+     */
+    private fun firebaseIdTokenBlocking(): String? {
+        return try {
+            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                ?: return null
+            kotlinx.coroutines.runBlocking { googleIdToken(user) }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**

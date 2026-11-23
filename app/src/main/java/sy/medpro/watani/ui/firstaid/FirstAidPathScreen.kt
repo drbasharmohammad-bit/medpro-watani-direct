@@ -217,7 +217,11 @@ private fun FaSystemBlock(
             }
         }
         if (booklet != null) {
-            BookletRow(step = step, booklet = booklet) { onOpenBooklet(booklet) }
+            BookletRow(
+                step = step,
+                booklet = booklet,
+                title = bookletDisplayTitle(booklet, index.systems.orEmpty())
+            ) { onOpenBooklet(booklet) }
         }
         systemUnits.forEachIndexed { positionInSystem, unitId ->
             val summary = byId[unitId]

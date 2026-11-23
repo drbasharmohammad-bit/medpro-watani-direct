@@ -494,6 +494,12 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 parcelFd = fd
                 pdfRenderer = renderer
                 totalPages = renderer.pageCount
+                // 1.2.47: a file that "opens" with zero pages used to
+                // fall past every state branch and show the bare black
+                // canvas forever — it is an open failure, full stop.
+                if (totalPages <= 0) {
+                    throw IllegalStateException("الملف بلا صفحات قابلة للعرض")
+                }
                 savedPage = prefs.getInt("last_page_${pdfFile.nameWithoutExtension}", 0)
                     .coerceIn(0, (totalPages - 1).coerceAtLeast(0))
                 // Successful open: this book becomes the most recent.
@@ -552,8 +558,14 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (isLoading) {
+            // 1.2.47: labelled, so the black canvas never reads as a
+            // dead screen while the book opens.
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = MaroonPrimary)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = MaroonPrimary)
+                    Spacer(Modifier.height(14.dp))
+                    Text("جارٍ فتح الكتاب…", color = Color.White, fontSize = 13.5.sp)
+                }
             }
         } else if (error != null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -585,6 +597,14 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             var boxSize by remember { mutableStateOf(IntSize.Zero) }
             var sliderPos by remember { mutableStateOf<Float?>(null) }
             val bitmapCache = remember { mutableStateMapOf<Int, Bitmap>() }
+            // Page render failures (1.2.47): a page whose render
+            // returns null is marked here and its slot shows an
+            // explicit error + retry (bumping the attempt re-runs
+            // the render effect). Before this, a failed render left
+            // a lone spinner on the black canvas forever — the
+            // silent black screen of the doctor's device report.
+            val failedPages = remember { mutableStateMapOf<Int, Boolean>() }
+            val pageRenderAttempts = remember { mutableStateMapOf<Int, Int>() }
             // PdfRenderer is NOT thread-safe: every openPage/render/
             // close sequence (base renders + zoom re-renders) is
             // serialized on this lock, and every opened Page handle
@@ -870,7 +890,8 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 modifier = Modifier.fillMaxSize().onSizeChanged { boxSize = it }
             ) { page ->
                 val bitmap = bitmapCache[page]
-                LaunchedEffect(page, pdfRenderer) {
+                val renderAttempt = pageRenderAttempts[page] ?: 0
+                LaunchedEffect(page, pdfRenderer, renderAttempt) {
                     if (bitmapCache[page] == null && pdfRenderer != null) {
                         // Display-matched base resolution (1.2.46):
                         // the target follows the pager's real pixel
@@ -878,12 +899,21 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         // the point size; zoom re-renders of the
                         // current page swap this entry at a
                         // zoom-matched target.
-                        renderPageBitmap(
+                        val rendered = renderPageBitmap(
                             page,
                             ReaderRenderMath.FALLBACK_SCALE,
                             targetWidthPx = ReaderRenderMath.baseTargetWidthPx(boxSize.width),
                             maxPixels = ReaderRenderMath.BASE_MAX_PIXELS
-                        )?.let { bitmapCache[page] = it }
+                        )
+                        if (rendered != null) {
+                            bitmapCache[page] = rendered
+                            failedPages.remove(page)
+                        } else {
+                            // 1.2.47: a null render is a page FAILURE,
+                            // not an eternal load — the slot below
+                            // turns it into an error with a retry.
+                            failedPages[page] = true
+                        }
                     }
                 }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1199,11 +1229,66 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                             }
                         }
                     } else {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(36.dp),
-                            color = MaroonPrimary,
-                            strokeWidth = 3.dp
-                        )
+                        // 1.2.47: an unrendered page looks like a PAGE
+                        // (the display mode's paper color), never a
+                        // black void; while rendering it carries a
+                        // labelled spinner, and a failed render is an
+                        // explicit error with a retry — no silent
+                        // black screen and no endless spinner (the
+                        // professional-cache rule: every loading state
+                        // resolves to content or an error).
+                        Box(
+                            Modifier.fillMaxSize().background(
+                                when {
+                                    nightMode -> Color.Black
+                                    warmMode -> Color(0xFFF3E5C8)
+                                    else -> Color.White
+                                }
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (failedPages[page] == true) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        Icons.Default.Error, null, Modifier.size(40.dp),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(Modifier.height(10.dp))
+                                    Text(
+                                        "تعذّرت قراءة هذه الصفحة",
+                                        color = if (nightMode) Color.White else Color.Black,
+                                        fontSize = 13.5.sp
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    Button(
+                                        onClick = {
+                                            failedPages.remove(page)
+                                            pageRenderAttempts[page] =
+                                                (pageRenderAttempts[page] ?: 0) + 1
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaroonPrimary
+                                        )
+                                    ) {
+                                        Text("إعادة المحاولة")
+                                    }
+                                }
+                            } else {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(36.dp),
+                                        color = MaroonPrimary,
+                                        strokeWidth = 3.dp
+                                    )
+                                    Spacer(Modifier.height(10.dp))
+                                    Text(
+                                        "جارٍ تجهيز الصفحة…",
+                                        color = if (nightMode) Color.White else Color.Black,
+                                        fontSize = 12.5.sp
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

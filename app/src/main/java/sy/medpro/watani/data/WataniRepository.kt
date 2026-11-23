@@ -711,8 +711,10 @@ class WataniRepository(private val context: Context) {
     ): Result<Unit> {
         // M8: device-integrity gate at the restricted-download entry.
         // Blocked devices never reach the gateway (and never get a
-        // partial file to keep).
-        val gateFailure = if (WorkerActivationApi.isRestrictedPath(path)) {
+        // partial file to keep). 1.2.47: the gate guards content that
+        // requires activation — the free-bank subjects are free
+        // content and download without it, like any free section.
+        val gateFailure = if (WorkerActivationApi.requiresActivation(path)) {
             val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
             if (gate.allowed) null else Exception(gate.userMessage)
         } else {
@@ -734,7 +736,7 @@ class WataniRepository(private val context: Context) {
             baseRequest == null -> Result.failure(
                 Exception("هذا القسم يحتاج كود تفعيل — فعّل حسابك من نافذة التفعيل أولاً.")
             )
-            else -> executeSectionFetch(entry, tempFile, baseRequest, onProgress)
+            else -> executeSectionFetch(path, entry, tempFile, baseRequest, onProgress)
         }
     }
 
@@ -749,6 +751,7 @@ class WataniRepository(private val context: Context) {
      * on a weak network must not leak connections or leave the
      * resume temp file unflushed. */
     private fun executeSectionFetch(
+        path: String,
         entry: ManifestFileEntry,
         tempFile: File,
         baseRequest: okhttp3.Request,
@@ -769,8 +772,22 @@ class WataniRepository(private val context: Context) {
             when {
                 // M3: no generic HTTP message, no cached fallback —
                 // activation is lost (cleared + wiped + prompt event).
+                // 1.2.47: that semantics belongs to requests that
+                // carried an ACTIVATION token. A free-bank download
+                // by a student with no activation token carried a
+                // Firebase ID token instead — its 401/403 means the
+                // sign-in session needs a refresh, never an
+                // activation loss (no wipe, no revocation prompt).
                 resp.code == 401 || resp.code == 403 ->
-                    Result.failure(gatewayAuthFailure(context))
+                    if (WorkerActivationApi.requiresActivation(path) ||
+                        WorkerActivationApi.isActivated(context)
+                    ) {
+                        Result.failure(gatewayAuthFailure(context))
+                    } else {
+                        Result.failure(
+                            Exception("انتهت جلسة تسجيل الدخول — أعد تسجيل الدخول ثم حاول مجددًا.")
+                        )
+                    }
                 !resp.isSuccessful && resp.code != 206 -> Result.failure(
                     Exception("فشل التحميل — تأكد من اتصال الإنترنت أو صحة الرابط.")
                 )
@@ -846,7 +863,7 @@ class WataniRepository(private val context: Context) {
         saveDownloadedSection(entity)
         // Gentle lease: a successful restricted download is a
         // successful server verification.
-        if (WorkerActivationApi.isRestrictedPath(staged.path)) {
+        if (WorkerActivationApi.requiresActivation(staged.path)) {
             WorkerActivationApi.noteServerVerified(context)
         }
         return Result.success(staged.actualCount)
@@ -858,7 +875,9 @@ class WataniRepository(private val context: Context) {
             // restricted sections behave as unavailable (free paths
             // are never gated here). The lease check stays FIRST —
             // a cached envelope is never served past it (1.2.27).
-            if (WorkerActivationApi.isRestrictedPath(path) &&
+            // 1.2.47: the free-bank subjects are free paths for this
+            // gate too — their downloads never expire behind a lease.
+            if (WorkerActivationApi.requiresActivation(path) &&
                 WorkerActivationApi.isRestrictedLeaseExpired(context)
             ) return@withContext null
             // Cache (1.2.27): served only when the registry holds
@@ -892,7 +911,7 @@ class WataniRepository(private val context: Context) {
     suspend fun getDawraSessionRecords(path: String): List<DawraSessionQuestionDto>? =
         withContext(Dispatchers.IO) {
             try {
-                if (WorkerActivationApi.isRestrictedPath(path) &&
+                if (WorkerActivationApi.requiresActivation(path) &&
                     WorkerActivationApi.isRestrictedLeaseExpired(context)
                 ) return@withContext null
                 // Parse cache (F5, 1.2.45): same registry-hash guard
@@ -929,7 +948,7 @@ class WataniRepository(private val context: Context) {
      */
     suspend fun getYearsEnvelope(path: String): YearsEnvelope? = withContext(Dispatchers.IO) {
         try {
-            if (WorkerActivationApi.isRestrictedPath(path) &&
+            if (WorkerActivationApi.requiresActivation(path) &&
                 WorkerActivationApi.isRestrictedLeaseExpired(context)
             ) return@withContext null
             // Parse cache (cache audit fix F5, 1.2.45): mirror of

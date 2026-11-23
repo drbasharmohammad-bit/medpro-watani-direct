@@ -371,17 +371,23 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Gating point (UI): ONLY Questions (BANK / UNIVERSITIES /
-                // UWORLD) and Library require activation. Everything else
-                // is free. A gated tab tap shows the activation prompt
+                // Gating point (UI): UWORLD and Library require
+                // activation at the TAB level (both are locked in full).
+                // BANK and UNIVERSITIES no longer gate here (1.2.47,
+                // the doctor's free-subjects policy): every signed-in
+                // student enters them — the three free subjects
+                // (القلبية / التوليد / الكلية والشوارد) are open inside,
+                // and every other subject gates itself at the quiz and
+                // download layers (MainViewModel + repository), which
+                // enforce the device gate, activation and lease per
+                // subject. A gated tab tap shows the activation prompt
                 // instead of switching; on success the pending tab opens.
                 // (The fetch layer enforces the same rule independently:
                 // restricted paths without a token are never fetched.)
                 // M8: the device-integrity gate is checked here too, so a
-                // blocked device cannot enter restricted tabs at all.
+                // blocked device cannot enter fully-locked tabs at all.
                 fun requestTab(tab: AppTab): Boolean {
-                    val restricted = tab == AppTab.BANK || tab == AppTab.UNIVERSITIES ||
-                        tab == AppTab.UWORLD || tab == AppTab.LIBRARY
+                    val restricted = tab == AppTab.UWORLD || tab == AppTab.LIBRARY
                     if (restricted) {
                         val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
                         if (!gate.allowed) {
@@ -1362,17 +1368,24 @@ class MainActivity : ComponentActivity() {
                                                             // M8: re-checked at composition, so a device
                                                             // that becomes blocked mid-session (debugger
                                                             // attached after entry) cannot keep browsing
-                                                            // restricted tabs.
+                                                            // restricted tabs. 1.2.47: this body-level
+                                                            // re-check guards the FULLY-LOCKED tab
+                                                            // (UWORLD) only — BANK and UNIVERSITIES
+                                                            // render for every signed-in student, and
+                                                            // their locked subjects keep the M4/M8
+                                                            // checks per subject in MainViewModel
+                                                            // and the repository.
                                                             val tabGate = remember(uiState.currentTab) {
                                                                 sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
                                                             }
-                                                            if (!tabGate.allowed) {
+                                                            val fullyLockedTab = tab == AppTab.UWORLD
+                                                            if (fullyLockedTab && !tabGate.allowed) {
                                                                 GateBlockedMessage(
                                                                     message = tabGate.userMessage
                                                                         ?: "المحتوى المحمي غير متاح على هذا الجهاز.",
                                                                     onBackHome = { requestTab(AppTab.HOME) }
                                                                 )
-                                                            } else if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
+                                                            } else if (fullyLockedTab && !sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
                                                                 // M4: activation expired mid-session —
                                                                 // never render restricted content from
                                                                 // local files without a live activation.

@@ -478,7 +478,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // attached mid-session is caught here, not only at tab entry).
             // The quiz only opens restricted bank content, so the gate
             // applies whenever the path is restricted.
-            if (WorkerActivationApi.isRestrictedPath(path)) {
+            if (WorkerActivationApi.requiresActivation(path)) {
                 val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(
                     getApplication<Application>().applicationContext
                 )
@@ -524,7 +524,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun openSessionQuiz(path: String, sessionKey: String, sessionName: String, subjectName: String) {
         viewModelScope.launch {
-            if (WorkerActivationApi.isRestrictedPath(path)) {
+            if (WorkerActivationApi.requiresActivation(path)) {
                 val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(
                     getApplication<Application>().applicationContext
                 )
@@ -576,7 +576,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         yearName: String
     ) {
         viewModelScope.launch {
-            if (WorkerActivationApi.isRestrictedPath(yearsPath)) {
+            if (WorkerActivationApi.requiresActivation(yearsPath)) {
                 val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(
                     getApplication<Application>().applicationContext
                 )

@@ -115,6 +115,10 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
     fun pop() { if (stack.size > 1) stack = stack.dropLast(1) }
 
     val bookletOpener = rememberBookletOpener(repo) { file, title -> push(FaDest.Pdf(file, title)) }
+    // 1.2.47: booklet titles derive from the systems of both
+    // indexes (re-assigned on every recomposition, so the opener
+    // picks them up as soon as the indexes land).
+    bookletOpener.systems = index1?.systems.orEmpty() + index2?.systems.orEmpty()
 
     val srsChanges by FirstAidSrs.changes.collectAsState()
     // 1.2.43: the due count parses every stored card state — it used
@@ -811,7 +815,14 @@ private fun FaHome(
             }
             items(booklets.size) { i ->
                 val (bStep, booklet) = booklets[i]
-                BookletRow(step = bStep, booklet = booklet) { onOpenBooklet(bStep, booklet) }
+                BookletRow(
+                    step = bStep,
+                    booklet = booklet,
+                    title = bookletDisplayTitle(
+                        booklet,
+                        (if (bStep == 1) index1 else index2)?.systems.orEmpty()
+                    )
+                ) { onOpenBooklet(bStep, booklet) }
             }
         }
 
