@@ -498,7 +498,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 // fall past every state branch and show the bare black
                 // canvas forever — it is an open failure, full stop.
                 if (totalPages <= 0) {
-                    throw IllegalStateException("الملف بلا صفحات قابلة للعرض")
+                    error("الملف بلا صفحات قابلة للعرض")
                 }
                 savedPage = prefs.getInt("last_page_${pdfFile.nameWithoutExtension}", 0)
                     .coerceIn(0, (totalPages - 1).coerceAtLeast(0))

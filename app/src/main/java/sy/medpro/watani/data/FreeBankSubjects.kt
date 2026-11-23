@@ -93,22 +93,25 @@ object FreeBankSubjects {
      * one). Everything else — other subjects, dawrat_sessions/,
      * uworld/, library.json, books/ — is false.
      */
+    /** Segment counts of the two free-path shapes: head/<file>,
+     * and head/<university>/<file> for the university banks. */
+    private const val SUBJECT_PATH_SEGMENTS = 2
+    private const val UNIVERSITY_PATH_SEGMENTS = 3
+
     fun isFreeBankPath(rawPath: String): Boolean {
         val rel = rawPath.trim().trimStart('/').substringBefore('?').substringBefore('#')
         if (rel == "explanations/index.json") return true
         val segments = rel.split('/').filter { it.isNotEmpty() }
-        if (segments.size < 2) return false
-        if (segments.first() !in FREE_HEADS) return false
         // Shape: head/<file> or head/<university>/<file> — the
         // university banks are the only three-segment family.
-        val shapeOk = when (segments.first()) {
-            "dawrat_jami3at" -> segments.size == 3
-            else -> segments.size == 2
+        val shapeOk = when (segments.firstOrNull()) {
+            "dawrat_jami3at" -> segments.size == UNIVERSITY_PATH_SEGMENTS
+            in FREE_HEADS -> segments.size == SUBJECT_PATH_SEGMENTS
+            else -> false
         }
-        if (!shapeOk) return false
-        val fileName = segments.last()
-        if (!fileName.endsWith(".json")) return false
-        return fileName.removeSuffix(".json") in ALL_ALIASES
+        val fileName = segments.lastOrNull().orEmpty()
+        return shapeOk && fileName.endsWith(".json") &&
+            fileName.removeSuffix(".json") in ALL_ALIASES
     }
 
     /** Bank section-file prefixes inside sections_cache (the
@@ -129,12 +132,11 @@ object FreeBankSubjects {
      */
     fun isFreeBankCacheFile(fileName: String): Boolean {
         val base = fileName.removeSuffix(".tmp")
-        if (!base.endsWith(".json")) return false
         val core = base.removeSuffix(".json")
-        if (!core.endsWith(".json")) return false
-        if (CACHE_PREFIXES.none { core.startsWith(it) }) return false
         val subjectFile = core.substringAfterLast('_')
-        return subjectFile.removeSuffix(".json") in ALL_ALIASES
+        return base.endsWith(".json") && core.endsWith(".json") &&
+            CACHE_PREFIXES.any { core.startsWith(it) } &&
+            subjectFile.removeSuffix(".json") in ALL_ALIASES
     }
 
     /** Hex chars kept from the shard-name hash (mirrors

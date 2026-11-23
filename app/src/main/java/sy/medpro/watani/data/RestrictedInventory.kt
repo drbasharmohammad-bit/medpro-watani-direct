@@ -74,10 +74,10 @@ object RestrictedInventory {
      * the wipe — they are free content ([FreeBankSubjects]) and a
      * revocation must never confiscate them. */
     fun isRestrictedSectionFile(fileName: String): Boolean {
-        if (FreeBankSubjects.isFreeBankCacheFile(fileName)) return false
+        // 1.2.47: the free subjects' caches are not restricted content.
         val base = fileName.removeSuffix(".tmp")
-        if (base.startsWith("library.json")) return true
-        return SECTION_PREFIXES.any { base.startsWith(it) }
+        return !FreeBankSubjects.isFreeBankCacheFile(fileName) &&
+            (base.startsWith("library.json") || SECTION_PREFIXES.any { base.startsWith(it) })
     }
 
     fun wipeRestrictedDownloads(context: Context) {
@@ -157,23 +157,28 @@ object RestrictedInventory {
      * unexpected subdirectory is still swept in full).
      */
     private fun deleteDirContentsExcept(dir: File, keep: (String) -> Boolean) {
-        try {
-            dir.listFiles()?.forEach { file ->
-                try {
-                    if (file.isDirectory) {
-                        deleteDirContents(file)
-                        if (!file.delete()) Log.w("RestrictedInventory", "could not delete dir ${file.name}")
-                    } else if (keep(file.name)) {
-                        // Free content — survives the wipe by design.
-                    } else if (!file.delete()) {
-                        Log.w("RestrictedInventory", "could not delete ${file.name}")
-                    }
-                } catch (e: Exception) {
-                    Log.w("RestrictedInventory", "delete failed for ${file.name}", e)
-                }
-            }
+        val children = try {
+            dir.listFiles()
         } catch (e: Exception) {
             Log.w("RestrictedInventory", "sweep failed for ${dir.name}", e)
+            null
+        } ?: return
+        children.forEach { file -> deleteOneExcept(file, keep) }
+    }
+
+    private fun deleteOneExcept(file: File, keep: (String) -> Boolean) {
+        try {
+            when {
+                file.isDirectory -> {
+                    deleteDirContents(file)
+                    if (!file.delete()) Log.w("RestrictedInventory", "could not delete dir ${file.name}")
+                }
+                // Free content — survives the wipe by design.
+                keep(file.name) -> Unit
+                !file.delete() -> Log.w("RestrictedInventory", "could not delete ${file.name}")
+            }
+        } catch (e: Exception) {
+            Log.w("RestrictedInventory", "delete failed for ${file.name}", e)
         }
     }
 
