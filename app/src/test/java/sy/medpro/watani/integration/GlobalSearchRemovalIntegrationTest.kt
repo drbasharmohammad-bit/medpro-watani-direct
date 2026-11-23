@@ -92,8 +92,11 @@ class GlobalSearchRemovalIntegrationTest {
             }
         }
         composeRule.waitForIdle()
+        // useUnmergedNode: LibCard merges its children's semantics,
+        // so the clickable card with its title lives in the unmerged tree.
         composeRule.onNode(
-            hasClickAction() and hasAnyDescendant(hasText("مدرّب التشخيص التفريقي"))
+            hasClickAction() and hasAnyDescendant(hasText("مدرّب التشخيص التفريقي")),
+            useUnmergedNode = true
         ).performClick()
         composeRule.waitForIdle()
         assertEquals(listOf("مدرّب التشخيص التفريقي"), routed)
