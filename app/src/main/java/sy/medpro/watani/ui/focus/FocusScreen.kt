@@ -120,14 +120,16 @@ fun FocusScreen() {
             // الوضع الأفقي: لوحتان جنبًا إلى جنب. الحلقة تُقاس من
             // الارتفاع المتاح فتظهر كاملة بأرقامها، والتحكّم
             // والإحصاءات بلوحة تمرير مستقلة — لا قصّ ولا تغطية.
+            // (يُلتقط الارتفاع هنا بنطاق القيود نفسه: داخل لامبدا
+            // الصف لا يعود مستقبِل القيود الضمني متاحًا.)
+            val ringSize = (maxHeight - FOCUS_RING_HEADER_RESERVE_DP.dp)
+                .coerceIn(FOCUS_RING_MIN_DP.dp, FOCUS_RING_MAX_DP.dp)
             Row(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 24.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val ringSize = (maxHeight - FOCUS_RING_HEADER_RESERVE_DP.dp)
-                    .coerceIn(FOCUS_RING_MIN_DP.dp, FOCUS_RING_MAX_DP.dp)
                 Box(
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     contentAlignment = Alignment.Center
@@ -467,7 +469,7 @@ private fun FocusRunningControls(state: FocusTimerState, context: Context) {
                 },
                 shape = RoundedCornerShape(14.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
-                colors = OutlinedButtonDefaults.outlinedButtonColors(
+                colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = MaterialTheme.colorScheme.primary
                 ),
                 modifier = Modifier.height(52.dp)
