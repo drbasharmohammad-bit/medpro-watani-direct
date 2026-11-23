@@ -75,7 +75,8 @@ class ReaderTakeoverIntegrationTest {
             try {
                 composeRule.onNodeWithText(OPEN_ERROR, substring = true).assertExists()
                 true
-            } catch (e: AssertionError) {
+            } catch (_: AssertionError) {
+                // Not on screen yet — waitUntil keeps polling.
                 false
             }
         }
