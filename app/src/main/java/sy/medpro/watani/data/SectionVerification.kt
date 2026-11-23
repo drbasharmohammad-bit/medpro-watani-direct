@@ -21,7 +21,8 @@ import com.squareup.moshi.Moshi
  *   Every non-subject envelope downloaded through downloadSection has
  *   its OWN branch here (cases/cases_de, guide, ddx, reverse,
  *   auscultation, osce, ecg, osce_procedures, dosing_drills,
- *   concepts, dawrat_sessions/, firstaid/): an
+ *   concepts, dawrat_sessions/, firstaid/,
+ *   dawrat_jami3at/<uni>_years/): an
  *   envelope shape without a branch falls into
  *   the subject check, counts 0 and can NEVER download (the 1.2 defect
  *   fixed in 1.2.1 — auscultation, German cases and OSCE all failed
@@ -57,6 +58,20 @@ object SectionVerification {
             }
         }
         return null
+    }
+
+    /**
+     * The «حسب السنوات» twin path shape, mirror of [yearsPathFor]'s
+     * output: `dawrat_jami3at/<university>_years/<subject>.json`
+     * (exactly three segments, the university segment carrying the
+     * `_years` suffix). Pure path check — no parsing.
+     */
+    fun isYearsFilePath(path: String): Boolean {
+        val parts = path.split("/")
+        return parts.size == 3 &&
+            parts[0] == "dawrat_jami3at" &&
+            parts[1].endsWith("_years") &&
+            parts[2].endsWith(".json")
     }
 
     /** F-02/F-03/F-04: parse + declared-count verification. */
@@ -245,6 +260,25 @@ object SectionVerification {
             val actualCount = records?.size ?: 0
             if (records == null || actualCount == 0) {
                 throw IllegalStateException("ملف الدورة المستقل بلا أسئلة — أعد التحميل.")
+            }
+            return actualCount
+        }
+        if (isYearsFilePath(path)) {
+            // Build 1.2.45 fix: the «حسب السنوات» twin file is a
+            // years envelope ({count, years: [{questions}]}) — in
+            // 1.2.44 it had NO branch here, fell into the subject
+            // check below, counted 0 (no topics/sessions) against
+            // its own declared count and could NEVER download
+            // (doctor's device report 23 Nov 2026 — the exact 1.2
+            // defect class this file's header warns about). Honest
+            // check: the actual count is the sum of the years'
+            // question lists, compared with the file's own declared
+            // count exactly like the other envelopes.
+            val yearsEnv = moshi.adapter(YearsEnvelope::class.java).fromJson(jsonString)
+            val declaredCount = yearsEnv?.count ?: 0
+            val actualCount = yearsEnv?.years?.sumOf { it.questions?.size ?: 0 } ?: 0
+            if (yearsEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
+                throw IllegalStateException("خطأ في تطابق عدد أسئلة السنوات الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
             }
             return actualCount
         }

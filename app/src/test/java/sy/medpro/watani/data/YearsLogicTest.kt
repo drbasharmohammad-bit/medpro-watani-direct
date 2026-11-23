@@ -134,6 +134,59 @@ class YearsLogicTest {
     }
 
     // ---------------------------------------------------------------
+    // SectionVerification — the download-time count check (F-02)
+    // ---------------------------------------------------------------
+    // Regression (device report 23 Nov 2026, build 1.2.44): the
+    // years envelope had NO branch in verifySectionCount, so every
+    // years file fell into the generic subject check, counted 0
+    // (no topics/sessions) against its own declared count and the
+    // download ALWAYS failed on device with
+    // «خطأ في تطابق عدد أسئلة القسم الداخلي (المتوقع … والفعلي 0)»
+    // — the exact 1.2 defect class. These tests pin the years
+    // branch: the count is the sum of the years' question lists.
+
+    @Test
+    fun verifySectionCountAcceptsYearsFileWithHonestCount() {
+        assertEquals(
+            5,
+            SectionVerification.verifySectionCount(
+                "dawrat_jami3at/damascus_years/أذنية.json", yearsFixtureJson, moshi
+            )
+        )
+    }
+
+    @Test
+    fun verifySectionCountRejectsYearsFileWithLyingCount() {
+        val lying = yearsFixtureJson.replace("\"count\":5", "\"count\":7")
+        val error = try {
+            SectionVerification.verifySectionCount(
+                "dawrat_jami3at/damascus_years/أذنية.json", lying, moshi
+            )
+            null
+        } catch (e: IllegalStateException) {
+            e
+        }
+        assertNotNull(error)
+        assertTrue(error!!.message!!.contains("السنوات"))
+        assertTrue(error.message!!.contains("المتوقع 7 والفعلي 5"))
+    }
+
+    @Test
+    fun verifySectionCountRejectsEmptyYearsFile() {
+        val empty = """{"version":"damascus-years-2026-11-23","count":0,"years":[]}"""
+        val error = try {
+            SectionVerification.verifySectionCount(
+                "dawrat_jami3at/damascus_years/أذنية.json", empty, moshi
+            )
+            null
+        } catch (e: IllegalStateException) {
+            e
+        }
+        assertNotNull(error)
+        assertTrue(error!!.message!!.contains("السنوات"))
+    }
+
+    // ---------------------------------------------------------------
     // isSectionPairUpToDate — the all-or-nothing verdict
     // ---------------------------------------------------------------
 
