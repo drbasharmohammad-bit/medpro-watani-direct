@@ -96,11 +96,17 @@ fun FirstAidUnitPlayer(
 
     var pkg by remember(unitId) { mutableStateOf<FirstAidUnitPackageDto?>(null) }
     var loadFailed by remember(unitId) { mutableStateOf(false) }
+    // 1.2.45: the failure state carries a real retry — bumping the
+    // attempt re-runs the load effect below (the doctor's rule: no
+    // loading state without a resolution — content, or an error the
+    // student can act on).
+    var loadAttempt by remember(unitId) { mutableIntStateOf(0) }
     var stage by remember(unitId) { mutableStateOf(FaStage.HOME) }
     var progressTick by remember(unitId) { mutableIntStateOf(0) }
     var mediaFiles by remember(unitId) { mutableStateOf<Map<String, File>>(emptyMap()) }
 
-    LaunchedEffect(unitId) {
+    LaunchedEffect(unitId, loadAttempt) {
+        loadFailed = false
         val loaded = repo.getFirstAidUnit(step, unitId)
         pkg = loaded
         loadFailed = loaded == null
@@ -124,20 +130,27 @@ fun FirstAidUnitPlayer(
 
     val pack = pkg
     if (pack == null) {
-        Column(modifier = Modifier.fillMaxSize().background(faBackground())) {
+        Column(
+            modifier = Modifier.fillMaxSize().background(faBackground())
+                .padding(horizontal = 16.dp)
+        ) {
             FaScreenHeader(title = unitTitleOf(step, unitId) ?: unitId, onBack = onBack)
-            Box(
-                modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (loadFailed) {
-                    Text(
-                        "تعذّر تحميل الوحدة — تحقق من الاتصال وحاول مجددًا.",
-                        fontFamily = NotoSansArabicFontFamily, fontSize = 13.5.sp, color = faMuted()
-                    )
-                } else {
-                    CircularProgressIndicator(color = faAccentText())
+            if (loadFailed) {
+                FaCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "تعذّر تحميل الوحدة — تحقق من الاتصال وحاول مجددًا.",
+                            fontFamily = NotoSansArabicFontFamily, fontSize = 13.5.sp, color = faMuted()
+                        )
+                        Spacer(modifier = Modifier.height(13.dp))
+                        FaPrimaryButton(text = "إعادة المحاولة") { loadAttempt++ }
+                    }
                 }
+            } else {
+                FaUnitLoadingSkeleton()
             }
         }
         return
@@ -264,6 +277,79 @@ fun FirstAidUnitPlayer(
             glossary = pack.glossary.orEmpty(),
             onClose = { stage = FaStage.HOME }
         )
+    }
+}
+
+/**
+ * First-open loading shape of the unit player (1.2.45). Before the
+ * background warm-up existed, this state was a lone spinner on the
+ * bare ivory field — the whole screen read as a washed-out blank page
+ * for the full duration of the one genuine network fetch (device
+ * report, 23 Nov 2026). The skeleton mirrors the unit home instead —
+ * title block and the white stage card in the design's own track
+ * colour — with a small spinner and caption, so the wait reads as the
+ * unit arriving, not as an empty screen.
+ */
+@Composable
+private fun FaUnitLoadingSkeleton() {
+    Column(modifier = Modifier.padding(top = 8.dp)) {
+        Box(
+            modifier = Modifier.fillMaxWidth(0.55f).height(15.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(7.dp))
+                .background(faTrack())
+        )
+        Spacer(modifier = Modifier.height(9.dp))
+        Box(
+            modifier = Modifier.fillMaxWidth(0.85f).height(24.dp)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                .background(faTrack())
+        )
+        FaCard(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+            Column(
+                modifier = Modifier.padding(horizontal = 15.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(15.dp)
+            ) {
+                repeat(3) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier.size(38.dp).clip(CircleShape).background(faTrack())
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth(0.5f).height(13.dp)
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                                    .background(faTrack())
+                            )
+                            Box(
+                                modifier = Modifier.fillMaxWidth(0.75f).height(10.dp)
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(5.dp))
+                                    .background(faTrack())
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(
+                color = faAccentText(), modifier = Modifier.size(19.dp), strokeWidth = 2.2.dp
+            )
+            Spacer(modifier = Modifier.width(9.dp))
+            Text(
+                "جارٍ تحميل الوحدة…",
+                fontFamily = NotoSansArabicFontFamily, fontSize = 12.5.sp, color = faMuted()
+            )
+        }
     }
 }
 

@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -104,6 +105,9 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
     var banks by remember { mutableStateOf<FirstAidBanksDto?>(null) }
     var loading by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
+    // 1.2.45: bumping the tick re-runs the section load — the failed
+    // state below carries a real retry button (no dead-end states).
+    var loadTick by remember { mutableIntStateOf(0) }
 
     var stack by remember { mutableStateOf<List<FaDest>>(listOf(FaDest.Home)) }
     val dest = stack.last()
@@ -127,7 +131,9 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
     // resolve — the section's structure — while the integration
     // layer and the printed banks land in the background and fill
     // their cards in (both are null-guarded at every read site).
-    LaunchedEffect(Unit) {
+    LaunchedEffect(loadTick) {
+        loading = true
+        failed = false
         kotlinx.coroutines.coroutineScope {
             val dIntegration = async { repo.getFirstAidIntegration() }
             val dBanks = async { repo.getFirstAidBanks() }
@@ -140,6 +146,19 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
             integration = dIntegration.await()
             banks = dBanks.await()
         }
+    }
+
+    // 1.2.45 background warm-up (the doctor's professional-cache
+    // standard): once both step indexes resolve, every unit package
+    // that is not yet cached is pulled silently in course order, so a
+    // unit's first open is a cache hit — never a network fetch behind
+    // a spinner. Silent and best-effort; a miss is retried on the
+    // next section entry and the open path stays the fallback.
+    LaunchedEffect(index1, index2) {
+        val ids1 = index1?.units.orEmpty().mapNotNull { it.id }
+        if (ids1.isNotEmpty()) repo.prefetchFirstAidUnits(1, ids1)
+        val ids2 = index2?.units.orEmpty().mapNotNull { it.id }
+        if (ids2.isNotEmpty()) repo.prefetchFirstAidUnits(2, ids2)
     }
 
     // The unit player registers its own BackHandler for its inner
@@ -232,11 +251,17 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
             }
 
             failed -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    "تعذّر تحميل قسم First Aid — تحقق من الاتصال وحاول مجددًا.",
-                    fontFamily = NotoSansArabicFontFamily,
-                    modifier = Modifier.padding(24.dp)
-                )
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "تعذّر تحميل قسم First Aid — تحقق من الاتصال وحاول مجددًا.",
+                        fontFamily = NotoSansArabicFontFamily
+                    )
+                    Spacer(modifier = Modifier.height(13.dp))
+                    FaPrimaryButton(text = "إعادة المحاولة") { loadTick++ }
+                }
             }
 
             else -> {

@@ -897,6 +897,33 @@ class WataniRepository(private val context: Context) {
     suspend fun getFirstAidUnit(step: Int, id: String): FirstAidUnitPackageDto? =
         getFirstAidSection("firstaid/units$step/$id.json", FirstAidUnitPackageDto::class.java)
 
+    /** True when the unit package already sits in the section cache —
+     * its getter then returns with no network wait at all. */
+    fun isFirstAidUnitCached(step: Int, id: String): Boolean =
+        getSectionFile("firstaid/units$step/$id.json").exists()
+
+    /** Background warm-up of a step's unit packages (1.2.45, the
+     * doctor's professional-cache standard): the moment the section's
+     * indexes resolve, every not-yet-cached package of the step is
+     * pulled silently and sequentially on the refresh scope, so the
+     * first open of a unit is a cache hit instead of a network fetch
+     * behind a spinner. Best-effort and silent by contract: a failed
+     * package is simply planned again on the next section entry, and
+     * the unit's own open remains the fallback fetch. */
+    fun prefetchFirstAidUnits(step: Int, ids: List<String>) {
+        val missing = FirstAidPrefetchRules.missing(ids) { isFirstAidUnitCached(step, it) }
+        if (missing.isEmpty()) return
+        firstAidRefreshScope.launch {
+            for (id in missing) {
+                try {
+                    getFirstAidUnit(step, id)
+                } catch (_: Exception) {
+                    // Silent: the open-path fetch stays the fallback.
+                }
+            }
+        }
+    }
+
     /** The integration layer: 157 topic links + integration sessions. */
     suspend fun getFirstAidIntegration(): FirstAidIntegrationDto? =
         getFirstAidSection("firstaid/integration.json", FirstAidIntegrationDto::class.java)
