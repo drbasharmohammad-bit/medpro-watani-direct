@@ -8,6 +8,8 @@ import com.squareup.moshi.Moshi
  * subject envelopes (the dispatch lives in
  * [SectionVerification.verifySectionCount]). Same honesty rules
  * as [SectionCountChecks]: real parse, real count, no coercion.
+ * Failures are raised with check() — IllegalStateException with
+ * the same user-facing messages as always.
  */
 object SectionBankCounts {
 
@@ -24,8 +26,8 @@ object SectionBankCounts {
         )
         val records = moshi.adapter<List<DawraSessionQuestionDto>>(listType).fromJson(jsonString)
         val actualCount = records?.size ?: 0
-        if (records == null || actualCount == 0) {
-            throw IllegalStateException("ملف الدورة المستقل بلا أسئلة — أعد التحميل.")
+        check(records != null && actualCount > 0) {
+            "ملف الدورة المستقل بلا أسئلة — أعد التحميل."
         }
         return actualCount
     }
@@ -62,11 +64,15 @@ object SectionBankCounts {
         val tCount = subjEnv?.topics?.sumOf { it.questions?.size ?: 0 } ?: 0
         val sCount = subjEnv?.sessions?.sumOf { it.questions?.size ?: 0 } ?: 0
         val actualCount = if (tCount > 0) tCount else sCount
-        if (subjEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد أسئلة القسم الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+        check(subjEnv != null && actualCount > 0) {
+            "خطأ في تطابق عدد أسئلة القسم الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
+        }
+        check(declaredCount <= 0 || actualCount == declaredCount) {
+            "خطأ في تطابق عدد أسئلة القسم الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
         }
         return actualCount
     }
+
     // Build 1.2.36: the First Aid family — without this branch
     // every firstaid file would fall into the subject check,
     // count 0 and never download (the exact 1.2.1 defect class).
@@ -89,8 +95,11 @@ object SectionBankCounts {
         val idx = moshi.adapter(FirstAidIndexDto::class.java).fromJson(jsonString)
         val declaredCount = idx?.count ?: 0
         val actualCount = idx?.units?.size ?: 0
-        if (idx == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد وحدات فهرس First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+        check(idx != null && actualCount > 0) {
+            "خطأ في تطابق عدد وحدات فهرس First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
+        }
+        check(declaredCount <= 0 || actualCount == declaredCount) {
+            "خطأ في تطابق عدد وحدات فهرس First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
         }
         return actualCount
     }
@@ -99,8 +108,11 @@ object SectionBankCounts {
         val integ = moshi.adapter(FirstAidIntegrationDto::class.java).fromJson(jsonString)
         val declaredCount = integ?.count ?: 0
         val actualCount = integ?.links?.size ?: 0
-        if (integ == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد روابط تكامل First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+        check(integ != null && actualCount > 0) {
+            "خطأ في تطابق عدد روابط تكامل First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
+        }
+        check(declaredCount <= 0 || actualCount == declaredCount) {
+            "خطأ في تطابق عدد روابط تكامل First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
         }
         return actualCount
     }
@@ -109,8 +121,11 @@ object SectionBankCounts {
         val banks = moshi.adapter(FirstAidBanksDto::class.java).fromJson(jsonString)
         val declaredCount = banks?.count ?: 0
         val actualCount = banks?.tests?.sumOf { it.questions?.size ?: 0 } ?: 0
-        if (banks == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد أسئلة بنوك First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+        check(banks != null && actualCount > 0) {
+            "خطأ في تطابق عدد أسئلة بنوك First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
+        }
+        check(declaredCount <= 0 || actualCount == declaredCount) {
+            "خطأ في تطابق عدد أسئلة بنوك First Aid الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
         }
         return actualCount
     }
@@ -118,8 +133,8 @@ object SectionBankCounts {
     private fun verifyFirstAidUnitCount(jsonString: String, moshi: Moshi): Int {
         val pkg = moshi.adapter(FirstAidUnitPackageDto::class.java).fromJson(jsonString)
         val actualCount = pkg?.quiz?.size ?: 0
-        if (pkg == null || actualCount == 0) {
-            throw IllegalStateException("حزمة وحدة First Aid بلا أسئلة تدريب — أعد التحميل.")
+        check(pkg != null && actualCount > 0) {
+            "حزمة وحدة First Aid بلا أسئلة تدريب — أعد التحميل."
         }
         return actualCount
     }

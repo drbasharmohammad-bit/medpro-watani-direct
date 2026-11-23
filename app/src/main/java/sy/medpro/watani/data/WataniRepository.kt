@@ -712,53 +712,70 @@ class WataniRepository(private val context: Context) {
         // M8: device-integrity gate at the restricted-download entry.
         // Blocked devices never reach the gateway (and never get a
         // partial file to keep).
-        if (WorkerActivationApi.isRestrictedPath(path)) {
+        val gateFailure = if (WorkerActivationApi.isRestrictedPath(path)) {
             val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
-            if (!gate.allowed) {
-                return Result.failure(Exception(gate.userMessage))
-            }
+            if (gate.allowed) null else Exception(gate.userMessage)
+        } else {
+            null
         }
-        val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
         // THE fetch-layer switch point (Team 1): restricted paths
         // (questions/, dawrat/, dawrat_jami3at/, uworld/,
         // explanations/, books/, library.json) are fetched via the
         // Worker gateway with the activation token; free paths keep
         // fetching directly from Pages, unchanged. Null = restricted
         // but no usable token -> activation prompt, never a direct fetch.
-        val baseRequest = WorkerActivationApi.contentRequest(context, path)
-            ?: return Result.failure(
+        val baseRequest = if (gateFailure == null) {
+            WorkerActivationApi.contentRequest(context, path)
+        } else {
+            null
+        }
+        return when {
+            gateFailure != null -> Result.failure(gateFailure)
+            baseRequest == null -> Result.failure(
                 Exception("هذا القسم يحتاج كود تفعيل — فعّل حسابك من نافذة التفعيل أولاً.")
             )
+            else -> executeSectionFetch(entry, tempFile, baseRequest, onProgress)
+        }
+    }
+
+    /** Executes the built section request into [tempFile]:
+     * Range resume, the 416 stale-range restart (detector fix b5:
+     * a temp longer than a shrunk origin file restarts from zero
+     * instead of looping on the same bad Range — the gateway now
+     * passes 416 through instead of masking it as 502), then the
+     * auth/status checks and the body copy. F-13: the response is
+     * closed on EVERY exit path (use{}), including the early
+     * 401/403 and HTTP-failure branches — an interrupted download
+     * on a weak network must not leak connections or leave the
+     * resume temp file unflushed. */
+    private fun executeSectionFetch(
+        entry: ManifestFileEntry,
+        tempFile: File,
+        baseRequest: okhttp3.Request,
+        onProgress: (Float) -> Unit
+    ): Result<Unit> {
+        val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
         val requestBuilder = baseRequest.newBuilder()
         if (existingBytes > 0) {
             requestBuilder.header("Range", "bytes=$existingBytes-")
         }
-
         var resp = client.newCall(requestBuilder.build()).execute()
         if (resp.code == 416) {
-            // Detector fix (b5): a stale Range (temp longer than a
-            // shrunk origin file) must restart from zero, not loop
-            // on the same bad Range forever (the gateway now passes
-            // 416 through instead of masking it as 502).
             if (tempFile.exists()) tempFile.delete()
             resp.close()
             resp = client.newCall(baseRequest).execute()
         }
-        // F-13: the response and both streams are closed on EVERY
-        // exit path from here on (use{}), including the early
-        // 401/403 and HTTP-failure returns below — an interrupted
-        // download on a weak network must not leak connections or
-        // leave the resume temp file unflushed.
-        resp.use {
-            if (resp.code == 401 || resp.code == 403) {
+        return resp.use {
+            when {
                 // M3: no generic HTTP message, no cached fallback —
                 // activation is lost (cleared + wiped + prompt event).
-                return Result.failure(gatewayAuthFailure(context))
+                resp.code == 401 || resp.code == 403 ->
+                    Result.failure(gatewayAuthFailure(context))
+                !resp.isSuccessful && resp.code != 206 -> Result.failure(
+                    Exception("فشل التحميل — تأكد من اتصال الإنترنت أو صحة الرابط.")
+                )
+                else -> copySectionBodyToTemp(resp, tempFile, existingBytes, entry, onProgress)
             }
-            if (!resp.isSuccessful && resp.code != 206) {
-                return Result.failure(Exception("فشل التحميل — تأكد من اتصال الإنترنت أو صحة الرابط."))
-            }
-            return copySectionBodyToTemp(resp, tempFile, existingBytes, entry, onProgress)
         }
     }
 

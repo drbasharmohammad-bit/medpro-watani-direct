@@ -560,9 +560,7 @@ fun StudyGuideScreen(onBack: () -> Unit) {
                 // observers below reload from disk when it lands.
                 isLoading = true
                 PackDownloadManager.startDownload(context, "guide.json")
-            } else {
-                reloadGuide()
-            }
+            } else reloadGuide()
         }
     }
 
@@ -571,14 +569,10 @@ fun StudyGuideScreen(onBack: () -> Unit) {
     // F6: the manager announces the pack's fate.
     val packState by PackDownloadManager.state.collectAsState()
     LaunchedEffect(packState.completedRuns["guide.json"]) {
-        if (guideEnvelope == null && (packState.completedRuns["guide.json"] ?: 0) > 0) {
-            reloadGuide()
-        }
+        if (guideEnvelope == null && (packState.completedRuns["guide.json"] ?: 0) > 0) reloadGuide()
     }
     LaunchedEffect(packState.failed, packState.downloading) {
-        if ("guide.json" in packState.failed && "guide.json" !in packState.downloading &&
-            guideEnvelope == null
-        ) {
+        if ("guide.json" in packState.failed && "guide.json" !in packState.downloading && guideEnvelope == null) {
             isLoading = false
         }
     }

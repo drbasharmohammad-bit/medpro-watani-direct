@@ -7,9 +7,12 @@ import com.squareup.moshi.Moshi
  * dispatch lives in [SectionVerification.verifySectionCount]).
  * Each function parses its family's REAL envelope shape and
  * compares the file's own declared count honestly — the exact
- * bodies that used to be branches of the verifier, moved to their
+ * checks that used to be branches of the verifier, moved to their
  * own object so no single object carries every family (and so a
  * new family lands here with its branch, or the guard test fails).
+ * Failures are raised with check()/error() — IllegalStateException
+ * with the same user-facing messages as always (the pattern the
+ * years branch established in 13083c1).
  */
 object SectionCountChecks {
 
@@ -17,19 +20,20 @@ object SectionCountChecks {
         val casesEnv = moshi.adapter(CasesEnvelope::class.java).fromJson(jsonString)
         val declaredCount = casesEnv?.count
         val actualCount = casesEnv?.cases?.size ?: 0
-        if (casesEnv == null || declaredCount == null || actualCount != declaredCount) {
-            throw IllegalStateException("خطأ في تطابق عدد الحالات الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+        check(casesEnv != null && declaredCount != null) {
+            "خطأ في تطابق عدد الحالات الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
+        }
+        check(actualCount == declaredCount) {
+            "خطأ في تطابق عدد الحالات الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
         }
         return actualCount
     }
 
     fun verifyGuideCount(jsonString: String, moshi: Moshi): Int {
         val guideEnv = moshi.adapter(GuideEnvelope::class.java).fromJson(jsonString)
-            ?: throw IllegalStateException("ملف الدليل غير صالح — أعد التحميل.")
+            ?: error("ملف الدليل غير صالح — أعد التحميل.")
         val actualCount = guideEnv.groups?.size ?: 0
-        if (actualCount == 0) {
-            throw IllegalStateException("ملف الدليل بلا مجموعات — أعد التحميل.")
-        }
+        check(actualCount > 0) { "ملف الدليل بلا مجموعات — أعد التحميل." }
         return actualCount
     }
 
@@ -37,8 +41,11 @@ object SectionCountChecks {
         val ddxEnv = moshi.adapter(DdxEnvelope::class.java).fromJson(jsonString)
         val declaredCount = ddxEnv?.count ?: 0
         val actualCount = ddxEnv?.cases?.size ?: 0
-        if (ddxEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد حالات التشخيص التفريقي الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+        check(ddxEnv != null) {
+            "خطأ في تطابق عدد حالات التشخيص التفريقي الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
+        }
+        check(declaredCount <= 0 || actualCount == declaredCount) {
+            "خطأ في تطابق عدد حالات التشخيص التفريقي الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
         }
         return actualCount
     }
@@ -53,8 +60,11 @@ object SectionCountChecks {
         val auscEnv = moshi.adapter(AuscultationEnvelope::class.java).fromJson(jsonString)
         val declaredCount = auscEnv?.count ?: 0
         val actualCount = auscEnv?.clips?.size ?: 0
-        if (auscEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد مقاطع الإصغاء الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+        check(auscEnv != null && actualCount > 0) {
+            "خطأ في تطابق عدد مقاطع الإصغاء الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
+        }
+        check(declaredCount <= 0 || actualCount == declaredCount) {
+            "خطأ في تطابق عدد مقاطع الإصغاء الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
         }
         return actualCount
     }
@@ -65,8 +75,11 @@ object SectionCountChecks {
         val osceEnv = moshi.adapter(OsceEnvelope::class.java).fromJson(jsonString)
         val declaredCount = osceEnv?.count ?: 0
         val actualCount = osceEnv?.stations?.size ?: 0
-        if (osceEnv == null || actualCount == 0 || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد محطات الأوسكي الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+        check(osceEnv != null && actualCount > 0) {
+            "خطأ في تطابق عدد محطات الأوسكي الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
+        }
+        check(declaredCount <= 0 || actualCount == declaredCount) {
+            "خطأ في تطابق عدد محطات الأوسكي الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
         }
         return actualCount
     }
@@ -81,11 +94,11 @@ object SectionCountChecks {
         // returned count is the number of strips, or patterns
         // when the pack ships patterns ahead of strips.
         val ecgEnv = moshi.adapter(EcgEnvelope::class.java).fromJson(jsonString)
-            ?: throw IllegalStateException("ملف كورس تخطيط القلب غير صالح — أعد التحميل.")
+            ?: error("ملف كورس تخطيط القلب غير صالح — أعد التحميل.")
         val patternCount = ecgEnv.patterns?.size ?: 0
         val stripCount = ecgEnv.strips?.size ?: 0
-        if (patternCount == 0 && stripCount == 0) {
-            throw IllegalStateException("ملف كورس تخطيط القلب بلا أنماط أو شرائط — أعد التحميل.")
+        check(patternCount > 0 || stripCount > 0) {
+            "ملف كورس تخطيط القلب بلا أنماط أو شرائط — أعد التحميل."
         }
         return if (stripCount > 0) stripCount else patternCount
     }
@@ -102,8 +115,8 @@ object SectionCountChecks {
         )
         val procedures = moshi.adapter<List<ProcedureDto>>(listType).fromJson(jsonString)
         val actualCount = procedures?.size ?: 0
-        if (procedures == null || actualCount == 0) {
-            throw IllegalStateException("ملف إجراءات الأوسكي بلا إجراءات — أعد التحميل.")
+        check(procedures != null && actualCount > 0) {
+            "ملف إجراءات الأوسكي بلا إجراءات — أعد التحميل."
         }
         return actualCount
     }
@@ -117,8 +130,8 @@ object SectionCountChecks {
         )
         val drills = moshi.adapter<List<DosingDrillDto>>(listType).fromJson(jsonString)
         val actualCount = drills?.size ?: 0
-        if (drills == null || actualCount == 0) {
-            throw IllegalStateException("ملف تدريبات الجرعات بلا تدريبات — أعد التحميل.")
+        check(drills != null && actualCount > 0) {
+            "ملف تدريبات الجرعات بلا تدريبات — أعد التحميل."
         }
         return actualCount
     }
@@ -133,8 +146,8 @@ object SectionCountChecks {
         // of units (the manifest entry's count is built from it).
         val conceptsEnv = moshi.adapter(ConceptsEnvelope::class.java).fromJson(jsonString)
         val actualCount = conceptsEnv?.units?.size ?: 0
-        if (conceptsEnv == null || actualCount == 0) {
-            throw IllegalStateException("ملف مفاهيم «ادرس مع ميد برو» بلا وحدات — أعد التحميل.")
+        check(conceptsEnv != null && actualCount > 0) {
+            "ملف مفاهيم «ادرس مع ميد برو» بلا وحدات — أعد التحميل."
         }
         return actualCount
     }
@@ -143,8 +156,11 @@ object SectionCountChecks {
         val revEnv = moshi.adapter(ReverseEnvelope::class.java).fromJson(jsonString)
         val declaredCount = revEnv?.count ?: 0
         val actualCount = revEnv?.rounds?.size ?: 0
-        if (revEnv == null || (declaredCount > 0 && actualCount != declaredCount)) {
-            throw IllegalStateException("خطأ في تطابق عدد جولات اقلبها الداخلي (المتوقع $declaredCount والفعلي $actualCount)")
+        check(revEnv != null) {
+            "خطأ في تطابق عدد جولات اقلبها الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
+        }
+        check(declaredCount <= 0 || actualCount == declaredCount) {
+            "خطأ في تطابق عدد جولات اقلبها الداخلي (المتوقع $declaredCount والفعلي $actualCount)"
         }
         return actualCount
     }
