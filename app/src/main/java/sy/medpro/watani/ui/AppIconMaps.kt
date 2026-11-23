@@ -59,7 +59,6 @@ object DrawerIcons {
         "نقاط الضعف" to R.drawable.ic_drawer_weaknesses,
         "مؤقت التركيز" to R.drawable.ic_drawer_focus_timer,
         "الإنجازات والأوسمة" to R.drawable.ic_drawer_achievements,
-        "البحث الشامل" to R.drawable.ic_drawer_search,
         "المفضلة" to R.drawable.ic_drawer_favorites,
         "ملاحظاتي" to R.drawable.ic_drawer_my_notes,
         "سجلّ حالاتي" to R.drawable.ic_drawer_case_log,

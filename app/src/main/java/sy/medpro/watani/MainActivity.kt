@@ -766,7 +766,6 @@ class MainActivity : ComponentActivity() {
                                                 "المختبرات وغازات الدم"
                                             ),
                                             "الأدوات" to listOf(
-                                                "البحث الشامل",
                                                 "الإشعارات والتذكير",
                                                 "إعدادات الويدجت",
                                                 "الوضع الليلي"
@@ -811,7 +810,6 @@ class MainActivity : ComponentActivity() {
                                                     "نقاط الضعف" -> Icons.Default.Assessment
                                                     "مؤقت التركيز" -> Icons.Default.Timer
                                                     "الإنجازات والأوسمة" -> Icons.Default.WorkspacePremium
-                                                    "البحث الشامل" -> Icons.Default.Search
                                                     "المفضلة" -> Icons.Default.Favorite
                                                     "ملاحظاتي" -> Icons.Default.NoteAlt
                                                     "سجلّ حالاتي" -> Icons.Default.Assignment
@@ -1228,7 +1226,6 @@ class MainActivity : ComponentActivity() {
                                                 "نقاط الضعف" -> WeakPointsScreen(onBack = { drawerScreen = null })
                                                 "مؤقت التركيز" -> FocusTimerScreen(onBack = { drawerScreen = null })
                                                 "الإنجازات والأوسمة" -> BadgesScreen(onBack = { drawerScreen = null })
-                                                "البحث الشامل" -> GlobalSearchScreen(onBack = { drawerScreen = null })
                                                 "المفضلة" -> FavoritesScreen(onBack = { drawerScreen = null })
                                                 "ملاحظاتي" -> MyNotesScreen(onBack = { drawerScreen = null })
                                                 "سجلّ حالاتي" -> LogbookScreen(onBack = { drawerScreen = null })
@@ -1339,7 +1336,6 @@ class MainActivity : ComponentActivity() {
                                                         AppTab.HOME -> {
                                                             HomeDashboardScreen(
                                                                 manifestVersion = uiState.manifestVersion,
-                                                                onOpenSearch = { drawerScreen = "البحث الشامل" },
                                                                 onOpenSupport = { drawerScreen = "الدعم النفسي" },
                                                                 onOpenFocusTimer = { drawerScreen = "مؤقت التركيز" },
                                                                 onOpenReviewDue = { openRestrictedDrawer("المراجعة الذكية Anki") },

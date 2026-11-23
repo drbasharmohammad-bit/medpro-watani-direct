@@ -41,7 +41,6 @@ import sy.medpro.watani.ui.library.LibAppLogo
 import sy.medpro.watani.ui.library.LibCard
 import sy.medpro.watani.ui.library.LibColors
 import sy.medpro.watani.ui.library.LibGoldBar
-import sy.medpro.watani.ui.library.LibIconButton
 import sy.medpro.watani.ui.library.libBackground
 import sy.medpro.watani.ui.library.libHeading
 import sy.medpro.watani.ui.library.libMuted
@@ -52,8 +51,7 @@ fun HomeDashboardScreen(
     manifestVersion: String?,
     onOpenSupport: () -> Unit = {},
     onOpenFocusTimer: () -> Unit = {},
-    onOpenReviewDue: () -> Unit = {},
-    onOpenSearch: () -> Unit = {}
+    onOpenReviewDue: () -> Unit = {}
 ) {
     val context = LocalContext.current
     // بطاقة الدعم: تقديم فهرس الرسالة اليومية بذاكرة الجلسة (يُصفَّر مع
@@ -88,7 +86,8 @@ fun HomeDashboardScreen(
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
         // Slim header of the approved home model (01): logo +
-        // «وطني» + slogan + search button.
+        // «وطني» + slogan. (The header search button was removed
+        // with the global-search feature, 1.2.45.)
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LibAppLogo()
@@ -107,11 +106,6 @@ fun HomeDashboardScreen(
                         color = libMuted()
                     )
                 }
-                LibIconButton(
-                    icon = Icons.Default.Search,
-                    contentDescription = "البحث الشامل",
-                    onClick = onOpenSearch
-                )
             }
         }
 

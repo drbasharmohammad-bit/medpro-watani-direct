@@ -34,8 +34,9 @@ import sy.medpro.watani.ui.library.libBackground
 
 /**
  * Tools hub — grid redesign (Nov 2026, doctor's approved mockup):
- * fixed global-search bar on top, then a two-per-row grid of large
- * tiles grouped under three headers. Every tile is a shortcut to an
+ * a two-per-row grid of large tiles grouped under three headers
+ * (the fixed global-search bar that sat on top was removed with the
+ * «البحث الشامل» feature, 1.2.45, doctor's order). Every tile is a shortcut to an
  * existing screen — no content is duplicated here. Tool titles route
  * through MainActivity drawer-screen titles, so tapping a tile behaves
  * exactly like the matching route (including the activation gate for
@@ -127,28 +128,6 @@ private val TOOL_GROUPS = listOf(
 @Composable
 fun ToolsScreen(onToolClick: (String) -> Unit) {
     Column(modifier = Modifier.fillMaxSize().background(libBackground())) {
-        // Fixed global-search bar (the old «البحث الشامل» tile is gone).
-        LibCard(
-            onClick = { onToolClick("البحث الشامل") },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Icon(
-                    Icons.Default.Search, contentDescription = null,
-                    tint = LibColors.Maroon, modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    "البحث الشامل — ابحث بكل محتوى التطبيق",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)

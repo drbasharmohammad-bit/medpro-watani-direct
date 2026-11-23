@@ -41,7 +41,6 @@ import sy.medpro.watani.ui.simulator.ExamSimulatorScreen
 import sy.medpro.watani.ui.theme.GoldAccent
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.WidthBreakpoints
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -793,76 +792,6 @@ fun BadgesScreen(onBack: () -> Unit) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = if (unlocked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
                             Text(desc, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// 14. Global Search (over downloaded section files)
-@Composable
-fun GlobalSearchScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
-    var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<String>>(emptyList()) }
-
-    LaunchedEffect(query) {
-        if (query.isBlank()) {
-            results = emptyList()
-            return@LaunchedEffect
-        }
-        // Unactivated users may only search FREE files: this screen reads
-        // full file text, so searching restricted bank files without an
-        // activation would be a presence oracle over restricted content.
-        val activated = sy.medpro.watani.data.WorkerActivationApi.isActivated(context)
-        val dir = File(context.filesDir, "sections_cache")
-        val list = mutableListOf<String>()
-        if (dir.exists() && dir.isDirectory) {
-            dir.listFiles()?.forEach { file ->
-                if (!activated && sy.medpro.watani.data.RestrictedInventory.isRestrictedSectionFile(file.name)) return@forEach
-                if (file.name.endsWith(".json") && !file.name.contains("guide")) {
-                    try {
-                        val text = sy.medpro.watani.data.SectionCacheCrypto.readText(context, file) ?: throw IllegalStateException("section cache unreadable")
-                        if (text.contains(query, ignoreCase = true)) {
-                            list.add("مطابقة في ملف: ${file.nameWithoutExtension}")
-                        }
-                    } catch (_: Exception) {}
-                }
-            }
-        }
-        results = list
-    }
-
-    DrawerScreenScaffold(title = "البحث الشامل في المحتوى المحمل", onBack = onBack) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text("ابحث عن مصطلح في الملفات المحملة...") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            if (query.isBlank()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("أدخل كلمة للبحث في الأقسام المحملة.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-                }
-            } else if (results.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("لا توجد نتائج مطابقة في الملفات المحلية المحملة.")
-                }
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(results) { item ->
-                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Search, contentDescription = null, tint = MaroonPrimary)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(item, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                            }
                         }
                     }
                 }
