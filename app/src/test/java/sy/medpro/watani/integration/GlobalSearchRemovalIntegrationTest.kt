@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -92,11 +91,11 @@ class GlobalSearchRemovalIntegrationTest {
             }
         }
         composeRule.waitForIdle()
-        // useUnmergedNode: LibCard merges its children's semantics,
-        // so the clickable card with its title lives in the unmerged tree.
+        // LibCard merges its children's semantics, so in the merged
+        // tree the clickable card node itself carries the tile title
+        // as one of its text values.
         composeRule.onNode(
-            hasClickAction() and hasAnyDescendant(hasText("مدرّب التشخيص التفريقي")),
-            useUnmergedNode = true
+            hasClickAction() and hasText("مدرّب التشخيص التفريقي")
         ).performClick()
         composeRule.waitForIdle()
         assertEquals(listOf("مدرّب التشخيص التفريقي"), routed)
