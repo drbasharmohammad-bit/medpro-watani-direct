@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -65,7 +66,6 @@ import sy.medpro.watani.ui.theme.GoldAccent
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -139,6 +139,11 @@ data class ReaderRecentDto(
  * than this many bitmaps alive; eviction always recycles. */
 private const val READER_MAX_CACHED_BITMAPS = 4
 
+/** Settle delay before a zoom level earns its hi-res re-render
+ * (1.2.46): pinch movements stream zoom values continuously, and
+ * only the level the student actually stops at is rendered. */
+private const val READER_HIRES_DEBOUNCE_MS = 250L
+
 private fun getFirebaseUid(): String {
     return try {
         com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
@@ -209,6 +214,13 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     // landscape/fullscreen as before. The dispose effect below
     // reports false on the way out.
     LaunchedEffect(Unit) {
+        // True fullscreen for the reader's whole lifetime (1.2.46):
+        // the SYSTEM bars hide too (transient reveal by edge
+        // swipe), so the page inherits the physical screen end to
+        // end — the manual fullscreen toggle used to be the only
+        // way to win those strips back, and the dispose effect
+        // below restores the bars on the way out.
+        setSystemBarsVisible(false)
         onFullscreenChange?.invoke(true)
     }
     val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
@@ -579,19 +591,37 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // is closed in a finally block (1.2.37 hardening).
             val renderLock = remember { Any() }
 
-            /** Renders one page at [scaleFactor] x its point size on
-             * the Default dispatcher; null on any failure. The caller
-             * owns the returned bitmap (cache it or recycle it). */
-            suspend fun renderPageBitmap(page: Int, scaleFactor: Float): Bitmap? {
+            /** Renders one page on the Default dispatcher; null on
+             * any failure. The caller owns the returned bitmap
+             * (cache it or recycle it). With [targetWidthPx] > 0 the
+             * render scale is derived from it via [ReaderRenderMath]
+             * (display-matched resolution, 1.2.46) under the
+             * [maxPixels] budget; otherwise the page renders at
+             * [scaleFactor] x its point size (the legacy path). */
+            suspend fun renderPageBitmap(
+                page: Int,
+                scaleFactor: Float,
+                targetWidthPx: Int = 0,
+                maxPixels: Int = 0
+            ): Bitmap? {
                 val renderer = pdfRenderer ?: return null
                 return withContext(Dispatchers.Default) {
                     synchronized(renderLock) {
                         try {
                             val pg = renderer.openPage(page)
                             try {
+                                val pixelBudget =
+                                    if (maxPixels > 0) maxPixels else ReaderRenderMath.BASE_MAX_PIXELS
+                                val renderScale = if (targetWidthPx > 0) {
+                                    ReaderRenderMath.scaleForTargetWidth(
+                                        pg.width, pg.height, targetWidthPx, pixelBudget
+                                    )
+                                } else {
+                                    scaleFactor
+                                }
                                 val bmp = Bitmap.createBitmap(
-                                    (pg.width * scaleFactor).toInt().coerceAtLeast(1),
-                                    (pg.height * scaleFactor).toInt().coerceAtLeast(1),
+                                    (pg.width * renderScale).toInt().coerceAtLeast(1),
+                                    (pg.height * renderScale).toInt().coerceAtLeast(1),
                                     Bitmap.Config.ARGB_8888
                                 )
                                 // Fill white first: some PDFs leave the page
@@ -733,64 +763,80 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 exitTextHighlightMode()
             }
 
-            // Keep only the current page ±1 rendered; recycle evicted bitmaps.
-            LaunchedEffect(currentPage) {
-                val keep = (currentPage - 1..currentPage + 1).toSet()
-                bitmapCache.keys.filter { it !in keep }.forEach { key ->
-                    bitmapCache.remove(key)?.recycle()
-                }
-                // Explicit memory ceiling (READER_MAX_CACHED_BITMAPS):
-                // ±1 is 3 by construction, so this guard only fires
-                // if a future change widens the window — evict the
-                // pages farthest from the current one, recycling each.
-                while (bitmapCache.size > READER_MAX_CACHED_BITMAPS) {
-                    val farthest = bitmapCache.keys.maxByOrNull { abs(it - currentPage) } ?: break
-                    bitmapCache.remove(farthest)?.recycle()
+            // Eviction runs ONLY once the pager has settled
+            // (1.2.46): the old per-page-turn eviction recycled
+            // bitmaps the pager was still animating away from — the
+            // outgoing page lost its image mid-swipe and flashed a
+            // spinner, and a fast fling back re-rendered from
+            // scratch. The keep window is the settled page ±1 plus
+            // the pager's own target page, and the explicit memory
+            // ceiling (READER_MAX_CACHED_BITMAPS) still applies:
+            // evict the pages farthest from the settled one,
+            // recycling each.
+            LaunchedEffect(pagerState, totalPages) {
+                snapshotFlow { pagerState.isScrollInProgress }.collect { scrolling ->
+                    if (!scrolling) {
+                        val settled = pagerState.currentPage
+                        val keep = (settled - 1..settled + 1).toSet() + pagerState.targetPage
+                        bitmapCache.keys.filter { it !in keep }.forEach { key ->
+                            bitmapCache.remove(key)?.recycle()
+                        }
+                        while (bitmapCache.size > READER_MAX_CACHED_BITMAPS) {
+                            val farthest = bitmapCache.keys.maxByOrNull { abs(it - settled) } ?: break
+                            bitmapCache.remove(farthest)?.recycle()
+                        }
+                    }
                 }
             }
 
-            // Zoom-resolution rendering (1.2.37): the settled zoom
-            // (debounced ~250ms) drives ONE re-render of the CURRENT
-            // page at base x min(zoom, 2.0); neighbours stay at base
-            // resolution. Settling back to 1x restores the base render.
-            var settledRenderScale by remember { mutableStateOf(2f) }
+            // Zoom-resolution rendering (1.2.46): the settled zoom
+            // (debounced) drives ONE re-render of the CURRENT page
+            // whose target width follows the zoom itself (box width
+            // x zoom x oversample, pixel-capped via ReaderRenderMath)
+            // — the 1.2.37 cap of base x min(zoom, 2.0) left 3-4x
+            // zooms permanently below display resolution. The
+            // sharper bitmap simply replaces the page's cache slot
+            // and STAYS there: settling back to 1x no longer
+            // re-renders the base (that round trip was pure churn —
+            // a full render on every zoom settle), and the eviction
+            // above recycles the slot on page change as before.
             var hiResPage by remember { mutableStateOf(-1) }
-            var hiResScale by remember { mutableStateOf(2f) }
-            LaunchedEffect(zoom) {
-                kotlinx.coroutines.delay(250)
-                settledRenderScale = 2f * min(zoom, 2f).coerceAtLeast(1f)
+            var hiResAppliedTarget by remember { mutableStateOf(0) }
+            var hiResTargetWidth by remember { mutableStateOf(0) }
+            LaunchedEffect(zoom, boxSize) {
+                kotlinx.coroutines.delay(READER_HIRES_DEBOUNCE_MS)
+                hiResTargetWidth = ReaderRenderMath.hiResTargetWidthPx(boxSize.width, zoom)
             }
-            LaunchedEffect(currentPage, settledRenderScale) {
-                val renderer = pdfRenderer ?: return@LaunchedEffect
-                if (settledRenderScale > 2.01f) {
-                    if (hiResPage != currentPage || hiResScale != settledRenderScale) {
-                        val bmp = renderPageBitmap(currentPage, settledRenderScale)
-                        if (bmp != null) {
-                            val old = bitmapCache[currentPage]
-                            bitmapCache[currentPage] = bmp
-                            if (old != null && old !== bmp) old.recycle()
-                            hiResPage = currentPage
-                            hiResScale = settledRenderScale
-                        }
-                    }
-                } else if (hiResPage == currentPage) {
-                    // Back at 1x: swap the hi-res bitmap for the base one.
-                    val bmp = renderPageBitmap(currentPage, 2f)
+            LaunchedEffect(currentPage, hiResTargetWidth) {
+                val target = hiResTargetWidth
+                // The live zoom is re-checked at execution time: a
+                // page turn resets it to 1x, and a stale target from
+                // the previous page must not fire a zoom render for
+                // the new one.
+                val wanted = target > 0 && zoom > ReaderRenderMath.HIRES_MIN_ZOOM
+                if (wanted && (hiResPage != currentPage || hiResAppliedTarget != target)) {
+                    val bmp = renderPageBitmap(
+                        currentPage,
+                        ReaderRenderMath.FALLBACK_SCALE,
+                        targetWidthPx = target,
+                        maxPixels = ReaderRenderMath.HIRES_MAX_PIXELS
+                    )
                     if (bmp != null) {
                         val old = bitmapCache[currentPage]
                         bitmapCache[currentPage] = bmp
                         if (old != null && old !== bmp) old.recycle()
+                        hiResPage = currentPage
+                        hiResAppliedTarget = target
                     }
-                    hiResPage = -1
-                    hiResScale = 2f
                 }
             }
-            // A page turn invalidates the hi-res marker: the eviction
-            // above already recycled that bitmap, and a stale marker
-            // would wrongly skip a later hi-res render of this page.
+            // A page turn invalidates the hi-res markers: the
+            // eviction above already recycled that bitmap, and a
+            // stale marker would wrongly skip a later hi-res render
+            // of this page.
             LaunchedEffect(currentPage) {
                 hiResPage = -1
-                hiResScale = 2f
+                hiResAppliedTarget = 0
             }
 
             DisposableEffect(Unit) {
@@ -811,6 +857,12 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
 
             HorizontalPager(
                 state = pagerState,
+                // Neighbours are composed (and so start rendering)
+                // BEFORE they slide in (1.2.46): with the default 0
+                // the incoming page only began its render once the
+                // swipe was already under way, and the render's
+                // duration showed up as a spinner mid-flip.
+                beyondViewportPageCount = 1,
                 // While zoomed, horizontal drags pan the page instead of
                 // flipping it; in text-highlight mode they select
                 // instead of flipping; at 1x they always flip.
@@ -820,15 +872,27 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 val bitmap = bitmapCache[page]
                 LaunchedEffect(page, pdfRenderer) {
                     if (bitmapCache[page] == null && pdfRenderer != null) {
-                        // Base resolution (x2) through the shared
-                        // serialized renderer; zoom re-renders of the
-                        // current page swap this entry at higher scale.
-                        renderPageBitmap(page, 2f)?.let { bitmapCache[page] = it }
+                        // Display-matched base resolution (1.2.46):
+                        // the target follows the pager's real pixel
+                        // width (ReaderRenderMath), not a fixed x2 of
+                        // the point size; zoom re-renders of the
+                        // current page swap this entry at a
+                        // zoom-matched target.
+                        renderPageBitmap(
+                            page,
+                            ReaderRenderMath.FALLBACK_SCALE,
+                            targetWidthPx = ReaderRenderMath.baseTargetWidthPx(boxSize.width),
+                            maxPixels = ReaderRenderMath.BASE_MAX_PIXELS
+                        )?.let { bitmapCache[page] = it }
                     }
                 }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     if (bitmap != null) {
                         val isCurrent = page == currentPage
+                        // The ImageBitmap wrapper is remembered per
+                        // bitmap (1.2.46): the old code rebuilt it on
+                        // every recomposition of the page.
+                        val pageImageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
                         // Pan is clamped so the page cannot be dragged
                         // off-screen: max pan is half the overflow on
                         // each axis.
@@ -864,12 +928,27 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                         else -> Color.White
                                     }
                                 )
-                                .graphicsLayer(
-                                    scaleX = if (isCurrent) zoom else 1f,
-                                    scaleY = if (isCurrent) zoom else 1f,
-                                    translationX = if (isCurrent) pan.x else 0f,
-                                    translationY = if (isCurrent) pan.y else 0f
-                                )
+                                .graphicsLayer {
+                                    // Zoom/pan are read HERE, in the
+                                    // draw phase (1.2.46): the old
+                                    // parameter form read them during
+                                    // composition, so every pinch/pan
+                                    // pointer event recomposed the
+                                    // whole page (image + markings
+                                    // canvas + fit math) on the main
+                                    // thread and movement stuttered.
+                                    // Read in the layer block, a state
+                                    // change only re-records this
+                                    // layer — no recomposition — and
+                                    // the markings Canvas inside
+                                    // inherits the same transform.
+                                    if (isCurrent) {
+                                        scaleX = zoom
+                                        scaleY = zoom
+                                        translationX = pan.x
+                                        translationY = pan.y
+                                    }
+                                }
                                 .pointerInput(Unit) {
                                     detectTapGestures(
                                         onTap = { tapOff ->
@@ -1036,9 +1115,14 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 )
                         ) {
                             Image(
-                                bitmap = bitmap.asImageBitmap(),
+                                bitmap = pageImageBitmap,
                                 contentDescription = null,
                                 contentScale = ContentScale.Fit,
+                                // High-quality resampling (1.2.46):
+                                // the default FilterQuality.Low hazed
+                                // every fit of the page bitmap (down
+                                // to phone widths, up on tablets).
+                                filterQuality = FilterQuality.High,
                                 // Display-mode filters apply ONLY to
                                 // the page image (inversion at night,
                                 // sepia when warm); markings drawn over
