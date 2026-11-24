@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.*
 import sy.medpro.watani.ui.SlimSubBar
+import sy.medpro.watani.ui.SlimBarTitle
 import sy.medpro.watani.ui.theme.MaroonPrimary
 
 // Local progress for «اقلبها»: best score per round + intruder streak.
@@ -181,10 +182,7 @@ fun ReverseTrainerScreen(onBack: () -> Unit) {
         topBar = {
             // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
             SlimSubBar(onBack = { if (currentRound != null) currentRound = null else onBack() }) {
-                Text(
-                    currentRound?.let { patternLabel(it.pattern) } ?: "اقلبها — التدرّب العكسي",
-                    fontWeight = FontWeight.Bold, fontSize = 17.sp
-                )
+                SlimBarTitle(currentRound?.let { patternLabel(it.pattern) } ?: "اقلبها — التدرّب العكسي")
             }
         }
     ) { padding ->

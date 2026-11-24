@@ -29,6 +29,7 @@ import sy.medpro.watani.data.ManifestFileEntry
 import sy.medpro.watani.data.isSectionUpToDate
 import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.ui.SlimSubBar
+import sy.medpro.watani.ui.SlimBarTitle
 import sy.medpro.watani.ui.cases.CasesScreen
 import androidx.compose.ui.draw.clip
 import sy.medpro.watani.ui.library.LibCard
@@ -50,7 +51,7 @@ val universitiesMap = mapOf(
 )
 
 enum class BankSection(val title: String) {
-    WATANI("بنك الوطني"),
+    WATANI("البنك"),
     UNIVERSITIES("الجامعات"),
     UWORLD("UWorld"),
     CASES("الحالات السريرية")
@@ -537,13 +538,13 @@ fun TopicSelectionScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        when {
+                    SlimBarTitle(
+                        text = when {
                             showYears && yearSummaries.isNotEmpty() -> "سنوات: $subjectName"
                             showYears -> "جلسات: $subjectName"
                             else -> "مواضيع: $subjectName"
                         },
-                        fontWeight = FontWeight.Bold, fontSize = 17.sp
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -808,7 +809,7 @@ fun UniversitySubjectsScreen(
         topBar = {
             // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
             SlimSubBar(onBack = onBack, containerColor = MaterialTheme.colorScheme.primary) {
-                Text(universityName, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                SlimBarTitle(universityName)
             }
         }
     ) { padding ->

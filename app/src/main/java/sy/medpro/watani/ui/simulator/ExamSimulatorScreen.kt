@@ -29,6 +29,7 @@ import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.SubjectEnvelope
 import sy.medpro.watani.data.getCorrectIndices
 import sy.medpro.watani.ui.SlimSubBar
+import sy.medpro.watani.ui.SlimBarTitle
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.explanation.ExplanationSection
 import sy.medpro.watani.ui.explanation.GatedExplanationSection
@@ -207,15 +208,17 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                 }
             ) {
                 Column {
-                    Text("محاكاة الامتحان الوطني الموحد", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                    SlimBarTitle("محاكاة الامتحان الوطني الموحد", maxFontSize = 15.sp, minFontSize = 11.sp)
                     if (mode == "RUNNING") {
                         val mm = remainingSeconds / 60
                         val ss = remainingSeconds % 60
                         Text(
                             text = String.format("الزمن المتبقي: %02d:%02d • سؤال %d من %d", mm, ss, currentIndex + 1, activeQuestions.size),
                             fontSize = 10.sp,
+                            lineHeight = 13.sp,
                             color = GoldAccent,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -539,7 +542,7 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                 modifier = Modifier.padding(20.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text("تقرير نتيجة المحاكاة الوطنية", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text("تقرير نتيجة المحاكاة", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text("$percent%", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 38.sp)
                                 Text(

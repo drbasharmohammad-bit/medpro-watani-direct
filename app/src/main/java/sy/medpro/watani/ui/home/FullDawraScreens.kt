@@ -28,6 +28,7 @@ import sy.medpro.watani.data.mergeDawraInfos
 import sy.medpro.watani.data.officialSubjectRank
 import sy.medpro.watani.data.resolveDawraInputs
 import sy.medpro.watani.ui.SlimSubBar
+import sy.medpro.watani.ui.SlimBarTitle
 import sy.medpro.watani.ui.library.LibCard
 import sy.medpro.watani.ui.library.LibColors
 import sy.medpro.watani.ui.library.libBackground
@@ -44,9 +45,15 @@ import sy.medpro.watani.ui.theme.NotoKufiFontFamily
  * the existing quiz engine — like the real exam.
  */
 
-/** Featured entry card at the top of the وطني subject list —
+/** Featured entry card at the top of the subject list —
  * white LibCard of the approved section model (02): ivory letter
- * tile, title, description, short gold underline. */
+ * tile, title, description, short gold underline.
+ *
+ * 1.2.49: while «دورة كاملة» is hard-locked (FullDawraLock) the
+ * card stays in its place but wears the lock on its face — a gold
+ * lock badge («مقفلة حاليًا») under the title and a lock instead
+ * of the chevron — and the tap only raises the lock message (the
+ * view model refuses the navigation). */
 @Composable
 fun FullDawraEntryCard(onClick: () -> Unit) {
     LibCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
@@ -91,13 +98,47 @@ fun FullDawraEntryCard(onClick: () -> Unit) {
                         .clip(RoundedCornerShape(99.dp))
                         .background(LibColors.Gold)
                 )
+                if (sy.medpro.watani.data.FullDawraLock.isLocked()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(99.dp))
+                            .background(libGoldTint())
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = LibColors.Gold,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            sy.medpro.watani.data.FullDawraLock.LOCK_BADGE,
+                            fontFamily = NotoKufiFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.5.sp,
+                            color = LibColors.Maroon
+                        )
+                    }
+                }
             }
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = null,
-                tint = LibColors.Chevron,
-                modifier = Modifier.size(20.dp)
-            )
+            if (sy.medpro.watani.data.FullDawraLock.isLocked()) {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = LibColors.Gold,
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = null,
+                    tint = LibColors.Chevron,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
@@ -122,7 +163,7 @@ fun FullDawraListScreen(
     Scaffold(
         topBar = {
             SlimSubBar(onBack = onBack, containerColor = MaterialTheme.colorScheme.primary) {
-                Text("دورة كاملة", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                SlimBarTitle("دورة كاملة")
             }
         }
     ) { padding ->
@@ -143,7 +184,7 @@ fun FullDawraListScreen(
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             if (inputs.isEmpty()) {
-                                "لا توجد مواد منزّلة بعد — حمّل مواد بنك الوطني أولًا لتظهر دوراتها الكاملة هنا."
+                                "لا توجد مواد منزّلة بعد — حمّل مواد البنك أولًا لتظهر دوراتها الكاملة هنا."
                             } else {
                                 "المواد المنزّلة عندك لا تحوي دورات مسمّاة بعد."
                             },
@@ -180,7 +221,7 @@ fun FullDawraListScreen(
                                     Spacer(modifier = Modifier.width(14.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            "بنك الوطني",
+                                            "البنك",
                                             fontFamily = NotoKufiFontFamily,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 21.sp,
@@ -337,7 +378,7 @@ fun FullDawraDetailScreen(
     Scaffold(
         topBar = {
             SlimSubBar(onBack = onBack, containerColor = MaterialTheme.colorScheme.primary) {
-                Text("دورة $dawraName", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                SlimBarTitle("دورة $dawraName")
             }
         }
     ) { padding ->

@@ -246,6 +246,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun downloadSection(path: String, entry: ManifestFileEntry) {
+        // 1.2.49 HARD LOCK: the standalone dawra files
+        // (dawrat_sessions/) belong to the locked «دورة كاملة»
+        // feature — while it is locked they are not downloadable
+        // through any surface.
+        if (FullDawraLock.isLocked() && path.startsWith(DAWRA_SESSIONS_PREFIX)) {
+            _uiState.update { it.copy(downloadError = FullDawraLock.LOCK_MESSAGE) }
+            return
+        }
         // Unified pair download (doctor's spec 23 Nov 2026,
         // all-or-nothing): a university subject whose years twin
         // exists in the manifest downloads BOTH files as ONE
@@ -616,11 +624,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openFullDawraList() {
+        // 1.2.49 HARD LOCK: «دورة كاملة» is closed for everyone
+        // (FullDawraLock) — the entry tap shows the lock message
+        // only and never navigates, whatever the activation state.
+        if (FullDawraLock.isLocked()) {
+            _uiState.update { it.copy(gateMessage = FullDawraLock.LOCK_MESSAGE) }
+            return
+        }
         navigateTo(ScreenState.FullDawraList)
         loadFullDawraData()
     }
 
     fun openFullDawraDetail(dawraName: String) {
+        // 1.2.49 HARD LOCK: see openFullDawraList — no route into
+        // the detail screen exists while the feature is locked.
+        if (FullDawraLock.isLocked()) {
+            _uiState.update { it.copy(gateMessage = FullDawraLock.LOCK_MESSAGE) }
+            return
+        }
         navigateTo(ScreenState.FullDawraDetail(dawraName))
         loadFullDawraData()
     }
@@ -770,6 +791,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * path — the whole bank shares the one restriction class.
      */
     fun openFullDawra(dawraName: String) {
+        // 1.2.49 HARD LOCK: checked synchronously, BEFORE the
+        // activation gates below — a dawra never starts while the
+        // feature is locked, not even from a restored screen state
+        // or a file already sitting in a student's cache.
+        if (FullDawraLock.isLocked()) {
+            _uiState.update { it.copy(gateMessage = FullDawraLock.LOCK_MESSAGE) }
+            return
+        }
         viewModelScope.launch {
             val context = getApplication<Application>().applicationContext
             val representativePath = downloadedSections.value

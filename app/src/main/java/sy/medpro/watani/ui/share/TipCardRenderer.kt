@@ -27,7 +27,7 @@ import java.io.FileOutputStream
  * template geometry as the approved question share card
  * ([ShareCardRenderer], 1080x1350): warm ivory background with faint
  * gold corner decoration, full-width dark-maroon header band
- * "Med Pro — وطني" with the gold medical plus, the tip's category as a
+ * "Med Pro" with the gold medical plus, the tip's category as a
  * gold pill, the message text in Thmanyah (Noto Sans Arabic fallback) laid out
  * ONLY with StaticLayout (real Arabic shaping + RTL), and the gold
  * gradient footer carrying "t.me/medprowatain". The text is vertically
@@ -103,7 +103,7 @@ object TipCardRenderer {
         canvas.drawRoundRect(RectF(plusCx - 13f, plusCy - 42f, plusCx + 13f, plusCy + 42f), 8f, 8f, plusPaint)
         canvas.drawRoundRect(RectF(plusCx - 42f, plusCy - 13f, plusCx + 42f, plusCy + 13f), 8f, 8f, plusPaint)
         val brandLayout = layout(
-            "Med Pro — وطني",
+            "Med Pro",
             textPaint(bold, 56f, Color.WHITE, bold = true),
             (WIDTH - 190 - PADDING.toInt()),
             lineSpacing = 1.1f

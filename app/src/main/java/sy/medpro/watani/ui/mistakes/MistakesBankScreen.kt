@@ -36,8 +36,8 @@ import sy.medpro.watani.ui.theme.SuccessGreen
 
 /** Arabic label for the surface a mistake came from. */
 private fun bankLabel(bank: String): String = when (bank) {
-    "questions" -> "البنك الوطني"
-    "questions_en" -> "البنك الوطني (إنجليزي)"
+    "questions" -> "البنك"
+    "questions_en" -> "البنك (إنجليزي)"
     "dawrat_jami3at" -> "دورات الجامعات"
     "uworld" -> "UWorld"
     "daily" -> "التحدي اليومي"
@@ -209,7 +209,7 @@ fun MistakesBankScreen(onBack: () -> Unit, autoStartReview: Boolean = false) {
                         }
                         Text("لا توجد أخطاء مسجلة حالياً.", fontWeight = FontWeight.Bold, fontSize = 17.sp, textAlign = TextAlign.Center)
                         Text(
-                            "أي سؤال تخطئ فيه بأي بنك (الوطني، الإنجليزي، دورات الجامعات، UWorld، التحدي اليومي، المحاكاة) سيُحفظ هنا تلقائياً لتراجعه بجدولة متباعدة حتى تتقنه — كل ذلك على جهازك وبدون إنترنت.",
+                            "أي سؤال تخطئ فيه بأي بنك (البنك، الإنجليزي، دورات الجامعات، UWorld، التحدي اليومي، المحاكاة) سيُحفظ هنا تلقائياً لتراجعه بجدولة متباعدة حتى تتقنه — كل ذلك على جهازك وبدون إنترنت.",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             textAlign = TextAlign.Center

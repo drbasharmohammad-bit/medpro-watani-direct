@@ -16,10 +16,12 @@ import sy.medpro.watani.ui.viewmodel.ScreenState
 /**
  * Layer 3 — navigation state machine: the REAL MainViewModel the
  * drawer and the bottom bar both drive. Tab switches land on the
- * tab's home and clear the back stack; opening «دورة كاملة» pushes
- * its list state; back pops to where the student was. The tab set
- * itself — the bottom bar's universe — is pinned: nine tabs with
- * the First Aid tab carrying its published name.
+ * tab's home and clear the back stack; back pops to where the
+ * student was. Since 1.2.49 «دورة كاملة» is hard-locked: its list
+ * entry point refuses with the lock message and never pushes its
+ * state (proven in depth by FullDawraLockIntegrationTest). The tab
+ * set itself — the bottom bar's universe — is pinned: nine tabs
+ * with the First Aid tab carrying its published name.
  *
  * Scope note: the drawer composable and the bottom bar composable
  * live inside MainActivity's content, behind a persisted Firebase
@@ -61,16 +63,23 @@ class NavigationStateIntegrationTest {
     }
 
     @Test
-    fun tabSwitchResetsToTabHomeAndFullDawraPushesAndPops() {
+    fun tabSwitchResetsToTabHomeAndFullDawraStaysLocked() {
         val vm = viewModel()
         vm.setTab(AppTab.CASES)
         var state = vm.uiState.value
         assertEquals(AppTab.CASES, state.currentTab)
         assertEquals(ScreenState.Home, state.screenState)
 
+        // 1.2.49 hard lock: the list entry point refuses — the
+        // state stays on the tab home and only the lock message is
+        // surfaced. (Before the lock this pushed FullDawraList.)
         vm.openFullDawraList()
         state = vm.uiState.value
-        assertEquals(ScreenState.FullDawraList, state.screenState)
+        assertEquals(ScreenState.Home, state.screenState)
+        assertEquals(
+            sy.medpro.watani.data.FullDawraLock.LOCK_MESSAGE,
+            state.gateMessage
+        )
 
         vm.goBack()
         state = vm.uiState.value

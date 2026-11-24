@@ -89,24 +89,20 @@ fun HomeDashboardScreen(
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
         // Slim header of the approved home model (01): logo +
-        // «وطني» + slogan. (The header search button was removed
-        // with the global-search feature, 1.2.45.)
+        // app name. (The header search button was removed
+        // with the global-search feature, 1.2.45; the brand word
+        // and the slogan left the header in 1.2.49.)
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LibAppLogo()
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "وطني",
+                        "Med Pro",
                         fontFamily = NotoKufiFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 19.sp,
                         color = libHeading()
-                    )
-                    Text(
-                        "نجاحك في الوطني يبدأ من هنا",
-                        fontSize = 11.5.sp,
-                        color = libMuted()
                     )
                 }
             }
@@ -393,24 +389,13 @@ fun HomeDashboardScreen(
                             // User-facing sync status only: the raw manifest
                             // version is an internal timestamp and must never
                             // be shown to users (it also renders mangled RTL).
-                            text = "الفهرس متزامن مع الخادم الرسمي للبنك الوطني",
+                            text = "الفهرس متزامن مع الخادم الرسمي للبنك",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
                 }
             }
-        }
-        item {
-            Text(
-                text = "نجاحك في الوطني يبدأ من هنا",
-                fontFamily = NotoKufiFontFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = LibColors.GoldText,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
         }
         // Student-set offline exam countdown — its own section directly
         // under the top bar. The student picks the date; it ticks

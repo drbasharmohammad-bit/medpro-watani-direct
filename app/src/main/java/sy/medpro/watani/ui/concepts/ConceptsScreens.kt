@@ -246,7 +246,7 @@ fun ConceptsEntryCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        "شرح المفاهيم الأهم في الدورات — $unitCount موضوعًا في $subjectsCount مادة، مرتّبة بأسئلة الوطني أولًا",
+                        "شرح المفاهيم الأهم في الدورات — $unitCount موضوعًا في $subjectsCount مادة، مرتّبة بأسئلة البنك أولًا",
                         fontSize = 12.sp,
                         color = sy.medpro.watani.ui.library.libMuted(),
                         lineHeight = 17.sp
@@ -482,7 +482,7 @@ fun ConceptsSubjectsScreen(
         ) {
             item {
                 Text(
-                    "المواد مرتّبة بمجموع أسئلة الوطني في مواضيعها — الأعلى أولًا.",
+                    "المواد مرتّبة بمجموع أسئلة البنك في مواضيعها — الأعلى أولًا.",
                     fontFamily = NotoSansArabicFontFamily,
                     fontSize = 12.5.sp,
                     color = sy.medpro.watani.ui.library.libMuted()
@@ -521,7 +521,7 @@ private fun conceptSubjectMeta(
     append(" موضوعًا")
     append("  ·  ")
     withStyle(num) { append(group.totalWatani.toString()) }
-    append(" وطني")
+    append(" البنك")
     append("  ·  ")
     withStyle(num) { append(group.totalDamascus.toString()) }
     append(" دمشق")
@@ -578,7 +578,7 @@ private fun ConceptSubjectGridCard(
                 modifier = Modifier.padding(top = 8.dp)
             )
             Text(
-                "وزن المادة في أسئلة الوطني",
+                "وزن المادة في أسئلة البنك",
                 fontFamily = NotoSansArabicFontFamily,
                 fontSize = 10.5.sp, color = sy.medpro.watani.ui.library.libBarLabel(),
                 modifier = Modifier.padding(top = 4.dp)
@@ -620,7 +620,7 @@ fun ConceptsTopicsScreen(
         ) {
             item {
                 Text(
-                    "المواضيع مرتّبة بعدد أسئلة الوطني — الأعلى أولًا.",
+                    "المواضيع مرتّبة بعدد أسئلة البنك — الأعلى أولًا.",
                     fontFamily = NotoSansArabicFontFamily,
                     fontSize = 12.5.sp,
                     color = sy.medpro.watani.ui.library.libMuted()
@@ -662,7 +662,7 @@ fun ConceptsTopicsScreen(
                                 lineHeight = 20.sp
                             )
                             val counts = listOfNotNull(
-                                unit.watani?.let { "وطني: $it" },
+                                unit.watani?.let { "البنك: $it" },
                                 unit.damascus?.let { "دمشق: $it" }
                             )
                             if (counts.isNotEmpty()) {
@@ -797,7 +797,7 @@ private fun ConceptUnitContent(
                     )
                     val meta = listOfNotNull(
                         unit.weight?.let { "الوزن في الدورات: $it" },
-                        unit.watani?.let { "أسئلة الوطني: $it" },
+                        unit.watani?.let { "أسئلة البنك: $it" },
                         unit.damascus?.let { "أسئلة دمشق: $it" }
                     )
                     if (meta.isNotEmpty()) {
@@ -1006,7 +1006,7 @@ private fun ConceptSelfTestCard(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        if (test.bank == "watani") "من بنك الوطني" else "من بنك دمشق",
+                        if (test.bank == "watani") "من البنك" else "من بنك دمشق",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaroonPrimary,

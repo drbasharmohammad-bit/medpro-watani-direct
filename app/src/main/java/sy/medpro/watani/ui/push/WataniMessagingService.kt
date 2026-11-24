@@ -35,7 +35,7 @@ class WataniMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val title = message.notification?.title
             ?: message.data["title"]
-            ?: "Med Pro - وطني"
+            ?: "Med Pro"
         val body = message.notification?.body
             ?: message.data["body"]
             ?: return
@@ -57,7 +57,7 @@ class WataniMessagingService : FirebaseMessagingService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "إشعارات وطني",
+                "إشعارات Med Pro",
                 NotificationManager.IMPORTANCE_DEFAULT
             )
             manager.createNotificationChannel(channel)

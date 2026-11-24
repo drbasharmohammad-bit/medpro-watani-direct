@@ -731,7 +731,7 @@ class MainActivity : ComponentActivity() {
                                             if (drawerLogoBitmap != null) {
                                                 Image(
                                                     bitmap = drawerLogoBitmap,
-                                                    contentDescription = "شعار وطني",
+                                                    contentDescription = "شعار Med Pro",
                                                     modifier = Modifier
                                                         .size(40.dp)
                                                         .clip(RoundedCornerShape(10.dp))
@@ -747,15 +747,10 @@ class MainActivity : ComponentActivity() {
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Column {
                                                 Text(
-                                                    "Med Pro - وطني",
+                                                    "Med Pro",
                                                     fontWeight = FontWeight.Bold,
                                                     fontSize = 18.sp,
                                                     color = Color.White
-                                                )
-                                                Text(
-                                                    "نجاحك في الوطني يبدأ من هنا",
-                                                    fontSize = 11.sp,
-                                                    color = GoldAccent
                                                 )
                                             }
                                         }
@@ -1061,7 +1056,7 @@ class MainActivity : ComponentActivity() {
                                 AppTab.FIRSTAID -> "First Aid - Med Pro"
                                 AppTab.LEADERBOARD -> "الصدارة"
                                 AppTab.TOOLS -> "أدوات"
-                                else -> "Med Pro - وطني"
+                                else -> "Med Pro"
                             }
                             Scaffold(
                                 topBar = {

@@ -33,18 +33,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import sy.medpro.watani.ui.theme.NotoKufiFontFamily
 import sy.medpro.watani.ui.theme.GoldAccent
 import sy.medpro.watani.ui.theme.MaroonDark
 import sy.medpro.watani.ui.theme.MaroonInk
 import sy.medpro.watani.ui.theme.MaroonPrimary
-import sy.medpro.watani.ui.theme.TajawalFontFamily
 import sy.medpro.watani.ui.theme.TextOnDark
 import sy.medpro.watani.ui.theme.ThmanyahFontFamily
 
@@ -155,7 +152,7 @@ fun BrandIntroScreen(onDone: () -> Unit) {
                     if (appIconBitmap != null) {
                         Image(
                             bitmap = appIconBitmap,
-                            contentDescription = "شعار وطني",
+                            contentDescription = "شعار Med Pro",
                             modifier = Modifier
                                 .size(112.dp)
                                 .shadow(18.dp, RoundedCornerShape(28.dp))
@@ -195,37 +192,17 @@ fun BrandIntroScreen(onDone: () -> Unit) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(20.dp))
                     Text(
-                        "وطني",
+                        "Med Pro",
                         fontFamily = ThmanyahFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 40.sp,
                         color = TextOnDark
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        "MED PRO",
-                        style = TextStyle(
-                            fontFamily = NotoKufiFontFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            letterSpacing = 4.5.sp,
-                            color = GoldAccent
-                        )
-                    )
                 }
             }
-            // ---------- Slogan + diamond divider ----------
+            // ---------- Diamond divider ----------
             AnimatedVisibility(visible = shown, enter = entrance(220, 0.22f)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        "نجاحك في الوطني يبدأ من هنا",
-                        fontFamily = TajawalFontFamily,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 17.sp,
-                        color = TextOnDark.copy(alpha = 0.92f),
-                        textAlign = TextAlign.Center
-                    )
                     Spacer(modifier = Modifier.height(18.dp))
                     // Hairline divider with a centre diamond.
                     Box(contentAlignment = Alignment.Center) {

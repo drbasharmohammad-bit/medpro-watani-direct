@@ -262,7 +262,7 @@ fun SignInGate(
                         if (appIconBitmap != null) {
                             Image(
                                 bitmap = appIconBitmap,
-                                contentDescription = "شعار وطني",
+                                contentDescription = "شعار Med Pro",
                                 modifier = Modifier
                                     .size(112.dp)
                                     .shadow(18.dp, RoundedCornerShape(28.dp))
@@ -298,36 +298,16 @@ fun SignInGate(
                     }
                     Spacer(modifier = Modifier.height(20.dp))
                     Text(
-                        "وطني",
+                        "Med Pro",
                         fontFamily = ThmanyahFontFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 40.sp,
                         color = TextOnDark
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        "MED PRO",
-                        style = TextStyle(
-                            fontFamily = NotoKufiFontFamily,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            letterSpacing = 4.5.sp,
-                            color = GoldAccent
-                        )
-                    )
                 }
             }
             AnimatedVisibility(visible = shown, enter = entrance(140, 0.22f)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        "نجاحك في الوطني يبدأ من هنا",
-                        fontFamily = TajawalFontFamily,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 17.sp,
-                        color = TextOnDark.copy(alpha = 0.92f),
-                        textAlign = TextAlign.Center
-                    )
                     Spacer(modifier = Modifier.height(18.dp))
                     // Hairline divider with a centre diamond.
                     Box(contentAlignment = Alignment.Center) {
@@ -644,7 +624,7 @@ private fun ConsentCheckboxRow(
  * صيغة الموافقة أسفل زرّ تسجيل الدخول (بناء 1.2.19) — نصّها حرفيًا
  * من القسم الرابع من وثيقة السياسة المعتمدة (POLICY_TEXT.md):
  * «بالمتابعة وتسجيل الدخول، أنت توافق على سياسة الخصوصية وشروط
- * الاستخدام وإخلاء المسؤولية الطبية الخاصة بتطبيق «وطني» — Med Pro.»
+ * الاستخدام وإخلاء المسؤولية الطبية الخاصة بتطبيق Med Pro.»
  * عبارات الأقسام الثلاثة روابط تفتح شاشة السياسة عند قسمها،
  * والمتابعة بالدخول نفسه إقرار بها (بلا خطوة تأكيد إضافية).
  */
@@ -682,7 +662,7 @@ private fun PrivacyConsentLine(onOpenPolicy: (Int) -> Unit) {
                 )
             ) { append("إخلاء المسؤولية الطبية") }
             pop()
-            append(" الخاصة بتطبيق «وطني» — Med Pro.")
+            append(" الخاصة بتطبيق Med Pro.")
         }
     }
     ClickableText(

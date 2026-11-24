@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import sy.medpro.watani.R
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.ui.SlimSubBar
+import sy.medpro.watani.ui.SlimBarTitle
 import sy.medpro.watani.ui.theme.*
 import kotlin.math.PI
 import kotlin.math.exp
@@ -351,8 +352,8 @@ fun EponymsAtlasScreen(onBack: () -> Unit) {
         topBar = {
             SlimSubBar(onBack = onBack) {
                 Column {
-                    Text("موسوعة المتلازمات والعلامات المسماة", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
-                    Text("تعمل أوفلاين 100% • Eponyms & Named Signs", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1)
+                    SlimBarTitle("موسوعة المتلازمات والعلامات المسماة", maxFontSize = 15.sp, minFontSize = 11.sp)
+                    Text("تعمل أوفلاين 100% • Eponyms & Named Signs", fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
         }
@@ -497,8 +498,8 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
         topBar = {
             SlimSubBar(onBack = onBack) {
                 Column {
-                    Text("أطلس تخطيط القلب التفاعلي (ECG)", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
-                    Text("تخطيطات حقيقية أوفلاين 100% للحالات الامتحانية الحرجة", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1)
+                    SlimBarTitle("أطلس تخطيط القلب التفاعلي (ECG)", maxFontSize = 15.sp, minFontSize = 11.sp)
+                    Text("تخطيطات حقيقية أوفلاين 100% للحالات الامتحانية الحرجة", fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
         }
@@ -781,8 +782,8 @@ fun SmartStudyPlannerScreen(onBack: () -> Unit) {
         topBar = {
             SlimSubBar(onBack = onBack) {
                 Column {
-                    Text("مخطط جدول الدراسة الذكي للوطني", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
-                    Text("يعمل أوفلاين 100% • توزيع معياري حسب ثقل المواد", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1)
+                    SlimBarTitle("مخطط جدول الدراسة الذكي للامتحان الوطني", maxFontSize = 15.sp, minFontSize = 11.sp)
+                    Text("يعمل أوفلاين 100% • توزيع معياري حسب ثقل المواد", fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
         }
@@ -994,8 +995,8 @@ fun OfflineClinicalCalculatorsScreen(onBack: () -> Unit, initialTab: Int = 0) {
         topBar = {
             SlimSubBar(onBack = onBack) {
                 Column {
-                    Text("الحاسبات والمعايير السريرية الأوفلاين", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
-                    Text("CURB-65 • مفسر غازات الدم الشرياني ABG والفجوة الأنيونية", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1)
+                    SlimBarTitle("الحاسبات والمعايير السريرية الأوفلاين", maxFontSize = 15.sp, minFontSize = 11.sp)
+                    Text("CURB-65 • مفسر غازات الدم الشرياني ABG والفجوة الأنيونية", fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
         }

@@ -120,8 +120,8 @@ fun ActivationPromptDialog(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Slim app header (mockup .apphead): logo + «وطني» +
-            // slogan; the model's search button becomes the sheet's
+            // Slim app header (mockup .apphead): logo + app name;
+            // the model's search button becomes the sheet's
             // close button (the old dialog's «إلغاء» affordance).
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -131,14 +131,9 @@ fun ActivationPromptDialog(
                 ActivationLogo(size = 46.dp, radius = 14.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "وطني",
+                        "Med Pro",
                         fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 21.sp, color = libHeading(), lineHeight = 28.sp
-                    )
-                    Text(
-                        "نجاحك في الوطني يبدأ من هنا",
-                        fontFamily = NotoSansArabicFontFamily,
-                        fontSize = 12.5.sp, color = libMuted()
                     )
                 }
                 LibIconButton(
@@ -151,7 +146,7 @@ fun ActivationPromptDialog(
             ActivationLogo(size = 92.dp, radius = 24.dp)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    "اشتراك وطني الكامل",
+                    "الاشتراك الكامل",
                     fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
                     fontSize = 26.sp, color = libHeading(), textAlign = TextAlign.Center
                 )
@@ -208,7 +203,7 @@ fun ActivationPromptDialog(
             }
 
             // Feature rows: white LibCards with a gold check disc.
-            ActivationFeatureRow("بنك الوطني كاملًا بشروحاته — 8,513 سؤالًا")
+            ActivationFeatureRow("البنك كاملًا بشروحاته — 8,513 سؤالًا")
             ActivationFeatureRow("كورس First Aid التفاعلي بمساريه")
             ActivationFeatureRow("المكتبة والكتيّبات — 581 فيديو · 245 كتيّبًا")
             ActivationFeatureRow("يعمل بلا إنترنت بعد التنزيل")
@@ -314,18 +309,13 @@ fun ActivationPromptDialog(
                 )
             }
 
-            // Footer: payment line, then the slogan.
+            // Footer: the payment line only (the slogan was
+            // removed app-wide in 1.2.49).
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     "الدفع عبر شام كاش لدى إدارة ميد برو",
                     fontFamily = NotoSansArabicFontFamily,
                     fontSize = 13.sp, color = libMuted(), textAlign = TextAlign.Center
-                )
-                Text(
-                    "نجاحك في الوطني يبدأ من هنا",
-                    fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp, color = LibColors.GoldText,
-                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -434,7 +424,7 @@ private fun ActivationLogo(size: Dp, radius: Dp) {
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
-            Image(bitmap = bitmap, contentDescription = "شعار وطني", modifier = Modifier.size(size))
+            Image(bitmap = bitmap, contentDescription = "شعار Med Pro", modifier = Modifier.size(size))
         }
     }
 }

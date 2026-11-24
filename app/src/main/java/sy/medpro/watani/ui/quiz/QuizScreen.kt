@@ -53,6 +53,7 @@ import sy.medpro.watani.data.findConceptUnit
 import sy.medpro.watani.data.getCorrectIndices
 import sy.medpro.watani.ui.concepts.rememberConceptUnits
 import sy.medpro.watani.ui.SlimSubBar
+import sy.medpro.watani.ui.SlimBarTitle
 import sy.medpro.watani.ui.reference.QuickMedicalReferenceModal
 import sy.medpro.watani.ui.explanation.ExplanationSection
 import sy.medpro.watani.ui.explanation.explanationContentOf
@@ -187,12 +188,14 @@ fun QuizScreen(
                     }
                 ) {
                     Column {
-                        Text("اختبار: $title", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                        SlimBarTitle("اختبار: $title", maxFontSize = 15.sp, minFontSize = 11.sp)
                         Text(
                             text = "عدد الأسئلة: ${questions.size} • وضع التدريب السريري المتقدم",
                             fontSize = 10.sp,
+                            lineHeight = 13.sp,
                             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                 }

@@ -153,7 +153,7 @@ fun TelegramLinkScreen(onBack: () -> Unit) {
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        "بربط حسابك هنا ببوت «وطني» على تليجرام تصلك تقارير دورية عن دراستك: أخطاؤك، ومواضيع ضعفك، وتقدّمك ونشاطك — إضافة إلى معلومات ونصائح دراسية مفيدة، كلها على تليجرامك مباشرة.",
+                        "بربط حسابك هنا ببوت «Med Pro» على تليجرام تصلك تقارير دورية عن دراستك: أخطاؤك، ومواضيع ضعفك، وتقدّمك ونشاطك — إضافة إلى معلومات ونصائح دراسية مفيدة، كلها على تليجرامك مباشرة.",
                         fontSize = 14.sp,
                         lineHeight = 22.sp
                     )
@@ -236,7 +236,7 @@ fun TelegramLinkScreen(onBack: () -> Unit) {
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        "سيفتح زر الربط بوت «وطني» على تليجرام: اضغط «ابدأ» (Start) في البوت ثم عُد إلى هنا.",
+                        "سيفتح زر الربط بوت «Med Pro» على تليجرام: اضغط «ابدأ» (Start) في البوت ثم عُد إلى هنا.",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         lineHeight = 20.sp

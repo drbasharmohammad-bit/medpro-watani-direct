@@ -185,7 +185,7 @@ fun UpdateRequiredScreen() {
             UpdatePhase.Downloaded -> {
                 if (needsPermission) {
                     Text(
-                        "فعّل خيار «تثبيت التطبيقات» لتطبيق وطني من صفحة الإعدادات التي فُتحت لك، ثم ارجع واضغط الزرّ من جديد ليبدأ التثبيت.",
+                        "فعّل خيار «تثبيت التطبيقات» لتطبيق Med Pro من صفحة الإعدادات التي فُتحت لك، ثم ارجع واضغط الزرّ من جديد ليبدأ التثبيت.",
                         fontSize = 13.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center

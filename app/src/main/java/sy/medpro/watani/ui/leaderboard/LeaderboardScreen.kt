@@ -138,7 +138,7 @@ fun LeaderboardScreen() {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(32.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("لوحة الصدارة الوطنية", style = MaterialTheme.typography.titleLarge, color = MaroonPrimary, fontWeight = FontWeight.Bold)
+                            Text("لوحة الصدارة", style = MaterialTheme.typography.titleLarge, color = MaroonPrimary, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("تنافس مع زملائك الأطباء من مختلف الجامعات السورية", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))

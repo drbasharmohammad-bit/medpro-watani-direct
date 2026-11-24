@@ -671,7 +671,7 @@ private fun FaUnitHome(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(
-                        "مواضيع الوطني المرتبطة",
+                        "مواضيع البنك المرتبطة",
                         fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.Bold,
                         fontSize = 13.5.sp, color = faHeading()
                     )

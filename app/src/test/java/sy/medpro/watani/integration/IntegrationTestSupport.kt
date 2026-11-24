@@ -161,7 +161,7 @@ object IntegrationTestSupport {
     const val FA_STEP1_LOCKED_UNIT_TITLE = "وحدة أساسيات 4"
     const val FA_STEP1_FREE_UNIT_TITLE = "وحدة أساسيات 1"
     const val FA_SESSION_TITLE = "جلسة تكامل اختبارية"
-    const val ACTIVATION_DIALOG_TITLE = "اشتراك وطني الكامل"
+    const val ACTIVATION_DIALOG_TITLE = "الاشتراك الكامل"
 
     /** Step 1 index fixture: five path units in one system. The
      * production free tier is the first three, so units 4 and 5 are

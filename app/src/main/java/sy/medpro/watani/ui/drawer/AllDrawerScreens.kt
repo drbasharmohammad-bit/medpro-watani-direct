@@ -32,6 +32,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import sy.medpro.watani.data.*
 import sy.medpro.watani.ui.SlimSubBar
+import sy.medpro.watani.ui.SlimBarTitle
 import sy.medpro.watani.ui.explanation.ExplanationSection
 import sy.medpro.watani.ui.explanation.GatedExplanationSection
 import sy.medpro.watani.ui.explanation.ExplanationUiState
@@ -49,7 +50,7 @@ fun DrawerScreenScaffold(title: String, onBack: () -> Unit, content: @Composable
         topBar = {
             // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
             SlimSubBar(onBack = onBack) {
-                Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                SlimBarTitle(title)
             }
         },
         content = { padding ->
@@ -362,7 +363,7 @@ fun DailyChallengeScreen(onBack: () -> Unit) {
             .pickForDay(list, System.currentTimeMillis())
     }
 
-    DrawerScreenScaffold(title = "التحدي اليومي الوطني", onBack = onBack) { padding ->
+    DrawerScreenScaffold(title = "التحدي اليومي", onBack = onBack) { padding ->
         if (selectedQuestion == null) {
             Box(modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1071,7 +1072,7 @@ fun ContactScreen(onBack: () -> Unit) {
                             OutlinedButton(border = BorderStroke(1.dp, MaroonPrimary), shape = MaterialTheme.shapes.medium, onClick = { openLink(contactLinks.wataniChannel) }, modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Default.Send, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("قناة وطني الرسمية")
+                                Text("القناة الرسمية")
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                         }

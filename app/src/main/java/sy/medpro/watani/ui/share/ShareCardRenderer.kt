@@ -25,7 +25,7 @@ import java.io.FileOutputStream
  * Share-card renderer (spec template, 1080x1350):
  * - warm ivory background #FBF7F2 with very faint gold geometric
  *   decoration in the corners (arcs + dots, low alpha),
- * - full-width dark-maroon header band: "Med Pro — وطني" in bold white,
+ * - full-width dark-maroon header band: "Med Pro" in bold white,
  *   a tasteful gold medical plus, and the subject as a gold pill with
  *   maroon text,
  * - question in dark text (Thmanyah Sans; Noto Sans Arabic fallback), ~44px at
@@ -114,7 +114,7 @@ object ShareCardRenderer {
         canvas.drawRoundRect(RectF(plusCx - 42f, plusCy - 13f, plusCx + 42f, plusCy + 13f), 8f, 8f, plusPaint)
         // brand (right-aligned, RTL start)
         val brandLayout = layout(
-            "Med Pro — وطني",
+            "Med Pro",
             textPaint(bold, 56f, Color.WHITE, bold = true),
             (WIDTH - 190 - PADDING.toInt()),
             lineSpacing = 1.1f

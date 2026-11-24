@@ -60,6 +60,7 @@ import sy.medpro.watani.data.EcgPatternDto
 import sy.medpro.watani.data.PackDownloadManager
 import sy.medpro.watani.data.WataniRepository
 import sy.medpro.watani.ui.SlimSubBar
+import sy.medpro.watani.ui.SlimBarTitle
 import sy.medpro.watani.ui.WidthBreakpoints
 import sy.medpro.watani.ui.isMediumWidth
 import sy.medpro.watani.ui.clinical.AuscultationTrainerScreen
@@ -100,7 +101,7 @@ internal fun EcgSubScaffold(
         topBar = {
             // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
             SlimSubBar(onBack = onBack) {
-                Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                SlimBarTitle(title)
             }
         }
     ) { padding ->
@@ -369,7 +370,7 @@ fun EcgCourseScreen(onBack: () -> Unit) {
         topBar = {
             // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
             SlimSubBar(onBack = onBack) {
-                Text("كورس القلب المصغّر", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                SlimBarTitle("كورس القلب المصغّر")
             }
         }
     ) { padding ->

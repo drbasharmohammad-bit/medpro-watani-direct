@@ -77,7 +77,7 @@ private val TOOL_GROUPS = listOf(
             ToolEntry("غرفة الطوارئ", "مناوبة إسعافية تفاعلية بحالات متغيرة",
                 Icons.Default.Emergency, LibColors.MaroonDeep, "غرفة الطوارئ"),
             ToolEntry(
-                "محاكاة الامتحان", "اختبار وطني كامل بعدد الأسئلة والتوقيت الحقيقيين ونتيجة فورية",
+                "محاكاة الامتحان", "اختبار كامل بعدد الأسئلة والتوقيت الحقيقيين ونتيجة فورية",
                 Icons.Default.AssignmentTurnedIn, LibColors.Maroon, "محاكاة الامتحان"
             ),
             ToolEntry("محطات OSCE", "محطات فحص سريري تفاعلية", Icons.Default.FactCheck, LibColors.Green, "محطات OSCE"),
@@ -112,7 +112,7 @@ private val TOOL_GROUPS = listOf(
                 Icons.Default.Style, LibColors.MaroonDeep, "المراجعة الذكية Anki"),
             ToolEntry("بنك أخطائي", "أخطاؤك من كل البنوك بمراجعة متباعدة حتى الإتقان",
                 Icons.Default.Quiz, LibColors.GoldText, "بنك أخطائي"),
-            ToolEntry("دليل الدراسة", "خطة دراسة منظمة للوطني", Icons.Default.Book, LibColors.GoldText, "دليل الدراسة"),
+            ToolEntry("دليل الدراسة", "خطة دراسة منظمة للامتحان الوطني", Icons.Default.Book, LibColors.GoldText, "دليل الدراسة"),
             ToolEntry("مخطط جدول الدراسة", "توزيع الأيام المتبقية حسب ثقل المواد",
                 Icons.Default.CalendarMonth, LibColors.Maroon, "مخطط جدول الدراسة"),
             ToolEntry("سجل أخطائي والاختبارات", "أسئلتك الخاطئة واختباراتك السابقة",

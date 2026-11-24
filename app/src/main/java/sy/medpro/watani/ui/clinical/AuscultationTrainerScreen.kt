@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sy.medpro.watani.data.*
 import sy.medpro.watani.ui.SlimSubBar
+import sy.medpro.watani.ui.SlimBarTitle
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import java.io.File
 
@@ -235,7 +236,7 @@ fun AuscultationTrainerScreen(onBack: () -> Unit) {
         topBar = {
             // Slim chrome (1.2.7): 48dp sub-bar instead of the 64dp block.
             SlimSubBar(onBack = onBack) {
-                Text("مدرب الإصغاء السريري", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                SlimBarTitle("مدرب الإصغاء السريري")
             }
         }
     ) { padding ->

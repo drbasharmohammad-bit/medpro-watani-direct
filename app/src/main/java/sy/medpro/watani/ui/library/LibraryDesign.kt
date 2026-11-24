@@ -239,7 +239,7 @@ fun LibAppLogo(modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
-            Image(bitmap = bitmap, contentDescription = "شعار وطني", modifier = Modifier.size(46.dp))
+            Image(bitmap = bitmap, contentDescription = "شعار Med Pro", modifier = Modifier.size(46.dp))
         }
     }
 }

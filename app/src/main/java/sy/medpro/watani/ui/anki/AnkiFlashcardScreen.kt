@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.ui.SlimSubBar
+import sy.medpro.watani.ui.SlimBarTitle
 import sy.medpro.watani.ui.icons.SubjectIcon
 import sy.medpro.watani.ui.icons.subjectIconRes
 import sy.medpro.watani.ui.theme.MaroonPrimary
@@ -183,7 +184,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
             // Back-navigation fix (1.2.22): the top-bar back steps
             // like the system button — session → picker → exit.
             SlimSubBar(onBack = { if (sessionStarted) backToPicker() else onBack() }) {
-                Text("البطاقات الذكية - Anki", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                SlimBarTitle("البطاقات الذكية - Anki")
             }
         }
     ) { padding ->

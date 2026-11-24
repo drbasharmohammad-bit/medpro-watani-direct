@@ -41,7 +41,7 @@ fun patternLabel(pattern: String?): String = when (pattern) {
 
 fun difficultyLabel(difficulty: Int?): String = when (difficulty) {
     1 -> "تمهيدي"
-    2 -> "وطني"
+    2 -> "مستوى الامتحان"
     3 -> "مميِّز عالٍ"
     else -> ""
 }
