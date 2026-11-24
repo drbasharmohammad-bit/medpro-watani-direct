@@ -94,10 +94,11 @@ class ReaderPagePipelineTest {
         // finger translation: the pan must move by exactly the
         // scale-around-centroid compensation.
         val pan = ReaderZoomMath.anchoredPan(
-            oldCentroidX = 800f, oldCentroidY = 1200f,
-            newCentroidX = 800f, newCentroidY = 1200f,
-            boxWidthPx = 1080, boxHeightPx = 2400,
-            oldZoom = 1f, newZoom = 2f, panX = 0f, panY = 0f
+            oldCentroid = ReaderZoomMath.Pan(800f, 1200f),
+            newCentroid = ReaderZoomMath.Pan(800f, 1200f),
+            box = ReaderZoomMath.BoxSize(1080, 2400),
+            zoom = ReaderZoomMath.ZoomChange(1f, 2f),
+            pan = ReaderZoomMath.Pan(0f, 0f)
         )
         assertEquals(-260f, pan.x, 0.5f)
         assertEquals(0f, pan.y, 0.5f)
@@ -117,10 +118,11 @@ class ReaderPagePipelineTest {
         // No zoom change: the pan grows by exactly the centroid
         // delta — the page tracks the fingers 1:1.
         val pan = ReaderZoomMath.anchoredPan(
-            oldCentroidX = 400f, oldCentroidY = 600f,
-            newCentroidX = 430f, newCentroidY = 640f,
-            boxWidthPx = 1080, boxHeightPx = 2400,
-            oldZoom = 2f, newZoom = 2f, panX = 10f, panY = 20f
+            oldCentroid = ReaderZoomMath.Pan(400f, 600f),
+            newCentroid = ReaderZoomMath.Pan(430f, 640f),
+            box = ReaderZoomMath.BoxSize(1080, 2400),
+            zoom = ReaderZoomMath.ZoomChange(2f, 2f),
+            pan = ReaderZoomMath.Pan(10f, 20f)
         )
         assertEquals(40f, pan.x, 0.5f)
         assertEquals(60f, pan.y, 0.5f)
@@ -132,17 +134,19 @@ class ReaderPagePipelineTest {
         // overflow halves are (540, 328) — beyond them the page
         // would leave the screen.
         val clamped = ReaderZoomMath.clampPan(
-            panX = 9999f, panY = 9999f,
-            fittedWidthPx = 1080f, fittedHeightPx = 1528f,
-            boxWidthPx = 1080, boxHeightPx = 2400, zoom = 2f
+            pan = ReaderZoomMath.Pan(9999f, 9999f),
+            fitted = ReaderZoomMath.SizeF(1080f, 1528f),
+            box = ReaderZoomMath.BoxSize(1080, 2400),
+            zoom = 2f
         )
         assertEquals(540f, clamped.x, 0.5f)
         assertEquals(328f, clamped.y, 0.5f)
         // At 1x there is no overflow at all: pan is pinned to 0.
         val atRest = ReaderZoomMath.clampPan(
-            panX = 120f, panY = -80f,
-            fittedWidthPx = 1080f, fittedHeightPx = 1528f,
-            boxWidthPx = 1080, boxHeightPx = 2400, zoom = 1f
+            pan = ReaderZoomMath.Pan(120f, -80f),
+            fitted = ReaderZoomMath.SizeF(1080f, 1528f),
+            box = ReaderZoomMath.BoxSize(1080, 2400),
+            zoom = 1f
         )
         assertEquals(0f, atRest.x, 0.5f)
         assertEquals(0f, atRest.y, 0.5f)

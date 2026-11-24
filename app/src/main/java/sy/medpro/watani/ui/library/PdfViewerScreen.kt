@@ -1141,9 +1141,12 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                 boxSize.height.toFloat() / bitmap.height
                             )
                             val clamped = ReaderZoomMath.clampPan(
-                                p.x, p.y,
-                                bitmap.width * fit, bitmap.height * fit,
-                                boxSize.width, boxSize.height, z
+                                ReaderZoomMath.Pan(p.x, p.y),
+                                ReaderZoomMath.SizeF(
+                                    bitmap.width * fit, bitmap.height * fit
+                                ),
+                                ReaderZoomMath.BoxSize(boxSize.width, boxSize.height),
+                                z
                             )
                             return Offset(clamped.x, clamped.y)
                         }
@@ -1276,7 +1279,10 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                         // overlap silently
                                                         // selected nothing.
                                                         val matched = HighlightSelection.selectWords(
-                                                            pageWords, left, top, right, bottom
+                                                            pageWords,
+                                                            HighlightSelection.SelectionRect(
+                                                                left, top, right, bottom
+                                                            )
                                                         )
                                                         if (matched.isNotEmpty()) {
                                                             selectionMissed = false
@@ -1361,12 +1367,16 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                                     // them (الرجفان).
                                                                     val anchored =
                                                                         ReaderZoomMath.anchoredPan(
-                                                                            oldC.x, oldC.y,
-                                                                            newC.x, newC.y,
-                                                                            boxSize.width,
-                                                                            boxSize.height,
-                                                                            oldZoom, newZoom,
-                                                                            pan.x, pan.y
+                                                                            ReaderZoomMath.Pan(oldC.x, oldC.y),
+                                                                            ReaderZoomMath.Pan(newC.x, newC.y),
+                                                                            ReaderZoomMath.BoxSize(
+                                                                                boxSize.width,
+                                                                                boxSize.height
+                                                                            ),
+                                                                            ReaderZoomMath.ZoomChange(
+                                                                                oldZoom, newZoom
+                                                                            ),
+                                                                            ReaderZoomMath.Pan(pan.x, pan.y)
                                                                         )
                                                                     clampPan(
                                                                         Offset(anchored.x, anchored.y),

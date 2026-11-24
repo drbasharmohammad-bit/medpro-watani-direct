@@ -31,37 +31,41 @@ import kotlin.math.max
  */
 object ReaderZoomMath {
 
-    /** A pan offset in pixels. */
+    /** A 2D point or offset in pixels (centroids, pans). */
     data class Pan(val x: Float, val y: Float)
+
+    /** A size in whole pixels (the pager box). */
+    data class BoxSize(val widthPx: Int, val heightPx: Int)
+
+    /** A size in fractional pixels (the fitted page). */
+    data class SizeF(val width: Float, val height: Float)
+
+    /** One pinch event's zoom movement. */
+    data class ZoomChange(val from: Float, val to: Float)
 
     /**
      * The pan after one pinch event: the content point under
      * the old centroid stays under the fingers (now at the
-     * new centroid) when the zoom moves [oldZoom] →
-     * [newZoom]. Degenerate inputs (unmeasured box, no prior
-     * zoom) keep the pan unchanged.
+     * new centroid) when the zoom moves per [zoom].
+     * Degenerate inputs (unmeasured box, no prior zoom) keep
+     * the pan unchanged.
      */
     fun anchoredPan(
-        oldCentroidX: Float,
-        oldCentroidY: Float,
-        newCentroidX: Float,
-        newCentroidY: Float,
-        boxWidthPx: Int,
-        boxHeightPx: Int,
-        oldZoom: Float,
-        newZoom: Float,
-        panX: Float,
-        panY: Float
+        oldCentroid: Pan,
+        newCentroid: Pan,
+        box: BoxSize,
+        zoom: ZoomChange,
+        pan: Pan
     ): Pan {
-        if (boxWidthPx <= 0 || boxHeightPx <= 0 || oldZoom <= 0f) {
-            return Pan(panX, panY)
+        if (box.widthPx <= 0 || box.heightPx <= 0 || zoom.from <= 0f) {
+            return pan
         }
-        val originX = boxWidthPx / 2f
-        val originY = boxHeightPx / 2f
-        val ratio = newZoom / oldZoom
+        val originX = box.widthPx / 2f
+        val originY = box.heightPx / 2f
+        val ratio = zoom.to / zoom.from
         return Pan(
-            x = newCentroidX - originX - (oldCentroidX - originX - panX) * ratio,
-            y = newCentroidY - originY - (oldCentroidY - originY - panY) * ratio
+            x = newCentroid.x - originX - (oldCentroid.x - originX - pan.x) * ratio,
+            y = newCentroid.y - originY - (oldCentroid.y - originY - pan.y) * ratio
         )
     }
 
@@ -71,20 +75,12 @@ object ReaderZoomMath {
      * the overflow of the zoomed fitted page over the box
      * (zero when the zoomed page still fits).
      */
-    fun clampPan(
-        panX: Float,
-        panY: Float,
-        fittedWidthPx: Float,
-        fittedHeightPx: Float,
-        boxWidthPx: Int,
-        boxHeightPx: Int,
-        zoom: Float
-    ): Pan {
-        val maxX = max(0f, (fittedWidthPx * zoom - boxWidthPx) / 2f)
-        val maxY = max(0f, (fittedHeightPx * zoom - boxHeightPx) / 2f)
+    fun clampPan(pan: Pan, fitted: SizeF, box: BoxSize, zoom: Float): Pan {
+        val maxX = max(0f, (fitted.width * zoom - box.widthPx) / 2f)
+        val maxY = max(0f, (fitted.height * zoom - box.heightPx) / 2f)
         return Pan(
-            x = panX.coerceIn(-maxX, maxX),
-            y = panY.coerceIn(-maxY, maxY)
+            x = pan.x.coerceIn(-maxX, maxX),
+            y = pan.y.coerceIn(-maxY, maxY)
         )
     }
 }

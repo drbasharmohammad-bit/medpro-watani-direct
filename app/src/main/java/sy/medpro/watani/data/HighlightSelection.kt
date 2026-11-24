@@ -25,29 +25,34 @@ object HighlightSelection {
      * rect before overlap is tested. */
     const val DEFAULT_TOLERANCE = 0.004f
 
+    /** The drag rect, in page fractions (y from the top). */
+    data class SelectionRect(
+        val left: Float,
+        val top: Float,
+        val right: Float,
+        val bottom: Float
+    )
+
     /**
-     * The words of [words] selected by the drag rect
-     * ([left], [top])–([right], [bottom]), in list order.
+     * The words of [words] selected by the drag [rect], in
+     * list order.
      */
     fun selectWords(
         words: List<WordBox>,
-        left: Float,
-        top: Float,
-        right: Float,
-        bottom: Float,
+        rect: SelectionRect,
         tolerance: Float = DEFAULT_TOLERANCE
     ): List<WordBox> {
-        val expandedLeft = left - tolerance
-        val expandedTop = top - tolerance
-        val expandedRight = right + tolerance
-        val expandedBottom = bottom + tolerance
+        val expandedLeft = rect.left - tolerance
+        val expandedTop = rect.top - tolerance
+        val expandedRight = rect.right + tolerance
+        val expandedBottom = rect.bottom + tolerance
         return words.filter { w ->
             val overlaps = w.x1 > expandedLeft && w.x0 < expandedRight &&
                 w.y1 > expandedTop && w.y0 < expandedBottom
             val centreX = (w.x0 + w.x1) / 2f
             val centreY = (w.y0 + w.y1) / 2f
-            val centreInside = centreX >= left && centreX <= right &&
-                centreY >= top && centreY <= bottom
+            val centreInside = centreX >= rect.left && centreX <= rect.right &&
+                centreY >= rect.top && centreY <= rect.bottom
             overlaps || centreInside
         }
     }

@@ -27,7 +27,7 @@ class HighlightSelectionTest {
     @Test
     fun dragAcrossALineSelectsItsWords() {
         val matched = HighlightSelection.selectWords(
-            words, left = 0.09f, top = 0.09f, right = 0.33f, bottom = 0.14f
+            words, HighlightSelection.SelectionRect(0.09f, 0.09f, 0.33f, 0.14f)
         )
         assertEquals(listOf(line1Word1, line1Word2), matched)
     }
@@ -38,7 +38,7 @@ class HighlightSelectionTest {
         // second word starts — inside the 0.004 tolerance, so
         // the word the finger clearly meant is selected.
         val matched = HighlightSelection.selectWords(
-            words, left = 0.09f, top = 0.10f, right = 0.217f, bottom = 0.13f
+            words, HighlightSelection.SelectionRect(0.09f, 0.10f, 0.217f, 0.13f)
         )
         assertEquals(listOf(line1Word1, line1Word2), matched)
     }
@@ -47,7 +47,7 @@ class HighlightSelectionTest {
     fun grazeBeyondToleranceSelectsNothingExtra() {
         // A 0.01 gap is a deliberate stop before the word.
         val matched = HighlightSelection.selectWords(
-            words, left = 0.09f, top = 0.10f, right = 0.21f, bottom = 0.13f
+            words, HighlightSelection.SelectionRect(0.09f, 0.10f, 0.21f, 0.13f)
         )
         assertEquals(listOf(line1Word1), matched)
     }
@@ -58,7 +58,7 @@ class HighlightSelectionTest {
         // only: its centre is inside, so it is selected even
         // though the drag never reaches its edges.
         val matched = HighlightSelection.selectWords(
-            words, left = 0.26f, top = 0.112f, right = 0.28f, bottom = 0.118f
+            words, HighlightSelection.SelectionRect(0.26f, 0.112f, 0.28f, 0.118f)
         )
         assertEquals(listOf(line1Word2), matched)
     }
@@ -66,7 +66,7 @@ class HighlightSelectionTest {
     @Test
     fun emptyAreaSelectsNothing() {
         val matched = HighlightSelection.selectWords(
-            words, left = 0.40f, top = 0.80f, right = 0.50f, bottom = 0.85f
+            words, HighlightSelection.SelectionRect(0.40f, 0.80f, 0.50f, 0.85f)
         )
         assertTrue(matched.isEmpty())
     }
