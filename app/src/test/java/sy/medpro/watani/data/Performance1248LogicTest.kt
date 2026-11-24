@@ -51,7 +51,7 @@ class Performance1248LogicTest {
         assertEquals(emptyList<Int>(), ParallelFetch.mapBounded(emptyList<Int>(), 3) { it })
         try {
             ParallelFetch.mapBounded(listOf(1, 2, 3), 2) { n ->
-                if (n == 2) throw IllegalStateException("boom")
+                if (n == 2) error("boom")
                 n
             }
             fail("a failing block must fail the whole map")

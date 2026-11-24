@@ -43,7 +43,9 @@ object ImageDecode {
         targetHeightPx: Int = 0
     ): Int {
         var sample = 1
-        if (sourceWidth > 0 && sourceHeight > 0 && (targetWidthPx > 0 || targetHeightPx > 0)) {
+        val usableSource = sourceWidth > 0 && sourceHeight > 0
+        val hasTarget = targetWidthPx > 0 || targetHeightPx > 0
+        if (usableSource && hasTarget) {
             while (true) {
                 val next = sample * 2
                 val widthOk = targetWidthPx <= 0 || sourceWidth / next >= targetWidthPx
