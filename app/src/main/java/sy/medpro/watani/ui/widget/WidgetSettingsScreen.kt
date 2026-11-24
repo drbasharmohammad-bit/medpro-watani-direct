@@ -225,7 +225,7 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
                 color = MaroonPrimary
             )
             Spacer(Modifier.height(4.dp))
-            GlassToggleRow(
+            SwitchRow(
                 label = "العدّاد بالثواني",
                 checked = settings.countdownStyle == WidgetCountdownStyle.DAYS_AND_TIME
             ) { on ->
@@ -239,15 +239,15 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
                     )
                 )
             }
-            GlassToggleRow(
+            SwitchRow(
                 label = "هدف اليوم والسلسلة",
                 checked = settings.showGoals
             ) { on -> apply(settings.copy(showGoals = on)) }
-            GlassToggleRow(
+            SwitchRow(
                 label = "زوادة اليوم",
                 checked = settings.showTip
             ) { on -> apply(settings.copy(showTip = on)) }
-            GlassToggleRow(
+            SwitchRow(
                 label = "الأزرار السريعة",
                 checked = settings.showButtons
             ) { on -> apply(settings.copy(showButtons = on)) }
@@ -572,15 +572,16 @@ private object GlassSettingsTokens {
     val GRADIENT_TOP_ARGB: Int = 0xFF7A2438.toInt()
     val EDGE_ARGB: Int = 0x73FFEECC.toInt()
     val GOLD_ARGB: Int = 0xFFC2A059.toInt()
-    val BORDER_UNSELECTED_ARGB: Int = 0x33FFFFFF
+    const val BORDER_UNSELECTED_ARGB: Int = 0x33FFFFFF
+
+    /** لون صبغة الزجاج لكل نمط (يطابق WidgetGlass). */
+    fun tintArgb(style: WidgetGlassStyle): Int = when (style) {
+        WidgetGlassStyle.LIGHT -> IVORY_ARGB
+        WidgetGlassStyle.CLEAR -> BURGUNDY_DARK_ARGB
+        WidgetGlassStyle.DARK -> BURGUNDY_ARGB
+    }
 }
 
-/** لون صبغة الزجاج لكل نمط (يطابق WidgetGlass). */
-private fun glassTintArgb(style: WidgetGlassStyle): Int = when (style) {
-    WidgetGlassStyle.LIGHT -> GlassSettingsTokens.IVORY_ARGB
-    WidgetGlassStyle.CLEAR -> GlassSettingsTokens.BURGUNDY_DARK_ARGB
-    WidgetGlassStyle.DARK -> GlassSettingsTokens.BURGUNDY_ARGB
-}
 
 /**
  * معاينة الزجاج الحية (1.2.51 — نموذج settings.png): صورة المعلم
@@ -677,7 +678,7 @@ private fun GlassPreviewSurface(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(glassTintArgb(settings.glassStyle)).copy(alpha = tintAlpha))
+                .background(Color(GlassSettingsTokens.tintArgb(settings.glassStyle)).copy(alpha = tintAlpha))
         )
         Box(
             modifier = Modifier
@@ -791,7 +792,7 @@ private fun GlassStyleThumb(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(glassTintArgb(spec.style)).copy(alpha = alpha))
+                    .background(Color(GlassSettingsTokens.tintArgb(spec.style)).copy(alpha = alpha))
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -804,32 +805,6 @@ private fun GlassStyleThumb(
             } else {
                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             }
-        )
-    }
-}
-
-/** صف مفتاح إظهار/إخفاء بنمط الشاشة القائم. */
-@Composable
-private fun GlassToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            label,
-            fontSize = 13.sp,
-            color = MaroonPrimary,
-            modifier = Modifier.weight(1f)
-        )
-        Switch(
-            checked = checked,
-            onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = MaroonPrimary
-            )
         )
     }
 }

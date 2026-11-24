@@ -118,9 +118,9 @@ fun TipsRootScreen(
         TipsRepository.refreshWritingMode(context)
     }
 
-    val title = tipsRouteTitle(route)
+    val title = TipsRouting.title(route)
     val back: () -> Unit = {
-        val next = tipsBackRoute(route)
+        val next = TipsRouting.backRoute(route)
         if (next == null) onBack() else route = next
     }
 
@@ -752,26 +752,30 @@ private fun TipsIntroHeader(onOpenMine: () -> Unit) {
     }
 }
 
-/** عنوان شاشة مسار الزوادة الحالي. */
-private fun tipsRouteTitle(route: TipsRoute): String = when (route) {
-    TipsRoute.Subjects -> "زوادة الطالب"
-    is TipsRoute.Subject -> route.subject
-    is TipsRoute.Section -> TipsContract.sectionTitle(route.sectionId) ?: "زوادة الطالب"
-    is TipsRoute.Add -> "أضف نصيحة"
-    TipsRoute.Mine -> "إضافاتي"
-}
+/** منطق توجيه الزوادة النقي: العناوين ومسارات الرجوع. */
+private object TipsRouting {
 
-/** مسار الرجوع من كل شاشة؛ null من قائمة المواد = خروج للقسم. */
-private fun tipsBackRoute(route: TipsRoute): TipsRoute? = when (route) {
-    TipsRoute.Subjects -> null
-    is TipsRoute.Subject -> TipsRoute.Subjects
-    is TipsRoute.Section -> TipsRoute.Subject(route.subject)
-    is TipsRoute.Add -> if (route.sectionId != null) {
-        TipsRoute.Section(route.subject, route.sectionId)
-    } else {
-        TipsRoute.Subject(route.subject)
+    /** عنوان شاشة مسار الزوادة الحالي. */
+    fun title(route: TipsRoute): String = when (route) {
+        TipsRoute.Subjects -> "زوادة الطالب"
+        is TipsRoute.Subject -> route.subject
+        is TipsRoute.Section -> TipsContract.sectionTitle(route.sectionId) ?: "زوادة الطالب"
+        is TipsRoute.Add -> "أضف نصيحة"
+        TipsRoute.Mine -> "إضافاتي"
     }
-    TipsRoute.Mine -> TipsRoute.Subjects
+
+    /** مسار الرجوع من كل شاشة؛ null من قائمة المواد = خروج. */
+    fun backRoute(route: TipsRoute): TipsRoute? = when (route) {
+        TipsRoute.Subjects -> null
+        is TipsRoute.Subject -> TipsRoute.Subjects
+        is TipsRoute.Section -> TipsRoute.Subject(route.subject)
+        is TipsRoute.Add -> if (route.sectionId != null) {
+            TipsRoute.Section(route.subject, route.sectionId)
+        } else {
+            TipsRoute.Subject(route.subject)
+        }
+        TipsRoute.Mine -> TipsRoute.Subjects
+    }
 }
 
 /** محتوى المسار الحالي (شاشات الزوادة الخمس). */
@@ -795,7 +799,7 @@ private fun TipsRouteContent(route: TipsRoute, onRoute: (TipsRoute) -> Unit) {
         is TipsRoute.Add -> TipsAddContent(
             subject = route.subject,
             initialSectionId = route.sectionId,
-            onDone = { onRoute(tipsBackRoute(route) ?: TipsRoute.Subject(route.subject)) }
+            onDone = { onRoute(TipsRouting.backRoute(route) ?: TipsRoute.Subject(route.subject)) }
         )
         TipsRoute.Mine -> TipsMineContent()
     }
