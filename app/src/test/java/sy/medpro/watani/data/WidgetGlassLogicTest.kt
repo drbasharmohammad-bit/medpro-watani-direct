@@ -36,9 +36,9 @@ class WidgetGlassLogicTest {
         val light = WidgetGlassMath.effectiveTintAlpha(WidgetGlassStyle.LIGHT, 65)
         val clear = WidgetGlassMath.effectiveTintAlpha(WidgetGlassStyle.CLEAR, 65)
         assertEquals(dark, light)
-        assertTrue("clear must be a fraction of the full tint", clear in 1 until dark)
+        assertTrue("clear must be a fraction of the full tint", clear > 0f && clear < dark)
         // Even at the slider minimum the tint never vanishes.
-        assertTrue(WidgetGlassMath.effectiveTintAlpha(WidgetGlassStyle.DARK, 45) > 0)
+        assertTrue(WidgetGlassMath.effectiveTintAlpha(WidgetGlassStyle.DARK, 45) > 0f)
     }
 
     private fun pack(subject: String, section: String, vararg tips: Pair<String, String?>): TipsPack =
