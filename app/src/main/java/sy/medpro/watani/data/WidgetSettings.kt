@@ -81,6 +81,7 @@ data class WidgetSettings(
 )
 
 /** أحجام معاينة شاشة الإعدادات (رقائق النموذج المعتمد). */
+@Suppress("MagicNumber") // aspect ratios ARE the size tokens of the approved settings mockup
 enum class WidgetPreviewSize(val label: String, val aspect: Float) {
     S2X1("2×1", 2.0f),
     S2X2("2×2", 1.0f),
@@ -234,19 +235,27 @@ object WidgetShapeMath {
     /** المقاس الافتراضي بالـdp لكل حجم عند غياب AppWidgetOptions
      * (يطابق minWidth/minHeight بملفات تعريف الويدجتات). */
     fun fallbackSizeDp(kind: Int): Pair<Int, Int> = when (kind) {
-        0 -> 110 to 110   // KIND_COUNTDOWN — widget_countdown_info.xml
-        1 -> 250 to 140   // KIND_DAY — widget_day_info.xml
-        2 -> 250 to 180   // KIND_LARGE — widget_day_large_info.xml
-        3 -> 250 to 140   // KIND_COUNTDOWN_WIDE (design 1, 4×2)
-        4 -> 250 to 260   // KIND_HERO (design 2, 4×4)
-        5 -> 110 to 110   // KIND_GOAL (design 3, 2×2)
-        6 -> 110 to 110   // KIND_STREAK (design 4, 2×2)
-        7 -> 250 to 70    // KIND_CONTINUE (design 5, 4×1)
-        8 -> 250 to 140   // KIND_TIP (design 6, 4×2)
-        9 -> 250 to 70    // KIND_ACTIONS (design 7, 4×1)
-        10 -> 110 to 110  // KIND_FOCUS (design 8, 2×2)
-        else -> 170 to 80 // KIND_MINI (design 9, 2×1)
+        0 -> SIZE_SMALL_SQUARE   // KIND_COUNTDOWN — widget_countdown_info.xml
+        1 -> SIZE_WIDE           // KIND_DAY — widget_day_info.xml
+        2 -> SIZE_LARGE          // KIND_LARGE — widget_day_large_info.xml
+        3 -> SIZE_WIDE           // KIND_COUNTDOWN_WIDE (design 1, 4×2)
+        4 -> SIZE_HERO           // KIND_HERO (design 2, 4×4)
+        5 -> SIZE_SMALL_SQUARE   // KIND_GOAL (design 3, 2×2)
+        6 -> SIZE_SMALL_SQUARE   // KIND_STREAK (design 4, 2×2)
+        7 -> SIZE_STRIP          // KIND_CONTINUE (design 5, 4×1)
+        8 -> SIZE_WIDE           // KIND_TIP (design 6, 4×2)
+        9 -> SIZE_STRIP          // KIND_ACTIONS (design 7, 4×1)
+        10 -> SIZE_SMALL_SQUARE  // KIND_FOCUS (design 8, 2×2)
+        else -> SIZE_MINI        // KIND_MINI (design 9, 2×1)
     }
+
+    // Default dp sizes per widget kind (mirror the provider info XMLs).
+    private val SIZE_SMALL_SQUARE: Pair<Int, Int> = 110 to 110
+    private val SIZE_WIDE: Pair<Int, Int> = 250 to 140
+    private val SIZE_LARGE: Pair<Int, Int> = 250 to 180
+    private val SIZE_HERO: Pair<Int, Int> = 250 to 260
+    private val SIZE_STRIP: Pair<Int, Int> = 250 to 70
+    private val SIZE_MINI: Pair<Int, Int> = 170 to 80
 
     const val MAX_BITMAP_SIDE_PX = 1200
 }
@@ -271,20 +280,23 @@ object WidgetGlassMath {
     const val GLASS_ALPHA_MIN: Int = 45
     const val GLASS_ALPHA_MAX: Int = 100
     const val DEFAULT_GLASS_ALPHA: Int = 65
+    private const val PERCENT_BASE: Float = 100f
+    /** كسر قوّة الصبغة بالنمط الشفاف (ربع القوّة تقريبًا). */
+    private const val CLEAR_TINT_FRACTION: Float = 0.35f
 
     fun clampGlassAlpha(value: Int): Int =
         value.coerceIn(GLASS_ALPHA_MIN, GLASS_ALPHA_MAX)
 
     /** ألفا الصبغة الفعلية 0..1 من نسبة المنزلق المقصوصة. */
     fun tintAlpha(glassAlphaPercent: Int): Float =
-        clampGlassAlpha(glassAlphaPercent) / 100f
+        clampGlassAlpha(glassAlphaPercent) / PERCENT_BASE
 
     /** للنمط الشفاف تُخفَّف الصبغة لربع قوّتها — الزجاج على
      * الخلفية مباشرة كما بنموذج «شفاف»، والحدّ الأدنى نفسه
      * يحمي المقروئية عبر طبقة التعتيم التحتية القائمة. */
     fun effectiveTintAlpha(style: WidgetGlassStyle, glassAlphaPercent: Int): Float =
         when (style) {
-            WidgetGlassStyle.CLEAR -> tintAlpha(glassAlphaPercent) * 0.35f
+            WidgetGlassStyle.CLEAR -> tintAlpha(glassAlphaPercent) * CLEAR_TINT_FRACTION
             else -> tintAlpha(glassAlphaPercent)
         }
 }
@@ -292,6 +304,9 @@ object WidgetGlassMath {
 /** سلسلة الأيام ونقاط الأسبوع — منطق نقي من خريطة النشاط اليومي
  * (مفاتيح yyyy-MM-dd كما يخزّنها OfflineStudyVault). */
 object WidgetStreakMath {
+
+    /** فهرس أقدم يوم بنافذة الأسبوع (اليوم + 6 أيام سابقة). */
+    private const val WEEK_LAST_INDEX: Int = 6
 
     /** أيام متتالية منتهية اليوم (أو أمس إن لم يبدأ اليوم بعد —
      * سلسلة الأمس لا تنكسر قبل أن يدرس الطالب اليوم). */
@@ -308,7 +323,7 @@ object WidgetStreakMath {
     /** نشاط آخر 7 أيام منتهية اليوم، من الأقدم للأحدث (نقاط
      * الأسبوع السبع بالنماذج). */
     fun weekDots(activity: Map<String, Int>, today: java.time.LocalDate): List<Boolean> =
-        (6 downTo 0).map { back ->
+        (WEEK_LAST_INDEX downTo 0).map { back ->
             (activity[today.minusDays(back.toLong()).toString()] ?: 0) > 0
         }
 }
@@ -334,9 +349,9 @@ object LastStudyStore {
     /** (المسار، اسم المادة) أو null إن لم يدرس الطالب بعد. */
     fun load(context: Context): Pair<String, String>? {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val path = prefs.getString(KEY_PATH, null)?.takeIf { it.isNotBlank() } ?: return null
-        val name = prefs.getString(KEY_NAME, null)?.takeIf { it.isNotBlank() } ?: return null
-        return path to name
+        val path = prefs.getString(KEY_PATH, null)?.takeIf { it.isNotBlank() }
+        val name = prefs.getString(KEY_NAME, null)?.takeIf { it.isNotBlank() }
+        return if (path != null && name != null) path to name else null
     }
 }
 

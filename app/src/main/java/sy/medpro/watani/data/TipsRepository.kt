@@ -48,12 +48,16 @@ object TipsRepository {
     private const val KEY_WRITING_MODE = "tips_writing"
     private const val OUTBOX_PREF_BASE = "watani_tips_outbox"
     private const val KEY_OUTBOX = "outbox_json"
+    private const val CONNECT_TIMEOUT_SECONDS = 30L
+    private const val READ_TIMEOUT_SECONDS = 30L
+    private const val CALL_TIMEOUT_SECONDS = 45L
+    private const val SHA_PREFIX_LENGTH = 16
 
     private val client: OkHttpClient = sy.medpro.watani.security.NetworkPinning.apply(
         OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(45, TimeUnit.SECONDS)
+            .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     ).build()
 
     // ---------------------------------------------------------------
@@ -100,7 +104,7 @@ object TipsRepository {
      * format (the shared contract). */
     fun sha256Prefix16(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-        return digest.joinToString("") { "%02x".format(it) }.substring(0, 16)
+        return digest.joinToString("") { "%02x".format(it) }.substring(0, SHA_PREFIX_LENGTH)
     }
 
     /** Pure freshness verdict: refresh when there is no cached file,
@@ -108,9 +112,9 @@ object TipsRepository {
      * one. A null entry (offline / pack unpublished) never forces a
      * refresh of an existing cache. */
     fun packNeedsDownload(hasFile: Boolean, storedHash: String?, entry: ManifestFileEntry?): Boolean {
-        if (!hasFile) return true
-        val manifestHash = entry?.hash?.trim()?.takeIf { it.isNotEmpty() } ?: return false
-        return !manifestHash.equals(storedHash?.trim(), ignoreCase = true)
+        val manifestHash = entry?.hash?.trim()?.takeIf { it.isNotEmpty() }
+        return !hasFile ||
+            (manifestHash != null && !manifestHash.equals(storedHash?.trim(), ignoreCase = true))
     }
 
     /**
@@ -152,11 +156,14 @@ object TipsRepository {
     }
 
     private fun verifyAgainstEntry(bytes: ByteArray, entry: ManifestFileEntry?): Boolean {
-        if (entry == null) return bytes.isNotEmpty()
-        val expectedSize = entry.size
-        if (expectedSize != null && expectedSize > 0 && bytes.size.toLong() != expectedSize) return false
-        val expectedHash = entry.hash?.trim()?.takeIf { it.isNotEmpty() } ?: return true
-        return sha256Prefix16(bytes).equals(expectedHash, ignoreCase = true)
+        val expectedSize = entry?.size
+        val expectedHash = entry?.hash?.trim()?.takeIf { it.isNotEmpty() }
+        return when {
+            entry == null -> bytes.isNotEmpty()
+            expectedSize != null && expectedSize > 0 && bytes.size.toLong() != expectedSize -> false
+            expectedHash == null -> true
+            else -> sha256Prefix16(bytes).equals(expectedHash, ignoreCase = true)
+        }
     }
 
     /** Bank-download hook: after a national-bank subject shard is
@@ -213,16 +220,19 @@ object TipsRepository {
      * rebinds the store (another account's outbox is never read). */
     @Synchronized
     fun engine(context: Context): TipsSyncEngine? {
-        val user = FirebaseAuth.getInstance().currentUser ?: return null
+        val user = FirebaseAuth.getInstance().currentUser
         val existing = engine
-        if (existing != null && engineUid == user.uid) return existing
-        val created = TipsSyncEngine(
-            SharedPrefsOutboxStore(context.applicationContext, user.uid),
-            WorkerTipsGateway()
-        )
-        engine = created
-        engineUid = user.uid
-        return created
+        return when {
+            user == null -> null
+            existing != null && engineUid == user.uid -> existing
+            else -> TipsSyncEngine(
+                SharedPrefsOutboxStore(context.applicationContext, user.uid),
+                WorkerTipsGateway()
+            ).also { created ->
+                engine = created
+                engineUid = user.uid
+            }
+        }
     }
 
     fun mineFlow(context: Context): StateFlow<List<OutboxTip>>? = engine(context)?.mine

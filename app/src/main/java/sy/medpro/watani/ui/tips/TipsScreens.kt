@@ -91,6 +91,9 @@ private sealed interface TipsRoute {
 }
 
 @Suppress("LongMethod", "CyclomaticComplexMethod")
+/** طول بادئة التاريخ المعروضة (yyyy-MM-dd من طابع ISO). */
+private const val DATE_PREFIX_LENGTH: Int = 10
+
 @Composable
 fun TipsRootScreen(
     onBack: () -> Unit,
@@ -203,31 +206,7 @@ private fun TipsSubjectsContent(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item(key = "tips_intro") {
-            Column {
-                Text(
-                    "نصائح من زملائك الطلاب، مرتّبة حسب المادة والقسم — وما تضيفه يصل بعد مراجعة سريعة.",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                LibCard(modifier = Modifier.fillMaxWidth(), onClick = onOpenMine) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = MaroonPrimary)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("إضافاتي", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text(
-                                "نصائحك وحالتها: بانتظار الإرسال، قيد المراجعة، منشورة، أو مرفوضة مع السبب.",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
+            TipsIntroHeader(onOpenMine = onOpenMine)
         }
         items(TipsContract.SUBJECTS, key = { it }) { subject ->
             LibCard(modifier = Modifier.fillMaxWidth(), onClick = { onOpenSubject(subject) }) {
@@ -432,7 +411,7 @@ private fun TipCard(tip: TipItem, onReport: () -> Unit, modifier: Modifier = Mod
                     )
                     if (tip.createdAt.isNotEmpty()) {
                         Text(
-                            tip.createdAt.take(10),
+                            tip.createdAt.take(DATE_PREFIX_LENGTH),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -782,6 +761,36 @@ private fun MineTipCard(
                 }
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, contentDescription = "حذف", tint = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    }
+}
+
+/** ترويسة قائمة المواد: شرح القسم + بطاقة «إضافاتي». */
+@Composable
+private fun TipsIntroHeader(onOpenMine: () -> Unit) {
+    Column {
+        Text(
+            "نصائح من زملائك الطلاب، مرتّبة حسب المادة والقسم — وما تضيفه يصل بعد مراجعة سريعة.",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        LibCard(modifier = Modifier.fillMaxWidth(), onClick = onOpenMine) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Person, contentDescription = null, tint = MaroonPrimary)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("إضافاتي", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(
+                        "نصائحك وحالتها: بانتظار الإرسال، قيد المراجعة، منشورة، أو مرفوضة مع السبب.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

@@ -23,21 +23,28 @@ import org.json.JSONObject
  * - GET    /v1/config → tipsWriting ('all' | 'activated')
  */
 
+/** HTTP success band + the worker client's local failure codes
+ * (WorkerActivationApi convention: -1 no token, -2 exception). */
+const val HTTP_SUCCESS_MIN: Int = 200
+const val HTTP_SUCCESS_MAX: Int = 299
+const val HTTP_UNAUTHORIZED: Int = 401
+const val NO_TOKEN_CODE: Int = -1
+
 data class TipsGatewayReply(
     /** HTTP code; negative = no request was made / transport failure
      * (WorkerActivationApi convention: -1 no token, -2 exception). */
     val code: Int,
     val serverId: String? = null
 ) {
-    val isSuccess: Boolean get() = code in 200..299
-    val isAuthFailure: Boolean get() = code == 401 || code == -1
+    val isSuccess: Boolean get() = code in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX
+    val isAuthFailure: Boolean get() = code == HTTP_UNAUTHORIZED || code == NO_TOKEN_CODE
 }
 
 data class TipsMineReply(
     val code: Int,
     val tips: List<ServerTip> = emptyList()
 ) {
-    val isSuccess: Boolean get() = code in 200..299
+    val isSuccess: Boolean get() = code in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX
 }
 
 interface TipsGateway {
@@ -113,18 +120,31 @@ class WorkerTipsGateway : TipsGateway {
     }
 
     override suspend fun fetchMine(since: Long): TipsMineReply {
-        val user = currentUser() ?: return TipsMineReply(-1)
-        val res = WorkerActivationApi.getFromWorker(user, "/v1/tips/mine?since=$since")
-        if (res.code !in 200..299) return TipsMineReply(res.code)
-        val tips = try {
-            val root = JSONObject(res.body ?: "")
-            val arr = root.optJSONArray("tips") ?: root.optJSONArray("entries")
-            if (arr == null) emptyList()
-            else (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { parseServerTip(it) } }
-        } catch (_: Exception) {
-            emptyList()
+        val user = currentUser()
+        return if (user == null) {
+            TipsMineReply(NO_TOKEN_CODE)
+        } else {
+            val res = WorkerActivationApi.getFromWorker(user, "/v1/tips/mine?since=$since")
+            if (res.code !in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX) {
+                TipsMineReply(res.code)
+            } else {
+                TipsMineReply(res.code, parseMineTips(res.body))
+            }
         }
-        return TipsMineReply(res.code, tips)
+    }
+
+    /** Parse the «mine» payload defensively: any malformation is
+     * an empty list, never a crash in a sync round. */
+    private fun parseMineTips(body: String?): List<ServerTip> = try {
+        val root = JSONObject(body ?: "")
+        val arr = root.optJSONArray("tips") ?: root.optJSONArray("entries")
+        if (arr == null) {
+            emptyList()
+        } else {
+            (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { parseServerTip(it) } }
+        }
+    } catch (_: Exception) {
+        emptyList()
     }
 
     override suspend fun report(serverId: String, reason: String): TipsGatewayReply {

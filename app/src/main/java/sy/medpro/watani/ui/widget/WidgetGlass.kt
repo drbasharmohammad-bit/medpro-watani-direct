@@ -63,12 +63,51 @@ data class GlassPalette(
     }
 }
 
-internal object WidgetGlass {
+/** ثوابت وصفة الزجاج الرقمية — كل رقم بالوصفة له اسم هنا. */
+@Suppress("MagicNumber") // the ARGB literals ARE the glass design tokens (repo pattern: LibraryDesign)
+private object GlassRecipe {
+    // Glass tint channel colours (mockup recipe).
+    const val BURG_R = 0x5E; const val BURG_G = 0x12; const val BURG_B = 0x24
+    const val DARK_R = 0x2E; const val DARK_G = 0x08; const val DARK_B = 0x12
+    const val IVORY_R = 0xFA; const val IVORY_G = 0xF6; const val IVORY_B = 0xF0
+    // The approved dim grade colour (#22050B) and its strength
+    // under the glass (the pre-v4 overlay runs at full strength).
+    const val DIM_R = 0x22; const val DIM_G = 0x05; const val DIM_B = 0x0B
+    const val DIM_STRENGTH = 0.75f
+    const val ALPHA_MAX = 255
+    // Blur: render the background at 1/8 size and scale back up.
+    const val BLUR_DOWNSAMPLE = 8
+    const val MIN_BLUR_BUFFER = 8
+    // Top sheen: white alpha 34 → 0 over the upper half.
+    const val SHEEN_MAX_ALPHA = 34
+    const val SHEEN_HEIGHT_FRACTION = 0.5f
+    const val GRADIENT_MIDPOINT = 0.5f
+    // Edge light (ARGB): warm hairline + top highlight per style.
+    val EDGE_ON_LIGHT: Int = 0x96FFFFFF.toInt()
+    val EDGE_ON_DARK: Int = 0x73FFEECC.toInt()
+    val HIGHLIGHT_ON_LIGHT: Int = 0x5AFFFFFF.toInt()
+    val HIGHLIGHT_ON_CLEAR: Int = 0x46FFFFFF.toInt()
+    val HIGHLIGHT_ON_DARK: Int = 0x34FFFFFF.toInt()
+    const val EDGE_STROKE_FRACTION = 0.09f
+    const val EDGE_STROKE_MIN = 2f
+    const val EDGE_STROKE_MAX = 6f
+    const val HIGHLIGHT_INSET_FACTOR = 2f
+    // Goal ring + week dots geometry.
+    const val FULL_CIRCLE_DEGREES = 360f
+    const val ARC_START_DEGREES = -90f
+    const val RING_STROKE_FRACTION = 0.11f
+    const val PERCENT_BASE = 100
+    val TRACK_ON_LIGHT: Int = 0x3C5E1224.toInt()
+    val TRACK_ON_DARK: Int = 0x2EFFFFFF.toInt()
+    val GOLD: Int = 0xFFC2A059.toInt()
+    val DOT_OFF_LIGHT: Int = 0x465E1224.toInt()
+    val DOT_OFF_DARK: Int = 0x3CFFFFFF.toInt()
+    const val DOT_RADIUS_FRACTION = 0.32f
+    const val DOT_CENTER_OFFSET = 0.5f
+    const val WHITE_RGB: Int = 0x00FFFFFF
+}
 
-    // Glass tint colours from the approved mockup recipe.
-    private const val BURG_R = 0x5E; private const val BURG_G = 0x12; private const val BURG_B = 0x24
-    private const val DARK_R = 0x2E; private const val DARK_G = 0x08; private const val DARK_B = 0x12
-    private const val IVORY_R = 0xFA; private const val IVORY_G = 0xF6; private const val IVORY_B = 0xF0
+internal object WidgetGlass {
 
     private data class Key(
         val landmark: Int, val style: WidgetGlassStyle, val alpha: Int,
@@ -114,6 +153,7 @@ internal object WidgetGlass {
         return result
     }
 
+    /** Orchestrates the recipe steps over one clipped canvas. */
     private fun compose(
         context: Context,
         data: WidgetData,
@@ -121,92 +161,145 @@ internal object WidgetGlass {
         heightPx: Int,
         radiusPx: Float
     ): Bitmap? {
-        val settings = data.settings
         val out = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         val clip = Path().apply {
-            addRoundRect(RectF(0f, 0f, widthPx.toFloat(), heightPx.toFloat()), radiusPx, radiusPx, Path.Direction.CW)
+            addRoundRect(
+                RectF(0f, 0f, widthPx.toFloat(), heightPx.toFloat()),
+                radiusPx, radiusPx, Path.Direction.CW
+            )
         }
         canvas.clipPath(clip)
-        val paint = Paint(Paint.FILTER_BITMAP_FLAG)
-
-        // ---- base layer: landmark photo or plain burgundy ----
-        val index = data.landmarkIndex
-        if (index != null) {
-            val source = sy.medpro.watani.ui.ImageDecode.decodeResourceDownsampled(
-                context.resources, LandmarkLibrary.all[index].drawableRes, widthPx, heightPx
-            ) ?: return null
-            val crop = WidgetShapeMath.centerCropRect(
-                source.width, source.height, widthPx.toFloat() / heightPx.toFloat()
-            )
-            val srcRect = android.graphics.Rect(
-                crop[0].toInt(), crop[1].toInt(),
-                (crop[0] + crop[2]).toInt(), (crop[1] + crop[3]).toInt()
-            )
-            // Blur of what is behind (the mockup's GaussianBlur):
-            // render the photo into a small buffer and scale it
-            // back up — a real pixel blur of the background layer.
-            val smallW = (widthPx / 8).coerceAtLeast(8)
-            val smallH = (heightPx / 8).coerceAtLeast(8)
-            val small = Bitmap.createBitmap(smallW, smallH, Bitmap.Config.ARGB_8888)
-            val smallCanvas = Canvas(small)
-            smallCanvas.drawBitmap(
-                source, srcRect,
-                RectF(0f, 0f, smallW.toFloat(), smallH.toFloat()), paint
-            )
-            canvas.drawBitmap(
-                small, android.graphics.Rect(0, 0, smallW, smallH),
-                RectF(0f, 0f, widthPx.toFloat(), heightPx.toFloat()), paint
-            )
-            // Approved dim grade (legibility under the glass).
-            val (top, mid, bottom) = WidgetSettingsMath.overlayStops(settings.dimPercent)
-            val dimPaint = Paint()
-            for (y in 0 until heightPx) {
-                val t = y / (heightPx - 1).coerceAtLeast(1).toFloat()
-                val a = if (t < 0.5f) top + (mid - top) * (t * 2f) else mid + (bottom - mid) * ((t - 0.5f) * 2f)
-                dimPaint.color = Color.argb((a * 0.75f * 255).toInt(), 0x22, 0x05, 0x0B)
-                canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, dimPaint)
-            }
+        val baseDrawn = if (data.landmarkIndex != null) {
+            drawPhotoBase(context, data, canvas, widthPx, heightPx)
         } else {
-            // Plain mode: a burgundy vertical gradient base (the
-            // glass still applies — tint, sheen and edge).
-            val basePaint = Paint()
-            for (y in 0 until heightPx) {
-                val t = y / (heightPx - 1).coerceAtLeast(1).toFloat()
-                basePaint.color = Color.rgb(
-                    (DARK_R + (BURG_R - DARK_R) * t).toInt(),
-                    (DARK_G + (BURG_G - DARK_G) * t).toInt(),
-                    (DARK_B + (BURG_B - DARK_B) * t).toInt()
-                )
-                canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, basePaint)
+            drawGradientBase(canvas, widthPx, heightPx)
+            true
+        }
+        if (!baseDrawn) return null
+        drawTint(canvas, data)
+        drawSheen(canvas, widthPx, heightPx)
+        drawEdge(canvas, data, widthPx, heightPx, radiusPx)
+        return out
+    }
+
+    /** Photo base: center-cropped landmark, blurred by rendering
+     * into a small buffer and scaling back up (a real pixel blur
+     * of the background layer, standing in for the mockup's
+     * GaussianBlur 26), then the approved dim grade at reduced
+     * strength under the glass. False = photo undecodable. */
+    private fun drawPhotoBase(
+        context: Context,
+        data: WidgetData,
+        canvas: Canvas,
+        widthPx: Int,
+        heightPx: Int
+    ): Boolean {
+        val index = data.landmarkIndex ?: return false
+        val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        val source = sy.medpro.watani.ui.ImageDecode.decodeResourceDownsampled(
+            context.resources, LandmarkLibrary.all[index].drawableRes, widthPx, heightPx
+        ) ?: return false
+        val crop = WidgetShapeMath.centerCropRect(
+            source.width, source.height, widthPx.toFloat() / heightPx.toFloat()
+        )
+        val srcRect = android.graphics.Rect(
+            crop[0].toInt(), crop[1].toInt(),
+            (crop[0] + crop[2]).toInt(), (crop[1] + crop[3]).toInt()
+        )
+        val smallW = (widthPx / GlassRecipe.BLUR_DOWNSAMPLE).coerceAtLeast(GlassRecipe.MIN_BLUR_BUFFER)
+        val smallH = (heightPx / GlassRecipe.BLUR_DOWNSAMPLE).coerceAtLeast(GlassRecipe.MIN_BLUR_BUFFER)
+        val small = Bitmap.createBitmap(smallW, smallH, Bitmap.Config.ARGB_8888)
+        Canvas(small).drawBitmap(
+            source, srcRect, RectF(0f, 0f, smallW.toFloat(), smallH.toFloat()), paint
+        )
+        canvas.drawBitmap(
+            small, android.graphics.Rect(0, 0, smallW, smallH),
+            RectF(0f, 0f, widthPx.toFloat(), heightPx.toFloat()), paint
+        )
+        drawDimGrade(canvas, data, widthPx, heightPx)
+        return true
+    }
+
+    /** The approved dim grade (legibility), at 75% strength —
+     * the glass tint above it carries the rest of the recipe. */
+    private fun drawDimGrade(canvas: Canvas, data: WidgetData, widthPx: Int, heightPx: Int) {
+        val (top, mid, bottom) = WidgetSettingsMath.overlayStops(data.settings.dimPercent)
+        val dimPaint = Paint()
+        for (y in 0 until heightPx) {
+            val t = y / (heightPx - 1).coerceAtLeast(1).toFloat()
+            val a = if (t < GlassRecipe.GRADIENT_MIDPOINT) {
+                top + (mid - top) * (t * 2f)
+            } else {
+                mid + (bottom - mid) * ((t - GlassRecipe.GRADIENT_MIDPOINT) * 2f)
             }
+            dimPaint.color = Color.argb(
+                (a * GlassRecipe.DIM_STRENGTH * GlassRecipe.ALPHA_MAX).toInt(),
+                GlassRecipe.DIM_R, GlassRecipe.DIM_G, GlassRecipe.DIM_B
+            )
+            canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, dimPaint)
         }
+    }
 
-        // ---- glass tint (style × student alpha, floored) ----
-        val tintAlpha = WidgetGlassMath.effectiveTintAlpha(settings.glassStyle, settings.glassAlphaPercent)
+    /** Plain mode base: a burgundy vertical gradient (the glass
+     * still applies above it — tint, sheen and edge). */
+    private fun drawGradientBase(canvas: Canvas, widthPx: Int, heightPx: Int) {
+        val basePaint = Paint()
+        for (y in 0 until heightPx) {
+            val t = y / (heightPx - 1).coerceAtLeast(1).toFloat()
+            basePaint.color = Color.rgb(
+                (GlassRecipe.DARK_R + (GlassRecipe.BURG_R - GlassRecipe.DARK_R) * t).toInt(),
+                (GlassRecipe.DARK_G + (GlassRecipe.BURG_G - GlassRecipe.DARK_G) * t).toInt(),
+                (GlassRecipe.DARK_B + (GlassRecipe.BURG_B - GlassRecipe.DARK_B) * t).toInt()
+            )
+            canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, basePaint)
+        }
+    }
+
+    /** Glass tint: the style colour at the student's floored
+     * slider alpha. */
+    private fun drawTint(canvas: Canvas, data: WidgetData) {
+        val settings = data.settings
+        val tintAlpha = WidgetGlassMath.effectiveTintAlpha(
+            settings.glassStyle, settings.glassAlphaPercent
+        )
         val (tr, tg, tb) = when (settings.glassStyle) {
-            WidgetGlassStyle.DARK -> Triple(BURG_R, BURG_G, BURG_B)
-            WidgetGlassStyle.LIGHT -> Triple(IVORY_R, IVORY_G, IVORY_B)
-            WidgetGlassStyle.CLEAR -> Triple(DARK_R, DARK_G, DARK_B)
+            WidgetGlassStyle.DARK -> Triple(GlassRecipe.BURG_R, GlassRecipe.BURG_G, GlassRecipe.BURG_B)
+            WidgetGlassStyle.LIGHT -> Triple(GlassRecipe.IVORY_R, GlassRecipe.IVORY_G, GlassRecipe.IVORY_B)
+            WidgetGlassStyle.CLEAR -> Triple(GlassRecipe.DARK_R, GlassRecipe.DARK_G, GlassRecipe.DARK_B)
         }
-        canvas.drawColor(Color.argb((tintAlpha * 255).toInt(), tr, tg, tb))
+        canvas.drawColor(Color.argb((tintAlpha * GlassRecipe.ALPHA_MAX).toInt(), tr, tg, tb))
+    }
 
-        // ---- top sheen: white 34 → 0 over the upper half ----
+    /** Top sheen: white 34 → 0 over the upper half. */
+    private fun drawSheen(canvas: Canvas, widthPx: Int, heightPx: Int) {
         val sheenPaint = Paint()
-        val sheenEnd = (heightPx * 0.5f).toInt().coerceAtLeast(1)
+        val sheenEnd = (heightPx * GlassRecipe.SHEEN_HEIGHT_FRACTION).toInt().coerceAtLeast(1)
         for (y in 0 until sheenEnd) {
             val t = y / sheenEnd.toFloat()
-            sheenPaint.color = Color.argb(((1f - t) * 34).toInt(), 255, 255, 255)
+            val alpha = ((1f - t) * GlassRecipe.SHEEN_MAX_ALPHA).toInt()
+            sheenPaint.color = (alpha shl 24) or GlassRecipe.WHITE_RGB
             canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, sheenPaint)
         }
+    }
 
-        // ---- edge light: warm hairline + top highlight line ----
+    /** Edge light: warm hairline + top highlight line. */
+    private fun drawEdge(
+        canvas: Canvas,
+        data: WidgetData,
+        widthPx: Int,
+        heightPx: Int,
+        radiusPx: Float
+    ) {
+        val style = data.settings.glassStyle
         val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = (radiusPx * 0.09f).coerceIn(2f, 6f)
-            color = when (settings.glassStyle) {
-                WidgetGlassStyle.LIGHT -> Color.argb(150, 255, 255, 255)
-                else -> Color.argb(115, 255, 238, 205)
+            this.style = Paint.Style.STROKE
+            strokeWidth = (radiusPx * GlassRecipe.EDGE_STROKE_FRACTION)
+                .coerceIn(GlassRecipe.EDGE_STROKE_MIN, GlassRecipe.EDGE_STROKE_MAX)
+            color = if (style == WidgetGlassStyle.LIGHT) {
+                GlassRecipe.EDGE_ON_LIGHT
+            } else {
+                GlassRecipe.EDGE_ON_DARK
             }
         }
         val inset = edgePaint.strokeWidth
@@ -216,14 +309,14 @@ internal object WidgetGlass {
         )
         val hiPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             strokeWidth = edgePaint.strokeWidth
-            color = when (settings.glassStyle) {
-                WidgetGlassStyle.LIGHT -> Color.argb(90, 255, 255, 255)
-                WidgetGlassStyle.CLEAR -> Color.argb(70, 255, 255, 255)
-                else -> Color.argb(52, 255, 255, 255)
+            color = when (style) {
+                WidgetGlassStyle.LIGHT -> GlassRecipe.HIGHLIGHT_ON_LIGHT
+                WidgetGlassStyle.CLEAR -> GlassRecipe.HIGHLIGHT_ON_CLEAR
+                else -> GlassRecipe.HIGHLIGHT_ON_DARK
             }
         }
-        canvas.drawLine(radiusPx, inset * 2, widthPx - radiusPx, inset * 2, hiPaint)
-        return out
+        val hiY = inset * GlassRecipe.HIGHLIGHT_INSET_FACTOR
+        canvas.drawLine(radiusPx, hiY, widthPx - radiusPx, hiY, hiPaint)
     }
 
     /** The goal ring (mockups): gold arc over a faint track.
@@ -231,22 +324,25 @@ internal object WidgetGlass {
     fun ringBitmap(sizePx: Int, percent: Int, light: Boolean): Bitmap {
         val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
-        val stroke = sizePx * 0.11f
+        val stroke = sizePx * GlassRecipe.RING_STROKE_FRACTION
         val rect = RectF(stroke / 2, stroke / 2, sizePx - stroke / 2, sizePx - stroke / 2)
         val track = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = stroke
-            color = if (light) Color.argb(60, 94, 18, 36) else Color.argb(46, 255, 255, 255)
+            color = if (light) GlassRecipe.TRACK_ON_LIGHT else GlassRecipe.TRACK_ON_DARK
         }
-        canvas.drawArc(rect, 0f, 360f, false, track)
+        canvas.drawArc(rect, 0f, GlassRecipe.FULL_CIRCLE_DEGREES, false, track)
         val arc = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = stroke
             strokeCap = Paint.Cap.ROUND
-            color = 0xFFC2A059.toInt()
+            color = GlassRecipe.GOLD
         }
-        val sweep = 360f * percent.coerceIn(0, 100) / 100f
-        if (sweep > 0f) canvas.drawArc(rect, -90f, sweep, false, arc)
+        val sweep = GlassRecipe.FULL_CIRCLE_DEGREES *
+            percent.coerceIn(0, GlassRecipe.PERCENT_BASE) / GlassRecipe.PERCENT_BASE
+        if (sweep > 0f) {
+            canvas.drawArc(rect, GlassRecipe.ARC_START_DEGREES, sweep, false, arc)
+        }
         return bmp
     }
 
@@ -259,15 +355,15 @@ internal object WidgetGlass {
         val canvas = Canvas(bmp)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         val n = dots.size.coerceAtLeast(1)
-        val r = heightPx * 0.32f
+        val r = heightPx * GlassRecipe.DOT_RADIUS_FRACTION
         val gap = widthPx.toFloat() / n
         dots.forEachIndexed { i, on ->
             paint.color = when {
-                on -> 0xFFC2A059.toInt()
-                light -> Color.argb(70, 94, 18, 36)
-                else -> Color.argb(60, 255, 255, 255)
+                on -> GlassRecipe.GOLD
+                light -> GlassRecipe.DOT_OFF_LIGHT
+                else -> GlassRecipe.DOT_OFF_DARK
             }
-            canvas.drawCircle(gap * (i + 0.5f), heightPx / 2f, r, paint)
+            canvas.drawCircle(gap * (i + GlassRecipe.DOT_CENTER_OFFSET), heightPx / 2f, r, paint)
         }
         return bmp
     }

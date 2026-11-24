@@ -98,38 +98,50 @@ data class TipsPack(
     companion object {
         fun parse(json: JSONObject): TipsPack? {
             val subject = json.optString("subject", "").trim()
-            if (subject.isEmpty()) return null
             val sectionsJson = json.optJSONObject("sections")
-            val parsed = LinkedHashMap<String, List<TipItem>>()
-            for (sectionId in TipsContract.SECTION_IDS) {
-                val arr = sectionsJson?.optJSONArray(sectionId)
-                val items = mutableListOf<TipItem>()
-                if (arr != null) {
-                    for (i in 0 until arr.length()) {
-                        val obj = arr.optJSONObject(i) ?: continue
+            val parsed = TipsContract.SECTION_IDS.associateWith { sectionId ->
+                parseItems(sectionsJson?.optJSONArray(sectionId))
+            }
+            return if (subject.isEmpty()) {
+                null
+            } else {
+                TipsPack(
+                    subject = subject,
+                    version = json.optInt("version", 0),
+                    updatedAt = json.optString("updated_at", ""),
+                    sections = parsed
+                )
+            }
+        }
+
+        /** One section's items: malformed entries and blank texts
+         * are skipped, a null author stays null (the UI's «بدون
+         * اسم» rule), and a missing array is an empty section. */
+        private fun parseItems(arr: org.json.JSONArray?): List<TipItem> =
+            if (arr == null) {
+                emptyList()
+            } else {
+                (0 until arr.length()).mapNotNull { i ->
+                    arr.optJSONObject(i)?.let { obj ->
                         val text = obj.optString("text", "")
-                        if (text.isBlank()) continue
-                        val author = if (obj.isNull("author")) null
-                            else obj.optString("author", "").trim().takeIf { it.isNotEmpty() }
-                        items.add(
+                        val author = if (obj.isNull("author")) {
+                            null
+                        } else {
+                            obj.optString("author", "").trim().takeIf { it.isNotEmpty() }
+                        }
+                        if (text.isBlank()) {
+                            null
+                        } else {
                             TipItem(
                                 id = obj.optString("id", ""),
                                 text = text,
                                 author = author,
                                 createdAt = obj.optString("created_at", "")
                             )
-                        )
+                        }
                     }
                 }
-                parsed[sectionId] = items
             }
-            return TipsPack(
-                subject = subject,
-                version = json.optInt("version", 0),
-                updatedAt = json.optString("updated_at", ""),
-                sections = parsed
-            )
-        }
 
         fun parse(text: String): TipsPack? = try {
             parse(JSONObject(text))

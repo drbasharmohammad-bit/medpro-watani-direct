@@ -28,6 +28,9 @@ interface TipsOutboxStore {
  *    المراجعة / منشورة / مرفوضة + سبب الرفض) over the local list via
  *    [TipsOutboxLogic.applyServerMine].
  */
+/** HTTP 200 — the synthetic success for a never-sent tombstone. */
+private const val HTTP_OK_CODE: Int = 200
+
 class TipsSyncEngine(
     private val store: TipsOutboxStore,
     private val gateway: TipsGateway,
@@ -91,34 +94,37 @@ class TipsSyncEngine(
     suspend fun flush(): Boolean = flushMutex.withLock {
         var drained = true
         for (entry in TipsOutboxLogic.pendingFlush(current())) {
-            val reply = when {
-                entry.deleted && entry.serverId != null ->
-                    gateway.delete(entry.serverId)
-                entry.deleted ->
-                    TipsGatewayReply(200) // never sent: delete() already dropped it; defensive
-                entry.serverId == null ->
-                    gateway.submit(entry)
-                else ->
-                    gateway.edit(entry.serverId, entry.text)
-            }
+            val reply = dispatch(entry)
             when {
                 reply.isAuthFailure -> {
                     drained = false
                     break
                 }
-                reply.isSuccess -> {
-                    val now = clock()
-                    val next = when {
-                        entry.deleted -> TipsOutboxLogic.markDeleteConfirmed(current(), entry.localId)
-                        entry.serverId == null -> TipsOutboxLogic.markSent(current(), entry.localId, reply.serverId, now)
-                        else -> TipsOutboxLogic.markEdited(current(), entry.localId, now)
-                    }
-                    commit(next)
-                }
+                reply.isSuccess -> commit(applySuccess(entry, reply))
                 else -> drained = false
             }
         }
         drained && TipsOutboxLogic.pendingFlush(current()).isEmpty()
+    }
+
+    /** One outbox entry → its gateway call: delete for tombstones,
+     * submit for new tips, edit for changed published ones. */
+    private suspend fun dispatch(entry: OutboxTip): TipsGatewayReply = when {
+        entry.deleted && entry.serverId != null -> gateway.delete(entry.serverId)
+        // Never sent: delete() already dropped it; defensive success.
+        entry.deleted -> TipsGatewayReply(HTTP_OK_CODE)
+        entry.serverId == null -> gateway.submit(entry)
+        else -> gateway.edit(entry.serverId, entry.text)
+    }
+
+    /** The outbox transition for one accepted entry. */
+    private fun applySuccess(entry: OutboxTip, reply: TipsGatewayReply): List<OutboxTip> {
+        val now = clock()
+        return when {
+            entry.deleted -> TipsOutboxLogic.markDeleteConfirmed(current(), entry.localId)
+            entry.serverId == null -> TipsOutboxLogic.markSent(current(), entry.localId, reply.serverId, now)
+            else -> TipsOutboxLogic.markEdited(current(), entry.localId, now)
+        }
     }
 
     /** Pull the server's view of «mine» and merge moderation states. */

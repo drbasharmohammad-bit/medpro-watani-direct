@@ -162,24 +162,33 @@ fun WidgetSettingsScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 GlassStyleThumb(
-                    style = WidgetGlassStyle.DARK,
-                    label = "عنابي داكن",
+                    spec = GlassThumbSpec(
+                        style = WidgetGlassStyle.DARK,
+                        label = "عنابي داكن",
+                        photoIndex = settings.fixedLandmarkIndex,
+                        alphaPercent = settings.glassAlphaPercent
+                    ),
                     selected = settings.glassStyle == WidgetGlassStyle.DARK,
-                    settings = settings,
                     modifier = Modifier.weight(1f)
                 ) { apply(settings.copy(glassStyle = WidgetGlassStyle.DARK)) }
                 GlassStyleThumb(
-                    style = WidgetGlassStyle.LIGHT,
-                    label = "عاجي فاتح",
+                    spec = GlassThumbSpec(
+                        style = WidgetGlassStyle.LIGHT,
+                        label = "عاجي فاتح",
+                        photoIndex = settings.fixedLandmarkIndex,
+                        alphaPercent = settings.glassAlphaPercent
+                    ),
                     selected = settings.glassStyle == WidgetGlassStyle.LIGHT,
-                    settings = settings,
                     modifier = Modifier.weight(1f)
                 ) { apply(settings.copy(glassStyle = WidgetGlassStyle.LIGHT)) }
                 GlassStyleThumb(
-                    style = WidgetGlassStyle.CLEAR,
-                    label = "شفاف",
+                    spec = GlassThumbSpec(
+                        style = WidgetGlassStyle.CLEAR,
+                        label = "شفاف",
+                        photoIndex = settings.fixedLandmarkIndex,
+                        alphaPercent = settings.glassAlphaPercent
+                    ),
                     selected = settings.glassStyle == WidgetGlassStyle.CLEAR,
-                    settings = settings,
                     modifier = Modifier.weight(1f)
                 ) { apply(settings.copy(glassStyle = WidgetGlassStyle.CLEAR)) }
             }
@@ -541,6 +550,37 @@ private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
     }
 }
 
+/** ثوابت شاشة الزجاج الرقمية (أحجام صور المعاينة/المصغّرات،
+ * لمعة، وألوان الصبغة كقيم ARGB مسمّاة). */
+@Suppress("MagicNumber") // the ARGB literals ARE the glass design tokens (repo pattern: LibraryDesign)
+private object GlassSettingsTokens {
+    const val PREVIEW_PHOTO_WIDTH: Int = 800
+    const val PREVIEW_PHOTO_HEIGHT: Int = 460
+    const val PREVIEW_PHOTO_RADIUS: Float = 60f
+    const val THUMB_PHOTO_WIDTH: Int = 300
+    const val THUMB_PHOTO_HEIGHT: Int = 200
+    const val THUMB_PHOTO_RADIUS: Float = 30f
+    const val SHEEN_END_Y: Float = 120f
+    const val SHEEN_ALPHA: Float = 0.13f
+    const val ALPHA_BASE: Float = 255f
+    const val MILLIS_PER_SECOND: Long = 1000L
+    const val SECONDS_PER_HOUR: Long = 3600L
+    const val SECONDS_PER_MINUTE: Long = 60L
+    val IVORY_ARGB: Int = 0xFFFAF6F0.toInt()
+    val BURGUNDY_DARK_ARGB: Int = 0xFF2E0812.toInt()
+    val BURGUNDY_ARGB: Int = 0xFF5E1224.toInt()
+    val GRADIENT_TOP_ARGB: Int = 0xFF7A2438.toInt()
+    val EDGE_ARGB: Int = 0x73FFEECC.toInt()
+    val GOLD_ARGB: Int = 0xFFC2A059.toInt()
+}
+
+/** لون صبغة الزجاج لكل نمط (يطابق WidgetGlass). */
+private fun glassTintArgb(style: WidgetGlassStyle): Int = when (style) {
+    WidgetGlassStyle.LIGHT -> GlassSettingsTokens.IVORY_ARGB
+    WidgetGlassStyle.CLEAR -> GlassSettingsTokens.BURGUNDY_DARK_ARGB
+    WidgetGlassStyle.DARK -> GlassSettingsTokens.BURGUNDY_ARGB
+}
+
 /**
  * معاينة الزجاج الحية (1.2.51 — نموذج settings.png): صورة المعلم
  * المختار + صبغة النمط والشفافية الحالية + محتوى عدّاد حقيقي،
@@ -550,8 +590,6 @@ private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
 @Composable
 private fun GlassPreviewCard(settings: WidgetSettings) {
     val context = LocalContext.current
-    val shape = RoundedCornerShape(20.dp)
-    val palette = GlassPalette.forStyle(settings.glassStyle)
     val photo = remember(settings.bgMode, settings.fixedLandmarkIndex) {
         val index = WidgetBackgroundMath.pickIndex(
             settings, LocalDate.now().toEpochDay(), LandmarkLibrary.all.size
@@ -559,98 +597,28 @@ private fun GlassPreviewCard(settings: WidgetSettings) {
         if (index == null) {
             null
         } else {
-            WidgetPhotos.rounded(context, LandmarkLibrary.all[index].drawableRes, 800, 460, 60f)
+            WidgetPhotos.rounded(
+                context, LandmarkLibrary.all[index].drawableRes,
+                GlassSettingsTokens.PREVIEW_PHOTO_WIDTH,
+                GlassSettingsTokens.PREVIEW_PHOTO_HEIGHT,
+                GlassSettingsTokens.PREVIEW_PHOTO_RADIUS
+            )
         }
-    }
-    val tintAlpha = WidgetGlassMath.effectiveTintAlpha(settings.glassStyle, settings.glassAlphaPercent) / 255f
-    val tintColor = when (settings.glassStyle) {
-        WidgetGlassStyle.LIGHT -> Color(0xFFFAF6F0)
-        WidgetGlassStyle.CLEAR -> Color(0xFF2E0812)
-        WidgetGlassStyle.DARK -> Color(0xFF5E1224)
     }
     val parts = remember {
         val target = DailyGoalEngine.examTargetOrDefault(context)
         CountdownMath.split(target - System.currentTimeMillis())
     }
     val timeText = remember(parts) {
-        val totalSec = (parts.withinDayMillis / 1000).coerceAtLeast(0)
-        "%02d:%02d:%02d".format(totalSec / 3600, (totalSec % 3600) / 60, totalSec % 60)
+        val totalSec = (parts.withinDayMillis / GlassSettingsTokens.MILLIS_PER_SECOND).coerceAtLeast(0)
+        "%02d:%02d:%02d".format(
+            totalSec / GlassSettingsTokens.SECONDS_PER_HOUR,
+            (totalSec % GlassSettingsTokens.SECONDS_PER_HOUR) / GlassSettingsTokens.SECONDS_PER_MINUTE,
+            totalSec % GlassSettingsTokens.SECONDS_PER_MINUTE
+        )
     }
     Column {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(settings.previewSize.aspect)
-                .clip(shape)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF7A2438), Color(0xFF2E0812))
-                    )
-                )
-                .border(1.dp, Color(0x73FFEECC), shape)
-        ) {
-            if (photo != null) {
-                Image(
-                    bitmap = photo.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            // صبغة الزجاج + لمعة علوية كما بالوصفة المعتمدة.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(tintColor.copy(alpha = tintAlpha))
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.White.copy(alpha = 0.13f), Color.Transparent),
-                            endY = 120f
-                        )
-                    )
-            )
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(14.dp)
-            ) {
-                Text(
-                    "العد التنازلي للامتحان الوطني",
-                    fontFamily = ThmanyahFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    color = Color(palette.heading)
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "${parts.days}",
-                        fontFamily = ThmanyahFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 40.sp,
-                        color = Color(palette.primary)
-                    )
-                    Spacer(Modifier.size(6.dp))
-                    Text(
-                        "يومًا",
-                        fontFamily = ThmanyahFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = Color(palette.secondary)
-                    )
-                }
-                Text(
-                    timeText,
-                    fontFamily = ThmanyahFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = Color(palette.timeAccent)
-                )
-            }
-        }
+        GlassPreviewSurface(settings = settings, photo = photo, days = parts.days, timeText = timeText)
         Spacer(Modifier.height(8.dp))
         Box(
             modifier = Modifier
@@ -668,39 +636,139 @@ private fun GlassPreviewCard(settings: WidgetSettings) {
     }
 }
 
+/** سطح المعاينة نفسه: صورة + صبغة + لمعة + محتوى العدّاد. */
+@Composable
+private fun GlassPreviewSurface(
+    settings: WidgetSettings,
+    photo: android.graphics.Bitmap?,
+    days: Long,
+    timeText: String
+) {
+    val shape = RoundedCornerShape(20.dp)
+    val palette = GlassPalette.forStyle(settings.glassStyle)
+    val tintAlpha = WidgetGlassMath.effectiveTintAlpha(
+        settings.glassStyle, settings.glassAlphaPercent
+    ) / GlassSettingsTokens.ALPHA_BASE
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(settings.previewSize.aspect)
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(GlassSettingsTokens.GRADIENT_TOP_ARGB),
+                        Color(GlassSettingsTokens.BURGUNDY_DARK_ARGB)
+                    )
+                )
+            )
+            .border(1.dp, Color(GlassSettingsTokens.EDGE_ARGB), shape)
+    ) {
+        if (photo != null) {
+            Image(
+                bitmap = photo.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        // صبغة الزجاج + لمعة علوية كما بالوصفة المعتمدة.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(glassTintArgb(settings.glassStyle)).copy(alpha = tintAlpha))
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = GlassSettingsTokens.SHEEN_ALPHA),
+                            Color.Transparent
+                        ),
+                        endY = GlassSettingsTokens.SHEEN_END_Y
+                    )
+                )
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(14.dp)
+        ) {
+            Text(
+                "العد التنازلي للامتحان الوطني",
+                fontFamily = ThmanyahFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                color = Color(palette.heading)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "$days",
+                    fontFamily = ThmanyahFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 40.sp,
+                    color = Color(palette.primary)
+                )
+                Spacer(Modifier.size(6.dp))
+                Text(
+                    "يومًا",
+                    fontFamily = ThmanyahFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = Color(palette.secondary)
+                )
+            }
+            Text(
+                timeText,
+                fontFamily = ThmanyahFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = Color(palette.timeAccent)
+            )
+        }
+    }
+}
+
+/** مواصفة مصغّرة نمط (قيمة مجمّعة — نمط الريبو للبارامترات). */
+private data class GlassThumbSpec(
+    val style: WidgetGlassStyle,
+    val label: String,
+    val photoIndex: Int,
+    val alphaPercent: Int
+)
+
 /** مصغّرة نمط زجاجي مرسومة فعليًا (صورة + صبغة) — تُختار بحدّ ذهبي. */
 @Composable
 private fun GlassStyleThumb(
-    style: WidgetGlassStyle,
-    label: String,
+    spec: GlassThumbSpec,
     selected: Boolean,
-    settings: WidgetSettings,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
     val shape = RoundedCornerShape(12.dp)
-    val photo = remember(settings.fixedLandmarkIndex) {
+    val photo = remember(spec.photoIndex) {
         WidgetPhotos.rounded(
-            context, LandmarkLibrary.all[settings.fixedLandmarkIndex].drawableRes, 300, 200, 30f
+            context, LandmarkLibrary.all[spec.photoIndex].drawableRes,
+            GlassSettingsTokens.THUMB_PHOTO_WIDTH,
+            GlassSettingsTokens.THUMB_PHOTO_HEIGHT,
+            GlassSettingsTokens.THUMB_PHOTO_RADIUS
         )
     }
-    val alpha = WidgetGlassMath.effectiveTintAlpha(style, settings.glassAlphaPercent) / 255f
-    val tint = when (style) {
-        WidgetGlassStyle.LIGHT -> Color(0xFFFAF6F0)
-        WidgetGlassStyle.CLEAR -> Color(0xFF2E0812)
-        WidgetGlassStyle.DARK -> Color(0xFF5E1224)
-    }
+    val alpha = WidgetGlassMath.effectiveTintAlpha(spec.style, spec.alphaPercent) /
+        GlassSettingsTokens.ALPHA_BASE
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(46.dp)
                 .clip(shape)
-                .background(Color(0xFF2E0812))
+                .background(Color(GlassSettingsTokens.BURGUNDY_DARK_ARGB))
                 .border(
                     if (selected) 2.dp else 1.dp,
-                    if (selected) Color(0xFFC2A059) else Color(0x33FFFFFF),
+                    if (selected) Color(GlassSettingsTokens.GOLD_ARGB) else Color(0x33FFFFFF),
                     shape
                 )
                 .clickable { onClick() }
@@ -716,15 +784,19 @@ private fun GlassStyleThumb(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(tint.copy(alpha = alpha))
+                    .background(Color(glassTintArgb(spec.style)).copy(alpha = alpha))
             )
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            label,
+            spec.label,
             fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) MaroonPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            color = if (selected) {
+                MaroonPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            }
         )
     }
 }
