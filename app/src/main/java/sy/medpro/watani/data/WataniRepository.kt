@@ -958,12 +958,15 @@ class WataniRepository(private val context: Context) {
      * of the shard body. */
     fun sessionCountsIndexEntry(path: String): SessionCountsIndexEntry? {
         val registryHash = _downloadedSectionsFlow.value
-            .firstOrNull { it.sectionPath == path }?.hash ?: return null
+            .firstOrNull { it.sectionPath == path }?.hash
         return try {
-            val raw = sessionCountsPrefs.getString(path, null) ?: return null
-            if (raw.substringBefore('\n') != registryHash) return null
-            moshi.adapter(SessionCountsIndexEntry::class.java)
-                .fromJson(raw.substringAfter('\n'))
+            val raw = registryHash?.let { sessionCountsPrefs.getString(path, null) }
+            if (raw == null || raw.substringBefore('\n') != registryHash) {
+                null
+            } else {
+                moshi.adapter(SessionCountsIndexEntry::class.java)
+                    .fromJson(raw.substringAfter('\n'))
+            }
         } catch (e: Exception) {
             null
         }
@@ -1854,12 +1857,14 @@ class WataniRepository(private val context: Context) {
         // Gentle lease: library.json is a restricted file — the
         // lease check stays FIRST, before any cached value (1.2.27
         // rule, same as getSubjectEnvelope).
-        val leaseExpired = try {
+        val leaseBlocked = try {
             WorkerActivationApi.isRestrictedLeaseExpired(context)
         } catch (e: Exception) {
-            return null
+            // The pre-1.2.48 body ran this check inside the envelope
+            // try, where a throwing check failed the whole read.
+            true
         }
-        if (leaseExpired) return null
+        if (leaseBlocked) return null
         // Books never surface in-app (see LibraryEnvelope.videosOnly):
         // the raw parse is what the 1.2.48 pack cache holds, and the
         // videosOnly projection is applied per call as before.

@@ -635,6 +635,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * at a time — fast on multi-core phones, gentle on memory. */
     private val shardSweepSemaphore = Semaphore(4)
 
+    /** Splits [shardPaths] into the «دورة كاملة» inputs the
+     * persisted session-count index can serve directly (no shard
+     * body is parsed for them) and the paths that still need an
+     * envelope fetch (1.2.48, performance item 3). */
+    private fun indexedDawraInputs(
+        shardPaths: List<String>
+    ): Pair<MutableList<DawraSubjectSessions>, List<String>> {
+        val inputs = mutableListOf<DawraSubjectSessions>()
+        val unindexedPaths = mutableListOf<String>()
+        for (path in shardPaths) {
+            val indexed = repository.sessionCountsIndexEntry(path)
+            val indexedCounts = indexed?.counts
+            if (indexed != null && indexedCounts != null) {
+                inputs += DawraSubjectSessions(
+                    subjectName = indexed.subjectName
+                        ?: path.removePrefix("questions/").removeSuffix(".json"),
+                    path = path,
+                    sessionCounts = LinkedHashMap(indexedCounts)
+                )
+            } else {
+                unindexedPaths += path
+            }
+        }
+        return inputs to unindexedPaths
+    }
+
     /**
      * Fetches the envelopes of [paths] with bounded parallelism,
      * preserving the input order in the result (nulls dropped).
@@ -689,27 +715,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val shardPaths = signature.keys.filter { it.startsWith("questions/") }
                 // Light session-count index first (1.2.48, performance
-                // item 3): a shard whose counts were indexed when its
-                // envelope was parsed contributes its table with NO
-                // body parse at all; only shards without an index
-                // entry go through the envelope sweep (which in turn
-                // builds their index entries for the next open).
-                val inputs = mutableListOf<DawraSubjectSessions>()
-                val unindexedPaths = mutableListOf<String>()
-                for (path in shardPaths) {
-                    val indexed = repository.sessionCountsIndexEntry(path)
-                    val indexedCounts = indexed?.counts
-                    if (indexed != null && indexedCounts != null) {
-                        inputs += DawraSubjectSessions(
-                            subjectName = indexed.subjectName
-                                ?: path.removePrefix("questions/").removeSuffix(".json"),
-                            path = path,
-                            sessionCounts = LinkedHashMap(indexedCounts)
-                        )
-                    } else {
-                        unindexedPaths += path
-                    }
-                }
+                // item 3): indexed shards contribute their tables with
+                // NO body parse; the rest go through the envelope
+                // sweep (which builds their index entries in turn).
+                val (inputs, unindexedPaths) = indexedDawraInputs(shardPaths)
                 inputs += fetchEnvelopesParallel(unindexedPaths).map { (path, envelope) ->
                     DawraSubjectSessions(
                         subjectName = envelope.subjectName

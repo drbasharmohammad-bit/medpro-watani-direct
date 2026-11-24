@@ -42,15 +42,16 @@ object ImageDecode {
         targetWidthPx: Int,
         targetHeightPx: Int = 0
     ): Int {
-        if (sourceWidth <= 0 || sourceHeight <= 0) return 1
-        if (targetWidthPx <= 0 && targetHeightPx <= 0) return 1
         var sample = 1
-        while (true) {
-            val next = sample * 2
-            val widthOk = targetWidthPx <= 0 || sourceWidth / next >= targetWidthPx
-            val heightOk = targetHeightPx <= 0 || sourceHeight / next >= targetHeightPx
-            if (widthOk && heightOk) sample = next else return sample
+        if (sourceWidth > 0 && sourceHeight > 0 && (targetWidthPx > 0 || targetHeightPx > 0)) {
+            while (true) {
+                val next = sample * 2
+                val widthOk = targetWidthPx <= 0 || sourceWidth / next >= targetWidthPx
+                val heightOk = targetHeightPx <= 0 || sourceHeight / next >= targetHeightPx
+                if (widthOk && heightOk) sample = next else break
+            }
         }
+        return sample
     }
 
     /** Decodes the file at [path] subsampled toward the target. */
