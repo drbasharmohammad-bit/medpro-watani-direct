@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Thmanyah Sans family for the GLASS WIDGET layouts only
+     (build 1.2.51, widget glass family v4). Three weights —
+     Regular / Medium / Bold — the subset the widget designs use.
+     The app's own typography stays Noto (Premium identity); this
+     family is referenced only from res/layout/widget_*.xml via
+     android:fontFamily. License: Thmanyah's official terms allow
+     use inside applications (see widget-glass-v4/REPORT.md §5);
+     embedding in the APK is application use, not file distribution. -->
+<font-family xmlns:android="http://schemas.android.com/apk/res/android">
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="400"
+        android:font="@font/thmanyahsans_regular" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="500"
+        android:font="@font/thmanyahsans_medium" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="700"
+        android:font="@font/thmanyahsans_bold" />
+</font-family>

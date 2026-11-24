@@ -19,7 +19,14 @@ import android.content.Context
 /** نمط خلفية الويدجت. */
 enum class WidgetBgMode { ROTATE, FIXED, PLAIN }
 
-/** نمط عرض العدّ التنازلي. */
+/**
+ * نمط الزجاج (بناء 1.2.51 — عائلة الويدجت الزجاجية v4 المعتمدة):
+ * عنابي داكن (الافتراضي كما بالنماذج) · عاجي فاتح (نص عنابي) ·
+ * شفاف (صبغة خفيفة على الخلفية مباشرة). النمط واحد لكل العائلة.
+ */
+enum class WidgetGlassStyle { DARK, LIGHT, CLEAR }
+
+/** نمط الزجاج. */
 enum class WidgetCountdownStyle {
     /** أيام كاملة + كرونومتر باقي اليوم (الافتراضي، كما بالنماذج). */
     DAYS_AND_TIME,
@@ -59,8 +66,28 @@ data class WidgetSettings(
     val showFocus: Boolean = true,
     val showButtons: Boolean = true,
     val countdownStyle: WidgetCountdownStyle = WidgetCountdownStyle.DAYS_AND_TIME,
-    val quickActions: List<WidgetQuickAction> = WidgetQuickAction.entries
+    val quickActions: List<WidgetQuickAction> = WidgetQuickAction.entries,
+    /** نمط الزجاج v4 (1.2.51) — الافتراضي عنابي داكن كما بالنماذج. */
+    val glassStyle: WidgetGlassStyle = WidgetGlassStyle.DARK,
+    /** قوّة صبغة الزجاج ٪ — بحدّ أدنى يحفظ المقروئية (انظر
+     * [WidgetGlassMath.GLASS_ALPHA_MIN]). الافتراضي 65 كما بنموذج
+     * شاشة الإعدادات المعتمد. */
+    val glassAlphaPercent: Int = WidgetGlassMath.DEFAULT_GLASS_ALPHA,
+    /** إظهار ويدجت «زوادة اليوم» ومحتواه (1.2.51). */
+    val showTip: Boolean = true,
+    /** حجم المعاينة المختار بشاشة الإعدادات (للمعاينة فقط — حجم
+     * الويدجت الحقيقي يقرره الطالب عند التثبيت على الشاشة). */
+    val previewSize: WidgetPreviewSize = WidgetPreviewSize.S4X2
 )
+
+/** أحجام معاينة شاشة الإعدادات (رقائق النموذج المعتمد). */
+enum class WidgetPreviewSize(val label: String, val aspect: Float) {
+    S2X1("2×1", 2.0f),
+    S2X2("2×2", 1.0f),
+    S4X1("4×1", 4.0f),
+    S4X2("4×2", 2.0f),
+    S4X4("4×4", 1.0f)
+}
 
 // ---------------------------------------------------------------------
 // Pure logic (no Android imports — unit tested).
@@ -209,10 +236,108 @@ object WidgetShapeMath {
     fun fallbackSizeDp(kind: Int): Pair<Int, Int> = when (kind) {
         0 -> 110 to 110   // KIND_COUNTDOWN — widget_countdown_info.xml
         1 -> 250 to 140   // KIND_DAY — widget_day_info.xml
-        else -> 250 to 180 // KIND_LARGE — widget_day_large_info.xml
+        2 -> 250 to 180   // KIND_LARGE — widget_day_large_info.xml
+        3 -> 250 to 140   // KIND_COUNTDOWN_WIDE (design 1, 4×2)
+        4 -> 250 to 260   // KIND_HERO (design 2, 4×4)
+        5 -> 110 to 110   // KIND_GOAL (design 3, 2×2)
+        6 -> 110 to 110   // KIND_STREAK (design 4, 2×2)
+        7 -> 250 to 70    // KIND_CONTINUE (design 5, 4×1)
+        8 -> 250 to 140   // KIND_TIP (design 6, 4×2)
+        9 -> 250 to 70    // KIND_ACTIONS (design 7, 4×1)
+        10 -> 110 to 110  // KIND_FOCUS (design 8, 2×2)
+        else -> 170 to 80 // KIND_MINI (design 9, 2×1)
     }
 
     const val MAX_BITMAP_SIDE_PX = 1200
+}
+
+// ---------------------------------------------------------------------
+// Glass math (build 1.2.51, widget glass family v4) — pure.
+// ---------------------------------------------------------------------
+
+object WidgetGlassMath {
+
+    /**
+     * ⛔ الحدّ الأدنى الموثّق لقوّة صبغة الزجاج: 45٪.
+     *
+     * السبب (درس مراجعات Glassify المسجّل بتقرير التصميم:
+     * «الشفافية الزائدة تقتل المقروئية على الخلفيات المزدحمة»):
+     * تحت 45٪ تهبط صبغة العنابي/العاجي فوق أفتح صور المعالم
+     * (سماء تدمر/بصرى نهارًا) بتباين النص العاجي/العنابي دون حدّ
+     * القراءة المريحة على شاشة رئيسية تُقرأ بلمحة. المنزلق إذن
+     * يعمل 45..100 فقط، وأي قيمة مخزّنة أدنى تُرفع للحدّ عند
+     * القراءة — لا توجد حالة يصير فيها الويدجت غير مقروء.
+     */
+    const val GLASS_ALPHA_MIN: Int = 45
+    const val GLASS_ALPHA_MAX: Int = 100
+    const val DEFAULT_GLASS_ALPHA: Int = 65
+
+    fun clampGlassAlpha(value: Int): Int =
+        value.coerceIn(GLASS_ALPHA_MIN, GLASS_ALPHA_MAX)
+
+    /** ألفا الصبغة الفعلية 0..1 من نسبة المنزلق المقصوصة. */
+    fun tintAlpha(glassAlphaPercent: Int): Float =
+        clampGlassAlpha(glassAlphaPercent) / 100f
+
+    /** للنمط الشفاف تُخفَّف الصبغة لربع قوّتها — الزجاج على
+     * الخلفية مباشرة كما بنموذج «شفاف»، والحدّ الأدنى نفسه
+     * يحمي المقروئية عبر طبقة التعتيم التحتية القائمة. */
+    fun effectiveTintAlpha(style: WidgetGlassStyle, glassAlphaPercent: Int): Float =
+        when (style) {
+            WidgetGlassStyle.CLEAR -> tintAlpha(glassAlphaPercent) * 0.35f
+            else -> tintAlpha(glassAlphaPercent)
+        }
+}
+
+/** سلسلة الأيام ونقاط الأسبوع — منطق نقي من خريطة النشاط اليومي
+ * (مفاتيح yyyy-MM-dd كما يخزّنها OfflineStudyVault). */
+object WidgetStreakMath {
+
+    /** أيام متتالية منتهية اليوم (أو أمس إن لم يبدأ اليوم بعد —
+     * سلسلة الأمس لا تنكسر قبل أن يدرس الطالب اليوم). */
+    fun streakDays(activity: Map<String, Int>, today: java.time.LocalDate): Int {
+        var cursor = if ((activity[today.toString()] ?: 0) > 0) today else today.minusDays(1)
+        var streak = 0
+        while ((activity[cursor.toString()] ?: 0) > 0) {
+            streak++
+            cursor = cursor.minusDays(1)
+        }
+        return streak
+    }
+
+    /** نشاط آخر 7 أيام منتهية اليوم، من الأقدم للأحدث (نقاط
+     * الأسبوع السبع بالنماذج). */
+    fun weekDots(activity: Map<String, Int>, today: java.time.LocalDate): List<Boolean> =
+        (6 downTo 0).map { back ->
+            (activity[today.minusDays(back.toLong()).toString()] ?: 0) > 0
+        }
+}
+
+/**
+ * آخر موضع دراسة («تابع من حيث توقفت» للويدجت): يُحفظ عند فتح
+ * أي مادة من البنك (المسار والاسم)، ويقرؤه الويدجت ليعرض الموضع
+ * ويفتحه بلمسته. جهازي كإعدادات الويدجت.
+ */
+object LastStudyStore {
+
+    private const val PREFS = "watani_widget_last_study"
+    private const val KEY_PATH = "path"
+    private const val KEY_NAME = "name"
+
+    fun save(context: Context, path: String, subjectName: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_PATH, path)
+            .putString(KEY_NAME, subjectName)
+            .apply()
+    }
+
+    /** (المسار، اسم المادة) أو null إن لم يدرس الطالب بعد. */
+    fun load(context: Context): Pair<String, String>? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val path = prefs.getString(KEY_PATH, null)?.takeIf { it.isNotBlank() } ?: return null
+        val name = prefs.getString(KEY_NAME, null)?.takeIf { it.isNotBlank() } ?: return null
+        return path to name
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -232,6 +357,10 @@ object WidgetSettingsStore {
     private const val KEY_SHOW_BUTTONS = "show_buttons"
     private const val KEY_STYLE = "countdown_style"
     private const val KEY_ACTIONS = "quick_actions"
+    private const val KEY_GLASS_STYLE = "glass_style"
+    private const val KEY_GLASS_ALPHA = "glass_alpha_percent"
+    private const val KEY_SHOW_TIP = "show_tip"
+    private const val KEY_PREVIEW_SIZE = "preview_size"
 
     fun settings(context: Context): WidgetSettings {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -252,7 +381,17 @@ object WidgetSettingsStore {
             }.getOrDefault(defaults.countdownStyle),
             quickActions = WidgetSettingsMath.decodeQuickActions(
                 prefs.getString(KEY_ACTIONS, null)
-            )
+            ),
+            glassStyle = runCatching {
+                WidgetGlassStyle.valueOf(prefs.getString(KEY_GLASS_STYLE, defaults.glassStyle.name)!!)
+            }.getOrDefault(defaults.glassStyle),
+            glassAlphaPercent = WidgetGlassMath.clampGlassAlpha(
+                prefs.getInt(KEY_GLASS_ALPHA, defaults.glassAlphaPercent)
+            ),
+            showTip = prefs.getBoolean(KEY_SHOW_TIP, defaults.showTip),
+            previewSize = runCatching {
+                WidgetPreviewSize.valueOf(prefs.getString(KEY_PREVIEW_SIZE, defaults.previewSize.name)!!)
+            }.getOrDefault(defaults.previewSize)
         )
     }
 
@@ -268,6 +407,10 @@ object WidgetSettingsStore {
             .putBoolean(KEY_SHOW_BUTTONS, settings.showButtons)
             .putString(KEY_STYLE, settings.countdownStyle.name)
             .putString(KEY_ACTIONS, WidgetSettingsMath.encodeQuickActions(settings.quickActions))
+            .putString(KEY_GLASS_STYLE, settings.glassStyle.name)
+            .putInt(KEY_GLASS_ALPHA, WidgetGlassMath.clampGlassAlpha(settings.glassAlphaPercent))
+            .putBoolean(KEY_SHOW_TIP, settings.showTip)
+            .putString(KEY_PREVIEW_SIZE, settings.previewSize.name)
             .apply()
     }
 }

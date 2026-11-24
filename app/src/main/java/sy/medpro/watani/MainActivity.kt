@@ -614,6 +614,24 @@ class MainActivity : ComponentActivity() {
                                 mistakesAutoReview = true
                                 drawerScreen = "بنك أخطائي"
                             }
+                            is sy.medpro.watani.ui.widget.WidgetDestination.Tips -> {
+                                // ويدجت «زوادة اليوم» (1.2.51): يفتح
+                                // القسم، وعلى مادة النصيحة إن وُجدت.
+                                tipsInitialSubject = destination.subject
+                                drawerScreen = "زوادة الطالب"
+                            }
+                            sy.medpro.watani.ui.widget.WidgetDestination.Continue -> {
+                                // ويدجت «تابع من حيث توقفت» (1.2.51):
+                                // يعيد فتح آخر مادة من موضعها.
+                                val last = sy.medpro.watani.data.LastStudyStore.load(context)
+                                val envelope = last?.let { viewModel.getSubjectEnvelope(it.first) }
+                                if (last != null && envelope != null) {
+                                    activeSubjectEnvelope = envelope
+                                    viewModel.openSubject(last.first, last.second, AppTab.BANK)
+                                } else {
+                                    viewModel.navigateToHome()
+                                }
+                            }
                             sy.medpro.watani.ui.widget.WidgetDestination.Home -> Unit
                         }
                         sy.medpro.watani.ui.widget.WidgetRouter.consume()
@@ -1438,6 +1456,9 @@ class MainActivity : ComponentActivity() {
                                                                 onRefreshManifest = { viewModel.fetchManifest() },
                                                                 onDownloadSection = { path, entry -> viewModel.downloadSection(path, entry) },
                                                                 onOpenSubject = { path, name, tab ->
+                                                                    // «تابع من حيث توقفت» (1.2.51):
+                                                                    // حفظ آخر مادة فُتحت لويدجت التابع.
+                                                                    sy.medpro.watani.data.LastStudyStore.save(context, path, name)
                                                                     coroutineScope.launch {
                                                                         activeSubjectEnvelope = viewModel.getSubjectEnvelope(path)
                                                                         viewModel.openSubject(path, name, tab)

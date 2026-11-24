@@ -33,7 +33,41 @@ object ProfileNameStore {
 
     /** Pure: the approved home greeting for a resolved name. */
     fun greetingFor(name: String?): String =
-        if (name.isNullOrBlank()) "مرحباً بك زميلي الطبيب" else "د. $name"
+        if (name.isNullOrBlank()) "مرحباً بك زميلي الطبيب" else prefixedName(name.trim())
+
+    /**
+     * Pure: the student's name WITH its title prefix, the prefix
+     * derived from the language of the name itself (doctor's device
+     * report, build 1.2.51: «د.» used to sit in the wrong place next
+     * to a Latin name like "Bashar Al Mohammad"):
+     * - A name whose FIRST LETTER is Arabic → «د.» (Arabic form).
+     * - A name whose FIRST LETTER is Latin → "Dr." before it.
+     * - Mixed names: the first letter decides (a name that opens
+     *   Arabic is an Arabic name with a Latin tail, and vice versa).
+     * - No letter at all (digits/symbols only) → the Arabic form,
+     *   the app's first language.
+     * This is the ONE place the prefix is built — every surface
+     * that shows the student's name with a title goes through here.
+     */
+    fun prefixedName(name: String): String {
+        val firstLetter = name.firstOrNull { it.isLetter() }
+        return when {
+            firstLetter == null -> "د. $name"
+            isArabicLetter(firstLetter) -> "د. $name"
+            else -> "Dr. $name"
+        }
+    }
+
+    /** Arabic-script letters: the Arabic block, its supplements and
+     * presentation forms — what a student typing an Arabic name
+     * actually produces. */
+    fun isArabicLetter(ch: Char): Boolean =
+        ch in '\u0620'..'\u064A' || // Arabic
+            ch in '\u066E'..'\u06D3' || // Arabic Supplement
+            ch in '\u0750'..'\u077F' || // Arabic Extended-A
+            ch in '\u08A0'..'\u08FF' || // Arabic Extended-B
+            ch in '\uFB50'..'\uFDFF' || // Presentation Forms-A
+            ch in '\uFE70'..'\uFEFF' // Presentation Forms-B
 
     fun savedName(context: Context, uid: String?): String? =
         context.getSharedPreferences(prefsNameFor(uid), Context.MODE_PRIVATE)

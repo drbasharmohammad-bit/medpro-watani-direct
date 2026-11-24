@@ -30,6 +30,14 @@ import sy.medpro.watani.data.WidgetSettings
 import sy.medpro.watani.data.WidgetSettingsMath
 import sy.medpro.watani.data.WidgetShapeMath
 import sy.medpro.watani.data.WidgetSettingsStore
+import sy.medpro.watani.data.LastStudyStore
+import sy.medpro.watani.data.OfflineStudyVault
+import sy.medpro.watani.data.TipsContract
+import sy.medpro.watani.data.TipsRepository
+import sy.medpro.watani.data.WidgetGlassStyle
+import sy.medpro.watani.data.WidgetStreakMath
+import sy.medpro.watani.data.WidgetTip
+import sy.medpro.watani.data.WidgetTipMath
 import java.time.LocalDate
 
 /**
@@ -83,7 +91,17 @@ internal data class WidgetData(
     /** Chosen landmark index for today, or null in plain mode.
      * The landmark's NAME is never written on the widget at any
      * size (doctor's order 16 Nov 18:32) — the photo stands alone. */
-    val landmarkIndex: Int?
+    val landmarkIndex: Int?,
+    /** Consecutive study days ending today/yesterday (glass
+     * family v4, design 4 + hero). */
+    val streakDays: Int = 0,
+    /** Activity of the last 7 days, oldest → newest (design 4). */
+    val weekDots: List<Boolean> = List(7) { false },
+    /** Last opened bank subject («تابع من حيث توقفت», design 5). */
+    val lastSubjectName: String? = null,
+    /** Today's stable daily tip from the downloaded «زوادة
+     * الطالب» packs (design 6); null = no pack/tip yet. */
+    val tipOfDay: WidgetTip? = null
 )
 
 object Widgets {
@@ -91,7 +109,16 @@ object Widgets {
     private val PROVIDERS: List<Class<*>> = listOf(
         CountdownWidgetProvider::class.java,
         DayWidgetProvider::class.java,
-        DayWidgetLargeProvider::class.java
+        DayWidgetLargeProvider::class.java,
+        CountdownWideWidgetProvider::class.java,
+        HeroWidgetProvider::class.java,
+        GoalWidgetProvider::class.java,
+        StreakWidgetProvider::class.java,
+        ContinueWidgetProvider::class.java,
+        TipWidgetProvider::class.java,
+        QuickActionsWidgetProvider::class.java,
+        FocusWidgetProvider::class.java,
+        MiniCountdownWidgetProvider::class.java
     )
 
     /** Refreshes every placed widget of the family. Called on app
@@ -110,7 +137,16 @@ object Widgets {
                 val kind = when (providerClass) {
                     CountdownWidgetProvider::class.java -> KIND_COUNTDOWN
                     DayWidgetProvider::class.java -> KIND_DAY
-                    else -> KIND_LARGE
+                    DayWidgetLargeProvider::class.java -> KIND_LARGE
+                    CountdownWideWidgetProvider::class.java -> KIND_COUNTDOWN_WIDE
+                    HeroWidgetProvider::class.java -> KIND_HERO
+                    GoalWidgetProvider::class.java -> KIND_GOAL
+                    StreakWidgetProvider::class.java -> KIND_STREAK
+                    ContinueWidgetProvider::class.java -> KIND_CONTINUE
+                    TipWidgetProvider::class.java -> KIND_TIP
+                    QuickActionsWidgetProvider::class.java -> KIND_ACTIONS
+                    FocusWidgetProvider::class.java -> KIND_FOCUS
+                    else -> KIND_MINI
                 }
                 // Per-instance views (1.2.27): the background
                 // bitmaps are clipped at the instance's real size,
@@ -157,7 +193,16 @@ object Widgets {
     ): RemoteViews = when (kind) {
         KIND_COUNTDOWN -> buildCountdownViews(context, data, sizeDp)
         KIND_DAY -> buildDayViews(context, data, sizeDp)
-        else -> buildLargeViews(context, data, sizeDp)
+        KIND_LARGE -> buildLargeViews(context, data, sizeDp)
+        KIND_COUNTDOWN_WIDE -> buildCountdownWideViews(context, data, sizeDp)
+        KIND_HERO -> buildHeroViews(context, data, sizeDp)
+        KIND_GOAL -> buildGoalViews(context, data, sizeDp)
+        KIND_STREAK -> buildStreakViews(context, data, sizeDp)
+        KIND_CONTINUE -> buildContinueViews(context, data, sizeDp)
+        KIND_TIP -> buildTipViews(context, data, sizeDp)
+        KIND_ACTIONS -> buildActionsViews(context, data, sizeDp)
+        KIND_FOCUS -> buildFocusViews(context, data, sizeDp)
+        else -> buildMiniViews(context, data, sizeDp)
     }
 
     /** The placed instance's real size in dp from its widget
@@ -184,6 +229,15 @@ object Widgets {
     internal const val KIND_COUNTDOWN = 0
     internal const val KIND_DAY = 1
     internal const val KIND_LARGE = 2
+    internal const val KIND_COUNTDOWN_WIDE = 3
+    internal const val KIND_HERO = 4
+    internal const val KIND_GOAL = 5
+    internal const val KIND_STREAK = 6
+    internal const val KIND_CONTINUE = 7
+    internal const val KIND_TIP = 8
+    internal const val KIND_ACTIONS = 9
+    internal const val KIND_FOCUS = 10
+    internal const val KIND_MINI = 11
 
     internal fun loadData(context: Context): WidgetData {
         val target = DailyGoalEngine.examTargetOrDefault(context)
@@ -196,6 +250,25 @@ object Widgets {
         val landmarkIndex = WidgetBackgroundMath.pickIndex(
             settings, LocalDate.now().toEpochDay(), LandmarkLibrary.all.size
         )
+        // Glass family v4 extras (1.2.51): streak + week dots from
+        // the vault's daily activity, the last studied subject, and
+        // the daily tip from the downloaded tips packs. Every read
+        // is guarded — a widget refresh must never fail on them.
+        val today = LocalDate.now()
+        val activity = try {
+            OfflineStudyVault.ensureInitialized(context)
+            OfflineStudyVault.statsFlow.value.dailyActivity
+        } catch (_: Exception) {
+            emptyMap()
+        }
+        val tipOfDay = try {
+            val packs = TipsContract.SUBJECTS.mapNotNull { subject ->
+                TipsRepository.cachedPack(context, subject)?.let { subject to it }
+            }.toMap()
+            WidgetTipMath.pickDaily(packs, today.toEpochDay())
+        } catch (_: Exception) {
+            null
+        }
         return WidgetData(
             remainingMillis = remaining,
             days = parts.days,
@@ -208,7 +281,15 @@ object Widgets {
             focusSessions = focus.sessionsToday,
             focusWeekMinutes = focus.minutesWeek,
             settings = settings,
-            landmarkIndex = landmarkIndex
+            landmarkIndex = landmarkIndex,
+            streakDays = WidgetStreakMath.streakDays(activity, today),
+            weekDots = WidgetStreakMath.weekDots(activity, today),
+            lastSubjectName = try {
+                LastStudyStore.load(context)?.second
+            } catch (_: Exception) {
+                null
+            },
+            tipOfDay = tipOfDay
         )
     }
 
@@ -325,6 +406,20 @@ object Widgets {
         data: WidgetData,
         sizeDp: Pair<Int, Int>
     ) {
+        // Glass family v4 (1.2.51): ONE composed glass bitmap —
+        // blurred background + tint + sheen + edge light — replaces
+        // the photo+overlay pair. Any failure falls through to the
+        // pre-v4 path below, unchanged.
+        val density0 = context.resources.displayMetrics.density
+        val (gw, gh) = WidgetShapeMath.bitmapSizePx(sizeDp.first, sizeDp.second, density0)
+        val gr = WidgetShapeMath.radiusPx(sizeDp.first, sizeDp.second, density0)
+        val glass = WidgetGlass.background(context, data, gw, gh, gr)
+        if (glass != null) {
+            views.setImageViewBitmap(R.id.widget_photo, glass)
+            views.setViewVisibility(R.id.widget_photo, View.VISIBLE)
+            views.setViewVisibility(R.id.widget_overlay, View.GONE)
+            return
+        }
         val index = data.landmarkIndex
         if (index == null) {
             views.setViewVisibility(R.id.widget_photo, View.GONE)
@@ -364,6 +459,317 @@ object Widgets {
      * shows instead (a count-down Chronometer past its base
      * would render negative garbage).
      */
+    // ── عائلة الزجاج v4 (1.2.51): البنّاؤون التسعة ─────────────
+
+    /** لوحة ألوان النمط الزجاجي على عناصر التخطيط: نصوص النمط
+     * الفاتح عنابية، والداكن/الشفاف عاجية/ذهبية — كما بالنماذج. */
+    private fun applyPalette(
+        views: RemoteViews,
+        data: WidgetData,
+        headings: List<Int>,
+        primary: List<Int>,
+        secondary: List<Int>,
+        accent: List<Int>
+    ) {
+        val palette = GlassPalette.forStyle(data.settings.glassStyle)
+        headings.forEach { views.setTextColor(it, palette.heading) }
+        primary.forEach { views.setTextColor(it, palette.primary) }
+        secondary.forEach { views.setTextColor(it, palette.secondary) }
+        accent.forEach { views.setTextColor(it, palette.accentTime) }
+    }
+
+    /** PendingIntent عام لأي قيمة توجيه (زوادة/تابع/تركيز...). */
+    private fun routePendingIntent(context: Context, route: String, requestCode: Int): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(WidgetRouter.EXTRA_ROUTE, route)
+            putExtra(WidgetRouter.EXTRA_NONCE, WidgetRouter.nonce(context))
+        }
+        return PendingIntent.getActivity(
+            context, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun densityOf(context: Context): Float =
+        context.resources.displayMetrics.density
+
+    /** تصميم 1: العدّاد التنازلي 4×2. */
+    private fun buildCountdownWideViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int>
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_glass_countdown)
+        bindBackground(views, context, data, sizeDp)
+        bindChronometer(views, data)
+        applyPalette(
+            views, data,
+            headings = listOf(R.id.widget_glass_title),
+            primary = listOf(R.id.widget_days, R.id.widget_expired),
+            secondary = listOf(R.id.widget_days_caption, R.id.widget_chip_caption),
+            accent = listOf(R.id.widget_chrono)
+        )
+        return views
+    }
+
+    /** تصميم 9: عدّاد مصغّر 2×1. */
+    private fun buildMiniViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int>
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_glass_mini)
+        bindBackground(views, context, data, sizeDp)
+        bindChronometer(views, data)
+        applyPalette(
+            views, data,
+            headings = emptyList(),
+            primary = listOf(R.id.widget_days, R.id.widget_expired),
+            secondary = listOf(R.id.widget_days_caption, R.id.widget_chip_caption),
+            accent = listOf(R.id.widget_chrono)
+        )
+        return views
+    }
+
+    /** تصميم 2: الجاهزية البطل 4×4 — عدّاد + حلقة الهدف + السلسلة
+     * + شريط «تابع من حيث توقفت» الذهبي. */
+    private fun buildHeroViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int>
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_glass_hero)
+        bindBackground(views, context, data, sizeDp)
+        bindChronometer(views, data)
+        val percent = if (data.questionTarget > 0) {
+            (data.doneToday * 100 / data.questionTarget).coerceIn(0, 100)
+        } else {
+            0
+        }
+        val ringPx = (64 * densityOf(context)).toInt()
+        views.setImageViewBitmap(
+            R.id.widget_ring,
+            WidgetGlass.ringBitmap(ringPx, percent, data.settings.glassStyle == WidgetGlassStyle.LIGHT)
+        )
+        views.setTextViewText(R.id.widget_ring_text, "${data.doneToday}")
+        views.setTextViewText(
+            R.id.widget_goal_text,
+            if (data.questionTarget > 0) "من ${data.questionTarget} سؤالًا" else "لم يُضبط هدف بعد"
+        )
+        views.setTextViewText(R.id.widget_streak_number, "${data.streakDays}")
+        views.setTextViewText(
+            R.id.widget_continue_text,
+            if (data.lastSubjectName != null) {
+                "تابع من حيث توقفت — ${data.lastSubjectName}"
+            } else {
+                "تابع من حيث توقفت"
+            }
+        )
+        views.setOnClickPendingIntent(
+            R.id.widget_continue_strip,
+            routePendingIntent(context, WidgetRouter.ROUTE_CONTINUE, 71)
+        )
+        applyPalette(
+            views, data,
+            headings = listOf(R.id.widget_glass_title),
+            primary = listOf(
+                R.id.widget_days, R.id.widget_expired, R.id.widget_ring_text, R.id.widget_goal_caption
+            ),
+            secondary = listOf(R.id.widget_days_caption, R.id.widget_goal_text, R.id.widget_streak_caption),
+            accent = listOf(R.id.widget_chrono, R.id.widget_streak_number)
+        )
+        return views
+    }
+
+    /** تصميم 3: هدف اليوم 2×2 — حلقة + «من X سؤالًا» + النص الحر. */
+    private fun buildGoalViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int>
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_glass_goal)
+        bindBackground(views, context, data, sizeDp)
+        val percent = if (data.questionTarget > 0) {
+            (data.doneToday * 100 / data.questionTarget).coerceIn(0, 100)
+        } else {
+            0
+        }
+        val ringPx = (56 * densityOf(context)).toInt()
+        views.setImageViewBitmap(
+            R.id.widget_ring,
+            WidgetGlass.ringBitmap(ringPx, percent, data.settings.glassStyle == WidgetGlassStyle.LIGHT)
+        )
+        views.setTextViewText(R.id.widget_ring_text, "${data.doneToday}")
+        views.setTextViewText(
+            R.id.widget_goal_text,
+            if (data.questionTarget > 0) "من ${data.questionTarget} سؤالًا" else "اضبط هدفك من التطبيق"
+        )
+        val free = data.items.firstOrNull { it.isNotBlank() }
+        if (free != null && data.settings.showGoals) {
+            views.setTextViewText(R.id.widget_goal_freetext, free)
+            views.setViewVisibility(R.id.widget_goal_freetext, View.VISIBLE)
+        } else {
+            views.setViewVisibility(R.id.widget_goal_freetext, View.GONE)
+        }
+        applyPalette(
+            views, data,
+            headings = listOf(R.id.widget_glass_title),
+            primary = listOf(R.id.widget_goal_text, R.id.widget_ring_text),
+            secondary = listOf(R.id.widget_goal_freetext),
+            accent = emptyList()
+        )
+        return views
+    }
+
+    /** تصميم 4: سلسلة الأيام 2×2 — الرقم + نقاط الأسبوع. */
+    private fun buildStreakViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int>
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_glass_streak)
+        bindBackground(views, context, data, sizeDp)
+        views.setTextViewText(R.id.widget_streak_number, "${data.streakDays}")
+        val density = densityOf(context)
+        views.setImageViewBitmap(
+            R.id.widget_dots,
+            WidgetGlass.dotsBitmap(
+                (sizeDp.first * density).toInt().coerceAtLeast(1),
+                (18 * density).toInt(),
+                data.weekDots,
+                data.settings.glassStyle == WidgetGlassStyle.LIGHT
+            )
+        )
+        applyPalette(
+            views, data,
+            headings = listOf(R.id.widget_glass_title),
+            primary = listOf(R.id.widget_streak_number),
+            secondary = listOf(R.id.widget_streak_caption),
+            accent = emptyList()
+        )
+        return views
+    }
+
+    /** تصميم 5: تابع من حيث توقفت 4×1 — آخر مادة + حبة «تابع». */
+    private fun buildContinueViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int>
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_glass_continue)
+        bindBackground(views, context, data, sizeDp)
+        views.setTextViewText(
+            R.id.widget_continue_subject,
+            data.lastSubjectName ?: "ابدأ أول مادة من التطبيق"
+        )
+        val intent = routePendingIntent(context, WidgetRouter.ROUTE_CONTINUE, 73)
+        views.setOnClickPendingIntent(R.id.widget_root, intent)
+        views.setOnClickPendingIntent(R.id.widget_continue_pill, intent)
+        applyPalette(
+            views, data,
+            headings = emptyList(),
+            primary = listOf(R.id.widget_continue_title),
+            secondary = listOf(R.id.widget_continue_subject),
+            accent = emptyList()
+        )
+        return views
+    }
+
+    /** تصميم 6: زوادة اليوم 4×2 — نصيحة ثابتة اليوم من الحزم
+     * المنزّلة؛ غيابها = حالة فارغة أنيقة بلا خطأ. */
+    private fun buildTipViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int>
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_glass_tip)
+        bindBackground(views, context, data, sizeDp)
+        val tip = data.tipOfDay
+        if (tip == null) {
+            views.setViewVisibility(R.id.widget_tip_text, View.GONE)
+            views.setViewVisibility(R.id.widget_tip_author, View.GONE)
+            views.setViewVisibility(R.id.widget_tip_empty, View.VISIBLE)
+            views.setOnClickPendingIntent(
+                R.id.widget_root,
+                routePendingIntent(context, WidgetRouter.ROUTE_TIPS, 74)
+            )
+        } else {
+            views.setViewVisibility(R.id.widget_tip_empty, View.GONE)
+            views.setViewVisibility(R.id.widget_tip_text, View.VISIBLE)
+            views.setTextViewText(R.id.widget_tip_text, tip.text)
+            val line = WidgetTipMath.authorLine(tip)
+            if (line != null) {
+                views.setViewVisibility(R.id.widget_tip_author, View.VISIBLE)
+                views.setTextViewText(R.id.widget_tip_author, line)
+            } else {
+                views.setViewVisibility(R.id.widget_tip_author, View.GONE)
+            }
+            views.setOnClickPendingIntent(
+                R.id.widget_root,
+                routePendingIntent(context, WidgetRouter.tipsRoute(tip.subject), 75)
+            )
+        }
+        applyPalette(
+            views, data,
+            headings = listOf(R.id.widget_glass_title),
+            primary = listOf(R.id.widget_tip_text),
+            secondary = listOf(R.id.widget_tip_empty, R.id.widget_tip_author),
+            accent = emptyList()
+        )
+        return views
+    }
+
+    /** تصميم 7: أزرار سريعة 4×1 — نفس ربط الأزرار القائم. */
+    private fun buildActionsViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int>
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_glass_actions)
+        bindBackground(views, context, data, sizeDp)
+        bindButtons(views, context, data, KIND_ACTIONS)
+        applyPalette(
+            views, data,
+            headings = emptyList(),
+            primary = listOf(
+                R.id.widget_btn_1_text, R.id.widget_btn_2_text,
+                R.id.widget_btn_3_text, R.id.widget_btn_4_text
+            ),
+            secondary = emptyList(),
+            accent = emptyList()
+        )
+        return views
+    }
+
+    /** تصميم 8: تركيز اليوم 2×2 — الوقت الكبير + «ابدأ جلسة». */
+    private fun buildFocusViews(
+        context: Context,
+        data: WidgetData,
+        sizeDp: Pair<Int, Int>
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_glass_focus)
+        bindBackground(views, context, data, sizeDp)
+        val m = data.focusMinutes
+        views.setTextViewText(
+            R.id.widget_focus_big,
+            "${m / 60}:${(m % 60).toString().padStart(2, '0')}"
+        )
+        views.setOnClickPendingIntent(
+            R.id.widget_focus_start,
+            routePendingIntent(context, WidgetRouter.ROUTE_FOCUS, 76)
+        )
+        applyPalette(
+            views, data,
+            headings = listOf(R.id.widget_glass_title),
+            primary = listOf(R.id.widget_focus_big),
+            secondary = emptyList(),
+            accent = emptyList()
+        )
+        return views
+    }
+
+
     private fun bindChronometer(views: RemoteViews, data: WidgetData) {
         if (data.remainingMillis <= 0L) {
             views.setViewVisibility(R.id.widget_days_row, View.GONE)

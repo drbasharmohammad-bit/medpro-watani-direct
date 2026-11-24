@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- هدف اليوم 2×2 — تصميم 3: حلقة + الهدف العددي + النص الحر. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:clipToOutline="true">
+
+    <ImageView
+        android:id="@+id/widget_photo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop" />
+
+    <ImageView
+        android:id="@+id/widget_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/widget_glass_title"
+            android:fontFamily="@font/thmanyah_sans"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="هدف اليوم"
+            android:textColor="#C2A059"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_goal_text"
+            android:fontFamily="@font/thmanyah_sans"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#FAF6F0"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_goal_freetext"
+            android:fontFamily="@font/thmanyah_sans"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:textColor="#DED2C0"
+            android:textSize="11sp" />
+
+        <FrameLayout
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_gravity="end">
+
+            <ImageView
+                android:id="@+id/widget_ring"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/widget_ring_text"
+                android:fontFamily="@font/thmanyah_sans"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textColor="#FAF6F0"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+    </LinearLayout>
+</FrameLayout>

@@ -46,6 +46,14 @@ sealed interface WidgetDestination {
     /** «بنك أخطائي» مع بدء جلسة المراجعة تلقائيًا (بناء 1.2.30 —
      * وجهة زر «ابدأ المراجعة» في تنبيه الأخطاء المستحقة). */
     data object MistakesReview : WidgetDestination
+
+    /** قسم «زوادة الطالب» (1.2.51 — ويدجت زوادة اليوم): يفتح
+     * القسم، وعلى مادة النصيحة نفسها إن حمل التوجيه اسمها. */
+    data class Tips(val subject: String?) : WidgetDestination
+
+    /** «تابع من حيث توقفت» (1.2.51 — ويدجت التابع): يعيد فتح
+     * آخر مادة درسها الطالب من موضعها المحفوظ. */
+    data object Continue : WidgetDestination
 }
 
 object WidgetRouter {
@@ -101,6 +109,16 @@ object WidgetRouter {
     /** زر «ابدأ المراجعة» بتنبيه الأخطاء المستحقة (1.2.30). */
     const val ROUTE_MISTAKES_REVIEW: String = "mistakes_review"
 
+    /** ويدجت «زوادة اليوم» (1.2.51): "tips" أو "tips:<المادة>". */
+    const val ROUTE_TIPS: String = "tips"
+
+    /** ويدجت «تابع من حيث توقفت» (1.2.51). */
+    const val ROUTE_CONTINUE: String = "continue"
+
+    /** بناء قيمة توجيه الزوادة من اسم المادة (أو بلا مادة). */
+    fun tipsRoute(subject: String?): String =
+        if (subject.isNullOrBlank()) ROUTE_TIPS else "$ROUTE_TIPS:$subject"
+
     // أسماء شاشات الدرج الحرفية كما بمفاتيح خريطة التنقّل.
     const val DRAWER_FOCUS: String = "مؤقت التركيز"
     const val DRAWER_MISTAKES: String = "بنك أخطائي"
@@ -133,6 +151,12 @@ object WidgetRouter {
         ROUTE_SETTINGS -> WidgetDestination.Drawer(DRAWER_SETTINGS)
         ROUTE_CHALLENGE -> WidgetDestination.Drawer(DRAWER_CHALLENGE)
         ROUTE_MISTAKES_REVIEW -> WidgetDestination.MistakesReview
-        else -> WidgetDestination.Home
+        ROUTE_CONTINUE -> WidgetDestination.Continue
+        ROUTE_TIPS -> WidgetDestination.Tips(null)
+        else -> if (route != null && route.startsWith("$ROUTE_TIPS:")) {
+            WidgetDestination.Tips(route.removePrefix("$ROUTE_TIPS:").takeIf { it.isNotBlank() })
+        } else {
+            WidgetDestination.Home
+        }
     }
 }

@@ -37,3 +37,32 @@ object ExamDateText {
     fun formatMillis(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
         format(Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate())
 }
+
+/**
+ * عدّاد الامتحان — نظام أرقام واحد (إصلاح 1.2.51 من صورة الدكتور:
+ * خانة «27» لاتينية وباقي الخانات مشرقية بخلافها).
+ *
+ * كل خانات العدّاد (بلاطة يوم الامتحان + اليوم/الساعة/الدقيقة/
+ * الثانية + سطر التاريخ داخل البطاقة نفسها) تمرّ عبر هاتين
+ * الدالتين حصرًا، فلا يخرج رقم لاتيني واحد من أي مسار: الأرقام
+ * المشرقية (٠١٢٣٤٥٦٧٨٩) هي نمط البطاقة الوحيد. منطق نقي مختبَر
+ * بالوحدات.
+ */
+object CountdownDigits {
+
+    private const val EASTERN = "٠١٢٣٤٥٦٧٨٩"
+
+    /** أي نص: أرقامه اللاتينية تُستبدل بالمشرقية، وباقيه كما هو. */
+    fun eastern(text: String): String = buildString(text.length) {
+        for (ch in text) {
+            append(if (ch in '0'..'9') EASTERN[ch - '0'] else ch)
+        }
+    }
+
+    /** قيمة خانة عدّاد: مشرقية، ومبطّنة بصفر مشرقي لعرض [pad]. */
+    fun unit(value: Long, pad: Int = 0): String {
+        val raw = value.toString()
+        val padded = if (raw.length >= pad) raw else "0".repeat(pad - raw.length) + raw
+        return eastern(padded)
+    }
+}

@@ -47,7 +47,8 @@
                 android:layout_width="0dp"
                 android:layout_height="1dp"
                 android:layout_weight="1"
-                android:background="#8CD4AF37" />
+                android:background="#8CD4AF37" 
+                android:fontFamily="@font/thmanyah_sans" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -57,19 +58,22 @@
                 android:text="للإمتحان الوطني"
                 android:textColor="#E9C767"
                 android:textSize="13sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/thmanyah_sans" />
 
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="1dp"
                 android:layout_weight="1"
-                android:background="#8CD4AF37" />
+                android:background="#8CD4AF37" 
+                android:fontFamily="@font/thmanyah_sans" />
         </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_weight="1" 
+                android:fontFamily="@font/thmanyah_sans" />
 
         <LinearLayout
             android:id="@+id/widget_days_row"
@@ -84,7 +88,8 @@
                 android:layout_height="wrap_content"
                 android:textColor="#E9C767"
                 android:textSize="54sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/thmanyah_sans" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -93,7 +98,8 @@
                 android:text="يومًا"
                 android:textColor="#FAF4E6"
                 android:textSize="19sp"
-                android:textStyle="bold" />
+                android:textStyle="bold" 
+                android:fontFamily="@font/thmanyah_sans" />
         </LinearLayout>
 
         <LinearLayout
@@ -133,11 +139,13 @@
             android:textColor="#FAF4E6"
             android:textSize="13sp"
             android:textStyle="bold"
-            android:visibility="gone" />
+            android:visibility="gone" 
+                android:fontFamily="@font/thmanyah_sans" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1" />
+            android:layout_weight="1" 
+                android:fontFamily="@font/thmanyah_sans" />
     </LinearLayout>
 </FrameLayout>

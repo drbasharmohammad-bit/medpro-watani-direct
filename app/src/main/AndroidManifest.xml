@@ -176,6 +176,105 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_day_large_info" />
         </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.CountdownWideWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_glass_countdown_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_glass_countdown_info" />
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.HeroWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_glass_hero_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_glass_hero_info" />
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.GoalWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_glass_goal_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_glass_goal_info" />
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.StreakWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_glass_streak_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_glass_streak_info" />
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.ContinueWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_glass_continue_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_glass_continue_info" />
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.TipWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_glass_tip_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_glass_tip_info" />
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.QuickActionsWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_glass_actions_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_glass_actions_info" />
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.FocusWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_glass_focus_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_glass_focus_info" />
+        </receiver>
+        <receiver
+            android:name="sy.medpro.watani.ui.widget.MiniCountdownWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_glass_mini_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_glass_mini_info" />
+        </receiver>
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />

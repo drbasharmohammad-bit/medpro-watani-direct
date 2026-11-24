@@ -187,9 +187,12 @@ class StudentTipsIntegrationTest {
         engine.add("الجلدية", "exam_traps", "فخ شائع: الخلط بين الصدفية والإكزيما", "طالب")
         engine.add("الجلدية", "key_points", "نقطة مكررة حرفيًا من نصيحة سابقة", "طالب")
         assertEquals(true, engine.flush())
-        val ids = gateway.server.map { it.id }
-        gateway.moderate(ids[0], "published")
-        gateway.moderate(ids[1], "rejected", "مكررة — موجودة بصياغة أخرى")
+        // Match by section, not by position: the outbox flushes
+        // newest-first, so server order is not add order.
+        val trapsId = gateway.server.first { it.sectionId == "exam_traps" }.id
+        val pointsId = gateway.server.first { it.sectionId == "key_points" }.id
+        gateway.moderate(trapsId, "published")
+        gateway.moderate(pointsId, "rejected", "مكررة — موجودة بصياغة أخرى")
         assertEquals(true, engine.refreshMine())
 
         val mine = engine.mine.value.associateBy { it.sectionId }

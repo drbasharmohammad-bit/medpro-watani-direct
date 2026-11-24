@@ -86,7 +86,7 @@ fun HomeDashboardScreen(
             .fillMaxSize()
             .background(libBackground())
             .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
         // Slim header of the approved home model (01): logo +
@@ -131,52 +131,46 @@ fun HomeDashboardScreen(
                     text = "دراستك اليوم… خطوة أقرب للنجاح",
                     fontFamily = NotoKufiFontFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     color = libHeading()
                 )
             }
         }
 
         item {
+            ExamCountdownCard()
+        }
+
+        item {
+            // Readiness — compact card (1.2.51, doctor's device
+            // report: the hero block shouted over the whole home).
+            // SAME content as the old hero, proportional size:
+            // the continue state («تابع من حيث توقفت» + play), the
+            // answered-question count, and the progress bar with
+            // its percent. The decorative gold chip is gone — one
+            // accent moment per card, not three competing ones.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(4.dp, RoundedCornerShape(24.dp), clip = false)
-                    .clip(RoundedCornerShape(24.dp))
+                    .shadow(4.dp, RoundedCornerShape(20.dp), clip = false)
+                    .clip(RoundedCornerShape(20.dp))
                     .background(brush = LibColors.MaroonBrush)
-                    .padding(20.dp)
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
                 Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Surface(
-                                color = LibColors.Gold.copy(alpha = 0.22f),
-                                shape = MaterialTheme.shapes.small
-                            ) {
-                                Text(
-                                    text = "منصة التحضير السريري المعتمدة",
-                                    color = LibColors.GoldSoft,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 text = "تابع من حيث توقفت",
                                 color = LibColors.GoldSoft,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
+                                fontSize = 11.sp
                             )
                             Text(
                                 text = "جاهزيتك للامتحان الوطني",
                                 fontFamily = NotoKufiFontFamily,
                                 color = Color.White,
-                                fontSize = 21.sp,
+                                fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
@@ -192,7 +186,7 @@ fun HomeDashboardScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Box(
                             modifier = Modifier
-                                .size(56.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
                                 .background(LibColors.GoldBrush),
                             contentAlignment = Alignment.Center
@@ -201,11 +195,11 @@ fun HomeDashboardScreen(
                                 Icons.Default.PlayArrow,
                                 contentDescription = null,
                                 tint = LibColors.MaroonDeep,
-                                modifier = Modifier.size(30.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LibGoldBar(
                             fraction = progressVal,
@@ -221,10 +215,6 @@ fun HomeDashboardScreen(
                     }
                 }
             }
-        }
-
-        item {
-            ExamCountdownCard()
         }
 
 
@@ -328,8 +318,8 @@ fun HomeDashboardScreen(
                         text = supportMessage.text,
                         fontFamily = ThmanyahFontFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        lineHeight = 30.sp
+                        fontSize = 17.sp,
+                        lineHeight = 26.sp
                     )
                 }
             }
@@ -529,9 +519,7 @@ private fun ExamCountdownCard() {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            examDay.toString().map { ch ->
-                                if (ch.isDigit()) "٠١٢٣٤٥٦٧٨٩"[ch - '0'] else ch
-                            }.joinToString(""),
+                            sy.medpro.watani.data.CountdownDigits.unit(examDay.toLong()),
                             fontFamily = NotoKufiFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 19.sp,
@@ -607,13 +595,13 @@ private fun ExamCountdownCard() {
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        CountdownUnit(modifier = Modifier.weight(1f), value = "$days", label = "يوماً")
+                        CountdownUnit(modifier = Modifier.weight(1f), value = sy.medpro.watani.data.CountdownDigits.unit(days), label = "يوماً")
                         Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = LibColors.Maroon)
-                        CountdownUnit(modifier = Modifier.weight(1f), value = "%02d".format(hours), label = "ساعة")
+                        CountdownUnit(modifier = Modifier.weight(1f), value = sy.medpro.watani.data.CountdownDigits.unit(hours, 2), label = "ساعة")
                         Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = LibColors.Maroon)
-                        CountdownUnit(modifier = Modifier.weight(1f), value = "%02d".format(minutes), label = "دقيقة")
+                        CountdownUnit(modifier = Modifier.weight(1f), value = sy.medpro.watani.data.CountdownDigits.unit(minutes, 2), label = "دقيقة")
                         Text(":", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = LibColors.Maroon)
-                        CountdownUnit(modifier = Modifier.weight(1f), value = "%02d".format(seconds), label = "ثانية")
+                        CountdownUnit(modifier = Modifier.weight(1f), value = sy.medpro.watani.data.CountdownDigits.unit(seconds, 2), label = "ثانية")
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     val dateText = Instant.ofEpochMilli(target).atZone(ZoneId.systemDefault())
@@ -623,7 +611,7 @@ private fun ExamCountdownCard() {
                             )
                         )
                     Text(
-                        "تاريخ الامتحان: $dateText",
+                        "تاريخ الامتحان: ${sy.medpro.watani.data.CountdownDigits.eastern(dateText)}",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
