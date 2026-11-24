@@ -89,8 +89,45 @@ class ReaderTakeoverIntegrationTest {
         assertTrue(fullscreenEvents.first() == true)
     }
 
+    /**
+     * 1.2.50 resolution contract, from the doctor's device
+     * report: a page state must ALWAYS resolve — content or an
+     * explicit error — never an eternal «جارٍ تجهيز الصفحة...».
+     * A corrupt book file (bytes that are not a PDF at all)
+     * resolves at open time to the reader's error state, and
+     * the per-page preparing label never appears for it.
+     */
+    @Test
+    fun corruptBookResolvesToOpenErrorNeverPagePreparing() {
+        val corrupt = File(context.cacheDir, "reader-resolution-corrupt-book.pdf")
+        corrupt.writeBytes("this is not a pdf".toByteArray())
+
+        composeRule.setContent {
+            WataniTheme(darkTheme = false) {
+                PdfViewerScreen(
+                    pdfFile = corrupt,
+                    title = "كتيّب تالف للاختبار",
+                    onBack = {}
+                )
+            }
+        }
+
+        composeRule.waitUntil(timeoutMillis = WAIT_MS) {
+            try {
+                composeRule.onNodeWithText(OPEN_ERROR, substring = true).assertExists()
+                true
+            } catch (_: AssertionError) {
+                false
+            }
+        }
+        // The book never reaches the pager, so the per-page
+        // preparing state cannot be on screen.
+        composeRule.onNodeWithText(PAGE_PREPARING, substring = true).assertDoesNotExist()
+    }
+
     private companion object {
         const val WAIT_MS = 10_000L
         const val OPEN_ERROR = "تعذر فتح الملف"
+        const val PAGE_PREPARING = "جارٍ تجهيز الصفحة"
     }
 }
