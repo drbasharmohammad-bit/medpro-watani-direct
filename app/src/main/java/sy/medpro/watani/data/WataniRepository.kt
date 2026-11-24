@@ -906,6 +906,25 @@ class WataniRepository(private val context: Context) {
         if (WorkerActivationApi.requiresActivation(staged.path)) {
             WorkerActivationApi.noteServerVerified(context)
         }
+        // «زوادة الطالب» (1.2.51): a full national-bank subject
+        // download brings the subject's tips pack with it — the
+        // pack entry comes from the same manifest snapshot family
+        // (fetchManifestForRefresh), and the hook is fire-and-forget:
+        // a tips failure can never fail or delay the bank download.
+        if (staged.path.startsWith("questions/")) {
+            val tipsSubject = staged.path.removePrefix("questions/")
+                .removeSuffix(".json")
+            if (TipsContract.isTipsSubject(tipsSubject)) {
+                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val tipsEntry = fetchManifestForRefresh()?.files
+                            ?.get(TipsContract.packPath(tipsSubject))
+                        TipsRepository.ensurePack(context, tipsSubject, tipsEntry)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+        }
         return Result.success(staged.actualCount)
     }
 

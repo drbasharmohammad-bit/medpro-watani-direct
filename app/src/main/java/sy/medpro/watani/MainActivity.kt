@@ -75,6 +75,7 @@ import sy.medpro.watani.ui.ecg.EcgCourseScreen
 import sy.medpro.watani.ui.home.*
 import sy.medpro.watani.ui.leaderboard.LeaderboardScreen
 import sy.medpro.watani.ui.logbook.LogbookScreen
+import sy.medpro.watani.ui.tips.TipsRootScreen
 import sy.medpro.watani.ui.mistakes.MistakesBankScreen
 import sy.medpro.watani.ui.ddx.DdxTrainerScreen
 import sy.medpro.watani.ui.dosing.DosingDrillsScreen
@@ -238,10 +239,20 @@ class MainActivity : ComponentActivity() {
                         }
                     } catch (_: Exception) { }
                 }
+                // «زوادة الطالب» (1.2.51): connectivity return is one
+                // of the outbox flush triggers — silent, best-effort.
+                try {
+                    sy.medpro.watani.data.TipsRepository.onAppStart(this@MainActivity)
+                } catch (_: Exception) { }
             }
         }
         (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager)
             .registerDefaultNetworkCallback(revocationNetworkCallback!!)
+        // «زوادة الطالب» (1.2.51): app start is an outbox flush
+        // trigger (silent; a signed-out start is a no-op).
+        try {
+            sy.medpro.watani.data.TipsRepository.onAppStart(this)
+        } catch (_: Exception) { }
         // TEAM-3 device-protection (single wiring line): FLAG_SECURE on this
         // window (same call as before, via SecurityChecks) + app-close sweep
         // of plaintext temp files. No auth-gate logic touched.
@@ -548,6 +559,10 @@ class MainActivity : ComponentActivity() {
                     // المستحقة — يفتح «بنك أخطائي» ويبدأ جلسته تلقائيًا
                     // مرة واحدة، ويُصفَّر عند مغادرة الشاشة.
                     var mistakesAutoReview by remember { mutableStateOf(false) }
+                    // «زوادة الطالب» (1.2.51): the subject the tips
+                    // section opens on — set by the in-bank subject
+                    // strip; null = the subjects list.
+                    var tipsInitialSubject by remember { mutableStateOf<String?>(null) }
 
                     // Shared guarded entry for restricted drawer screens,
                     // used by drawer taps AND home shortcuts alike:
@@ -778,6 +793,7 @@ class MainActivity : ComponentActivity() {
                                                 "المفضلة",
                                                 "ملاحظاتي",
                                                 "سجلّ حالاتي",
+                                                "زوادة الطالب",
                                                 "محطات OSCE",
                                                 "القلب والإصغاء",
                                                 "غرفة الطوارئ",
@@ -831,6 +847,7 @@ class MainActivity : ComponentActivity() {
                                                     "المفضلة" -> Icons.Default.Favorite
                                                     "ملاحظاتي" -> Icons.Default.NoteAlt
                                                     "سجلّ حالاتي" -> Icons.Default.Assignment
+                                                    "زوادة الطالب" -> Icons.Default.Lightbulb
                                                     "الإشعارات والتذكير" -> Icons.Default.Notifications
                                                     "إعدادات الويدجت" -> Icons.Default.Widgets
                                                     "الوضع الليلي" -> Icons.Default.DarkMode
@@ -1247,6 +1264,10 @@ class MainActivity : ComponentActivity() {
                                                 "المفضلة" -> FavoritesScreen(onBack = { drawerScreen = null })
                                                 "ملاحظاتي" -> MyNotesScreen(onBack = { drawerScreen = null })
                                                 "سجلّ حالاتي" -> LogbookScreen(onBack = { drawerScreen = null })
+                                                "زوادة الطالب" -> TipsRootScreen(
+                                                    onBack = { drawerScreen = null; tipsInitialSubject = null },
+                                                    initialSubject = tipsInitialSubject
+                                                )
                                                 "الإشعارات والتذكير" -> sy.medpro.watani.ui.notify.NotificationSettingsScreen(onBack = { drawerScreen = null })
                                                 "إعدادات الويدجت" -> sy.medpro.watani.ui.widget.WidgetSettingsScreen(onBack = { drawerScreen = null })
                                                 "الحالات الألمانية" -> GermanCasesScreen(onBack = { drawerScreen = null })
@@ -1357,6 +1378,10 @@ class MainActivity : ComponentActivity() {
                                                                 onOpenSupport = { drawerScreen = "الدعم النفسي" },
                                                                 onOpenFocusTimer = { drawerScreen = "مؤقت التركيز" },
                                                                 onOpenReviewDue = { openRestrictedDrawer("المراجعة الذكية Anki") },
+                                                                onOpenTips = {
+                                                                    tipsInitialSubject = null
+                                                                    drawerScreen = "زوادة الطالب"
+                                                                },
                                                             )
                                                         }
                                                         AppTab.BANK, AppTab.UNIVERSITIES, AppTab.UWORLD -> {
@@ -1673,6 +1698,20 @@ class MainActivity : ComponentActivity() {
                                                                 activeSubjectEnvelope = viewModel.getSubjectEnvelope(enPath)
                                                                 viewModel.openSubject(enPath, screen.subjectName, AppTab.BANK)
                                                             }
+                                                        },
+                                                        // «زوادة الطالب» (1.2.51): the strip
+                                                        // shows on national-bank subjects
+                                                        // only (the tips contract's 27).
+                                                        onOpenTips = if (
+                                                            screen.path.startsWith("questions/") &&
+                                                            sy.medpro.watani.data.TipsContract.isTipsSubject(screen.subjectName)
+                                                        ) {
+                                                            { subjectName: String ->
+                                                                tipsInitialSubject = subjectName
+                                                                drawerScreen = "زوادة الطالب"
+                                                            }
+                                                        } else {
+                                                            null
                                                         }
                                                     )
                                                 }

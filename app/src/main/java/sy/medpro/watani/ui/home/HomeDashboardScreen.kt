@@ -54,7 +54,8 @@ fun HomeDashboardScreen(
     manifestVersion: String?,
     onOpenSupport: () -> Unit = {},
     onOpenFocusTimer: () -> Unit = {},
-    onOpenReviewDue: () -> Unit = {}
+    onOpenReviewDue: () -> Unit = {},
+    onOpenTips: () -> Unit = {}
 ) {
     val context = LocalContext.current
     // بطاقة الدعم: تقديم فهرس الرسالة اليومية بذاكرة الجلسة (يُصفَّر مع
@@ -229,6 +230,49 @@ fun HomeDashboardScreen(
 
         item {
             MyDayGoalsCard()
+        }
+
+        item {
+            // «زوادة الطالب» (1.2.51): home entry card — tips from
+            // fellow students, per subject and section.
+            LibCard(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { onOpenTips() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = libGoldTint(),
+                        modifier = Modifier.size(50.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.Lightbulb,
+                                contentDescription = null,
+                                tint = LibColors.Maroon,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "زوادة الطالب",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = LibColors.Maroon
+                        )
+                        Text(
+                            "نصائح زملائك في كل مادة — الأشيع، النقاط المهمة، ربطات الذاكرة وفخاخ الامتحان. أضف زوادتك أنت أيضًا.",
+                            fontSize = 12.sp,
+                            color = libMuted()
+                        )
+                    }
+                }
+            }
         }
 
 

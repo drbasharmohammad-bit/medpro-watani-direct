@@ -495,7 +495,11 @@ fun TopicSelectionScreen(
     // وسلوك الشاشة كما كان حرفيًا. لا تحميل منفصل للسنوات:
     // تنزيل المادة موحّد كل-أو-لا-شيء (الملفان معًا).
     yearsEnvelope: sy.medpro.watani.data.YearsEnvelope? = null,
-    onYearClick: (Int, String) -> Unit = { _, _ -> }
+    onYearClick: (Int, String) -> Unit = { _, _ -> },
+    // «زوادة الطالب» (1.2.51): strip inside the bank subject page —
+    // opens the tips section on THIS subject. Null = no strip (every
+    // non-national-bank caller keeps its exact previous behaviour).
+    onOpenTips: ((String) -> Unit)? = null
 ) {
     // «حسب السنوات» (مواصفة الدكتور 21:51): المواد التي تحمل sessions[]
     // بالشاردة المنزّلة تعرض مبدّلًا بين عرض المواضيع (الأصلي، لا يتغير)
@@ -623,6 +627,34 @@ fun TopicSelectionScreen(
                                         )
                                     }
                                     Icon(Icons.Default.Language, contentDescription = null, tint = LibColors.Maroon)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+                    }
+                    if (onOpenTips != null) {
+                        item {
+                            LibCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = { onOpenTips(subjectName) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "زوادة الطالب", fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp, color = LibColors.Maroon
+                                        )
+                                        Text(
+                                            "نصائح زملائك في هذه المادة — وأضف زوادتك",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                                        )
+                                    }
+                                    Icon(Icons.Default.Lightbulb, contentDescription = null, tint = LibColors.Maroon)
                                 }
                             }
                             Spacer(modifier = Modifier.height(4.dp))
