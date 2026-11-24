@@ -103,22 +103,31 @@ fun FullDawraEntryCard(onClick: () -> Unit) {
                     FullDawraLockBadge()
                 }
             }
-            if (sy.medpro.watani.data.FullDawraLock.isLocked) {
-                Icon(
-                    Icons.Default.Lock,
-                    contentDescription = null,
-                    tint = LibColors.Gold,
-                    modifier = Modifier.size(20.dp)
-                )
-            } else {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = null,
-                    tint = LibColors.Chevron,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            FullDawraEntryTrailingIcon()
         }
+    }
+}
+
+/** The card's trailing glyph: a gold lock while the feature is
+ * hard-locked (1.2.49), the usual chevron otherwise. Extracted
+ * from the card so the card itself stays within the detekt
+ * method-length gate. */
+@Composable
+private fun FullDawraEntryTrailingIcon() {
+    if (sy.medpro.watani.data.FullDawraLock.isLocked) {
+        Icon(
+            Icons.Default.Lock,
+            contentDescription = null,
+            tint = LibColors.Gold,
+            modifier = Modifier.size(20.dp)
+        )
+    } else {
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = null,
+            tint = LibColors.Chevron,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 

@@ -23,7 +23,7 @@ package sy.medpro.watani.data
 object FullDawraLock {
 
     /** The one switch. True = «دورة كاملة» is closed for all. */
-    val isLocked: Boolean = true
+    const val isLocked: Boolean = true
 
     /** The badge text on the entry card, exactly as the doctor
      * worded it: the lock must be visible from OUTSIDE, before
