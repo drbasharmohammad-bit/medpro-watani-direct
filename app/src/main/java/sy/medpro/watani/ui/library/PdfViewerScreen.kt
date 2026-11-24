@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -55,17 +56,21 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import sy.medpro.watani.data.BookTextIndex
+import sy.medpro.watani.data.HighlightSelection
 import sy.medpro.watani.data.PdfTextEngine
 import sy.medpro.watani.data.SearchHit
 import sy.medpro.watani.data.WordBox
 import sy.medpro.watani.ui.theme.MaroonPrimary
 import sy.medpro.watani.ui.theme.GoldAccent
 import java.io.File
+import java.util.concurrent.Executors
 import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
@@ -143,6 +148,21 @@ private const val READER_MAX_CACHED_BITMAPS = 4
  * (1.2.46): pinch movements stream zoom values continuously, and
  * only the level the student actually stops at is rendered. */
 private const val READER_HIRES_DEBOUNCE_MS = 250L
+
+/** How long the "drag over the words themselves" hint stays in
+ * the highlight panel after a selection matched nothing
+ * (1.2.50). */
+private const val SELECTION_MISS_HINT_MS = 2500L
+
+/**
+ * Whether the book's text layer — the extracted words that
+ * search and yellow text highlighting run on — is still
+ * extracting, ready, or absent (1.2.50). Before this the two
+ * non-ready states were the same null: the highlight pen
+ * simply did not exist while extraction ran (or after it
+ * failed), with no explanation to the student.
+ */
+enum class TextLayerState { LOADING, READY, UNAVAILABLE }
 
 private fun getFirebaseUid(): String {
     return try {
@@ -225,6 +245,17 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     }
     val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
 
+    // Dedicated single-thread render dispatcher (1.2.50): every
+    // PdfRenderer call of this reader (open + page renders) runs
+    // on its own thread, so renders serialize naturally instead
+    // of convoying behind one monitor on the shared
+    // Dispatchers.Default pool — one of the mechanisms behind
+    // the eternal «جارٍ تجهيز الصفحة» (see ReaderPagePipeline).
+    // Closed with the reader in the dispose effect below.
+    val renderDispatcher = remember {
+        Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    }
+
     // Highlighter persistence (outer scope so the open effect can restore it).
     // CRASH ARMOR (Crashlytics c3b30976, build 1.2.37): adapter creation
     // used to run bare inside remember{} during composition — when the
@@ -272,7 +303,12 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
         val adapter = textHighlightAdapter ?: return
         runCatching {
             prefs.edit().putString(
-                "texthighlights_${pdfFile.nameWithoutExtension}",
+                // Length-aware key (1.2.50, ReaderMarkingKeys): a
+                // re-downloaded booklet no longer inherits the old
+                // file's highlights on shifted text.
+                ReaderMarkingKeys.textHighlightsKey(
+                    pdfFile.nameWithoutExtension, pdfFile.length()
+                ),
                 adapter.toJson(textHighlights)
             ).apply()
         }
@@ -404,8 +440,23 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     // text highlighting and the outline button stay silently absent
     // and the reader behaves exactly as before.
     var textIndex by remember { mutableStateOf<BookTextIndex?>(null) }
-    LaunchedEffect(pdfFile) {
-        textIndex = PdfTextEngine.load(context, pdfFile)
+    // Text-layer readiness (1.2.50): extraction starts only
+    // after the first page has painted — at open it used to run
+    // concurrently with the first renders, and PDFBox chewing a
+    // whole book competed with them for CPU and memory on
+    // exactly the devices that could least afford it. The
+    // readiness is an explicit state (see TextLayerState), so
+    // the highlight pen can always be present and can say WHY
+    // highlighting is not usable yet.
+    var textLayerState by remember { mutableStateOf(TextLayerState.LOADING) }
+    var firstPagePainted by remember { mutableStateOf(false) }
+    LaunchedEffect(pdfFile, firstPagePainted) {
+        if (firstPagePainted && textLayerState == TextLayerState.LOADING) {
+            val index = PdfTextEngine.load(context, pdfFile)
+            textIndex = index
+            textLayerState =
+                if (index != null) TextLayerState.READY else TextLayerState.UNAVAILABLE
+        }
     }
 
     // Bookmarks: a TYPED List<Int> adapter built once (build 1.2.37).
@@ -461,7 +512,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     }
 
     LaunchedEffect(pdfFile) {
-        withContext(Dispatchers.Default) {
+        withContext(renderDispatcher) {
             try {
                 loadBookmarks()
                 // Legacy freehand strokes + shape/text annotations
@@ -481,8 +532,26 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     }
                 }
                 try {
-                    prefs.getString("texthighlights_${pdfFile.nameWithoutExtension}", null)?.let {
+                    // Length-aware key first (1.2.50); the legacy
+                    // bare-name key is read once and migrated
+                    // forward by the save below, so existing
+                    // highlights survive the key change.
+                    val bookName = pdfFile.nameWithoutExtension
+                    val newKey = ReaderMarkingKeys.textHighlightsKey(
+                        bookName, pdfFile.length()
+                    )
+                    val legacyKey = ReaderMarkingKeys.legacyTextHighlightsKey(bookName)
+                    val stored = prefs.getString(newKey, null)
+                    val legacy = if (stored == null) {
+                        prefs.getString(legacyKey, null)
+                    } else {
+                        null
+                    }
+                    (stored ?: legacy)?.let {
                         textHighlights = textHighlightAdapter?.fromJson(it) ?: emptyList()
+                    }
+                    if (legacy != null && textHighlights.isNotEmpty()) {
+                        saveTextHighlights()
                     }
                 } catch (_: Exception) {
                     // Corrupt text-highlight JSON must never block opening the book.
@@ -497,14 +566,20 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 // 1.2.47: a file that "opens" with zero pages used to
                 // fall past every state branch and show the bare black
                 // canvas forever — it is an open failure, full stop.
+                // (1.2.50: the old body called error("...") here,
+                // which resolved to kotlin.error and threw its way
+                // into the catch below; the state is now assigned
+                // directly, as intended all along.)
                 if (totalPages <= 0) {
-                    error("الملف بلا صفحات قابلة للعرض")
+                    error = "الملف بلا صفحات قابلة للعرض"
+                    isLoading = false
+                } else {
+                    savedPage = prefs.getInt("last_page_${pdfFile.nameWithoutExtension}", 0)
+                        .coerceIn(0, (totalPages - 1).coerceAtLeast(0))
+                    // Successful open: this book becomes the most recent.
+                    recordRecent(savedPage, totalPages)
+                    isLoading = false
                 }
-                savedPage = prefs.getInt("last_page_${pdfFile.nameWithoutExtension}", 0)
-                    .coerceIn(0, (totalPages - 1).coerceAtLeast(0))
-                // Successful open: this book becomes the most recent.
-                recordRecent(savedPage, totalPages)
-                isLoading = false
             } catch (e: Exception) {
                 error = "تعذر فتح الملف: ${e.localizedMessage}"
                 isLoading = false
@@ -553,6 +628,8 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             onFullscreenChange?.invoke(false)
             try { pdfRenderer?.close() } catch (_: Exception) {}
             try { parcelFd?.close() } catch (_: Exception) {}
+            // The render thread dies with the reader (1.2.50).
+            (renderDispatcher as? ExecutorCoroutineDispatcher)?.close()
         }
     }
 
@@ -605,6 +682,12 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // silent black screen of the doctor's device report.
             val failedPages = remember { mutableStateMapOf<Int, Boolean>() }
             val pageRenderAttempts = remember { mutableStateMapOf<Int, Int>() }
+            // Pages whose FULL render already landed (or was
+            // attempted) over the fast paint (1.2.50 staged
+            // pipeline — see ReaderPagePipeline): the full stage
+            // runs at most once per page per cache lifetime, and
+            // eviction clears the mark with the bitmap.
+            val fullResPages = remember { mutableStateMapOf<Int, Boolean>() }
             // PdfRenderer is NOT thread-safe: every openPage/render/
             // close sequence (base renders + zoom re-renders) is
             // serialized on this lock, and every opened Page handle
@@ -625,7 +708,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 maxPixels: Int = 0
             ): Bitmap? {
                 val renderer = pdfRenderer ?: return null
-                return withContext(Dispatchers.Default) {
+                return withContext(renderDispatcher) {
                     synchronized(renderLock) {
                         try {
                             val pg = renderer.openPage(page)
@@ -659,6 +742,52 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 }
             }
 
+            /** One bounded render attempt of [stage] for [page]
+             * (1.2.50 — see ReaderPagePipeline): the attempt dies
+             * at the pipeline timeout instead of hanging the page
+             * state, and the caller walks the stage chain
+             * (FAST → FULL → failure state). */
+            suspend fun renderStage(
+                page: Int,
+                stage: ReaderPagePipeline.Stage
+            ): Bitmap? {
+                val target = when (stage) {
+                    ReaderPagePipeline.Stage.FAST ->
+                        ReaderPagePipeline.fastTargetWidthPx(boxSize.width)
+                    ReaderPagePipeline.Stage.FULL ->
+                        ReaderRenderMath.baseTargetWidthPx(boxSize.width)
+                }
+                val budget = when (stage) {
+                    ReaderPagePipeline.Stage.FAST -> ReaderPagePipeline.FAST_MAX_PIXELS
+                    ReaderPagePipeline.Stage.FULL -> ReaderRenderMath.BASE_MAX_PIXELS
+                }
+                return withTimeoutOrNull(ReaderPagePipeline.RENDER_TIMEOUT_MS) {
+                    renderPageBitmap(
+                        page,
+                        ReaderRenderMath.FALLBACK_SCALE,
+                        targetWidthPx = target,
+                        maxPixels = budget
+                    )
+                }
+            }
+
+            /** Recycles a replaced page bitmap only after its
+             * replacement has had a frame on screen (1.2.50):
+             * recycling the old bitmap in the same instant as
+             * the swap could blank the page for a frame — one
+             * of the visible zoom flicker sources. If the slot
+             * has moved on by then, the bitmap is left to the
+             * cache's own eviction/dispose recycling. */
+            fun recycleAfterFrame(replaced: Bitmap?, page: Int, current: Bitmap) {
+                if (replaced == null || replaced === current) return
+                coroutineScope.launch {
+                    withFrameNanos { }
+                    if (bitmapCache[page] === current) {
+                        try { replaced.recycle() } catch (_: Exception) {}
+                    }
+                }
+            }
+
             /** Text-highlight undo (1.2.38): pops the newest text
              * highlight on the CURRENT page and saves immediately.
              * (The 1.2.37 unified undo also covered freehand strokes
@@ -686,6 +815,12 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // highlights.
             var selectionStart by remember { mutableStateOf<Offset?>(null) }
             var selectionEnd by remember { mutableStateOf<Offset?>(null) }
+            // A selection drag that matched no word (1.2.50):
+            // the panel shows the corrective hint for a few
+            // seconds instead of the drag silently doing
+            // nothing (the old "the highlighter doesn't work"
+            // experience).
+            var selectionMissed by remember { mutableStateOf(false) }
             var showTextHighlights by remember { mutableStateOf(false) }
             var showOutline by remember { mutableStateOf(false) }
             // On-demand chrome popups (1.2.38 diet): zoom and
@@ -765,6 +900,14 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 }
             }
 
+            // The selection-miss hint clears itself (1.2.50).
+            LaunchedEffect(selectionMissed) {
+                if (selectionMissed) {
+                    kotlinx.coroutines.delay(SELECTION_MISS_HINT_MS)
+                    selectionMissed = false
+                }
+            }
+
             // Prev/next (and the initial landing) scroll to the
             // current hit's page.
             LaunchedEffect(currentHitIndex, searchHits) {
@@ -800,10 +943,15 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         val keep = (settled - 1..settled + 1).toSet() + pagerState.targetPage
                         bitmapCache.keys.filter { it !in keep }.forEach { key ->
                             bitmapCache.remove(key)?.recycle()
+                            // The full-render mark dies with its
+                            // bitmap (1.2.50): a page that comes
+                            // back re-earns its full stage.
+                            fullResPages.remove(key)
                         }
                         while (bitmapCache.size > READER_MAX_CACHED_BITMAPS) {
                             val farthest = bitmapCache.keys.maxByOrNull { abs(it - settled) } ?: break
                             bitmapCache.remove(farthest)?.recycle()
+                            fullResPages.remove(farthest)
                         }
                     }
                 }
@@ -823,9 +971,20 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             var hiResPage by remember { mutableStateOf(-1) }
             var hiResAppliedTarget by remember { mutableStateOf(0) }
             var hiResTargetWidth by remember { mutableStateOf(0) }
-            LaunchedEffect(zoom, boxSize) {
-                kotlinx.coroutines.delay(READER_HIRES_DEBOUNCE_MS)
-                hiResTargetWidth = ReaderRenderMath.hiResTargetWidthPx(boxSize.width, zoom)
+            // A pinch/pan gesture in progress (1.2.50): written
+            // by the page's transform handler, read by the
+            // hi-res gate below. Before this, the hi-res
+            // debounce ran from the last zoom VALUE change, so
+            // a slow pinch pausing mid-gesture fired a full
+            // hi-res render whose bitmap swap (and immediate
+            // recycle of the old bitmap) flickered mid-gesture
+            // — part of the reported zoom shake.
+            var pinchActive by remember { mutableStateOf(false) }
+            LaunchedEffect(zoom, boxSize, pinchActive) {
+                if (!pinchActive) {
+                    kotlinx.coroutines.delay(READER_HIRES_DEBOUNCE_MS)
+                    hiResTargetWidth = ReaderRenderMath.hiResTargetWidthPx(boxSize.width, zoom)
+                }
             }
             LaunchedEffect(currentPage, hiResTargetWidth) {
                 val target = hiResTargetWidth
@@ -844,7 +1003,10 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     if (bmp != null) {
                         val old = bitmapCache[currentPage]
                         bitmapCache[currentPage] = bmp
-                        if (old != null && old !== bmp) old.recycle()
+                        // The replaced bitmap is recycled only
+                        // after the sharper one has had a frame
+                        // on screen (1.2.50) — no swap flicker.
+                        recycleAfterFrame(old, currentPage, bmp)
                         hiResPage = currentPage
                         hiResAppliedTarget = target
                     }
@@ -857,6 +1019,9 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             LaunchedEffect(currentPage) {
                 hiResPage = -1
                 hiResAppliedTarget = 0
+                // A gesture interrupted by the page turn must not
+                // leave the hi-res gate shut (1.2.50).
+                pinchActive = false
             }
 
             DisposableEffect(Unit) {
@@ -892,28 +1057,65 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 val bitmap = bitmapCache[page]
                 val renderAttempt = pageRenderAttempts[page] ?: 0
                 LaunchedEffect(page, pdfRenderer, renderAttempt) {
-                    if (bitmapCache[page] == null && pdfRenderer != null) {
-                        // Display-matched base resolution (1.2.46):
-                        // the target follows the pager's real pixel
-                        // width (ReaderRenderMath), not a fixed x2 of
-                        // the point size; zoom re-renders of the
-                        // current page swap this entry at a
-                        // zoom-matched target.
-                        val rendered = renderPageBitmap(
-                            page,
-                            ReaderRenderMath.FALLBACK_SCALE,
-                            targetWidthPx = ReaderRenderMath.baseTargetWidthPx(boxSize.width),
-                            maxPixels = ReaderRenderMath.BASE_MAX_PIXELS
-                        )
-                        if (rendered != null) {
-                            bitmapCache[page] = rendered
+                    if (pdfRenderer == null) return@LaunchedEffect
+                    // Staged, bounded page resolution (1.2.50 —
+                    // see ReaderPagePipeline): the FAST paint
+                    // lands first so a downloaded book shows its
+                    // page at once, then the FULL render swaps in
+                    // over it. Every attempt is timeout-bounded
+                    // and the chain terminates — the page always
+                    // resolves to content or to the explicit
+                    // failure state below, never to an eternal
+                    // spinner (the pre-1.2.50 single fancy render
+                    // could stall and fire neither exit).
+                    if (bitmapCache[page] == null) {
+                        val fast = renderStage(page, ReaderPagePipeline.Stage.FAST)
+                        if (fast != null) {
+                            bitmapCache[page] = fast
                             failedPages.remove(page)
+                            if (!firstPagePainted) firstPagePainted = true
                         } else {
-                            // 1.2.47: a null render is a page FAILURE,
-                            // not an eternal load — the slot below
-                            // turns it into an error with a retry.
-                            failedPages[page] = true
+                            val full = renderStage(page, ReaderPagePipeline.Stage.FULL)
+                            if (full != null) {
+                                bitmapCache[page] = full
+                                failedPages.remove(page)
+                                fullResPages[page] = true
+                                if (!firstPagePainted) firstPagePainted = true
+                            } else {
+                                failedPages[page] = true
+                            }
                         }
+                    }
+                    if (bitmapCache[page] != null && fullResPages[page] != true &&
+                        failedPages[page] != true
+                    ) {
+                        val full = renderStage(page, ReaderPagePipeline.Stage.FULL)
+                        if (full != null) {
+                            val replaced = bitmapCache[page]
+                            bitmapCache[page] = full
+                            recycleAfterFrame(replaced, page, full)
+                        }
+                        // Landed or not, the full stage is not
+                        // re-attempted for this cache lifetime:
+                        // the fast paint stays rather than the
+                        // page churning renders.
+                        fullResPages[page] = true
+                    }
+                }
+                // The labelled preparing state is gated behind
+                // the pipeline grace (1.2.50): a downloaded
+                // book's fast paint lands far inside it, so the
+                // label is effectively never seen for local
+                // files; before the grace the slot is just the
+                // paper colour.
+                var showPreparing by remember(page) { mutableStateOf(false) }
+                LaunchedEffect(page, bitmap == null, failedPages[page]) {
+                    showPreparing = false
+                    if (bitmap == null && failedPages[page] != true) {
+                        kotlinx.coroutines.delay(
+                            ReaderPagePipeline.PREPARING_LABEL_DELAY_MS
+                        )
+                        showPreparing = true
                     }
                 }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -927,18 +1129,20 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         // off-screen: max pan is half the overflow on
                         // each axis.
                         fun clampPan(p: Offset, z: Float): Offset {
+                            // The clamp math lives in
+                            // ReaderZoomMath (1.2.50, unit-tested):
+                            // half the zoomed page's overflow over
+                            // the box, per axis.
                             val fit = minOf(
                                 boxSize.width.toFloat() / bitmap.width,
                                 boxSize.height.toFloat() / bitmap.height
                             )
-                            val dispW = bitmap.width * fit * z
-                            val dispH = bitmap.height * fit * z
-                            val maxX = max(0f, (dispW - boxSize.width) / 2f)
-                            val maxY = max(0f, (dispH - boxSize.height) / 2f)
-                            return Offset(
-                                p.x.coerceIn(-maxX, maxX),
-                                p.y.coerceIn(-maxY, maxY)
+                            val clamped = ReaderZoomMath.clampPan(
+                                p.x, p.y,
+                                bitmap.width * fit, bitmap.height * fit,
+                                boxSize.width, boxSize.height, z
                             )
+                            return Offset(clamped.x, clamped.y)
                         }
                         Box(
                             Modifier
@@ -1060,17 +1264,27 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                         val pageWords = textIndex
                                                             ?.pages?.firstOrNull { it.page == page }
                                                             ?.words.orEmpty()
-                                                        val matched = pageWords.filter { w ->
-                                                            w.x1 > left && w.x0 < right &&
-                                                                w.y1 > top && w.y0 < bottom
-                                                        }
+                                                        // Tolerant matching
+                                                        // (1.2.50 —
+                                                        // HighlightSelection):
+                                                        // a graze at a word's
+                                                        // edge counts, where
+                                                        // the old strict
+                                                        // overlap silently
+                                                        // selected nothing.
+                                                        val matched = HighlightSelection.selectWords(
+                                                            pageWords, left, top, right, bottom
+                                                        )
                                                         if (matched.isNotEmpty()) {
+                                                            selectionMissed = false
                                                             textHighlights = textHighlights + TextHighlightDto(
                                                                 page = page,
                                                                 rects = matched,
                                                                 text = matched.joinToString(" ") { it.text }
                                                             )
                                                             saveTextHighlights()
+                                                        } else if (textLayerState == TextLayerState.READY) {
+                                                            selectionMissed = true
                                                         }
                                                     }
                                                 },
@@ -1104,6 +1318,11 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                             while (true) {
                                                 val event = awaitPointerEvent()
                                                 val down = event.changes.filter { it.pressed }
+                                                // Gesture activity gates the
+                                                // hi-res re-render (1.2.50):
+                                                // it may only start once the
+                                                // fingers are gone.
+                                                pinchActive = down.isNotEmpty()
                                                 if (down.size >= 2) {
                                                     val cur = down.associate { it.id.value to it.position }
                                                     val ids = cur.keys.intersect(prev.keys).take(2)
@@ -1116,8 +1335,41 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                         if (oldDist > 0f && newDist > 0f) {
                                                             val scale = newDist / oldDist
                                                             if (scale != 1f || newC != oldC) {
-                                                                zoom = (zoom * scale).coerceIn(1f, 4f)
-                                                                pan = if (zoom <= 1.01f) Offset.Zero else clampPan(pan + (newC - oldC), zoom)
+                                                                val oldZoom = zoom
+                                                                val newZoom =
+                                                                    (zoom * scale).coerceIn(1f, 4f)
+                                                                zoom = newZoom
+                                                                pan = if (newZoom <= 1.01f) {
+                                                                    Offset.Zero
+                                                                } else {
+                                                                    // Anchored zoom
+                                                                    // (1.2.50 — see
+                                                                    // ReaderZoomMath):
+                                                                    // the pan
+                                                                    // compensates the
+                                                                    // scale around
+                                                                    // the box centre
+                                                                    // in the SAME
+                                                                    // event, so the
+                                                                    // content under
+                                                                    // the fingers no
+                                                                    // longer swims a
+                                                                    // frame behind
+                                                                    // them (الرجفان).
+                                                                    val anchored =
+                                                                        ReaderZoomMath.anchoredPan(
+                                                                            oldC.x, oldC.y,
+                                                                            newC.x, newC.y,
+                                                                            boxSize.width,
+                                                                            boxSize.height,
+                                                                            oldZoom, newZoom,
+                                                                            pan.x, pan.y
+                                                                        )
+                                                                    clampPan(
+                                                                        Offset(anchored.x, anchored.y),
+                                                                        newZoom
+                                                                    )
+                                                                }
                                                                 down.forEach { it.consume() }
                                                             }
                                                         }
@@ -1273,7 +1525,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                         Text("إعادة المحاولة")
                                     }
                                 }
-                            } else {
+                            } else if (showPreparing) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(36.dp),
@@ -1350,18 +1602,21 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     // toggleBookmark/showBookmarks logic is unchanged.
                     // The pen: the reader's ONLY marking system —
                     // yellow text highlighting (the freehand mode is
-                    // deleted, 1.2.38). Shown only with a text index.
-                    if (textIndex != null) {
-                        IconButton(
-                            onClick = {
-                                showToolsPanel = false
-                                if (textHighlightMode) exitTextHighlightMode()
-                                else textHighlightMode = true
-                            },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(Icons.Default.BorderColor, null, tint = if (textHighlightMode) GoldAccent else Color.White, modifier = Modifier.size(20.dp))
-                        }
+                    // deleted, 1.2.38). Always present (1.2.50): it
+                    // used to exist only once the text index had
+                    // loaded, so on large books — whose extraction
+                    // takes a while — the highlighter silently did
+                    // not exist; the panel now explains the text
+                    // layer's state instead (see TextLayerState).
+                    IconButton(
+                        onClick = {
+                            showToolsPanel = false
+                            if (textHighlightMode) exitTextHighlightMode()
+                            else textHighlightMode = true
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(Icons.Default.BorderColor, null, tint = if (textHighlightMode) GoldAccent else Color.White, modifier = Modifier.size(20.dp))
                     }
                     IconButton(
                         onClick = {
@@ -1553,7 +1808,22 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "اسحب فوق النص لتظليله — ولمس مظللة يحذفها",
+                            // The panel narrates the text layer's
+                            // state (1.2.50): still extracting, no
+                            // text layer in this book, a selection
+                            // that just missed, or the normal hint.
+                            when (textLayerState) {
+                                TextLayerState.LOADING ->
+                                    "جارٍ تجهيز نص الكتاب… لحظات ويصير التظليل جاهزًا"
+                                TextLayerState.UNAVAILABLE ->
+                                    "هذا الكتاب بلا طبقة نصية — التظليل غير متاح له"
+                                TextLayerState.READY ->
+                                    if (selectionMissed) {
+                                        "اسحب فوق كلمات النص مباشرة حتى يثبت التظليل"
+                                    } else {
+                                        "اسحب فوق النص لتظليله — ولمس مظللة يحذفها"
+                                    }
+                            },
                             color = Color.White, fontSize = 12.sp,
                             modifier = Modifier.weight(1f)
                         )
