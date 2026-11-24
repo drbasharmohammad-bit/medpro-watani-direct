@@ -38,7 +38,7 @@ class Build1232LogicTest {
         assertTrue(AppUpdate.isApkUrlAllowed(AppUpdate.FALLBACK_APK_URL))
         assertTrue(AppUpdate.isApkUrlAllowed(AppUpdate.GITHUB_APK_URL))
         assertEquals(
-            "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.42/watani-latest.apk",
+            "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.46/watani-latest.apk",
             AppUpdate.GITHUB_APK_URL
         )
     }
