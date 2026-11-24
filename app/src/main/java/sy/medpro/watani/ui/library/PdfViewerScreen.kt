@@ -571,7 +571,10 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 // into the catch below; the state is now assigned
                 // directly, as intended all along.)
                 if (totalPages <= 0) {
-                    error = "الملف بلا صفحات قابلة للعرض"
+                    // Same «تعذر فتح الملف» prefix as the catch
+                    // below: one open-failure wording for every
+                    // way a book can fail to open.
+                    error = "تعذر فتح الملف: بلا صفحات قابلة للعرض"
                     isLoading = false
                 } else {
                     savedPage = prefs.getInt("last_page_${pdfFile.nameWithoutExtension}", 0)
