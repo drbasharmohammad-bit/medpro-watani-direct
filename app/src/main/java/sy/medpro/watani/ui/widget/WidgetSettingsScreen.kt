@@ -647,7 +647,7 @@ private fun GlassPreviewCard(settings: WidgetSettings) {
                     fontFamily = ThmanyahFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
-                    color = Color(palette.accentTime)
+                    color = Color(palette.timeAccent)
                 )
             }
         }

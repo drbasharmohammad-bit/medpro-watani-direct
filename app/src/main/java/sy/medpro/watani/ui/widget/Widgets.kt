@@ -475,16 +475,19 @@ object Widgets {
         headings.forEach { views.setTextColor(it, palette.heading) }
         primary.forEach { views.setTextColor(it, palette.primary) }
         secondary.forEach { views.setTextColor(it, palette.secondary) }
-        accent.forEach { views.setTextColor(it, palette.accentTime) }
+        accent.forEach { views.setTextColor(it, palette.timeAccent) }
     }
 
-    /** PendingIntent عام لأي قيمة توجيه (زوادة/تابع/تركيز...). */
+    /** PendingIntent عام لأي قيمة توجيه (زوادة/تابع/تركيز...) —
+     * بنمط التوجيه القائم نفسه: ختم النونس الخاص بالتثبيت وفعل
+     * مميز لكل طلب حتى لا تتصادم النوايا المعلّقة. */
     private fun routePendingIntent(context: Context, route: String, requestCode: Int): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            this.action = "sy.medpro.watani.widget.GLASS_$requestCode"
             putExtra(WidgetRouter.EXTRA_ROUTE, route)
-            putExtra(WidgetRouter.EXTRA_NONCE, WidgetRouter.nonce(context))
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
+        WidgetRouter.stampRoute(intent, context)
         return PendingIntent.getActivity(
             context, requestCode, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -542,8 +545,9 @@ object Widgets {
         val views = RemoteViews(context.packageName, R.layout.widget_glass_hero)
         bindBackground(views, context, data, sizeDp)
         bindChronometer(views, data)
-        val percent = if (data.questionTarget > 0) {
-            (data.doneToday * 100 / data.questionTarget).coerceIn(0, 100)
+        val target = data.questionTarget ?: 0
+        val percent = if (target > 0) {
+            (data.doneToday * 100 / target).coerceIn(0, 100)
         } else {
             0
         }
@@ -555,7 +559,7 @@ object Widgets {
         views.setTextViewText(R.id.widget_ring_text, "${data.doneToday}")
         views.setTextViewText(
             R.id.widget_goal_text,
-            if (data.questionTarget > 0) "من ${data.questionTarget} سؤالًا" else "لم يُضبط هدف بعد"
+            if (target > 0) "من $target سؤالًا" else "لم يُضبط هدف بعد"
         )
         views.setTextViewText(R.id.widget_streak_number, "${data.streakDays}")
         views.setTextViewText(
@@ -590,8 +594,9 @@ object Widgets {
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_glass_goal)
         bindBackground(views, context, data, sizeDp)
-        val percent = if (data.questionTarget > 0) {
-            (data.doneToday * 100 / data.questionTarget).coerceIn(0, 100)
+        val target = data.questionTarget ?: 0
+        val percent = if (target > 0) {
+            (data.doneToday * 100 / target).coerceIn(0, 100)
         } else {
             0
         }
@@ -603,9 +608,9 @@ object Widgets {
         views.setTextViewText(R.id.widget_ring_text, "${data.doneToday}")
         views.setTextViewText(
             R.id.widget_goal_text,
-            if (data.questionTarget > 0) "من ${data.questionTarget} سؤالًا" else "اضبط هدفك من التطبيق"
+            if (target > 0) "من $target سؤالًا" else "اضبط هدفك من التطبيق"
         )
-        val free = data.items.firstOrNull { it.isNotBlank() }
+        val free = data.items.firstOrNull { it.text.isNotBlank() }?.text
         if (free != null && data.settings.showGoals) {
             views.setTextViewText(R.id.widget_goal_freetext, free)
             views.setViewVisibility(R.id.widget_goal_freetext, View.VISIBLE)
@@ -728,7 +733,15 @@ object Widgets {
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_glass_actions)
         bindBackground(views, context, data, sizeDp)
-        bindButtons(views, context, data, KIND_ACTIONS)
+        bindButtons(
+            context, views, data, KIND_ACTIONS,
+            listOf(
+                Triple(R.id.widget_btn_1, R.id.widget_btn_1_icon, R.id.widget_btn_1_text),
+                Triple(R.id.widget_btn_2, R.id.widget_btn_2_icon, R.id.widget_btn_2_text),
+                Triple(R.id.widget_btn_3, R.id.widget_btn_3_icon, R.id.widget_btn_3_text),
+                Triple(R.id.widget_btn_4, R.id.widget_btn_4_icon, R.id.widget_btn_4_text)
+            )
+        )
         applyPalette(
             views, data,
             headings = emptyList(),
@@ -757,7 +770,7 @@ object Widgets {
         )
         views.setOnClickPendingIntent(
             R.id.widget_focus_start,
-            routePendingIntent(context, WidgetRouter.ROUTE_FOCUS, 76)
+            routePendingIntent(context, WidgetQuickAction.FOCUS.route, 76)
         )
         applyPalette(
             views, data,
