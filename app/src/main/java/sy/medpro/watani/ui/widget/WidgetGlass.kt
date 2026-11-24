@@ -63,7 +63,7 @@ data class GlassPalette(
     }
 }
 
-object WidgetGlass {
+internal object WidgetGlass {
 
     // Glass tint colours from the approved mockup recipe.
     private const val BURG_R = 0x5E; private const val BURG_G = 0x12; private const val BURG_B = 0x24

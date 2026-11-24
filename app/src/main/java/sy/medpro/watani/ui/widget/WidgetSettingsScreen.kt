@@ -59,8 +59,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
-import sy.medpro.watani.data.ExamCountdownMath
-import sy.medpro.watani.data.ExamDateStore
+import sy.medpro.watani.data.CountdownMath
+import sy.medpro.watani.data.DailyGoalEngine
 import sy.medpro.watani.data.WidgetBackgroundMath
 import sy.medpro.watani.data.WidgetGlassMath
 import sy.medpro.watani.data.WidgetGlassStyle
@@ -569,8 +569,8 @@ private fun GlassPreviewCard(settings: WidgetSettings) {
         WidgetGlassStyle.DARK -> Color(0xFF5E1224)
     }
     val parts = remember {
-        val target = ExamDateStore.load(context)
-        ExamCountdownMath.parts(target - System.currentTimeMillis())
+        val target = DailyGoalEngine.examTargetOrDefault(context)
+        CountdownMath.split(target - System.currentTimeMillis())
     }
     val timeText = remember(parts) {
         val totalSec = (parts.withinDayMillis / 1000).coerceAtLeast(0)

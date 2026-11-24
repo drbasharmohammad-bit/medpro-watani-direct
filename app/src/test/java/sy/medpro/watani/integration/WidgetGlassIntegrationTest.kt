@@ -86,13 +86,13 @@ class WidgetGlassIntegrationTest {
 
     @Test
     fun glassSettingsRoundTripAndOpacityFloor() {
-        val saved = WidgetSettingsStore.load(context).copy(
+        val saved = WidgetSettingsStore.settings(context).copy(
             glassStyle = WidgetGlassStyle.LIGHT,
             glassAlphaPercent = 80,
             showTip = false
         )
         WidgetSettingsStore.save(context, saved)
-        val loaded = WidgetSettingsStore.load(context)
+        val loaded = WidgetSettingsStore.settings(context)
         assertEquals(WidgetGlassStyle.LIGHT, loaded.glassStyle)
         assertEquals(80, loaded.glassAlphaPercent)
         assertEquals(false, loaded.showTip)
@@ -103,7 +103,7 @@ class WidgetGlassIntegrationTest {
             .edit().putInt("glass_alpha_percent", 10).commit()
         assertEquals(
             WidgetGlassMath.GLASS_ALPHA_MIN,
-            WidgetSettingsStore.load(context).glassAlphaPercent
+            WidgetSettingsStore.settings(context).glassAlphaPercent
         )
     }
 
