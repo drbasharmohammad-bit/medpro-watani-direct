@@ -77,7 +77,7 @@ object AppUpdate {
      * the app repository — a different network path than the
      * content host, for networks where *.pages.dev is throttled). */
     const val GITHUB_APK_URL =
-        "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.42/watani-latest.apk"
+        "https://github.com/drbasharmohammad-bit/medpro-watani-direct/releases/download/v1.2.46/watani-latest.apk"
 
     private val ALLOWED_HOSTS = setOf(
         "watani-content.pages.dev",

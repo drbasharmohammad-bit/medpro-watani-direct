@@ -14,9 +14,9 @@ package sy.medpro.watani.data
  * the content itself was healthy.
  *
  * The warm-up walks the step index in course order and pulls every
- * package that is not already in the section cache, silently and
- * sequentially, the moment the section's indexes resolve. This
- * planner decides which ids those are.
+ * package that is not already in the section cache, silently (with
+ * bounded parallelism since 1.2.48), the moment the section's
+ * indexes resolve. This planner decides which ids those are.
  */
 object FirstAidPrefetchRules {
 

@@ -1,5 +1,6 @@
 package sy.medpro.watani.ui.firstaid
 
+import sy.medpro.watani.ui.PremiumListSkeleton
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.activity.compose.BackHandler
@@ -250,9 +251,7 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
 
     Box(modifier = Modifier.fillMaxSize().background(faBackground())) {
         when {
-            loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = faAccentText())
-            }
+            loading -> PremiumListSkeleton(caption = "جارٍ تحميل القسم…")
 
             failed -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(

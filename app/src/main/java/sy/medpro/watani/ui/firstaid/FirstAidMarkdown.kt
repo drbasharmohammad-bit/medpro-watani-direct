@@ -1,6 +1,5 @@
 package sy.medpro.watani.ui.firstaid
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -480,7 +479,12 @@ private fun FaFigure(
     val file = figureFile(block.mediaId)
     val bitmap = remember(file?.absolutePath, file?.length()) {
         file?.takeIf { it.exists() && it.length() > 0 }?.let {
-            try { BitmapFactory.decodeFile(it.absolutePath) } catch (e: Exception) { null }
+            // Decode at display size (1.2.48, item 6): the figure
+            // renders at slot width, so the decode subsamples to
+            // that width instead of holding the full source bitmap.
+            sy.medpro.watani.ui.ImageDecode.decodeFileDownsampled(
+                it.absolutePath, sy.medpro.watani.ui.ImageDecode.FIGURE_TARGET_WIDTH_PX
+            )
         }
     }
     Column(

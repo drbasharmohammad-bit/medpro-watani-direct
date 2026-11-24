@@ -4,6 +4,8 @@ import android.content.Context
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -209,6 +211,21 @@ class WataniRepository(private val context: Context) {
         /** Process-wide parsed-concepts cache (see the field note in
          * the class body — audit item Z, 21 Nov 2026). */
         private val sharedConceptsEnvelopeCache = EnvelopeCache<ConceptsEnvelope>()
+
+        /** Prefs file of the persisted session-count index
+         * (1.2.48, performance item 3 — see [sessionCountsIndexEntry]). */
+        const val SESSION_COUNTS_PREFS = "watani_session_counts_index"
+
+        /** Process-wide parsed-pack cache (1.2.48, performance list
+         * item 1 — search indexes instead of full scans): the small
+         * section packs (cases, ddx, osce, ecg, library…) used to be
+         * re-read, re-decrypted and re-parsed on EVERY getter call,
+         * and screens build a fresh repository per effect and call a
+         * pack getter up to three times per entry. Same idiom as the
+         * First Aid cache: entries are stamped with the section
+         * file's own (mtime, length), so a re-download rewrites the
+         * file and the stale parse drops itself. */
+        private val sharedPackEnvelopeCache = EnvelopeCache<Any>()
 
         // ── First Aid load-path repair (1.2.43, doctor's device
         // report: section jank + «الواجهة الثابتة تكون عند الطالب من
@@ -502,19 +519,26 @@ class WataniRepository(private val context: Context) {
         return try {
             val manifest = fetchManifest().getOrNull() ?: return false
             val files = manifest.files ?: return false
-            var updated = false
             // Snapshot first: downloadSection rewrites the downloaded
             // registry as each section lands.
             val installed = _downloadedSectionsFlow.value.filter { entity ->
                 entity.sectionPath !in excludePaths &&
                     BANK_SECTION_PREFIXES.any { entity.sectionPath.startsWith(it) }
             }
-            for (entity in installed) {
-                val entry = files[entity.sectionPath] ?: continue
-                if (!sectionNeedsRefresh(entity, entry)) continue
-                if (downloadSection(entity.sectionPath, entry).isSuccess) updated = true
+            val toRefresh = installed.mapNotNull { entity ->
+                val entry = files[entity.sectionPath] ?: return@mapNotNull null
+                if (sectionNeedsRefresh(entity, entry)) entity to entry else null
             }
-            updated
+            // Bounded parallelism (1.2.48, performance item 9): the
+            // per-section downloads are independent; the registry
+            // save reloads the full prefs state after each section
+            // lands, so concurrent saves stay consistent.
+            val results = ParallelFetch.mapBounded(
+                toRefresh, ParallelFetch.DOWNLOAD_CONCURRENCY
+            ) { (entity, entry) ->
+                downloadSection(entity.sectionPath, entry).isSuccess
+            }
+            results.any { it }
         } catch (e: Exception) {
             false
         }
@@ -581,16 +605,32 @@ class WataniRepository(private val context: Context) {
         val subjectTemp = File(subjectFile.parentFile, "${subjectFile.name}.tmp")
         val twinFile = getSectionFile(twinPath)
         val twinTemp = File(twinFile.parentFile, "${twinFile.name}.tmp")
-        val stagedSubject = stageSectionDownload(path, entry) { p ->
-            onProgress(p * PAIR_PROGRESS_HALF)
-        }.getOrElse {
+        // Bounded parallelism (1.2.48, performance item 9): the two
+        // stagings are independent network fetches, so they now run
+        // concurrently instead of one after the other. The atomic
+        // install below is untouched — both files are still written
+        // and registered only after BOTH verifications pass, and any
+        // staging failure deletes every temp of the pair.
+        val stagedResults = coroutineScope {
+            val subjectDeferred = async {
+                stageSectionDownload(path, entry) { p ->
+                    onProgress(p * PAIR_PROGRESS_HALF)
+                }
+            }
+            val twinDeferred = async {
+                stageSectionDownload(twinPath, twinEntry) { p ->
+                    onProgress(PAIR_PROGRESS_HALF + p * PAIR_PROGRESS_HALF)
+                }
+            }
+            subjectDeferred.await() to twinDeferred.await()
+        }
+        val stagedSubject = stagedResults.first.getOrElse {
             subjectTemp.delete()
             twinTemp.delete()
+            stagedResults.second.getOrNull()?.tempFile?.delete()
             return@withContext Result.failure(it)
         }
-        val stagedTwin = stageSectionDownload(twinPath, twinEntry) { p ->
-            onProgress(PAIR_PROGRESS_HALF + p * PAIR_PROGRESS_HALF)
-        }.getOrElse {
+        val stagedTwin = stagedResults.second.getOrElse {
             stagedSubject.tempFile.delete()
             twinTemp.delete()
             return@withContext Result.failure(it)
@@ -893,10 +933,59 @@ class WataniRepository(private val context: Context) {
             val parsed = moshi.adapter(SubjectEnvelope::class.java).fromJson(jsonString)
             if (parsed != null && registryHash != null) {
                 subjectEnvelopeCache.put(path, registryHash, jsonString.length, parsed)
+                // Build the light session-count index from the same
+                // parse (1.2.48, performance item 3), so the «دورة
+                // كاملة» list never has to parse this body again
+                // just to count its sessions.
+                persistSessionCountsIndex(path, registryHash, parsed)
             }
             parsed
         } catch (e: Exception) {
             null
+        }
+    }
+
+    private val sessionCountsPrefs by lazy {
+        context.getSharedPreferences(SESSION_COUNTS_PREFS, Context.MODE_PRIVATE)
+    }
+
+    /** The persisted light session-count index for the shard at
+     * [path] — subject name + per-session question counts, in shard
+     * order — or null when no entry was built from the bytes the
+     * downloaded-sections registry currently holds for the path
+     * (never downloaded, hash moved on, or the entry is unreadable).
+     * Cheap and synchronous: two prefs reads, no file I/O, no parse
+     * of the shard body. */
+    fun sessionCountsIndexEntry(path: String): SessionCountsIndexEntry? {
+        val registryHash = _downloadedSectionsFlow.value
+            .firstOrNull { it.sectionPath == path }?.hash ?: return null
+        return try {
+            val raw = sessionCountsPrefs.getString(path, null) ?: return null
+            if (raw.substringBefore('\n') != registryHash) return null
+            moshi.adapter(SessionCountsIndexEntry::class.java)
+                .fromJson(raw.substringAfter('\n'))
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Builds/persists the session-count index for a freshly parsed
+     * subject [envelope], stamped with the registry [registryHash]
+     * of the bytes it was parsed from. Best-effort: a failure here
+     * only means the next list build falls back to the envelope. */
+    private fun persistSessionCountsIndex(
+        path: String,
+        registryHash: String,
+        envelope: SubjectEnvelope
+    ) {
+        try {
+            val entry = SessionCountsIndexEntry(
+                subjectName = envelope.subjectName,
+                counts = SectionIndex.sessionCounts(envelope)
+            )
+            val json = moshi.adapter(SessionCountsIndexEntry::class.java).toJson(entry)
+            sessionCountsPrefs.edit().putString(path, "$registryHash\n$json").apply()
+        } catch (_: Exception) {
         }
     }
 
@@ -972,50 +1061,57 @@ class WataniRepository(private val context: Context) {
         }
     }
 
-    suspend fun getCasesEnvelope(): CasesEnvelope? = withContext(Dispatchers.IO) {
-        try {
-            val jsonString = readSectionText("cases.json") ?: return@withContext null
-            moshi.adapter(CasesEnvelope::class.java).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
-        }
+    // ── Parsed-pack cache plumbing (1.2.48, performance item 1) ──
+    /** (mtime, length) stamp of a section file — the same
+     * self-invalidating stamp the First Aid cache uses: any
+     * re-download rewrites the file, changes the stamp and drops
+     * the stale parse inside [EnvelopeCache.get]. */
+    private fun packFileStamp(path: String): String? {
+        val file = getSectionFile(path)
+        return if (file.exists()) "${file.lastModified()}:${file.length()}" else null
     }
+
+    /** Read + parse a small section pack through the process-wide
+     * parse cache ([sharedPackEnvelopeCache]): a repeat call for
+     * unchanged bytes returns the parsed value with no disk read,
+     * no decrypt and no parse. Null when the file is absent or does
+     * not parse — a null is never cached. Semantics are otherwise
+     * identical to the pre-1.2.48 direct read+parse getters. */
+    private suspend fun <T> getCachedPack(path: String, parse: (String) -> T?): T? =
+        withContext(Dispatchers.IO) {
+            try {
+                val stamp = packFileStamp(path)
+                if (stamp != null) {
+                    @Suppress("UNCHECKED_CAST")
+                    val hit = sharedPackEnvelopeCache.get(path, stamp) as? T
+                    if (hit != null) return@withContext hit
+                }
+                val text = readSectionText(path) ?: return@withContext null
+                val parsed = parse(text) ?: return@withContext null
+                packFileStamp(path)?.let {
+                    sharedPackEnvelopeCache.put(path, it, text.length, parsed as Any)
+                }
+                parsed
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+    suspend fun getCasesEnvelope(): CasesEnvelope? =
+        getCachedPack("cases.json") { moshi.adapter(CasesEnvelope::class.java).fromJson(it) }
 
     // الحالات الألمانية (نقل 9 نوفمبر): نفس غلاف الحالات تمامًا، ملف مستقل.
-    suspend fun getCasesDeEnvelope(): CasesEnvelope? = withContext(Dispatchers.IO) {
-        try {
-            val jsonString = readSectionText("cases_de.json") ?: return@withContext null
-            moshi.adapter(CasesEnvelope::class.java).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
-        }
-    }
+    suspend fun getCasesDeEnvelope(): CasesEnvelope? =
+        getCachedPack("cases_de.json") { moshi.adapter(CasesEnvelope::class.java).fromJson(it) }
 
-    suspend fun getGuideEnvelope(): GuideEnvelope? = withContext(Dispatchers.IO) {
-        try {
-            val jsonString = readSectionText("guide.json") ?: return@withContext null
-            moshi.adapter(GuideEnvelope::class.java).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
-        }
-    }
+    suspend fun getGuideEnvelope(): GuideEnvelope? =
+        getCachedPack("guide.json") { moshi.adapter(GuideEnvelope::class.java).fromJson(it) }
 
-    suspend fun getOsceEnvelope(): OsceEnvelope? = withContext(Dispatchers.IO) {
-        try {
-            val jsonString = readSectionText("osce.json") ?: return@withContext null
-            moshi.adapter(OsceEnvelope::class.java).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
-        }
-    }
+    suspend fun getOsceEnvelope(): OsceEnvelope? =
+        getCachedPack("osce.json") { moshi.adapter(OsceEnvelope::class.java).fromJson(it) }
 
-    suspend fun getAuscultationEnvelope(): AuscultationEnvelope? = withContext(Dispatchers.IO) {
-        try {
-            val jsonString = readSectionText("auscultation.json") ?: return@withContext null
-            moshi.adapter(AuscultationEnvelope::class.java).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
-        }
+    suspend fun getAuscultationEnvelope(): AuscultationEnvelope? = getCachedPack("auscultation.json") {
+        moshi.adapter(AuscultationEnvelope::class.java).fromJson(it)
     }
 
     /**
@@ -1025,16 +1121,10 @@ class WataniRepository(private val context: Context) {
      * downloaded yet (the course screen then pulls it through the
      * manifest + downloadSection path, like the auscultation trainer).
      */
-    suspend fun getEcgEnvelope(): EcgEnvelope? = withContext(Dispatchers.IO) {
-        try {
-            // Encrypted sections_cache (phase-2 hardening): read through
-            // the central crypto point like every other section getter.
-            val jsonString = readSectionText("ecg.json") ?: return@withContext null
-            moshi.adapter(EcgEnvelope::class.java).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
-        }
-    }
+    suspend fun getEcgEnvelope(): EcgEnvelope? =
+        // Encrypted sections_cache (phase-2 hardening): the cached
+        // path still reads through the central crypto point.
+        getCachedPack("ecg.json") { moshi.adapter(EcgEnvelope::class.java).fromJson(it) }
 
     // ---------------- First Aid - Med Pro (firstaid/, 1.2.36) ----------------
     // FREE family: files live on the public origin and flow through the
@@ -1161,16 +1251,20 @@ class WataniRepository(private val context: Context) {
     /** Background warm-up of a step's unit packages (1.2.45, the
      * doctor's professional-cache standard): the moment the section's
      * indexes resolve, every not-yet-cached package of the step is
-     * pulled silently and sequentially on the refresh scope, so the
-     * first open of a unit is a cache hit instead of a network fetch
-     * behind a spinner. Best-effort and silent by contract: a failed
-     * package is simply planned again on the next section entry, and
-     * the unit's own open remains the fallback fetch. */
+     * pulled silently on the refresh scope (bounded-parallel since
+     * 1.2.48), so the first open of a unit is a cache hit instead of
+     * a network fetch behind a spinner. Best-effort and silent by
+     * contract: a failed package is simply planned again on the next
+     * section entry, and the unit's own open remains the fallback fetch. */
     fun prefetchFirstAidUnits(step: Int, ids: List<String>) {
         val missing = FirstAidPrefetchRules.missing(ids) { isFirstAidUnitCached(step, it) }
         if (missing.isEmpty()) return
         firstAidRefreshScope.launch {
-            for (id in missing) {
+            // Bounded parallelism (1.2.48, performance item 9): the
+            // packages are independent files, so the warm-up pulls a
+            // few at a time instead of one by one — the first open of
+            // a unit becomes a cache hit sooner on slow networks.
+            ParallelFetch.mapBounded(missing, ParallelFetch.DOWNLOAD_CONCURRENCY) { id ->
                 try {
                     getFirstAidUnit(step, id)
                 } catch (_: Exception) {
@@ -1361,23 +1455,11 @@ class WataniRepository(private val context: Context) {
         }
     }
 
-    suspend fun getDdxEnvelope(): DdxEnvelope? = withContext(Dispatchers.IO) {
-        try {
-            val jsonString = readSectionText("ddx.json") ?: return@withContext null
-            moshi.adapter(DdxEnvelope::class.java).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
-        }
-    }
+    suspend fun getDdxEnvelope(): DdxEnvelope? =
+        getCachedPack("ddx.json") { moshi.adapter(DdxEnvelope::class.java).fromJson(it) }
 
-    suspend fun getReverseEnvelope(): ReverseEnvelope? = withContext(Dispatchers.IO) {
-        try {
-            val jsonString = readSectionText("reverse.json") ?: return@withContext null
-            moshi.adapter(ReverseEnvelope::class.java).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
-        }
-    }
+    suspend fun getReverseEnvelope(): ReverseEnvelope? =
+        getCachedPack("reverse.json") { moshi.adapter(ReverseEnvelope::class.java).fromJson(it) }
 
     /**
      * OSCE procedures pack (build 1.2.6): the downloaded
@@ -1387,19 +1469,15 @@ class WataniRepository(private val context: Context) {
      * then pulls it through the manifest + downloadSection path, like
      * the OSCE stations screen).
      */
-    suspend fun getOsceProcedures(): List<ProcedureDto>? = withContext(Dispatchers.IO) {
-        try {
-            // Encrypted sections_cache (phase-2 hardening): read through
-            // the central crypto point like every other section getter.
-            val jsonString = readSectionText("osce_procedures.json") ?: return@withContext null
+    suspend fun getOsceProcedures(): List<ProcedureDto>? =
+        // Encrypted sections_cache (phase-2 hardening): the cached
+        // path still reads through the central crypto point.
+        getCachedPack("osce_procedures.json") {
             val listType = com.squareup.moshi.Types.newParameterizedType(
                 List::class.java, ProcedureDto::class.java
             )
-            moshi.adapter<List<ProcedureDto>>(listType).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
+            moshi.adapter<List<ProcedureDto>>(listType).fromJson(it)
         }
-    }
 
     /**
      * Bundled fallback (assets/osce_procedures_sample.json): one full
@@ -1428,19 +1506,15 @@ class WataniRepository(private val context: Context) {
      * (the drills screen then pulls it through the manifest +
      * downloadSection path).
      */
-    suspend fun getDosingDrills(): List<DosingDrillDto>? = withContext(Dispatchers.IO) {
-        try {
-            // Encrypted sections_cache (phase-2 hardening): read through
-            // the central crypto point like every other section getter.
-            val jsonString = readSectionText("dosing_drills.json") ?: return@withContext null
+    suspend fun getDosingDrills(): List<DosingDrillDto>? =
+        // Encrypted sections_cache (phase-2 hardening): the cached
+        // path still reads through the central crypto point.
+        getCachedPack("dosing_drills.json") {
             val listType = com.squareup.moshi.Types.newParameterizedType(
                 List::class.java, DosingDrillDto::class.java
             )
-            moshi.adapter<List<DosingDrillDto>>(listType).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
+            moshi.adapter<List<DosingDrillDto>>(listType).fromJson(it)
         }
-    }
 
     /**
      * Bundled fallback (assets/dosing_drills_sample.json): two sample
@@ -1669,13 +1743,8 @@ class WataniRepository(private val context: Context) {
     suspend fun findQuestionById(qid: String): Pair<QuestionDto, String>? =
         findQuestionsByIds(listOf(qid))[qid.trim()]
 
-    suspend fun getAuscultationArEnvelope(): AuscultationArEnvelope? = withContext(Dispatchers.IO) {
-        try {
-            val jsonString = readSectionText("auscultation_ar.json") ?: return@withContext null
-            moshi.adapter(AuscultationArEnvelope::class.java).fromJson(jsonString)
-        } catch (e: Exception) {
-            null
-        }
+    suspend fun getAuscultationArEnvelope(): AuscultationArEnvelope? = getCachedPack("auscultation_ar.json") {
+        moshi.adapter(AuscultationArEnvelope::class.java).fromJson(it)
     }
 
     suspend fun downloadAuscultationAr(): Result<AuscultationArEnvelope> = withContext(Dispatchers.IO) {
@@ -1781,16 +1850,20 @@ class WataniRepository(private val context: Context) {
 
     private val libraryAdapter get() = moshi.adapter(LibraryEnvelope::class.java)
 
-    suspend fun getLibraryEnvelope(): LibraryEnvelope? = withContext(Dispatchers.IO) {
-        try {
-            // Gentle lease: library.json is a restricted file.
-            if (WorkerActivationApi.isRestrictedLeaseExpired(context)) return@withContext null
-            val text = readSectionText("library.json") ?: return@withContext null
-            // Books never surface in-app (see LibraryEnvelope.videosOnly).
-            libraryAdapter.fromJson(text)?.videosOnly()
+    suspend fun getLibraryEnvelope(): LibraryEnvelope? {
+        // Gentle lease: library.json is a restricted file — the
+        // lease check stays FIRST, before any cached value (1.2.27
+        // rule, same as getSubjectEnvelope).
+        val leaseExpired = try {
+            WorkerActivationApi.isRestrictedLeaseExpired(context)
         } catch (e: Exception) {
-            null
+            return null
         }
+        if (leaseExpired) return null
+        // Books never surface in-app (see LibraryEnvelope.videosOnly):
+        // the raw parse is what the 1.2.48 pack cache holds, and the
+        // videosOnly projection is applied per call as before.
+        return getCachedPack("library.json") { libraryAdapter.fromJson(it) }?.videosOnly()
     }
 
     suspend fun fetchLibrary(retries: Int = 3): Result<LibraryEnvelope?> = withContext(Dispatchers.IO) {
@@ -2176,6 +2249,12 @@ class WataniRepository(private val context: Context) {
             tmpDir.deleteRecursively()
             return LibraryDownloadResult.fail(msg)
         }
+        // Guards the shared [meta]/[downloaded] bookkeeping now that
+        // segments fetch in parallel (1.2.48, performance item 9):
+        // the network fetch and the encryption stay outside the lock
+        // (each segment owns its files), only the three bookkeeping
+        // lines are serialized.
+        val bookkeepingLock = Any()
         /** Fetches one segment to a transient `.part`, encrypts it to
          * its final name inside the temp tree, deletes the `.part`. */
         fun fetchSegmentEncrypted(targetUrl: String, fileName: String): Boolean {
@@ -2203,10 +2282,29 @@ class WataniRepository(private val context: Context) {
                 .encryptFile(context, partFile, File(tmpDir, fileName))
             partFile.delete()
             if (!ok) return false
-            meta[fileName] = plainSize
-            downloaded += plainSize
-            if (total > 0) onProgress((downloaded.toFloat() / total).coerceIn(0f, 0.9f))
+            synchronized(bookkeepingLock) {
+                meta[fileName] = plainSize
+                downloaded += plainSize
+                if (total > 0) onProgress((downloaded.toFloat() / total).coerceIn(0f, 0.9f))
+            }
             return true
+        }
+        /** Fetches every segment of one playlist with bounded
+         * parallelism (1.2.48, performance item 9 — a video is dozens
+         * of independent segment files; the pre-1.2.48 chain fetched
+         * them one by one). False when any segment failed; the whole
+         * batch settles before the caller acts on the verdict, so a
+         * failure never races the temp-tree cleanup in [fail]. */
+        suspend fun fetchSegmentsParallel(playlistUrl: String, playlistText: String): Boolean {
+            val segUrls = HlsPlaylistRewrite.mediaReferences(playlistText)
+                .map { ref -> resolvePlaylistUrl(playlistUrl, ref) }
+            if (segUrls.isEmpty()) return true
+            val results = ParallelFetch.mapBounded(
+                segUrls, ParallelFetch.SEGMENT_CONCURRENCY
+            ) { segUrl ->
+                fetchSegmentEncrypted(segUrl, playlistFileName(segUrl))
+            }
+            return results.all { it }
         }
         /** Encrypts playlist text (already held in memory) into the tree. */
         fun storePlaylistEncrypted(text: String, fileName: String): Boolean {
@@ -2255,19 +2353,13 @@ class WataniRepository(private val context: Context) {
             if (!storePlaylistEncrypted(variantText, playlistFileName(variantUrl))) {
                 return fail("فشل تشفير الملف")
             }
-            for (ref in HlsPlaylistRewrite.mediaReferences(variantText)) {
-                val segUrl = resolvePlaylistUrl(variantUrl, ref)
-                if (!fetchSegmentEncrypted(segUrl, playlistFileName(segUrl))) {
-                    return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
-                }
+            if (!fetchSegmentsParallel(variantUrl, variantText)) {
+                return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
             }
         }
         for ((playlistUrl, playlistText) in playlistsToScan) {
-            for (ref in HlsPlaylistRewrite.mediaReferences(playlistText)) {
-                val segUrl = resolvePlaylistUrl(playlistUrl, ref)
-                if (!fetchSegmentEncrypted(segUrl, playlistFileName(segUrl))) {
-                    return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
-                }
+            if (!fetchSegmentsParallel(playlistUrl, playlistText)) {
+                return fail("فشل التحميل — تأكد من اتصال الإنترنت.")
             }
         }
         // Integrity, §4.3: plaintext byte total (recorded per file in

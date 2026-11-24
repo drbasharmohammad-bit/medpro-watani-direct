@@ -49,7 +49,14 @@ private fun WaveformImage(waveformPath: String?, repo: WataniRepository) {
         if (res.isSuccess) {
             val file = res.getOrThrow()
             bitmap = withContext(Dispatchers.IO) {
-                android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+                // Decode at display size (1.2.48, item 6): the strip
+                // is drawn 54dp tall, so the decode subsamples
+                // toward that instead of the full source bitmap.
+                sy.medpro.watani.ui.ImageDecode.decodeFileDownsampled(
+                    file.absolutePath,
+                    sy.medpro.watani.ui.ImageDecode.WAVEFORM_TARGET_WIDTH_PX,
+                    sy.medpro.watani.ui.ImageDecode.WAVEFORM_TARGET_HEIGHT_PX
+                )
             }
         }
     }

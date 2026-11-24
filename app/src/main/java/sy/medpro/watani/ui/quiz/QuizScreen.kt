@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.MistakeKeys
@@ -84,6 +85,8 @@ fun QuizScreen(
     // link and this screen behaves exactly as in 1.2.12.
     val conceptState = rememberConceptUnits()
     val scope = rememberCoroutineScope()
+    // Serializes the background tap-time records (1.2.48, item 10b).
+    val recordMutex = remember { kotlinx.coroutines.sync.Mutex() }
     LaunchedEffect(Unit) {
         OfflineStudyVault.ensureInitialized(context)
     }
@@ -398,6 +401,21 @@ fun QuizScreen(
                                             }
                                             val correctText = options.getOrNull(correctIndices.firstOrNull() ?: 0) ?: ""
                                             val selectedText = options.getOrNull(optionIndex) ?: ""
+                                            // Optimistic persistence (1.2.48,
+                                            // item 10b): the selection, the
+                                            // grading and the score are
+                                            // already on screen above; the
+                                            // two local records below used
+                                            // to do their disk work INSIDE
+                                            // this tap handler. They now
+                                            // write on IO under a mutex —
+                                            // serial because
+                                            // recordQuestionAttempt is a
+                                            // read-modify-write on shared
+                                            // stats, exactly as the old
+                                            // main-thread order guaranteed.
+                                            scope.launch(Dispatchers.IO) {
+                                            recordMutex.withLock {
                                             OfflineStudyVault.recordQuestionAttempt(
                                                 context = context,
                                                 subjectTitle = sectionSubject ?: title,
@@ -437,6 +455,8 @@ fun QuizScreen(
                                                     summary = question.summary,
                                                     ltr = ltr
                                                 )
+                                            }
+                                            }
                                             }
                                         }
                                     }

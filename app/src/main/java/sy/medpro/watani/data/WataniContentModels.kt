@@ -18,6 +18,22 @@ data class ManifestFileEntry(
 )
 
 /**
+ * Light session-count index entry for one downloaded subject shard
+ * (build 1.2.48, performance list item 3 — list screens read the
+ * fields they need, not whole bodies). Persisted by
+ * [WataniRepository] the first time a shard's envelope is parsed,
+ * stamped with the registry hash of the parsed bytes: the «دورة
+ * كاملة» list then builds its per-session counts from this record
+ * instead of parsing every shard body just to count sessions.
+ * [counts] preserves the shard's session order.
+ */
+@JsonClass(generateAdapter = true)
+data class SessionCountsIndexEntry(
+    @Json(name = "subject_name") val subjectName: String?,
+    @Json(name = "counts") val counts: Map<String, Int>?
+)
+
+/**
  * Manifest-hash fix (Nov 2026): decides whether a downloaded section is
  * up to date against the CURRENT manifest [entry].
  *

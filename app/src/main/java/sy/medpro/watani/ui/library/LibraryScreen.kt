@@ -1,5 +1,6 @@
 package sy.medpro.watani.ui.library
 
+import sy.medpro.watani.ui.PremiumListSkeleton
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -319,12 +320,10 @@ fun LibraryScreen(
     }
 
     if (state.isLoading && state.library == null) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                CircularProgressIndicator(color = MaroonPrimary)
-                Text("جاري تحميل المكتبة...", fontSize = 14.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-            }
-        }
+        // Premium skeleton (1.2.48, item 10a): only while the
+        // envelope is genuinely absent (library == null); an
+        // installed library renders from cache with no skeleton.
+        PremiumListSkeleton(caption = "جاري تحميل المكتبة...")
         return
     }
 

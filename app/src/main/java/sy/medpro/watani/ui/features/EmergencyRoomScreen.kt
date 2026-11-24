@@ -3,11 +3,11 @@ package sy.medpro.watani.ui.features
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -704,13 +704,19 @@ fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit) {
     BackHandler { goBack() }
 
     DrawerScreenScaffold(title = "غرفة الطوارئ (مناوبة فردية)", onBack = { goBack() }) { padding ->
-        val scroll = rememberScrollState()
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scroll),
+        // Lazy composition (1.2.48, performance list item 4 —
+        // windowed lists): the case index holds 189 cards and the
+        // pre-1.2.48 scrolling Column composed every one of them
+        // up front. Each state branch now emits lazy items, so
+        // only what is near the viewport is composed.
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             when {
                 shiftDone -> {
+                    item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaroonDeep), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("تقرير المناوبة", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -718,8 +724,9 @@ fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit) {
                             Text("الحالات المنجزة: ${caseScores.size} من ${visibleCases.size}", color = Color.White, fontSize = 13.sp)
                         }
                     }
-                    Text("نتائج الحالات:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
-                    caseScores.forEach { (title, score) ->
+                    }
+                    item { Text("نتائج الحالات:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary) }
+                    items(caseScores) { (title, score) ->
                         Card(shape = RoundedCornerShape(12.dp)) {
                             Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text(title, fontSize = 13.sp, modifier = Modifier.weight(1f))
@@ -728,8 +735,8 @@ fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit) {
                         }
                     }
                     if (mistakes.isNotEmpty()) {
-                        Text("مراجعة الأخطاء:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary)
-                        mistakes.forEach { m ->
+                    item { Text("مراجعة الأخطاء:", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaroonPrimary) }
+                    items(mistakes) { m ->
                             Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(m.caseTitle, fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -739,8 +746,9 @@ fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit) {
                             }
                         }
                     } else {
-                        Text("بلا أخطاء — مناوبة نظيفة تمامًا.", fontSize = 13.sp, color = MaroonPrimary, fontWeight = FontWeight.Bold)
+                    item { Text("بلا أخطاء — مناوبة نظيفة تمامًا.", fontSize = 13.sp, color = MaroonPrimary, fontWeight = FontWeight.Bold) }
                     }
+                    item {
                     Button(shape = MaterialTheme.shapes.medium,
                         onClick = {
                             caseIndex = -1; totalScore = 0; caseScores = emptyList()
@@ -749,20 +757,26 @@ fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit) {
                         colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("إعادة المناوبة") }
+                    }
                 }
 
                 caseIndex < 0 -> {
+                    item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaroonDeep), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("غرفة الطوارئ — مناوبة فردية أوفلاين", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Text("189 حالة طارئة مقسمة حسب الاختصاص. كل حالة: عرض وعلامات حيوية، ثم اختر إجراءً من 3-4 إجراءات. العلامات تتغير فقط مع قرارك، والتغذية الراجعة تشرح لماذا الصح صحيح ولماذا الخطأ خطأ، مع مرجع إرشادي. بلا اتصال أثناء اللعب.", color = Color.White, fontSize = 13.sp)
                         }
                     }
+                    }
+                    item {
                     OutlinedButton(
                         onClick = onOpenNightShift,
                         shape = MaterialTheme.shapes.medium,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("محاكاة المناوبة الليلية الإسعافية", fontWeight = FontWeight.Bold) }
+                    }
+                    item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(specialtyOrder) { spec ->
                             val count = if (spec == "الكل") erCases.size else erCases.count { it.specialty == spec }
@@ -777,7 +791,8 @@ fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit) {
                             )
                         }
                     }
-                    visibleCases.forEachIndexed { index, c ->
+                    }
+                    itemsIndexed(visibleCases) { index, c ->
                         Card(shape = RoundedCornerShape(12.dp)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text("${index + 1}. ${c.title}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaroonPrimary)
@@ -790,14 +805,17 @@ fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit) {
                             }
                         }
                     }
+                    item {
                     Button(shape = MaterialTheme.shapes.medium,
                         onClick = { startCase(0) },
                         colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("ابدأ المناوبة كاملة (${visibleCases.size} حالة)", color = Color.Black, fontWeight = FontWeight.Bold) }
+                    }
                 }
 
                 else -> {
+                    item { Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     val c = visibleCases[caseIndex]
                     val node = c.node(nodeId ?: c.startNodeId)
                     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaroonPrimary.copy(alpha = 0.1f))) {
@@ -872,6 +890,7 @@ fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit) {
                             ) { Text(action.label, fontSize = 13.sp) }
                         }
                     }
+                    } }
                 }
             }
         }

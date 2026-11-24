@@ -1,4 +1,5 @@
 package sy.medpro.watani.ui.home
+import sy.medpro.watani.ui.PremiumListSkeleton
 import sy.medpro.watani.ui.library.libGoldTint
 
 import androidx.compose.foundation.Image
@@ -169,13 +170,12 @@ fun HomeScreen(
             ) {
                 when {
                     isLoadingManifest && files.isEmpty() -> {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text("جاري جلب الفهرس والأسئلة...", color = MaterialTheme.colorScheme.onBackground)
-                            }
-                        }
+                        // Premium skeleton (1.2.48, item 10a): this
+                        // branch requires an EMPTY manifest, so
+                        // cached content still renders instantly and
+                        // the skeleton covers only a genuine first
+                        // fetch — never a cache hit.
+                        PremiumListSkeleton(caption = "جاري جلب الفهرس والأسئلة...")
                     }
                     manifestError != null && files.isEmpty() -> {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

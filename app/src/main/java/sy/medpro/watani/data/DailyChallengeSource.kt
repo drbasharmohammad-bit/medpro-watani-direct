@@ -44,39 +44,77 @@ object DailyChallengeSource {
         "reverse.json"
     )
 
+    // Pool cache (1.2.48, performance list item 1 — indexes instead
+    // of full scans): loadPool used to sweep, decrypt and parse
+    // EVERY downloaded shard on every call (the drawer screen and
+    // the morning reminder both call it). The pool is now cached
+    // against a signature of the candidate files themselves
+    // (name|length|mtime per file, in name order): any download,
+    // refresh or wipe changes a file's stamp and the pool rebuilds;
+    // unchanged bytes return the cached pool with zero disk reads
+    // beyond the directory listing.
+    @Volatile
+    private var cachedPoolSignature: String? = null
+
+    @Volatile
+    private var cachedPool: List<Pair<String, QuestionDto>>? = null
+
+    private val poolLock = Any()
+
+    /** The candidate shard files of the sweep, in stable order —
+     * the exact filter [loadPool] has always applied. */
+    private fun candidateFiles(dir: File): List<File> {
+        if (!dir.exists() || !dir.isDirectory) return emptyList()
+        return dir.listFiles()?.filter { file ->
+            file.name.endsWith(".json") && !file.name.contains("cases") &&
+                !file.name.contains("guide") && !file.name.contains("osce") &&
+                file.name.removeSuffix(".json") !in NON_ENVELOPE_PACKS
+        }?.sortedBy { it.name } ?: emptyList()
+    }
+
+    /** Signature of a candidate-file set: any content change,
+     * addition or removal changes it. Pure — unit-testable. */
+    fun poolSignature(files: List<Triple<String, Long, Long>>): String =
+        files.joinToString(";") { (name, length, mtime) -> "$name|$length|$mtime" }
+
     /** كل أسئلة البنوك المنزّلة الصالحة (مادة ← سؤال) بترتيب الملفات. */
     fun loadPool(context: Context): List<Pair<String, QuestionDto>> {
         val dir = File(context.applicationContext.filesDir, "sections_cache")
+        val files = candidateFiles(dir)
+        val signature = poolSignature(
+            files.map { Triple(it.name, it.length(), it.lastModified()) }
+        )
+        synchronized(poolLock) {
+            val hit = cachedPool
+            if (hit != null && cachedPoolSignature == signature) return hit
+        }
         val list = mutableListOf<Pair<String, QuestionDto>>()
-        if (dir.exists() && dir.isDirectory) {
-            dir.listFiles()?.forEach { file ->
-                if (file.name.endsWith(".json") && !file.name.contains("cases") &&
-                    !file.name.contains("guide") && !file.name.contains("osce") &&
-                    file.name.removeSuffix(".json") !in NON_ENVELOPE_PACKS
-                ) {
-                    try {
-                        val text = SectionCacheCrypto.readText(context, file)
-                            ?: throw IllegalStateException("section cache unreadable")
-                        val env = envelopeAdapter.fromJson(text)
-                        val subjName = env?.subjectName ?: file.name.substringBefore(".json")
-                        env?.topics?.forEach { topic ->
-                            topic.questions?.forEach { q ->
-                                if (!q.text.isNullOrBlank() && !q.options.isNullOrEmpty()) {
-                                    list.add(Pair(subjName, q))
-                                }
-                            }
+        files.forEach { file ->
+            try {
+                val text = SectionCacheCrypto.readText(context, file)
+                    ?: throw IllegalStateException("section cache unreadable")
+                val env = envelopeAdapter.fromJson(text)
+                val subjName = env?.subjectName ?: file.name.substringBefore(".json")
+                env?.topics?.forEach { topic ->
+                    topic.questions?.forEach { q ->
+                        if (!q.text.isNullOrBlank() && !q.options.isNullOrEmpty()) {
+                            list.add(Pair(subjName, q))
                         }
-                        env?.sessions?.forEach { session ->
-                            session.questions?.forEach { q ->
-                                if (!q.text.isNullOrBlank() && !q.options.isNullOrEmpty()) {
-                                    list.add(Pair(subjName, q))
-                                }
-                            }
-                        }
-                    } catch (_: Exception) {
                     }
                 }
+                env?.sessions?.forEach { session ->
+                    session.questions?.forEach { q ->
+                        if (!q.text.isNullOrBlank() && !q.options.isNullOrEmpty()) {
+                            list.add(Pair(subjName, q))
+                        }
+                    }
+                }
+            } catch (_: Exception) {
             }
+        }
+        synchronized(poolLock) {
+            cachedPool = list
+            cachedPoolSignature = signature
         }
         return list
     }

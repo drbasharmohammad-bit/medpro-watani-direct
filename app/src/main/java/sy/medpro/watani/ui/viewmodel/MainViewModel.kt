@@ -688,14 +688,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(fullDawraLoading = true) }
             try {
                 val shardPaths = signature.keys.filter { it.startsWith("questions/") }
-                val inputs = fetchEnvelopesParallel(shardPaths).map { (path, envelope) ->
+                // Light session-count index first (1.2.48, performance
+                // item 3): a shard whose counts were indexed when its
+                // envelope was parsed contributes its table with NO
+                // body parse at all; only shards without an index
+                // entry go through the envelope sweep (which in turn
+                // builds their index entries for the next open).
+                val inputs = mutableListOf<DawraSubjectSessions>()
+                val unindexedPaths = mutableListOf<String>()
+                for (path in shardPaths) {
+                    val indexed = repository.sessionCountsIndexEntry(path)
+                    val indexedCounts = indexed?.counts
+                    if (indexed != null && indexedCounts != null) {
+                        inputs += DawraSubjectSessions(
+                            subjectName = indexed.subjectName
+                                ?: path.removePrefix("questions/").removeSuffix(".json"),
+                            path = path,
+                            sessionCounts = LinkedHashMap(indexedCounts)
+                        )
+                    } else {
+                        unindexedPaths += path
+                    }
+                }
+                inputs += fetchEnvelopesParallel(unindexedPaths).map { (path, envelope) ->
                     DawraSubjectSessions(
                         subjectName = envelope.subjectName
                             ?: path.removePrefix("questions/").removeSuffix(".json"),
                         path = path,
                         sessionCounts = SectionIndex.sessionCounts(envelope)
                     )
-                }.toMutableList()
+                }
                 inputs.sortWith(
                     compareBy({ officialSubjectRank(it.subjectName) }, { it.subjectName })
                 )

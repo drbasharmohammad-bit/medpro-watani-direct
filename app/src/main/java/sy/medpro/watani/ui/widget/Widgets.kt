@@ -6,7 +6,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -580,8 +579,13 @@ internal object WidgetPhotos {
         val key = Key(resId, widthPx, heightPx)
         cached?.let { if (cachedKey == key) return it }
         val result = try {
-            val source = BitmapFactory.decodeResource(context.resources, resId)
-                ?: return null
+            // Decode at display size (1.2.48, item 6): the background
+            // is drawn at widget size, so the decode subsamples
+            // toward it instead of the full source bitmap; the
+            // center-crop below works on whatever was decoded.
+            val source = sy.medpro.watani.ui.ImageDecode.decodeResourceDownsampled(
+                context.resources, resId, widthPx, heightPx
+            ) ?: return null
             val crop = WidgetShapeMath.centerCropRect(
                 source.width, source.height, widthPx.toFloat() / heightPx.toFloat()
             )

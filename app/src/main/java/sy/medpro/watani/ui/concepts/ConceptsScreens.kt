@@ -1,5 +1,6 @@
 package sy.medpro.watani.ui.concepts
 
+import sy.medpro.watani.ui.PremiumListSkeleton
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -749,12 +750,7 @@ fun ConceptUnitScreen(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                     )
                 }
-                else -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = MaroonPrimary)
-                }
+                else -> PremiumListSkeleton(caption = "جاري تحميل الوحدة...")
             }
         }
     }

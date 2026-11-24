@@ -1,5 +1,6 @@
 package sy.medpro.watani.ui.cases
 
+import sy.medpro.watani.ui.PremiumListSkeleton
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -154,15 +155,7 @@ fun GermanCasesScreen(onBack: () -> Unit) {
                 .padding(padding)
         ) {
             when {
-                isLoading -> Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    CircularProgressIndicator(color = MaroonPrimary)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("جاري تحميل الحالات الألمانية...", fontWeight = FontWeight.Bold, color = MaroonPrimary)
-                }
+                isLoading -> PremiumListSkeleton(caption = "جاري تحميل الحالات الألمانية...")
                 errorMessage != null || cases.isEmpty() -> Column(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                     verticalArrangement = Arrangement.Center,
