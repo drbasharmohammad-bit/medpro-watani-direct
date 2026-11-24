@@ -98,33 +98,12 @@ fun FullDawraEntryCard(onClick: () -> Unit) {
                         .clip(RoundedCornerShape(99.dp))
                         .background(LibColors.Gold)
                 )
-                if (sy.medpro.watani.data.FullDawraLock.isLocked()) {
+                if (sy.medpro.watani.data.FullDawraLock.isLocked) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(99.dp))
-                            .background(libGoldTint())
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = LibColors.Gold,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            sy.medpro.watani.data.FullDawraLock.LOCK_BADGE,
-                            fontFamily = NotoKufiFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.5.sp,
-                            color = LibColors.Maroon
-                        )
-                    }
+                    FullDawraLockBadge()
                 }
             }
-            if (sy.medpro.watani.data.FullDawraLock.isLocked()) {
+            if (sy.medpro.watani.data.FullDawraLock.isLocked) {
                 Icon(
                     Icons.Default.Lock,
                     contentDescription = null,
@@ -140,6 +119,35 @@ fun FullDawraEntryCard(onClick: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+/** The gold lock pill on the entry card's face while the feature
+ * is hard-locked (1.2.49) — extracted from the card so the card
+ * itself stays within the detekt method-length gate. */
+@Composable
+private fun FullDawraLockBadge() {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(99.dp))
+            .background(libGoldTint())
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Default.Lock,
+            contentDescription = null,
+            tint = LibColors.Gold,
+            modifier = Modifier.size(13.dp)
+        )
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            sy.medpro.watani.data.FullDawraLock.LOCK_BADGE,
+            fontFamily = NotoKufiFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.5.sp,
+            color = LibColors.Maroon
+        )
     }
 }
 

@@ -250,7 +250,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // (dawrat_sessions/) belong to the locked «دورة كاملة»
         // feature — while it is locked they are not downloadable
         // through any surface.
-        if (FullDawraLock.isLocked() && path.startsWith(DAWRA_SESSIONS_PREFIX)) {
+        if (FullDawraLock.isLocked && path.startsWith(DAWRA_SESSIONS_PREFIX)) {
             _uiState.update { it.copy(downloadError = FullDawraLock.LOCK_MESSAGE) }
             return
         }
@@ -627,7 +627,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // 1.2.49 HARD LOCK: «دورة كاملة» is closed for everyone
         // (FullDawraLock) — the entry tap shows the lock message
         // only and never navigates, whatever the activation state.
-        if (FullDawraLock.isLocked()) {
+        if (FullDawraLock.isLocked) {
             _uiState.update { it.copy(gateMessage = FullDawraLock.LOCK_MESSAGE) }
             return
         }
@@ -638,7 +638,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun openFullDawraDetail(dawraName: String) {
         // 1.2.49 HARD LOCK: see openFullDawraList — no route into
         // the detail screen exists while the feature is locked.
-        if (FullDawraLock.isLocked()) {
+        if (FullDawraLock.isLocked) {
             _uiState.update { it.copy(gateMessage = FullDawraLock.LOCK_MESSAGE) }
             return
         }
@@ -795,7 +795,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // activation gates below — a dawra never starts while the
         // feature is locked, not even from a restored screen state
         // or a file already sitting in a student's cache.
-        if (FullDawraLock.isLocked()) {
+        if (FullDawraLock.isLocked) {
             _uiState.update { it.copy(gateMessage = FullDawraLock.LOCK_MESSAGE) }
             return
         }

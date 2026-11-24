@@ -353,7 +353,9 @@ fun EponymsAtlasScreen(onBack: () -> Unit) {
             SlimSubBar(onBack = onBack) {
                 Column {
                     SlimBarTitle("موسوعة المتلازمات والعلامات المسماة", maxFontSize = 15.sp, minFontSize = 11.sp)
-                    Text("تعمل أوفلاين 100% • Eponyms & Named Signs", fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text("تعمل أوفلاين 100% • Eponyms & Named Signs", fontSize = 10.sp, lineHeight = 13.sp,
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
         }
@@ -499,7 +501,9 @@ fun OfflineEcgAtlasScreen(onBack: () -> Unit) {
             SlimSubBar(onBack = onBack) {
                 Column {
                     SlimBarTitle("أطلس تخطيط القلب التفاعلي (ECG)", maxFontSize = 15.sp, minFontSize = 11.sp)
-                    Text("تخطيطات حقيقية أوفلاين 100% للحالات الامتحانية الحرجة", fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text("تخطيطات حقيقية أوفلاين 100% للحالات الامتحانية الحرجة", fontSize = 10.sp, lineHeight = 13.sp,
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
         }
@@ -783,7 +787,9 @@ fun SmartStudyPlannerScreen(onBack: () -> Unit) {
             SlimSubBar(onBack = onBack) {
                 Column {
                     SlimBarTitle("مخطط جدول الدراسة الذكي للامتحان الوطني", maxFontSize = 15.sp, minFontSize = 11.sp)
-                    Text("يعمل أوفلاين 100% • توزيع معياري حسب ثقل المواد", fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text("يعمل أوفلاين 100% • توزيع معياري حسب ثقل المواد", fontSize = 10.sp, lineHeight = 13.sp,
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
         }
@@ -996,7 +1002,9 @@ fun OfflineClinicalCalculatorsScreen(onBack: () -> Unit, initialTab: Int = 0) {
             SlimSubBar(onBack = onBack) {
                 Column {
                     SlimBarTitle("الحاسبات والمعايير السريرية الأوفلاين", maxFontSize = 15.sp, minFontSize = 11.sp)
-                    Text("CURB-65 • مفسر غازات الدم الشرياني ABG والفجوة الأنيونية", fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text("CURB-65 • مفسر غازات الدم الشرياني ABG والفجوة الأنيونية", fontSize = 10.sp, lineHeight = 13.sp,
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
         }

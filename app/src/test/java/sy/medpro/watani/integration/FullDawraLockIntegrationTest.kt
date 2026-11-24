@@ -78,7 +78,7 @@ class FullDawraLockIntegrationTest {
 
     @Test
     fun lockPredicateIsUnconditionalAndBadgeTextIsExact() {
-        assertTrue(FullDawraLock.isLocked())
+        assertTrue(FullDawraLock.isLocked)
         assertEquals("مقفلة حاليًا", FullDawraLock.LOCK_BADGE)
         assertEquals("«دورة كاملة» مقفلة حاليًا.", FullDawraLock.LOCK_MESSAGE)
     }

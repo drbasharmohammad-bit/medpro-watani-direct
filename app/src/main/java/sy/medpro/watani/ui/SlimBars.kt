@@ -89,7 +89,6 @@ fun SlimBarTitle(
     modifier: Modifier = Modifier,
     maxFontSize: TextUnit = 17.sp,
     minFontSize: TextUnit = 12.sp,
-    fontWeight: FontWeight = FontWeight.Bold,
     color: Color = Color.Unspecified
 ) {
     val measurer = rememberTextMeasurer()
@@ -103,7 +102,7 @@ fun SlimBarTitle(
                 while (candidate > minFontSize) {
                     val width = measurer.measure(
                         text = AnnotatedString(text),
-                        style = baseStyle.copy(fontSize = candidate, fontWeight = fontWeight),
+                        style = baseStyle.copy(fontSize = candidate, fontWeight = FontWeight.Bold),
                         softWrap = false,
                         maxLines = 1
                     ).size.width
@@ -117,7 +116,7 @@ fun SlimBarTitle(
             text = text,
             fontSize = fitted,
             lineHeight = (fitted.value * SlimBarTitleMetrics.LINE_HEIGHT_FACTOR).sp,
-            fontWeight = fontWeight,
+            fontWeight = FontWeight.Bold,
             color = color,
             maxLines = 1,
             softWrap = false,
