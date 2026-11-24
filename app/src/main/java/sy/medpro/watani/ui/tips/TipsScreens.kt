@@ -118,60 +118,15 @@ fun TipsRootScreen(
         TipsRepository.refreshWritingMode(context)
     }
 
-    val title = when (val r = route) {
-        TipsRoute.Subjects -> "زوادة الطالب"
-        is TipsRoute.Subject -> r.subject
-        is TipsRoute.Section -> TipsContract.sectionTitle(r.sectionId) ?: "زوادة الطالب"
-        is TipsRoute.Add -> "أضف نصيحة"
-        TipsRoute.Mine -> "إضافاتي"
-    }
+    val title = tipsRouteTitle(route)
     val back: () -> Unit = {
-        route = when (val r = route) {
-            TipsRoute.Subjects -> {
-                onBack()
-                r
-            }
-            is TipsRoute.Subject -> TipsRoute.Subjects
-            is TipsRoute.Section -> TipsRoute.Subject(r.subject)
-            is TipsRoute.Add -> if (r.sectionId != null) {
-                TipsRoute.Section(r.subject, r.sectionId)
-            } else {
-                TipsRoute.Subject(r.subject)
-            }
-            TipsRoute.Mine -> TipsRoute.Subjects
-        }
+        val next = tipsBackRoute(route)
+        if (next == null) onBack() else route = next
     }
 
     DrawerScreenScaffold(title = title, onBack = back) { padding ->
         Box(modifier = modifier.fillMaxSize().padding(padding)) {
-            when (val r = route) {
-                TipsRoute.Subjects -> TipsSubjectsContent(
-                    onOpenSubject = { route = TipsRoute.Subject(it) },
-                    onOpenMine = { route = TipsRoute.Mine }
-                )
-                is TipsRoute.Subject -> TipsSubjectContent(
-                    subject = r.subject,
-                    onOpenSection = { route = TipsRoute.Section(r.subject, it) },
-                    onAdd = { route = TipsRoute.Add(r.subject, null) }
-                )
-                is TipsRoute.Section -> TipsSectionContent(
-                    subject = r.subject,
-                    sectionId = r.sectionId,
-                    onAdd = { route = TipsRoute.Add(r.subject, r.sectionId) }
-                )
-                is TipsRoute.Add -> TipsAddContent(
-                    subject = r.subject,
-                    initialSectionId = r.sectionId,
-                    onDone = {
-                        route = if (r.sectionId != null) {
-                            TipsRoute.Section(r.subject, r.sectionId)
-                        } else {
-                            TipsRoute.Subject(r.subject)
-                        }
-                    }
-                )
-                TipsRoute.Mine -> TipsMineContent()
-            }
+            TipsRouteContent(route = route, onRoute = { route = it })
         }
     }
 }
@@ -794,5 +749,54 @@ private fun TipsIntroHeader(onOpenMine: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** عنوان شاشة مسار الزوادة الحالي. */
+private fun tipsRouteTitle(route: TipsRoute): String = when (route) {
+    TipsRoute.Subjects -> "زوادة الطالب"
+    is TipsRoute.Subject -> route.subject
+    is TipsRoute.Section -> TipsContract.sectionTitle(route.sectionId) ?: "زوادة الطالب"
+    is TipsRoute.Add -> "أضف نصيحة"
+    TipsRoute.Mine -> "إضافاتي"
+}
+
+/** مسار الرجوع من كل شاشة؛ null من قائمة المواد = خروج للقسم. */
+private fun tipsBackRoute(route: TipsRoute): TipsRoute? = when (route) {
+    TipsRoute.Subjects -> null
+    is TipsRoute.Subject -> TipsRoute.Subjects
+    is TipsRoute.Section -> TipsRoute.Subject(route.subject)
+    is TipsRoute.Add -> if (route.sectionId != null) {
+        TipsRoute.Section(route.subject, route.sectionId)
+    } else {
+        TipsRoute.Subject(route.subject)
+    }
+    TipsRoute.Mine -> TipsRoute.Subjects
+}
+
+/** محتوى المسار الحالي (شاشات الزوادة الخمس). */
+@Composable
+private fun TipsRouteContent(route: TipsRoute, onRoute: (TipsRoute) -> Unit) {
+    when (route) {
+        TipsRoute.Subjects -> TipsSubjectsContent(
+            onOpenSubject = { onRoute(TipsRoute.Subject(it)) },
+            onOpenMine = { onRoute(TipsRoute.Mine) }
+        )
+        is TipsRoute.Subject -> TipsSubjectContent(
+            subject = route.subject,
+            onOpenSection = { onRoute(TipsRoute.Section(route.subject, it)) },
+            onAdd = { onRoute(TipsRoute.Add(route.subject, null)) }
+        )
+        is TipsRoute.Section -> TipsSectionContent(
+            subject = route.subject,
+            sectionId = route.sectionId,
+            onAdd = { onRoute(TipsRoute.Add(route.subject, route.sectionId)) }
+        )
+        is TipsRoute.Add -> TipsAddContent(
+            subject = route.subject,
+            initialSectionId = route.sectionId,
+            onDone = { onRoute(tipsBackRoute(route) ?: TipsRoute.Subject(route.subject)) }
+        )
+        TipsRoute.Mine -> TipsMineContent()
     }
 }

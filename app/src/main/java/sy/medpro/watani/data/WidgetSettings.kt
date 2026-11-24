@@ -234,28 +234,33 @@ object WidgetShapeMath {
 
     /** المقاس الافتراضي بالـdp لكل حجم عند غياب AppWidgetOptions
      * (يطابق minWidth/minHeight بملفات تعريف الويدجتات). */
+    @Suppress("MagicNumber") // kind ids are the Widgets.KIND_* contract values
     fun fallbackSizeDp(kind: Int): Pair<Int, Int> = when (kind) {
-        0 -> SIZE_SMALL_SQUARE   // KIND_COUNTDOWN — widget_countdown_info.xml
-        1 -> SIZE_WIDE           // KIND_DAY — widget_day_info.xml
-        2 -> SIZE_LARGE          // KIND_LARGE — widget_day_large_info.xml
-        3 -> SIZE_WIDE           // KIND_COUNTDOWN_WIDE (design 1, 4×2)
-        4 -> SIZE_HERO           // KIND_HERO (design 2, 4×4)
-        5 -> SIZE_SMALL_SQUARE   // KIND_GOAL (design 3, 2×2)
-        6 -> SIZE_SMALL_SQUARE   // KIND_STREAK (design 4, 2×2)
-        7 -> SIZE_STRIP          // KIND_CONTINUE (design 5, 4×1)
-        8 -> SIZE_WIDE           // KIND_TIP (design 6, 4×2)
-        9 -> SIZE_STRIP          // KIND_ACTIONS (design 7, 4×1)
-        10 -> SIZE_SMALL_SQUARE  // KIND_FOCUS (design 8, 2×2)
-        else -> SIZE_MINI        // KIND_MINI (design 9, 2×1)
+        0 -> FallbackSizes.SMALL_SQUARE   // KIND_COUNTDOWN — widget_countdown_info.xml
+        1 -> FallbackSizes.WIDE           // KIND_DAY — widget_day_info.xml
+        2 -> FallbackSizes.LARGE          // KIND_LARGE — widget_day_large_info.xml
+        3 -> FallbackSizes.WIDE           // KIND_COUNTDOWN_WIDE (design 1, 4×2)
+        4 -> FallbackSizes.HERO           // KIND_HERO (design 2, 4×4)
+        5 -> FallbackSizes.SMALL_SQUARE   // KIND_GOAL (design 3, 2×2)
+        6 -> FallbackSizes.SMALL_SQUARE   // KIND_STREAK (design 4, 2×2)
+        7 -> FallbackSizes.STRIP          // KIND_CONTINUE (design 5, 4×1)
+        8 -> FallbackSizes.WIDE           // KIND_TIP (design 6, 4×2)
+        9 -> FallbackSizes.STRIP          // KIND_ACTIONS (design 7, 4×1)
+        10 -> FallbackSizes.SMALL_SQUARE  // KIND_FOCUS (design 8, 2×2)
+        else -> FallbackSizes.MINI        // KIND_MINI (design 9, 2×1)
     }
 
-    // Default dp sizes per widget kind (mirror the provider info XMLs).
-    private val SIZE_SMALL_SQUARE: Pair<Int, Int> = 110 to 110
-    private val SIZE_WIDE: Pair<Int, Int> = 250 to 140
-    private val SIZE_LARGE: Pair<Int, Int> = 250 to 180
-    private val SIZE_HERO: Pair<Int, Int> = 250 to 260
-    private val SIZE_STRIP: Pair<Int, Int> = 250 to 70
-    private val SIZE_MINI: Pair<Int, Int> = 170 to 80
+    /** Default dp sizes per widget kind (mirror the provider
+     * info XMLs) — the literals ARE the size tokens. */
+    @Suppress("MagicNumber")
+    private object FallbackSizes {
+        val SMALL_SQUARE: Pair<Int, Int> = 110 to 110
+        val WIDE: Pair<Int, Int> = 250 to 140
+        val LARGE: Pair<Int, Int> = 250 to 180
+        val HERO: Pair<Int, Int> = 250 to 260
+        val STRIP: Pair<Int, Int> = 250 to 70
+        val MINI: Pair<Int, Int> = 170 to 80
+    }
 
     const val MAX_BITMAP_SIDE_PX = 1200
 }

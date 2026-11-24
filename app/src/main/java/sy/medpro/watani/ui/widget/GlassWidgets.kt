@@ -52,24 +52,6 @@ internal object GlassWidgetBuilders {
         roles.accent.forEach { views.setTextColor(it, palette.timeAccent) }
     }
 
-    /** PendingIntent عام لأي قيمة توجيه (زوادة/تابع/تركيز...) —
-     * بنمط التوجيه القائم نفسه: ختم النونس الخاص بالتثبيت وفعل
-     * مميز لكل طلب حتى لا تتصادم النوايا المعلّقة. */
-    private fun routePendingIntent(context: Context, route: String, requestCode: Int): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            this.action = "sy.medpro.watani.widget.GLASS_$requestCode"
-            putExtra(WidgetRouter.EXTRA_ROUTE, route)
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        WidgetRouter.stampRoute(intent, context)
-        return PendingIntent.getActivity(
-            context, requestCode, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
-
-    private fun densityOf(context: Context): Float =
-        context.resources.displayMetrics.density
 
     /** تصميم 1: العدّاد التنازلي 4×2. */
     internal fun buildCountdownWideViews(
@@ -356,3 +338,22 @@ internal object GlassWidgetBuilders {
         return views
     }
 }
+
+/** PendingIntent عام لأي قيمة توجيه (زوادة/تابع/تركيز...) —
+ * بنمط التوجيه القائم نفسه: ختم النونس الخاص بالتثبيت وفعل
+ * مميز لكل طلب حتى لا تتصادم النوايا المعلّقة. */
+private fun routePendingIntent(context: Context, route: String, requestCode: Int): PendingIntent {
+    val intent = Intent(context, MainActivity::class.java).apply {
+        this.action = "sy.medpro.watani.widget.GLASS_$requestCode"
+        putExtra(WidgetRouter.EXTRA_ROUTE, route)
+        flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+    }
+    WidgetRouter.stampRoute(intent, context)
+    return PendingIntent.getActivity(
+        context, requestCode, intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+}
+
+private fun densityOf(context: Context): Float =
+    context.resources.displayMetrics.density

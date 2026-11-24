@@ -572,6 +572,7 @@ private object GlassSettingsTokens {
     val GRADIENT_TOP_ARGB: Int = 0xFF7A2438.toInt()
     val EDGE_ARGB: Int = 0x73FFEECC.toInt()
     val GOLD_ARGB: Int = 0xFFC2A059.toInt()
+    val BORDER_UNSELECTED_ARGB: Int = 0x33FFFFFF
 }
 
 /** لون صبغة الزجاج لكل نمط (يطابق WidgetGlass). */
@@ -691,43 +692,49 @@ private fun GlassPreviewSurface(
                     )
                 )
         )
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(14.dp)
-        ) {
+        GlassPreviewContent(palette = palette, days = days, timeText = timeText)
+    }
+}
+
+/** محتوى العدّاد داخل سطح المعاينة (عنوان + أيام + وقت). */
+@Composable
+private fun GlassPreviewContent(palette: GlassPalette, days: Long, timeText: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(14.dp)
+    ) {
+        Text(
+            "العد التنازلي للامتحان الوطني",
+            fontFamily = ThmanyahFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = Color(palette.heading)
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "العد التنازلي للامتحان الوطني",
+                "$days",
                 fontFamily = ThmanyahFontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-                color = Color(palette.heading)
+                fontSize = 40.sp,
+                color = Color(palette.primary)
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "$days",
-                    fontFamily = ThmanyahFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 40.sp,
-                    color = Color(palette.primary)
-                )
-                Spacer(Modifier.size(6.dp))
-                Text(
-                    "يومًا",
-                    fontFamily = ThmanyahFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = Color(palette.secondary)
-                )
-            }
+            Spacer(Modifier.size(6.dp))
             Text(
-                timeText,
+                "يومًا",
                 fontFamily = ThmanyahFontFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                color = Color(palette.timeAccent)
+                fontSize = 13.sp,
+                color = Color(palette.secondary)
             )
         }
+        Text(
+            timeText,
+            fontFamily = ThmanyahFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            color = Color(palette.timeAccent)
+        )
     }
 }
 
@@ -768,7 +775,7 @@ private fun GlassStyleThumb(
                 .background(Color(GlassSettingsTokens.BURGUNDY_DARK_ARGB))
                 .border(
                     if (selected) 2.dp else 1.dp,
-                    if (selected) Color(GlassSettingsTokens.GOLD_ARGB) else Color(0x33FFFFFF),
+                    if (selected) Color(GlassSettingsTokens.GOLD_ARGB) else Color(GlassSettingsTokens.BORDER_UNSELECTED_ARGB),
                     shape
                 )
                 .clickable { onClick() }

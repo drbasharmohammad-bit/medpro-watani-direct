@@ -105,6 +105,10 @@ private object GlassRecipe {
     const val DOT_RADIUS_FRACTION = 0.32f
     const val DOT_CENTER_OFFSET = 0.5f
     const val WHITE_RGB: Int = 0x00FFFFFF
+    /** موضع ارتفاع مستطيل القصّ بمصفوفة centerCropRect ‏[x, y, w, h]. */
+    const val CROP_HEIGHT_INDEX: Int = 3
+    /** إزاحة قناة الألفا داخل لون ARGB. */
+    const val ALPHA_SHIFT: Int = 24
 }
 
 internal object WidgetGlass {
@@ -195,17 +199,20 @@ internal object WidgetGlass {
         widthPx: Int,
         heightPx: Int
     ): Boolean {
-        val index = data.landmarkIndex ?: return false
+        val index = data.landmarkIndex
         val paint = Paint(Paint.FILTER_BITMAP_FLAG)
-        val source = sy.medpro.watani.ui.ImageDecode.decodeResourceDownsampled(
-            context.resources, LandmarkLibrary.all[index].drawableRes, widthPx, heightPx
-        ) ?: return false
+        val source = index?.let {
+            sy.medpro.watani.ui.ImageDecode.decodeResourceDownsampled(
+                context.resources, LandmarkLibrary.all[it].drawableRes, widthPx, heightPx
+            )
+        }
+        if (index == null || source == null) return false
         val crop = WidgetShapeMath.centerCropRect(
             source.width, source.height, widthPx.toFloat() / heightPx.toFloat()
         )
         val srcRect = android.graphics.Rect(
             crop[0].toInt(), crop[1].toInt(),
-            (crop[0] + crop[2]).toInt(), (crop[1] + crop[3]).toInt()
+            (crop[0] + crop[2]).toInt(), (crop[1] + crop[GlassRecipe.CROP_HEIGHT_INDEX]).toInt()
         )
         val smallW = (widthPx / GlassRecipe.BLUR_DOWNSAMPLE).coerceAtLeast(GlassRecipe.MIN_BLUR_BUFFER)
         val smallH = (heightPx / GlassRecipe.BLUR_DOWNSAMPLE).coerceAtLeast(GlassRecipe.MIN_BLUR_BUFFER)
@@ -278,7 +285,7 @@ internal object WidgetGlass {
         for (y in 0 until sheenEnd) {
             val t = y / sheenEnd.toFloat()
             val alpha = ((1f - t) * GlassRecipe.SHEEN_MAX_ALPHA).toInt()
-            sheenPaint.color = (alpha shl 24) or GlassRecipe.WHITE_RGB
+            sheenPaint.color = (alpha shl GlassRecipe.ALPHA_SHIFT) or GlassRecipe.WHITE_RGB
             canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, sheenPaint)
         }
     }

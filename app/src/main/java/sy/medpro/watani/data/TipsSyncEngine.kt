@@ -94,38 +94,19 @@ class TipsSyncEngine(
     suspend fun flush(): Boolean = flushMutex.withLock {
         var drained = true
         for (entry in TipsOutboxLogic.pendingFlush(current())) {
-            val reply = dispatch(entry)
+            val reply = dispatch(gateway, entry)
             when {
                 reply.isAuthFailure -> {
                     drained = false
                     break
                 }
-                reply.isSuccess -> commit(applySuccess(entry, reply))
+                reply.isSuccess -> commit(applySuccess(current(), entry, reply, clock()))
                 else -> drained = false
             }
         }
         drained && TipsOutboxLogic.pendingFlush(current()).isEmpty()
     }
 
-    /** One outbox entry → its gateway call: delete for tombstones,
-     * submit for new tips, edit for changed published ones. */
-    private suspend fun dispatch(entry: OutboxTip): TipsGatewayReply = when {
-        entry.deleted && entry.serverId != null -> gateway.delete(entry.serverId)
-        // Never sent: delete() already dropped it; defensive success.
-        entry.deleted -> TipsGatewayReply(HTTP_OK_CODE)
-        entry.serverId == null -> gateway.submit(entry)
-        else -> gateway.edit(entry.serverId, entry.text)
-    }
-
-    /** The outbox transition for one accepted entry. */
-    private fun applySuccess(entry: OutboxTip, reply: TipsGatewayReply): List<OutboxTip> {
-        val now = clock()
-        return when {
-            entry.deleted -> TipsOutboxLogic.markDeleteConfirmed(current(), entry.localId)
-            entry.serverId == null -> TipsOutboxLogic.markSent(current(), entry.localId, reply.serverId, now)
-            else -> TipsOutboxLogic.markEdited(current(), entry.localId, now)
-        }
-    }
 
     /** Pull the server's view of «mine» and merge moderation states. */
     suspend fun refreshMine(): Boolean {
@@ -143,4 +124,29 @@ class TipsSyncEngine(
 
     suspend fun report(serverId: String, reason: String = ""): Boolean =
         gateway.report(serverId, reason).isSuccess
+    companion object {
+
+        /** One outbox entry → its gateway call: delete for
+         * tombstones, submit for new tips, edit for changed
+         * published ones. */
+        private suspend fun dispatch(gateway: TipsGateway, entry: OutboxTip): TipsGatewayReply = when {
+            entry.deleted && entry.serverId != null -> gateway.delete(entry.serverId)
+            // Never sent: delete() already dropped it; defensive success.
+            entry.deleted -> TipsGatewayReply(HTTP_OK_CODE)
+            entry.serverId == null -> gateway.submit(entry)
+            else -> gateway.edit(entry.serverId, entry.text)
+        }
+
+        /** The outbox transition for one accepted entry. */
+        private fun applySuccess(
+            entries: List<OutboxTip>,
+            entry: OutboxTip,
+            reply: TipsGatewayReply,
+            now: Long
+        ): List<OutboxTip> = when {
+            entry.deleted -> TipsOutboxLogic.markDeleteConfirmed(entries, entry.localId)
+            entry.serverId == null -> TipsOutboxLogic.markSent(entries, entry.localId, reply.serverId, now)
+            else -> TipsOutboxLogic.markEdited(entries, entry.localId, now)
+        }
+    }
 }
