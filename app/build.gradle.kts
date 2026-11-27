@@ -77,8 +77,8 @@ android {
     // are opt-in and OFF by default, managed from the existing
     // «الإشعارات والتذكير» screen; sign-in/consent (1.2.29) and
     // every other existing behavior are untouched.
-    versionCode = 74325
-    versionName = "1.2.51"
+    versionCode = 74326
+    versionName = "1.2.52"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -228,6 +228,14 @@ dependencies {
   // book outline for the internal reader. Page RENDERING stays on
   // android.graphics.pdf.PdfRenderer — PDFBox is never asked to draw.
   implementation(libs.pdfbox.android)
+  // PDF rendering + text engine (build 1.2.52): PDFium via
+  // PdfiumAndroidKt (Apache 2.0) replaces PdfRenderer as the
+  // unified reader's engine — rendering AND the FPDFText text
+  // layer — and PDFBox stays on as the text-layer fallback only.
+  // MuPDF was rejected for this role: its AGPL licence is
+  // incompatible with a closed commercial app (research report
+  // 24 Nov 2026, pdf-reader-techniques-2026-11-24).
+  implementation(libs.pdfium.android)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
@@ -247,6 +255,22 @@ dependencies {
   androidTestImplementation(libs.androidx.runner)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+// ---------------------------------------------------------------------------
+// PDFium metadata gate (build 1.2.52): PdfiumAndroidKt 2.0.3 is
+// compiled with Kotlin 2.4, so its classes carry metadata version
+// 2.4 while this project compiles with Kotlin 2.1 — without this
+// flag the compiler refuses the library's classes outright
+// ("binary version of its metadata is 2.4.0, expected 2.1.0").
+// The reader consumes only the library's plain class/method API
+// (no inline or Kotlin-specific surface), whose metadata layout
+// the 2.1 reader parses unchanged once the version gate is off.
+// ---------------------------------------------------------------------------
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+  compilerOptions {
+    freeCompilerArgs.add("-Xskip-metadata-version-check")
+  }
 }
 
 // ---------------------------------------------------------------------------

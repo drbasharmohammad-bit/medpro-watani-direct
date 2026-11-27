@@ -125,9 +125,56 @@ class ReaderTakeoverIntegrationTest {
         composeRule.onNodeWithText(PAGE_PREPARING, substring = true).assertDoesNotExist()
     }
 
+    /**
+     * 1.2.52 engine-boundary contract: the reader's engine is
+     * now PDFium (a native library bundled in the APK). Under
+     * Robolectric that native library cannot load, so opening
+     * even a perfectly valid book must resolve to the reader's
+     * error state — the engine boundary is armored against ANY
+     * throwable (an UnsatisfiedLinkError is an Error, not an
+     * Exception) — never a crash, never a dead spinner, never
+     * the per-page preparing label. On a real device the same
+     * file opens and reads normally; what this test pins is
+     * that a dead engine can never take the reader down with
+     * it.
+     */
+    @Test
+    fun validBookWithUnavailableEngineResolvesToOpenErrorNeverCrash() {
+        val book = File(context.cacheDir, "reader-engine-boundary-book.pdf")
+        book.writeBytes(MINIMAL_PDF.toByteArray(Charsets.US_ASCII))
+
+        composeRule.setContent {
+            WataniTheme(darkTheme = false) {
+                PdfViewerScreen(
+                    pdfFile = book,
+                    title = "كتيّب حدود المحرك",
+                    onBack = {}
+                )
+            }
+        }
+
+        composeRule.waitUntil(timeoutMillis = WAIT_MS) {
+            try {
+                composeRule.onNodeWithText(OPEN_ERROR, substring = true).assertExists()
+                true
+            } catch (_: AssertionError) {
+                false
+            }
+        }
+        composeRule.onNodeWithText(PAGE_PREPARING, substring = true).assertDoesNotExist()
+    }
+
     private companion object {
         const val WAIT_MS = 10_000L
         const val OPEN_ERROR = "تعذر فتح الملف"
         const val PAGE_PREPARING = "جارٍ تجهيز الصفحة"
+
+        /** A minimal structurally valid one-page PDF. */
+        const val MINIMAL_PDF: String =
+            "%PDF-1.4\n" +
+                "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n" +
+                "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
+                "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>endobj\n" +
+                "trailer<</Root 1 0 R>>\n%%EOF\n"
     }
 }
