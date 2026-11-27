@@ -61,7 +61,7 @@ class BidiProofTest {
         // pulls back with the test results (plain adb pull of the
         // app sandbox proved unreliable in the emulator action:
         // run 46027639852 produced reports but no screenshots).
-        val dir = instrumentation.arguments.getString("additionalTestOutputDir")
+        val dir = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
             ?.let { File(it).apply { mkdirs() } }
             ?: instrumentation.targetContext.getExternalFilesDir(null)
         FileOutputStream(File(dir, name)).use { out ->
