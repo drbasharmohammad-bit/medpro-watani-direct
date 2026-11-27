@@ -756,24 +756,11 @@ class MainActivity : ComponentActivity() {
                                 mistakesAutoReview = true
                                 drawerScreen = "بنك أخطائي"
                             }
-                            is sy.medpro.watani.ui.widget.WidgetDestination.Tips -> {
-                                // ويدجت «زوادة اليوم» (1.2.51): يفتح
-                                // القسم، وعلى مادة النصيحة إن وُجدت.
-                                tipsInitialSubject = destination.subject
-                                drawerScreen = "زوادة الطالب"
-                            }
-                            sy.medpro.watani.ui.widget.WidgetDestination.Continue -> {
-                                // ويدجت «تابع من حيث توقفت» (1.2.51):
-                                // يعيد فتح آخر مادة من موضعها.
-                                val last = sy.medpro.watani.data.LastStudyStore.load(context)
-                                val envelope = last?.let { viewModel.getSubjectEnvelope(it.first) }
-                                if (last != null && envelope != null) {
-                                    activeSubjectEnvelope = envelope
-                                    viewModel.openSubject(last.first, last.second, AppTab.BANK)
-                                } else {
-                                    viewModel.navigateToHome()
-                                }
-                            }
+                            // وجهتا «زوادة اليوم» و«تابع» كانتا لويدجتَي
+                            // الزجاج (1.2.51) — أُلغيتا مع إلغاء عائلة
+                            // الزجاج نهائيًا (1.2.55): الموجّه المستعاد
+                            // لا ينتجهما، ونقرات الويدجتات القديمة
+                            // المتبقية على الأجهزة تسقط على الرئيسية.
                             sy.medpro.watani.ui.widget.WidgetDestination.Home -> Unit
                         }
                         sy.medpro.watani.ui.widget.WidgetRouter.consume()

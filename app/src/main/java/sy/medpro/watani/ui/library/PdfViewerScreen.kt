@@ -1897,7 +1897,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                     Text(
-                        title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Color.White, fontSize = 13.5.sp,
+                        title, maxLines = 1, color = Color.White, fontSize = 13.5.sp,
                         modifier = Modifier.weight(1f),
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
