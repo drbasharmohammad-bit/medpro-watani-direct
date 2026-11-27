@@ -27,46 +27,46 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
  * all state lives in CourseDetailScreen / LibraryViewModel.
  */
 
+/** Everything the course detail body renders from, bundled as
+ * one value object (detekt LongParameterList — the same pattern
+ * as WidgetSizeBounds in the 1.2.52 detekt round). */
+data class CourseDetailUiState(
+    val course: Course,
+    val lessons: List<CourseLesson>,
+    val items: List<LibraryItem>,
+    val canAccess: Boolean,
+    val fullyDownloaded: Boolean,
+    val anyDownloading: Boolean,
+    val downloadedCount: Int,
+    val downloadingIds: Set<String>,
+    val openError: String?
+)
+
 @Composable
 fun CourseDetailContent(
-    course: Course,
-    lessons: List<CourseLesson>,
-    items: List<LibraryItem>,
+    state: CourseDetailUiState,
     viewModel: LibraryViewModel,
-    canAccess: Boolean,
-    fullyDownloaded: Boolean,
-    anyDownloading: Boolean,
-    downloadedCount: Int,
-    downloadingIds: Set<String>,
-    openError: String?,
     onBack: () -> Unit,
     onOpenLesson: (LibraryItem, Boolean) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        CoursesTopBar(title = course.title ?: "كورس", onBack = onBack)
+        CoursesTopBar(title = state.course.title ?: "كورس", onBack = onBack)
         CourseLessonsList(
-            course = course,
-            lessons = lessons,
+            state = state,
             viewModel = viewModel,
-            canAccess = canAccess,
-            fullyDownloaded = fullyDownloaded,
-            anyDownloading = anyDownloading,
-            downloadedCount = downloadedCount,
-            totalCount = items.size,
-            openError = openError,
             onDownloadAll = {
-                items.forEach { item ->
-                    if (!viewModel.isItemDownloaded(item) && (item.id ?: "") !in downloadingIds) {
+                state.items.forEach { item ->
+                    if (!viewModel.isItemDownloaded(item) && (item.id ?: "") !in state.downloadingIds) {
                         viewModel.downloadItem(item)
                     }
                 }
             },
-            onDeleteAll = { items.forEach { viewModel.deleteItem(it) } },
+            onDeleteAll = { state.items.forEach { viewModel.deleteItem(it) } },
             onOpenLesson = onOpenLesson
         )
-        if (anyDownloading && !fullyDownloaded && items.isNotEmpty()) {
+        if (state.anyDownloading && !state.fullyDownloaded && state.items.isNotEmpty()) {
             LinearProgressIndicator(
-                progress = { downloadedCount.toFloat() / items.size },
+                progress = { state.downloadedCount.toFloat() / state.items.size },
                 modifier = Modifier.fillMaxWidth(),
                 color = GoldAccent
             )
@@ -76,15 +76,8 @@ fun CourseDetailContent(
 
 @Composable
 private fun CourseLessonsList(
-    course: Course,
-    lessons: List<CourseLesson>,
+    state: CourseDetailUiState,
     viewModel: LibraryViewModel,
-    canAccess: Boolean,
-    fullyDownloaded: Boolean,
-    anyDownloading: Boolean,
-    downloadedCount: Int,
-    totalCount: Int,
-    openError: String?,
     onDownloadAll: () -> Unit,
     onDeleteAll: () -> Unit,
     onOpenLesson: (LibraryItem, Boolean) -> Unit
@@ -94,34 +87,34 @@ private fun CourseLessonsList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        if (!course.description.isNullOrBlank()) {
+        if (!state.course.description.isNullOrBlank()) {
             item {
-                Text(course.description ?: "", fontSize = 13.sp, lineHeight = 19.sp, color = MaroonPrimary)
+                Text(state.course.description ?: "", fontSize = 13.sp, lineHeight = 19.sp, color = MaroonPrimary)
             }
         }
         item {
             CourseAccessHeader(
-                canAccess = canAccess,
-                fullyDownloaded = fullyDownloaded,
-                anyDownloading = anyDownloading,
-                downloadedCount = downloadedCount,
-                totalCount = totalCount,
+                canAccess = state.canAccess,
+                fullyDownloaded = state.fullyDownloaded,
+                anyDownloading = state.anyDownloading,
+                downloadedCount = state.downloadedCount,
+                totalCount = state.items.size,
                 onDownloadAll = onDownloadAll,
                 onDeleteAll = onDeleteAll
             )
         }
-        items(lessons, key = { it.id ?: "" }) { lesson ->
+        items(state.lessons, key = { it.id ?: "" }) { lesson ->
             LessonRow(
                 lesson = lesson,
-                item = CourseLogic.lessonItem(course, lesson),
+                item = CourseLogic.lessonItem(state.course, lesson),
                 viewModel = viewModel,
-                canAccess = canAccess,
+                canAccess = state.canAccess,
                 onOpen = onOpenLesson
             )
         }
-        if (openError != null) {
+        if (state.openError != null) {
             item {
-                Text(openError ?: "", fontSize = 12.sp, color = MaroonPrimary)
+                Text(state.openError ?: "", fontSize = 12.sp, color = MaroonPrimary)
             }
         }
     }

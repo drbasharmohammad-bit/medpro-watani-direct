@@ -202,16 +202,18 @@ fun CourseDetailScreen(
     }
 
     CourseDetailContent(
-        course = course,
-        lessons = lessons,
-        items = items,
+        state = CourseDetailUiState(
+            course = course,
+            lessons = lessons,
+            items = items,
+            canAccess = canAccess,
+            fullyDownloaded = fullyDownloaded,
+            anyDownloading = anyDownloading,
+            downloadedCount = downloadedCount,
+            downloadingIds = state.downloadingIds,
+            openError = openError
+        ),
         viewModel = viewModel,
-        canAccess = canAccess,
-        fullyDownloaded = fullyDownloaded,
-        anyDownloading = anyDownloading,
-        downloadedCount = downloadedCount,
-        downloadingIds = state.downloadingIds,
-        openError = openError,
         onBack = onBack,
         onOpenLesson = { item, isPdf ->
             scope.launch {
