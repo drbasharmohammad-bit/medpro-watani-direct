@@ -39,7 +39,7 @@ name: Build Watani Final APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/home-package, feature/pdfium-reader, feature/flexibility-courses, feature/reader-crash-fix]
+    branches: [main, feature/home-package, feature/pdfium-reader, feature/flexibility-courses, feature/reader-crash-fix, feature/bidi-subtitle-fix]
 
 jobs:
   build:
