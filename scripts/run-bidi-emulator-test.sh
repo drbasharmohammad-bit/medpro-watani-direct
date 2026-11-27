@@ -21,8 +21,8 @@ while [ "$attempt" -le 3 ]; do
   attempt=$((attempt + 1))
 done
 mkdir -p bidi_screenshots
-adb pull /sdcard/Android/data/sy.medpro.watani/files/bidi_1_header.png bidi_screenshots/ 2>/dev/null || true
-adb pull /sdcard/Android/data/sy.medpro.watani/files/bidi_2_quiz.png bidi_screenshots/ 2>/dev/null || true
-adb pull /sdcard/Android/data/sy.medpro.watani/files/bidi_3_watani.png bidi_screenshots/ 2>/dev/null || true
+adb pull /sdcard/Android/data/sy.medpro.watani.test/files/bidi_1_header.png bidi_screenshots/ 2>/dev/null || true
+adb pull /sdcard/Android/data/sy.medpro.watani.test/files/bidi_2_quiz.png bidi_screenshots/ 2>/dev/null || true
+adb pull /sdcard/Android/data/sy.medpro.watani.test/files/bidi_3_watani.png bidi_screenshots/ 2>/dev/null || true
 adb logcat -d -v threadtime > logcat-bidi.txt 2>/dev/null || true
 exit $code

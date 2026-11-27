@@ -19,9 +19,9 @@ while [ "$attempt" -le 3 ]; do
   attempt=$((attempt + 1))
 done
 mkdir -p clip_screenshots
-adb pull /sdcard/Android/data/sy.medpro.watani/files/clip_before.png clip_screenshots/ 2>/dev/null || true
-adb pull /sdcard/Android/data/sy.medpro.watani/files/clip_after.png clip_screenshots/ 2>/dev/null || true
-adb pull /sdcard/Android/data/sy.medpro.watani/files/header_after.png clip_screenshots/ 2>/dev/null || true
-adb pull /sdcard/Android/data/sy.medpro.watani/files/widget_after.png clip_screenshots/ 2>/dev/null || true
+adb pull /sdcard/Android/data/sy.medpro.watani.test/files/clip_before.png clip_screenshots/ 2>/dev/null || true
+adb pull /sdcard/Android/data/sy.medpro.watani.test/files/clip_after.png clip_screenshots/ 2>/dev/null || true
+adb pull /sdcard/Android/data/sy.medpro.watani.test/files/header_after.png clip_screenshots/ 2>/dev/null || true
+adb pull /sdcard/Android/data/sy.medpro.watani.test/files/widget_after.png clip_screenshots/ 2>/dev/null || true
 adb logcat -d -v threadtime > logcat-clip.txt 2>/dev/null || true
 exit $code
