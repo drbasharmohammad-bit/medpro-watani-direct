@@ -21,9 +21,9 @@ while [ "$attempt" -le 3 ]; do
   attempt=$((attempt + 1))
 done
 mkdir -p bidi_screenshots
-adb pull /sdcard/Android/data/sy.medpro.watani.test/files/bidi_1_header.png bidi_screenshots/ 2>/dev/null || true
-adb pull /sdcard/Android/data/sy.medpro.watani.test/files/bidi_2_quiz.png bidi_screenshots/ 2>/dev/null || true
-adb pull /sdcard/Android/data/sy.medpro.watani.test/files/bidi_3_watani.png bidi_screenshots/ 2>/dev/null || true
+adb exec-out run-as sy.medpro.watani cat /storage/emulated/0/Android/data/sy.medpro.watani/files/bidi_1_header.png > bidi_screenshots/bidi_1_header.png 2>/dev/null || true
+adb exec-out run-as sy.medpro.watani cat /storage/emulated/0/Android/data/sy.medpro.watani/files/bidi_2_quiz.png > bidi_screenshots/bidi_2_quiz.png 2>/dev/null || true
+adb exec-out run-as sy.medpro.watani cat /storage/emulated/0/Android/data/sy.medpro.watani/files/bidi_3_watani.png > bidi_screenshots/bidi_3_watani.png 2>/dev/null || true
 {
       echo "== ls Android/data =="
       adb shell ls /sdcard/Android/data/ 2>&1

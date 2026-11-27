@@ -19,10 +19,10 @@ while [ "$attempt" -le 3 ]; do
   attempt=$((attempt + 1))
 done
 mkdir -p clip_screenshots
-adb pull /sdcard/Android/data/sy.medpro.watani.test/files/clip_before.png clip_screenshots/ 2>/dev/null || true
-adb pull /sdcard/Android/data/sy.medpro.watani.test/files/clip_after.png clip_screenshots/ 2>/dev/null || true
-adb pull /sdcard/Android/data/sy.medpro.watani.test/files/header_after.png clip_screenshots/ 2>/dev/null || true
-adb pull /sdcard/Android/data/sy.medpro.watani.test/files/widget_after.png clip_screenshots/ 2>/dev/null || true
+adb exec-out run-as sy.medpro.watani cat /storage/emulated/0/Android/data/sy.medpro.watani/files/clip_before.png > clip_screenshots/clip_before.png 2>/dev/null || true
+adb exec-out run-as sy.medpro.watani cat /storage/emulated/0/Android/data/sy.medpro.watani/files/clip_after.png > clip_screenshots/clip_after.png 2>/dev/null || true
+adb exec-out run-as sy.medpro.watani cat /storage/emulated/0/Android/data/sy.medpro.watani/files/header_after.png > clip_screenshots/header_after.png 2>/dev/null || true
+adb exec-out run-as sy.medpro.watani cat /storage/emulated/0/Android/data/sy.medpro.watani/files/widget_after.png > clip_screenshots/widget_after.png 2>/dev/null || true
 {
       echo "== ls Android/data =="
       adb shell ls /sdcard/Android/data/ 2>&1
