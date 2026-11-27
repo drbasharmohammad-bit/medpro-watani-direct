@@ -506,6 +506,7 @@ jobs:
           path: |
             bidi_screenshots
             logcat-bidi.txt
+            discovery-bidi.txt
             app/build/reports/androidTests
             app/build/outputs/androidTest-results
           if-no-files-found: ignore
@@ -587,6 +588,7 @@ jobs:
           path: |
             clip_screenshots
             logcat-clip.txt
+            discovery-clip.txt
             app/build/reports/androidTests
             app/build/outputs/androidTest-results
           if-no-files-found: ignore

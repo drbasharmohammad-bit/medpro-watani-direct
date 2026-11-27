@@ -24,5 +24,15 @@ mkdir -p bidi_screenshots
 adb pull /sdcard/Android/data/sy.medpro.watani.test/files/bidi_1_header.png bidi_screenshots/ 2>/dev/null || true
 adb pull /sdcard/Android/data/sy.medpro.watani.test/files/bidi_2_quiz.png bidi_screenshots/ 2>/dev/null || true
 adb pull /sdcard/Android/data/sy.medpro.watani.test/files/bidi_3_watani.png bidi_screenshots/ 2>/dev/null || true
+{
+      echo "== ls Android/data =="
+      adb shell ls /sdcard/Android/data/ 2>&1
+      echo "== ls test files dir =="
+      adb shell ls -la /sdcard/Android/data/sy.medpro.watani.test/files/ 2>&1
+      echo "== ls target files dir =="
+      adb shell ls -la /sdcard/Android/data/sy.medpro.watani/files/ 2>&1
+      echo "== ProofShoot logcat lines =="
+      adb logcat -d -s ProofShoot 2>&1
+    } > discovery-bidi.txt 2>&1 || true
 adb logcat -d -v threadtime > logcat-bidi.txt 2>/dev/null || true
 exit $code

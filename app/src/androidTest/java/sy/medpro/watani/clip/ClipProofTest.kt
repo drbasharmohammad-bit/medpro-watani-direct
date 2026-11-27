@@ -62,10 +62,15 @@ class ClipProofTest {
         // pulls this exact dir back via additionalTestOutputDir.
         val dir = instrumentation.context.getExternalFilesDir(null)
             ?: instrumentation.targetContext.getExternalFilesDir(null)
-        FileOutputStream(File(dir, name)).use { out ->
+        val target = File(dir, name)
+        FileOutputStream(target).use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
         bitmap.recycle()
+        android.util.Log.i(
+            "ProofShoot",
+            "wrote ${target.absolutePath} exists=${target.exists()} len=${target.length()}"
+        )
     }
 
     @Test
