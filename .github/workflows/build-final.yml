@@ -470,7 +470,7 @@ jobs:
       - name: Restore stable signing keystore (debug builds sign from it too)
         env:
           WATANI_KEYSTORE_BASE64: ${{ secrets.WATANI_KEYSTORE_BASE64 }}
-          WATANI_KEYSTORE_PASSWORD: <redacted>
+          WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
           WATANI_KEY_ALIAS: watani
           WATANI_KEYSTORE_TYPE: PKCS12
         run: |
@@ -485,9 +485,9 @@ jobs:
       - name: Bidi proof test on emulator (header + quiz + Watani sample)
         uses: reactivecircus/android-emulator-runner@v2
         env:
-          WATANI_KEYSTORE_PASSWORD: <redacted>
+          WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
           WATANI_KEY_ALIAS: watani
-          WATANI_KEY_PASSWORD: <redacted>
+          WATANI_KEY_PASSWORD: ${{ secrets.WATANI_KEY_PASSWORD }}
           WATANI_KEYSTORE_TYPE: PKCS12
         with:
           api-level: 34
@@ -551,7 +551,7 @@ jobs:
       - name: Restore stable signing keystore (debug builds sign from it too)
         env:
           WATANI_KEYSTORE_BASE64: ${{ secrets.WATANI_KEYSTORE_BASE64 }}
-          WATANI_KEYSTORE_PASSWORD: <redacted>
+          WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
           WATANI_KEY_ALIAS: watani
           WATANI_KEYSTORE_TYPE: PKCS12
         run: |
@@ -566,9 +566,9 @@ jobs:
       - name: Clip proof test on emulator (grade buttons + card text, before/after)
         uses: reactivecircus/android-emulator-runner@v2
         env:
-          WATANI_KEYSTORE_PASSWORD: <redacted>
+          WATANI_KEYSTORE_PASSWORD: ${{ secrets.WATANI_KEYSTORE_PASSWORD }}
           WATANI_KEY_ALIAS: watani
-          WATANI_KEY_PASSWORD: <redacted>
+          WATANI_KEY_PASSWORD: ${{ secrets.WATANI_KEY_PASSWORD }}
           WATANI_KEYSTORE_TYPE: PKCS12
         with:
           api-level: 34
