@@ -71,6 +71,11 @@ object AppVersionGate {
         // build itself; the value is allow-listed before storage.
         val apkUrl = config?.optString("apkUrl", "") ?: ""
         if (apkUrl.isNotBlank()) WorkerActivationApi.saveKnownApkUrl(context, apkUrl)
+        // Build 1.2.53: the same fetch also learns the section
+        // switches (`sectionSwitches`) — the admin panel's remote
+        // open/activated/locked states. A config without the field
+        // (older gateway) leaves the stored switches untouched.
+        SectionSwitchStore.updateFromConfig(context, config)
         return isUpdateRequired(context)
     }
 }

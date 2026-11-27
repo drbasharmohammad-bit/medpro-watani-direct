@@ -804,3 +804,49 @@ private fun TipsRouteContent(route: TipsRoute, onRoute: (TipsRoute) -> Unit) {
         TipsRoute.Mine -> TipsMineContent()
     }
 }
+
+// ---------------------------------------------------------------
+// Section-switch lock (build 1.2.53): rendered by MainActivity
+// instead of TipsRootScreen when the admin panel's tips switch
+// says ACTIVATED (for a non-activated student) or LOCKED.
+// ---------------------------------------------------------------
+
+@Composable
+fun TipsLockedScreen(
+    needsActivation: Boolean,
+    onBack: () -> Unit,
+    onActivate: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    DrawerScreenScaffold(title = "زوادة الطالب", onBack = onBack) { padding ->
+        Column(
+            modifier = modifier.fillMaxSize().padding(padding).padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = if (needsActivation) "زوادة الطالب للمفعّلين" else "زوادة الطالب مقفلة حاليًا",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaroonPrimary
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = if (needsActivation) {
+                    "فعّل حسابك بكود التفعيل لتفتح هذا القسم."
+                } else {
+                    "هذا القسم مقفل حاليًا — جرّب لاحقًا."
+                },
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (needsActivation) {
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onActivate,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
+                ) {
+                    Text("تفعيل الحساب")
+                }
+            }
+        }
+    }
+}

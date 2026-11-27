@@ -93,6 +93,9 @@ private sealed interface LibraryRoute {
     object ConceptsSubjects : LibraryRoute
     data class ConceptsTopics(val subject: String) : LibraryRoute
     data class ConceptsUnit(val unitId: String) : LibraryRoute
+    // Build 1.2.53: server-published courses (courses.json).
+    object Courses : LibraryRoute
+    data class CourseDetail(val courseId: String) : LibraryRoute
 }
 
 /** Back-navigation fix (1.2.22): the library route is saveable, so
@@ -110,12 +113,16 @@ private val LibraryRouteSaver = androidx.compose.runtime.saveable.Saver<LibraryR
             LibraryRoute.ConceptsSubjects -> "subjects"
             is LibraryRoute.ConceptsTopics -> "topics\u0001" + route.subject
             is LibraryRoute.ConceptsUnit -> "unit\u0001" + route.unitId
+            LibraryRoute.Courses -> "courses"
+            is LibraryRoute.CourseDetail -> "course\u0001" + route.courseId
         }
     },
     restore = { value ->
         when {
             value == "videos" -> LibraryRoute.Videos
             value.startsWith("subject\u0001") -> LibraryRoute.Subject(value.removePrefix("subject\u0001"))
+            value == "courses" -> LibraryRoute.Courses
+            value.startsWith("course\u0001") -> LibraryRoute.CourseDetail(value.removePrefix("course\u0001"))
             value == "subjects" -> LibraryRoute.ConceptsSubjects
             value.startsWith("topics\u0001") -> LibraryRoute.ConceptsTopics(value.removePrefix("topics\u0001"))
             value.startsWith("unit\u0001") -> LibraryRoute.ConceptsUnit(value.removePrefix("unit\u0001"))
@@ -245,6 +252,13 @@ fun LibraryScreen(
     BackHandler(enabled = libraryRoute is LibraryRoute.Subject) {
         libraryRoute = LibraryRoute.Videos
     }
+    // Build 1.2.53: courses back chain — detail → list → entries.
+    BackHandler(enabled = libraryRoute == LibraryRoute.Courses) {
+        libraryRoute = LibraryRoute.Entries
+    }
+    BackHandler(enabled = libraryRoute is LibraryRoute.CourseDetail) {
+        libraryRoute = LibraryRoute.Courses
+    }
 
     // Back-navigation fix (1.2.22): system back while a video is
     // playing closes the READER first (one step — the same as the
@@ -316,7 +330,48 @@ fun LibraryScreen(
             )
             return
         }
-        LibraryRoute.Entries, LibraryRoute.Videos, is LibraryRoute.Subject -> Unit
+        LibraryRoute.Entries, LibraryRoute.Videos, is LibraryRoute.Subject,
+        LibraryRoute.Courses, is LibraryRoute.CourseDetail -> Unit
+    }
+
+    // Build 1.2.53 — courses routes: like the concepts routes
+    // above, they depend ONLY on their own catalog (cache-first
+    // from CoursesRepository), never on the library envelope, so
+    // they resolve before the envelope loading/error paths below.
+    val coursesRepo = remember { sy.medpro.watani.data.CoursesRepository(context) }
+    var coursesCatalog by remember { mutableStateOf(coursesRepo.cachedCatalog()) }
+    LaunchedEffect(Unit) {
+        coursesRepo.refreshCatalog()?.let { coursesCatalog = it }
+    }
+    val courses = coursesCatalog?.courses.orEmpty().filter { !it.id.isNullOrBlank() }
+    when (val route = libraryRoute) {
+        LibraryRoute.Courses -> {
+            CoursesListScreen(
+                courses = courses,
+                onCourseClick = { libraryRoute = LibraryRoute.CourseDetail(it.id ?: "") },
+                onBack = { libraryRoute = LibraryRoute.Entries }
+            )
+            return
+        }
+        is LibraryRoute.CourseDetail -> {
+            val course = courses.firstOrNull { it.id == route.courseId }
+            if (course != null) {
+                CourseDetailScreen(
+                    course = course,
+                    viewModel = viewModel,
+                    onBack = { libraryRoute = LibraryRoute.Courses },
+                    onReaderFullscreenChange = onReaderFullscreenChange
+                )
+            } else {
+                CoursesListScreen(
+                    courses = courses,
+                    onCourseClick = { libraryRoute = LibraryRoute.CourseDetail(it.id ?: "") },
+                    onBack = { libraryRoute = LibraryRoute.Entries }
+                )
+            }
+            return
+        }
+        else -> Unit
     }
 
     if (state.isLoading && state.library == null) {
@@ -477,7 +532,32 @@ fun LibraryScreen(
                         VideosEntryCard(
                             totalVideos = subjectsWithVideos.sumOf { it.videos?.size ?: 0 },
                             subjectsCount = subjectsWithVideos.size,
-                            onClick = { libraryRoute = LibraryRoute.Videos }
+                            onClick = {
+                                // Build 1.2.53: the videos section
+                                // switch (defaults to ACTIVATED ==
+                                // today's behaviour inside the
+                                // activation-gated library).
+                                when (sy.medpro.watani.data.SectionSwitchStore.decision(
+                                    context,
+                                    sy.medpro.watani.data.SectionKey.VIDEOS,
+                                    sy.medpro.watani.data.WorkerActivationApi.isActivated(context)
+                                )) {
+                                    sy.medpro.watani.data.SectionSwitches.EntryDecision.ALLOW ->
+                                        libraryRoute = LibraryRoute.Videos
+                                    sy.medpro.watani.data.SectionSwitches.EntryDecision.LOCKED ->
+                                        openError = sy.medpro.watani.data.SectionSwitches.LOCKED_MESSAGE
+                                    sy.medpro.watani.data.SectionSwitches.EntryDecision.NEEDS_ACTIVATION ->
+                                        openError = "الفيديوهات للمفعّلين — فعّل حسابك أولًا"
+                                }
+                            }
+                        )
+                    }
+                }
+                if (courses.isNotEmpty()) {
+                    item {
+                        CoursesEntryCard(
+                            coursesCount = courses.size,
+                            onClick = { libraryRoute = LibraryRoute.Courses }
                         )
                     }
                 }

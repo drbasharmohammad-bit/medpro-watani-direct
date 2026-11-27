@@ -398,6 +398,40 @@ class MainActivity : ComponentActivity() {
                 // M8: the device-integrity gate is checked here too, so a
                 // blocked device cannot enter fully-locked tabs at all.
                 fun requestTab(tab: AppTab): Boolean {
+                    // Build 1.2.53 — section switches (the doctor's
+                    // «مرونة» order): the tab's section state from
+                    // the admin panel (SectionSwitchStore, defaults
+                    // == the pre-1.2.53 behaviour) decides FIRST:
+                    // LOCKED refuses everyone with the lock message,
+                    // ACTIVATED routes a non-activated student to
+                    // the activation prompt, OPEN lets the tap
+                    // through. The device-integrity and lease checks
+                    // below are security checks, independent of the
+                    // switches, and keep applying to the two
+                    // fully-restricted tabs exactly as before.
+                    val sectionKey = when (tab) {
+                        AppTab.BANK, AppTab.UNIVERSITIES -> sy.medpro.watani.data.SectionKey.BANKS
+                        AppTab.CASES -> sy.medpro.watani.data.SectionKey.CASES
+                        AppTab.FIRSTAID -> sy.medpro.watani.data.SectionKey.FIRSTAID
+                        AppTab.UWORLD -> sy.medpro.watani.data.SectionKey.UWORLD
+                        AppTab.LIBRARY -> sy.medpro.watani.data.SectionKey.LIBRARY
+                        else -> null
+                    }
+                    val isActivated = sy.medpro.watani.data.WorkerActivationApi.isActivated(context)
+                    if (sectionKey != null) {
+                        when (sy.medpro.watani.data.SectionSwitchStore.decision(context, sectionKey, isActivated)) {
+                            sy.medpro.watani.data.SectionSwitches.EntryDecision.LOCKED -> {
+                                gateDialogMessage = sy.medpro.watani.data.SectionSwitches.LOCKED_MESSAGE
+                                return false
+                            }
+                            sy.medpro.watani.data.SectionSwitches.EntryDecision.NEEDS_ACTIVATION -> {
+                                pendingTab = tab
+                                showActivationPrompt = true
+                                return false
+                            }
+                            sy.medpro.watani.data.SectionSwitches.EntryDecision.ALLOW -> Unit
+                        }
+                    }
                     val restricted = tab == AppTab.UWORLD || tab == AppTab.LIBRARY
                     if (restricted) {
                         val gate = sy.medpro.watani.ui.security.RestrictedContentGate.check(context)
@@ -407,11 +441,6 @@ class MainActivity : ComponentActivity() {
                         }
                         if (sy.medpro.watani.data.WorkerActivationApi.isRestrictedLeaseExpired(context)) {
                             gateDialogMessage = sy.medpro.watani.data.WorkerActivationApi.LEASE_EXPIRED_MESSAGE
-                            return false
-                        }
-                        if (!sy.medpro.watani.data.WorkerActivationApi.isActivated(context)) {
-                            pendingTab = tab
-                            showActivationPrompt = true
                             return false
                         }
                     }
@@ -1282,10 +1311,35 @@ class MainActivity : ComponentActivity() {
                                                 "المفضلة" -> FavoritesScreen(onBack = { drawerScreen = null })
                                                 "ملاحظاتي" -> MyNotesScreen(onBack = { drawerScreen = null })
                                                 "سجلّ حالاتي" -> LogbookScreen(onBack = { drawerScreen = null })
-                                                "زوادة الطالب" -> TipsRootScreen(
-                                                    onBack = { drawerScreen = null; tipsInitialSubject = null },
-                                                    initialSubject = tipsInitialSubject
-                                                )
+                                                "زوادة الطالب" -> {
+                                                    // Build 1.2.53: the tips section
+                                                    // switch gates the drawer screen
+                                                    // itself, so every entry point
+                                                    // (drawer, home card, subject
+                                                    // strip, widget) is covered by
+                                                    // this one render-point check.
+                                                    val tipsDecision = sy.medpro.watani.data.SectionSwitchStore.decision(
+                                                        context,
+                                                        sy.medpro.watani.data.SectionKey.TIPS,
+                                                        sy.medpro.watani.data.WorkerActivationApi.isActivated(context)
+                                                    )
+                                                    when (tipsDecision) {
+                                                        sy.medpro.watani.data.SectionSwitches.EntryDecision.ALLOW ->
+                                                            TipsRootScreen(
+                                                                onBack = { drawerScreen = null; tipsInitialSubject = null },
+                                                                initialSubject = tipsInitialSubject
+                                                            )
+                                                        else -> sy.medpro.watani.ui.tips.TipsLockedScreen(
+                                                            needsActivation = tipsDecision ==
+                                                                sy.medpro.watani.data.SectionSwitches.EntryDecision.NEEDS_ACTIVATION,
+                                                            onBack = { drawerScreen = null; tipsInitialSubject = null },
+                                                            onActivate = {
+                                                                drawerScreen = null
+                                                                showActivationPrompt = true
+                                                            }
+                                                        )
+                                                    }
+                                                }
                                                 "الإشعارات والتذكير" -> sy.medpro.watani.ui.notify.NotificationSettingsScreen(onBack = { drawerScreen = null })
                                                 "إعدادات الويدجت" -> sy.medpro.watani.ui.widget.WidgetSettingsScreen(onBack = { drawerScreen = null })
                                                 "الحالات الألمانية" -> GermanCasesScreen(onBack = { drawerScreen = null })
