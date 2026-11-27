@@ -65,7 +65,7 @@ class BidiProofTest {
     }
 
     @Test
-    fun headerRange_quizExplanation_wataniSample_renderInOrder() {
+    fun headerRange_rendersInOrder() {
         // ── 1) Header with the production-composed subtitle ──────
         composeRule.setContent {
             Column {
@@ -78,7 +78,10 @@ class BidiProofTest {
         }
         composeRule.onNode(hasText("241-299", substring = true)).assertIsDisplayed()
         shoot("bidi_1_header.png")
+    }
 
+    @Test
+    fun quizExplanation_rendersInOrder() {
         // ── 2) The doctor's question, repaired live text ─────────
         val item = FaQuizItem(
             stem = "ما دراسة التصوير الأولية الموصى بها لمريض طفل بعد أول عدوى مسالك بولية حموية؟ (Urinary Tract Infection, UTI)",
@@ -111,7 +114,10 @@ class BidiProofTest {
         }
         composeRule.onNode(hasText("Renal Scarring", substring = true)).assertIsDisplayed()
         shoot("bidi_2_quiz.png")
+    }
 
+    @Test
+    fun wataniSample_rendersInOrder() {
         // ── 3) Watani bank explanation sample (NV2-TWL-0150) ─────
         composeRule.setContent {
             Column {
