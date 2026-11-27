@@ -22,8 +22,11 @@ import java.security.MessageDigest
 /**
  * PDF text layer for the internal reader (build 1.2.37).
  *
- * Rendering stays on `android.graphics.pdf.PdfRenderer`; this engine
- * is TEXT ONLY. PDFBox Android extracts, per page, every word with its
+ * This engine is TEXT ONLY. (Build 1.2.52: rendering moved to
+ * PDFium and the primary text layer with it — see
+ * [PdfiumTextEngine]; this PDFBox engine remains as the text
+ * layer's fallback, under the policy pinned there.) PDFBox
+ * Android extracts, per page, every word with its
  * bounding box as page fractions (0..1, y measured from the TOP of the
  * page — the same normalized space the reader's freehand strokes use),
  * plus the document outline. The result is cached on disk as Moshi

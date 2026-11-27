@@ -3,6 +3,8 @@ package sy.medpro.watani.ui.firstaid
 import sy.medpro.watani.ui.PremiumListSkeleton
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import io.legere.pdfiumandroid.PdfDocument
+import io.legere.pdfiumandroid.PdfiumCore
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -272,7 +274,7 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
                 if (current is FaDest.Pdf) {
                     // Booklet integrity gate (1.2.37): before the
                     // reader opens, the file must actually parse as a
-                    // PDF (PdfRenderer, pageCount > 0, on IO). A file
+                    // PDF (PDFium since 1.2.52, pageCount > 0, on IO). A file
                     // that fails is deleted and re-downloaded ONCE
                     // automatically (matched back to its index booklet
                     // by its local file); a second failure surfaces
@@ -1165,19 +1167,62 @@ private fun FaDueReview(
 }
 
 /**
- * Booklet integrity probe (1.2.37): opens [file] with PdfRenderer on
- * the IO dispatcher and returns null only when it parses with at
+ * Booklet integrity probe (1.2.37): opens [file] on the IO
+ * dispatcher and returns null only when it parses with at
  * least one page. Any failure returns the REAL reason as
- * "ExceptionClass: message" for the caller's error path. Every
- * handle (renderer + descriptor) is closed on every path.
+ * "ExceptionClass: message" for the caller's error path.
+ * Every handle is closed on every path.
+ *
+ * 1.2.52: the probe's engine is PDFium — the reader's own
+ * engine — so "valid" means exactly "the reader can open
+ * this booklet". One armor exception: if the PDFium native
+ * library itself cannot load (an Error, not an Exception —
+ * e.g. a broken native build), the probe falls back to the
+ * platform PdfRenderer instead of condemning every booklet
+ * on the device for an engine outage; a genuine PDFium parse
+ * failure (an Exception) is reported as-is, never masked by
+ * the fallback.
  */
 private suspend fun validateFaPdfFile(file: File): String? = withContext(Dispatchers.IO) {
+    if (!file.exists() || file.length() == 0L) {
+        return@withContext "الملف غير موجود على الجهاز أو فارغ"
+    }
+    val pdfiumResult = runCatching {
+        var fd: ParcelFileDescriptor? = null
+        var doc: PdfDocument? = null
+        try {
+            fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            doc = PdfiumCore().newDocument(fd)
+            if (doc.getPageCount() > 0) {
+                null
+            } else {
+                "PDFium: الملف بلا صفحات (pageCount = 0)"
+            }
+        } finally {
+            try { doc?.close() } catch (_: Exception) {}
+            try { fd?.close() } catch (_: Exception) {}
+        }
+    }
+    pdfiumResult.fold(
+        onSuccess = { it },
+        onFailure = { failure ->
+            if (failure is Exception) {
+                "${failure.javaClass.simpleName}: " +
+                    (failure.message ?: "خطأ غير معروف أثناء فتح ملف PDF")
+            } else {
+                validateFaPdfFileWithPlatformRenderer(file)
+            }
+        }
+    )
+}
+
+/** The probe's engine-outage fallback (1.2.52): the platform
+ * PdfRenderer check this probe ran on before PDFium — used
+ * ONLY when the PDFium native library cannot load at all. */
+private suspend fun validateFaPdfFileWithPlatformRenderer(file: File): String? {
     var fd: ParcelFileDescriptor? = null
     var renderer: PdfRenderer? = null
-    try {
-        if (!file.exists() || file.length() == 0L) {
-            return@withContext "الملف غير موجود على الجهاز أو فارغ"
-        }
+    return try {
         fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
         renderer = PdfRenderer(fd)
         if (renderer.pageCount > 0) {

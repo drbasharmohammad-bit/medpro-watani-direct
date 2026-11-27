@@ -3,7 +3,6 @@ package sy.medpro.watani.ui.library
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
@@ -20,8 +19,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -61,9 +59,13 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import io.legere.pdfiumandroid.PdfDocument
+import io.legere.pdfiumandroid.PdfiumCore
 import sy.medpro.watani.data.BookTextIndex
 import sy.medpro.watani.data.HighlightSelection
+import sy.medpro.watani.data.PdfPagePoints
 import sy.medpro.watani.data.PdfTextEngine
+import sy.medpro.watani.data.PdfiumTextEngine
 import sy.medpro.watani.data.SearchHit
 import sy.medpro.watani.data.WordBox
 import sy.medpro.watani.ui.theme.MaroonPrimary
@@ -138,11 +140,48 @@ data class ReaderRecentDto(
     val timestamp: Long
 )
 
+/**
+ * One successfully opened book (build 1.2.52): the descriptor
+ * the PDFium document reads through (kept open for the
+ * document's whole lifetime, closed after it on dispose), the
+ * document itself, its page count and its page sizes in
+ * points. Produced by the open effect's armored PDFium open —
+ * see the call site for why the armor catches Throwable.
+ */
+private data class OpenedBook(
+    val fd: ParcelFileDescriptor,
+    val document: PdfDocument,
+    val pageCount: Int,
+    val sizes: List<PdfPagePoints>
+)
+
 /** Hard cap on simultaneously held page bitmaps (build 1.2.37):
- * the cache keeps the current page ±1 (3) plus at most one
- * zoom-resolution replacement of the current page — never more
- * than this many bitmaps alive; eviction always recycles. */
-private const val READER_MAX_CACHED_BITMAPS = 4
+ * the cache keeps the visible pages ±1 plus at most one
+ * zoom-resolution replacement per visible page — never more
+ * than this many bitmaps alive; eviction always recycles.
+ * (1.2.52: the cap rose from 4 to 6 because the vertical stack
+ * legitimately shows more pages at once than the old pager —
+ * a tall page plus parts of both neighbours, with one more
+ * composed beyond each edge. The per-bitmap pixel budgets are
+ * unchanged, so the worst case grows by the same pages the
+ * student can actually see.) */
+private const val READER_MAX_CACHED_BITMAPS = 6
+
+/** The dpi at which PDFium's page-size call returns PDF points
+ * numerically (points are 1/72 inch): getPageSizes(72) yields
+ * the book's page sizes in points (build 1.2.52). */
+private const val PDFIUM_SIZE_DPI = 72
+
+/** Fallback page size (A4 points) for a page whose size the
+ * engine could not report — layout only; the render itself
+ * always uses the page's real size (build 1.2.52). */
+private const val DEFAULT_PAGE_WIDTH_PT = 595
+private const val DEFAULT_PAGE_HEIGHT_PT = 842
+
+/** The seam between stacked pages in the vertical reader
+ * (build 1.2.52): enough to read as a page boundary while
+ * scrolling, never a layout band. */
+private const val READER_PAGE_GAP_DP = 6
 
 /** Settle delay before a zoom level earns its hi-res re-render
  * (1.2.46): pinch movements stream zoom values continuously, and
@@ -180,6 +219,16 @@ private fun getFirebaseUid(): String {
  * zoomed, and jumps with a page slider. Rendered bitmaps are cached for
  * the current page ±1 and recycled on eviction (the old version never
  * recycled bitmaps on page change and never closed the file descriptor).
+ *
+ * Build 1.2.52 (the doctor's order of 27 Nov 2026, after the
+ * 1.2.50/1.2.51 reader fixes did not settle his device's
+ * «جارٍ تجهيز الصفحة» complaint): the engine is now PDFium
+ * (PdfiumAndroidKt, Apache 2.0) — rendering AND the FPDFText
+ * text layer — replacing PdfRenderer outright, and browsing
+ * is a continuous VERTICAL stack (page under page, one
+ * downward scroll) instead of the horizontal pager. MuPDF was
+ * rejected for the engine role: AGPL. PDFBox remains only as
+ * the text-layer fallback (see PdfiumTextEngine).
  */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -188,7 +237,12 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     val coroutineScope = rememberCoroutineScope()
     var totalPages by remember { mutableStateOf(0) }
     var savedPage by remember { mutableStateOf(0) }
-    var pdfRenderer by remember { mutableStateOf<PdfRenderer?>(null) }
+    // The open PDFium document (1.2.52) and its page sizes in
+    // points, in page order: the sizes lay out the vertical
+    // stack (each page's height follows its aspect ratio) and
+    // feed the text engine's fraction conversion.
+    var pdfiumDoc by remember { mutableStateOf<PdfDocument?>(null) }
+    var pageSizesPt by remember { mutableStateOf<List<PdfPagePoints>>(emptyList()) }
     var parcelFd by remember { mutableStateOf<ParcelFileDescriptor?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -246,12 +300,14 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     val prefs = remember { context.getSharedPreferences("watani_library_${getFirebaseUid()}", Context.MODE_PRIVATE) }
 
     // Dedicated single-thread render dispatcher (1.2.50): every
-    // PdfRenderer call of this reader (open + page renders) runs
+    // engine call of this reader (open + page renders) runs
     // on its own thread, so renders serialize naturally instead
     // of convoying behind one monitor on the shared
     // Dispatchers.Default pool — one of the mechanisms behind
     // the eternal «جارٍ تجهيز الصفحة» (see ReaderPagePipeline).
     // Closed with the reader in the dispose effect below.
+    // (1.2.52: the engine is PDFium now; the discipline is the
+    // same — one thread owns the document's renders.)
     val renderDispatcher = remember {
         Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     }
@@ -452,7 +508,28 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
     var firstPagePainted by remember { mutableStateOf(false) }
     LaunchedEffect(pdfFile, firstPagePainted) {
         if (firstPagePainted && textLayerState == TextLayerState.LOADING) {
-            val index = PdfTextEngine.load(context, pdfFile)
+            // PDFium first (1.2.52): the text layer comes from
+            // the engine that renders, so word geometry and
+            // pixels share one coordinate truth. The PDFBox
+            // engine is the fallback — it runs only when the
+            // PDFium pass produced nothing usable (policy:
+            // PdfiumTextEngine.shouldFallbackToPdfBox), and its
+            // result wins whenever it has words; a wordless
+            // PDFium index (outline only) still survives a
+            // failed fallback.
+            val doc = pdfiumDoc
+            val fromPdfium = if (doc != null) {
+                runCatching {
+                    PdfiumTextEngine.load(context, pdfFile, doc, pageSizesPt)
+                }.getOrNull()
+            } else {
+                null
+            }
+            val index = if (PdfiumTextEngine.shouldFallbackToPdfBox(fromPdfium)) {
+                PdfTextEngine.load(context, pdfFile) ?: fromPdfium
+            } else {
+                fromPdfium
+            }
             textIndex = index
             textLayerState =
                 if (index != null) TextLayerState.READY else TextLayerState.UNAVAILABLE
@@ -558,31 +635,78 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 }
                 // Recents load (armored inside loadRecents itself).
                 loadRecents()
-                val fd = ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY)
-                val renderer = PdfRenderer(fd)
-                parcelFd = fd
-                pdfRenderer = renderer
-                totalPages = renderer.pageCount
-                // 1.2.47: a file that "opens" with zero pages used to
-                // fall past every state branch and show the bare black
-                // canvas forever — it is an open failure, full stop.
-                // (1.2.50: the old body called error("...") here,
-                // which resolved to kotlin.error and threw its way
-                // into the catch below; the state is now assigned
-                // directly, as intended all along.)
-                if (totalPages <= 0) {
-                    // Same «تعذر فتح الملف» prefix as the catch
-                    // below: one open-failure wording for every
-                    // way a book can fail to open.
-                    error = "تعذر فتح الملف: بلا صفحات قابلة للعرض"
-                    isLoading = false
-                } else {
-                    savedPage = prefs.getInt("last_page_${pdfFile.nameWithoutExtension}", 0)
-                        .coerceIn(0, (totalPages - 1).coerceAtLeast(0))
-                    // Successful open: this book becomes the most recent.
-                    recordRecent(savedPage, totalPages)
-                    isLoading = false
+                // The PDFium open (1.2.52), armored with
+                // runCatching — which catches Throwable, not just
+                // Exception: a native library that cannot load
+                // (a missing ABI build, a broken update) surfaces
+                // as an UnsatisfiedLinkError, an Error, and the
+                // reader must still land on its error state
+                // instead of dying mid-composition. The
+                // descriptor is closed again on every failure
+                // path; on success it stays open for the
+                // document's lifetime (PDFium reads through it)
+                // and closes after the document on dispose.
+                val opened = runCatching {
+                    val fd = ParcelFileDescriptor.open(
+                        pdfFile, ParcelFileDescriptor.MODE_READ_ONLY
+                    )
+                    try {
+                        val doc = PdfiumCore(context).newDocument(fd)
+                        val count = doc.getPageCount()
+                        val sizes = if (count > 0) {
+                            val raw = runCatching {
+                                doc.getPageSizes(PDFIUM_SIZE_DPI)
+                            }.getOrDefault(emptyList())
+                            (0 until count).map { i ->
+                                raw.getOrNull(i)
+                                    ?.let { PdfPagePoints(it.width, it.height) }
+                                    ?: raw.firstOrNull()
+                                        ?.let { PdfPagePoints(it.width, it.height) }
+                                    ?: PdfPagePoints(
+                                        DEFAULT_PAGE_WIDTH_PT, DEFAULT_PAGE_HEIGHT_PT
+                                    )
+                            }
+                        } else {
+                            emptyList()
+                        }
+                        OpenedBook(fd, doc, count, sizes)
+                    } catch (t: Throwable) {
+                        runCatching { fd.close() }
+                        throw t
+                    }
                 }
+                opened.fold(
+                    onSuccess = { book ->
+                        parcelFd = book.fd
+                        pdfiumDoc = book.document
+                        pageSizesPt = book.sizes
+                        totalPages = book.pageCount
+                        // 1.2.47: a file that "opens" with zero pages used to
+                        // fall past every state branch and show the bare black
+                        // canvas forever — it is an open failure, full stop.
+                        // (1.2.50: the old body called error("...") here,
+                        // which resolved to kotlin.error and threw its way
+                        // into the catch below; the state is now assigned
+                        // directly, as intended all along.)
+                        if (totalPages <= 0) {
+                            // Same «تعذر فتح الملف» prefix as the catch
+                            // below: one open-failure wording for every
+                            // way a book can fail to open.
+                            error = "تعذر فتح الملف: بلا صفحات قابلة للعرض"
+                            isLoading = false
+                        } else {
+                            savedPage = prefs.getInt("last_page_${pdfFile.nameWithoutExtension}", 0)
+                                .coerceIn(0, (totalPages - 1).coerceAtLeast(0))
+                            // Successful open: this book becomes the most recent.
+                            recordRecent(savedPage, totalPages)
+                            isLoading = false
+                        }
+                    },
+                    onFailure = { failure ->
+                        error = "تعذر فتح الملف: ${failure.message ?: failure.javaClass.simpleName}"
+                        isLoading = false
+                    }
+                )
             } catch (e: Exception) {
                 error = "تعذر فتح الملف: ${e.localizedMessage}"
                 isLoading = false
@@ -629,7 +753,10 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             hideBarJob?.cancel()
             setSystemBarsVisible(true)
             onFullscreenChange?.invoke(false)
-            try { pdfRenderer?.close() } catch (_: Exception) {}
+            // The document closes before its descriptor (1.2.52):
+            // PDFium reads through the fd, so the fd must outlive
+            // the document, never the other way round.
+            try { pdfiumDoc?.close() } catch (_: Exception) {}
             try { parcelFd?.close() } catch (_: Exception) {}
             // The render thread dies with the reader (1.2.50).
             (renderDispatcher as? ExecutorCoroutineDispatcher)?.close()
@@ -667,14 +794,60 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 }
             }
         } else if (totalPages > 0 && !isLoading) {
-            val pagerState = rememberPagerState(
-                initialPage = savedPage,
-                pageCount = { totalPages }
+            // The VERTICAL page stack (1.2.52): pages compose in
+            // one LazyColumn, top to bottom, starting at the
+            // saved page. The stack's current page — the one the
+            // indicator, the slider, the saved position and the
+            // progress callback all follow — is the page
+            // occupying the largest visible slice of the
+            // viewport (ReaderScrollMath, derived from the
+            // list's own layout info).
+            val listState = rememberLazyListState(
+                initialFirstVisibleItemIndex = savedPage
             )
-            val currentPage = pagerState.currentPage
+            val currentPage by remember {
+                derivedStateOf {
+                    val info = listState.layoutInfo
+                    ReaderScrollMath.currentPageFromVisible(
+                        info.visibleItemsInfo.map { item ->
+                            val visiblePx = (
+                                minOf(
+                                    item.offset + item.size,
+                                    info.viewportEndOffset
+                                ) - maxOf(item.offset, info.viewportStartOffset)
+                                ).coerceAtLeast(0)
+                            ReaderScrollMath.VisibleSlice(item.index, visiblePx)
+                        }
+                    )
+                }
+            }
             var zoom by remember { mutableStateOf(1f) }
             var pan by remember { mutableStateOf(Offset.Zero) }
             var boxSize by remember { mutableStateOf(IntSize.Zero) }
+            // The column's measured width: page heights and the
+            // touch normalization derive from it (1.2.52).
+            var columnWidthPx by remember { mutableStateOf(0) }
+            // A second finger is down (1.2.52): the column stops
+            // scrolling so the pinch owns the gesture — written
+            // by the viewport's non-consuming pointer observer,
+            // read by the column's userScrollEnabled.
+            var multiTouch by remember { mutableStateOf(false) }
+            // A pinch/pan gesture in progress (1.2.50): written
+            // by the viewport's pointer observer (1.2.52), read
+            // by the hi-res gate below. Before this, the hi-res
+            // debounce ran from the last zoom VALUE change, so
+            // a slow pinch pausing mid-gesture fired a full
+            // hi-res render whose bitmap swap (and immediate
+            // recycle of the old bitmap) flickered mid-gesture
+            // — part of the reported zoom shake.
+            var pinchActive by remember { mutableStateOf(false) }
+            // Per-page hi-res marks (1.2.52): page -> the target
+            // width its cache slot was last zoom-rendered at.
+            // The vertical stack zoom-renders EVERY visible page
+            // (the pager rendered only the current one), so the
+            // marks are per page; eviction clears a page's mark
+            // with its bitmap.
+            val hiResApplied = remember { mutableStateMapOf<Int, Int>() }
             var sliderPos by remember { mutableStateOf<Float?>(null) }
             val bitmapCache = remember { mutableStateMapOf<Int, Bitmap>() }
             // Page render failures (1.2.47): a page whose render
@@ -691,52 +864,62 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // runs at most once per page per cache lifetime, and
             // eviction clears the mark with the bitmap.
             val fullResPages = remember { mutableStateMapOf<Int, Boolean>() }
-            // PdfRenderer is NOT thread-safe: every openPage/render/
-            // close sequence (base renders + zoom re-renders) is
-            // serialized on this lock, and every opened Page handle
-            // is closed in a finally block (1.2.37 hardening).
+            // PDFium calls are serialized twice over (1.2.52):
+            // the library guards its native side with its own
+            // global lock, and this reader additionally runs
+            // every openPage/render/close sequence (base renders
+            // + zoom re-renders) on its single render thread
+            // under this lock, with every opened Page handle
+            // closed in a finally block (1.2.37 hardening, kept).
             val renderLock = remember { Any() }
 
-            /** Renders one page on the Default dispatcher; null on
+            /** Renders one page on the render dispatcher; null on
              * any failure. The caller owns the returned bitmap
              * (cache it or recycle it). With [targetWidthPx] > 0 the
              * render scale is derived from it via [ReaderRenderMath]
              * (display-matched resolution, 1.2.46) under the
              * [maxPixels] budget; otherwise the page renders at
-             * [scaleFactor] x its point size (the legacy path). */
+             * [scaleFactor] x its point size (the legacy path).
+             * (1.2.52: the render itself is PDFium's — it fills
+             * the page background opaque white itself, so the old
+             * explicit white erase the PdfRenderer path needed
+             * for transparent-background pages is built in.) */
             suspend fun renderPageBitmap(
                 page: Int,
                 scaleFactor: Float,
                 targetWidthPx: Int = 0,
                 maxPixels: Int = 0
             ): Bitmap? {
-                val renderer = pdfRenderer ?: return null
+                val doc = pdfiumDoc ?: return null
                 return withContext(renderDispatcher) {
                     synchronized(renderLock) {
                         try {
-                            val pg = renderer.openPage(page)
-                            try {
-                                val pixelBudget =
-                                    if (maxPixels > 0) maxPixels else ReaderRenderMath.BASE_MAX_PIXELS
-                                val renderScale = if (targetWidthPx > 0) {
-                                    ReaderRenderMath.scaleForTargetWidth(
-                                        pg.width, pg.height, targetWidthPx, pixelBudget
+                            val pg = doc.openPage(page)
+                            if (pg == null) {
+                                null
+                            } else {
+                                try {
+                                    val pixelBudget =
+                                        if (maxPixels > 0) maxPixels else ReaderRenderMath.BASE_MAX_PIXELS
+                                    val pageWidthPt = pg.getPageWidthPoint()
+                                    val pageHeightPt = pg.getPageHeightPoint()
+                                    val renderScale = if (targetWidthPx > 0) {
+                                        ReaderRenderMath.scaleForTargetWidth(
+                                            pageWidthPt, pageHeightPt, targetWidthPx, pixelBudget
+                                        )
+                                    } else {
+                                        scaleFactor
+                                    }
+                                    val bmp = Bitmap.createBitmap(
+                                        (pageWidthPt * renderScale).toInt().coerceAtLeast(1),
+                                        (pageHeightPt * renderScale).toInt().coerceAtLeast(1),
+                                        Bitmap.Config.ARGB_8888
                                     )
-                                } else {
-                                    scaleFactor
+                                    pg.renderPageBitmap(bmp, 0, 0, bmp.width, bmp.height)
+                                    bmp
+                                } finally {
+                                    try { pg.close() } catch (_: Exception) {}
                                 }
-                                val bmp = Bitmap.createBitmap(
-                                    (pg.width * renderScale).toInt().coerceAtLeast(1),
-                                    (pg.height * renderScale).toInt().coerceAtLeast(1),
-                                    Bitmap.Config.ARGB_8888
-                                )
-                                // Fill white first: some PDFs leave the page
-                                // background transparent, which showed as black.
-                                bmp.eraseColor(android.graphics.Color.WHITE)
-                                pg.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                                bmp
-                            } finally {
-                                try { pg.close() } catch (_: Exception) {}
                             }
                         } catch (_: Exception) {
                             null
@@ -818,6 +1001,12 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // highlights.
             var selectionStart by remember { mutableStateOf<Offset?>(null) }
             var selectionEnd by remember { mutableStateOf<Offset?>(null) }
+            // The page the live selection belongs to (1.2.52):
+            // in the vertical stack several pages are composed
+            // at once, so the selection is owned by ONE page —
+            // the one the drag started on — and only that page
+            // draws the live rect. -1 = no live selection.
+            var selectionPage by remember { mutableStateOf(-1) }
             // A selection drag that matched no word (1.2.50):
             // the panel shows the corrective hint for a few
             // seconds instead of the drag silently doing
@@ -851,27 +1040,54 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 textHighlightMode = false
                 selectionStart = null
                 selectionEnd = null
+                selectionPage = -1
                 saveTextHighlights()
             }
 
             // Touch point -> page-normalized point (0..1 across the fitted
             // page rect), so strokes survive zoom and screen sizes.
-            fun toNormalized(px: Offset, bmp: Bitmap): Offset {
-                val fit = minOf(boxSize.width.toFloat() / bmp.width, boxSize.height.toFloat() / bmp.height)
+            // (1.2.52: the fitted rect is the page's own slot in the
+            // vertical stack — the caller passes that slot's size, and
+            // the bitmap fitted into it; the math is unchanged.)
+            fun toNormalized(px: Offset, bmp: Bitmap, container: IntSize): Offset {
+                val fit = minOf(container.width.toFloat() / bmp.width, container.height.toFloat() / bmp.height)
                 val fittedW = bmp.width * fit
                 val fittedH = bmp.height * fit
-                val offX = (boxSize.width - fittedW) / 2f
-                val offY = (boxSize.height - fittedH) / 2f
+                val offX = (container.width - fittedW) / 2f
+                val offY = (container.height - fittedH) / 2f
                 return Offset(
                     ((px.x - offX) / fittedW).coerceIn(0f, 1f),
                     ((px.y - offY) / fittedH).coerceIn(0f, 1f)
                 )
             }
 
+            // The pan clamp for the zoom layer (1.2.52): the
+            // layer wraps the whole stack viewport, so the
+            // "fitted page" of ReaderZoomMath's clamp is the
+            // viewport itself — the zoomed viewport may drift
+            // by at most half its overflow per axis, exactly
+            // the discipline the per-page clamp enforced when
+            // the fitted page filled the box.
+            fun clampViewPan(p: Offset, z: Float): Offset {
+                if (boxSize.width <= 0 || boxSize.height <= 0) return p
+                val clamped = ReaderZoomMath.clampPan(
+                    ReaderZoomMath.Pan(p.x, p.y),
+                    ReaderZoomMath.SizeF(
+                        boxSize.width.toFloat(), boxSize.height.toFloat()
+                    ),
+                    ReaderZoomMath.BoxSize(boxSize.width, boxSize.height),
+                    z
+                )
+                return Offset(clamped.x, clamped.y)
+            }
+
             // Save the reading position and reset zoom on every page turn.
             LaunchedEffect(currentPage) {
                 zoom = 1f
                 pan = Offset.Zero
+                // A gesture interrupted by the page turn must not
+                // leave the hi-res gate shut (1.2.50).
+                pinchActive = false
                 prefs.edit().putInt("last_page_${pdfFile.nameWithoutExtension}", currentPage).apply()
                 // The recents entry tracks the live page too (1.2.37).
                 updateRecentPage(currentPage)
@@ -880,8 +1096,8 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // Reading progress for the caller (library booklet cards):
             // snapshotFlow emits the saved start page on collection —
             // that is the on-open report — then every page turn.
-            LaunchedEffect(pagerState, totalPages) {
-                snapshotFlow { pagerState.currentPage }.collect { page ->
+            LaunchedEffect(listState, totalPages) {
+                snapshotFlow { currentPage }.collect { page ->
                     onProgress?.invoke(page, totalPages)
                 }
             }
@@ -915,8 +1131,8 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // current hit's page.
             LaunchedEffect(currentHitIndex, searchHits) {
                 val hit = searchHits.getOrNull(currentHitIndex)
-                if (hit != null && hit.page != pagerState.currentPage) {
-                    pagerState.animateScrollToPage(hit.page)
+                if (hit != null && hit.page != currentPage) {
+                    listState.animateScrollToItem(hit.page)
                 }
             }
 
@@ -929,39 +1145,44 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 exitTextHighlightMode()
             }
 
-            // Eviction runs ONLY once the pager has settled
-            // (1.2.46): the old per-page-turn eviction recycled
-            // bitmaps the pager was still animating away from — the
-            // outgoing page lost its image mid-swipe and flashed a
-            // spinner, and a fast fling back re-rendered from
-            // scratch. The keep window is the settled page ±1 plus
-            // the pager's own target page, and the explicit memory
-            // ceiling (READER_MAX_CACHED_BITMAPS) still applies:
-            // evict the pages farthest from the settled one,
-            // recycling each.
-            LaunchedEffect(pagerState, totalPages) {
-                snapshotFlow { pagerState.isScrollInProgress }.collect { scrolling ->
+            // Eviction runs ONLY once the stack has settled
+            // (1.2.46 discipline, kept): evicting mid-scroll
+            // recycled bitmaps still on their way out of the
+            // viewport — the outgoing page lost its image
+            // mid-gesture and flashed a spinner, and a fast
+            // fling back re-rendered from scratch. The keep
+            // window is the visible range ±1, and the explicit
+            // memory ceiling (READER_MAX_CACHED_BITMAPS) still
+            // applies: evict the pages farthest from the
+            // current one, recycling each.
+            LaunchedEffect(listState, totalPages) {
+                snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
                     if (!scrolling) {
-                        val settled = pagerState.currentPage
-                        val keep = (settled - 1..settled + 1).toSet() + pagerState.targetPage
+                        val visibleItems = listState.layoutInfo.visibleItemsInfo
+                        val firstVisible = visibleItems.firstOrNull()?.index ?: currentPage
+                        val lastVisible = visibleItems.lastOrNull()?.index ?: currentPage
+                        val keep = (firstVisible - 1..lastVisible + 1).toSet()
                         bitmapCache.keys.filter { it !in keep }.forEach { key ->
                             bitmapCache.remove(key)?.recycle()
-                            // The full-render mark dies with its
-                            // bitmap (1.2.50): a page that comes
-                            // back re-earns its full stage.
+                            // The full-render and hi-res marks
+                            // die with their bitmap (1.2.50): a
+                            // page that comes back re-earns both
+                            // stages.
                             fullResPages.remove(key)
+                            hiResApplied.remove(key)
                         }
                         while (bitmapCache.size > READER_MAX_CACHED_BITMAPS) {
-                            val farthest = bitmapCache.keys.maxByOrNull { abs(it - settled) } ?: break
+                            val farthest = bitmapCache.keys.maxByOrNull { abs(it - currentPage) } ?: break
                             bitmapCache.remove(farthest)?.recycle()
                             fullResPages.remove(farthest)
+                            hiResApplied.remove(farthest)
                         }
                     }
                 }
             }
 
             // Zoom-resolution rendering (1.2.46): the settled zoom
-            // (debounced) drives ONE re-render of the CURRENT page
+            // (debounced) drives a re-render of the visible pages
             // whose target width follows the zoom itself (box width
             // x zoom x oversample, pixel-capped via ReaderRenderMath)
             // — the 1.2.37 cap of base x min(zoom, 2.0) left 3-4x
@@ -970,61 +1191,46 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // and STAYS there: settling back to 1x no longer
             // re-renders the base (that round trip was pure churn —
             // a full render on every zoom settle), and the eviction
-            // above recycles the slot on page change as before.
-            var hiResPage by remember { mutableStateOf(-1) }
-            var hiResAppliedTarget by remember { mutableStateOf(0) }
+            // above recycles the slot when the page leaves the
+            // keep window as before. (1.2.52: the pager rendered
+            // only its current page; the stack renders every page
+            // in the viewport, each with its own applied-target
+            // mark in hiResApplied.)
             var hiResTargetWidth by remember { mutableStateOf(0) }
-            // A pinch/pan gesture in progress (1.2.50): written
-            // by the page's transform handler, read by the
-            // hi-res gate below. Before this, the hi-res
-            // debounce ran from the last zoom VALUE change, so
-            // a slow pinch pausing mid-gesture fired a full
-            // hi-res render whose bitmap swap (and immediate
-            // recycle of the old bitmap) flickered mid-gesture
-            // — part of the reported zoom shake.
-            var pinchActive by remember { mutableStateOf(false) }
             LaunchedEffect(zoom, boxSize, pinchActive) {
                 if (!pinchActive) {
                     kotlinx.coroutines.delay(READER_HIRES_DEBOUNCE_MS)
                     hiResTargetWidth = ReaderRenderMath.hiResTargetWidthPx(boxSize.width, zoom)
                 }
             }
-            LaunchedEffect(currentPage, hiResTargetWidth) {
+            LaunchedEffect(hiResTargetWidth) {
                 val target = hiResTargetWidth
-                // The live zoom is re-checked at execution time: a
-                // page turn resets it to 1x, and a stale target from
-                // the previous page must not fire a zoom render for
-                // the new one.
-                val wanted = target > 0 && zoom > ReaderRenderMath.HIRES_MIN_ZOOM
-                if (wanted && (hiResPage != currentPage || hiResAppliedTarget != target)) {
-                    val bmp = renderPageBitmap(
-                        currentPage,
-                        ReaderRenderMath.FALLBACK_SCALE,
-                        targetWidthPx = target,
-                        maxPixels = ReaderRenderMath.HIRES_MAX_PIXELS
-                    )
-                    if (bmp != null) {
-                        val old = bitmapCache[currentPage]
-                        bitmapCache[currentPage] = bmp
-                        // The replaced bitmap is recycled only
-                        // after the sharper one has had a frame
-                        // on screen (1.2.50) — no swap flicker.
-                        recycleAfterFrame(old, currentPage, bmp)
-                        hiResPage = currentPage
-                        hiResAppliedTarget = target
+                // The live zoom is re-checked at execution time:
+                // a page turn resets it to 1x, and a stale target
+                // must not fire zoom renders at 1x.
+                if (target > 0 && zoom > ReaderRenderMath.HIRES_MIN_ZOOM) {
+                    val visiblePages = listState.layoutInfo.visibleItemsInfo
+                        .map { it.index }
+                    for (page in (visiblePages + currentPage).distinct()) {
+                        if (bitmapCache[page] != null && hiResApplied[page] != target) {
+                            val bmp = renderPageBitmap(
+                                page,
+                                ReaderRenderMath.FALLBACK_SCALE,
+                                targetWidthPx = target,
+                                maxPixels = ReaderRenderMath.HIRES_MAX_PIXELS
+                            )
+                            if (bmp != null) {
+                                val old = bitmapCache[page]
+                                bitmapCache[page] = bmp
+                                // The replaced bitmap is recycled only
+                                // after the sharper one has had a frame
+                                // on screen (1.2.50) — no swap flicker.
+                                recycleAfterFrame(old, page, bmp)
+                                hiResApplied[page] = target
+                            }
+                        }
                     }
                 }
-            }
-            // A page turn invalidates the hi-res markers: the
-            // eviction above already recycled that bitmap, and a
-            // stale marker would wrongly skip a later hi-res render
-            // of this page.
-            LaunchedEffect(currentPage) {
-                hiResPage = -1
-                hiResAppliedTarget = 0
-                // A gesture interrupted by the page turn must not
-                // leave the hi-res gate shut (1.2.50).
-                pinchActive = false
             }
 
             DisposableEffect(Unit) {
@@ -1043,24 +1249,170 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 pan = Offset.Zero
             }
 
-            HorizontalPager(
-                state = pagerState,
-                // Neighbours are composed (and so start rendering)
-                // BEFORE they slide in (1.2.46): with the default 0
-                // the incoming page only began its render once the
-                // swipe was already under way, and the render's
-                // duration showed up as a spinner mid-flip.
-                beyondViewportPageCount = 1,
-                // While zoomed, horizontal drags pan the page instead of
-                // flipping it; in text-highlight mode they select
-                // instead of flipping; at 1x they always flip.
-                userScrollEnabled = zoom <= 1.01f && !textHighlightMode,
-                modifier = Modifier.fillMaxSize().onSizeChanged { boxSize = it }
-            ) { page ->
+            // The reading viewport (1.2.52): measures itself into
+            // boxSize (the zoom math's frame), carries the zoom
+            // layer, and hosts the vertical stack. The zoom/pan
+            // graphicsLayer wraps the WHOLE stack now — read in
+            // the draw phase, so a pinch/pan state change only
+            // re-records this layer (the 1.2.46 discipline) — and
+            // the pinch/pan handler lives on the same box: its
+            // pointer coordinates are layer-local (pre-transform),
+            // exactly as they were inside the old per-page layer,
+            // so the anchored-zoom math is unchanged.
+            Box(Modifier.fillMaxSize().onSizeChanged { boxSize = it }) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = pan.x
+                            translationY = pan.y
+                        }
+                        .pointerInput(Unit) {
+                            // Pinch/pan that never steals
+                            // single-finger scrolls at 1x: only
+                            // multi-touch (pinch) and drags while
+                            // zoomed are consumed; a single finger
+                            // at 1x passes straight through to the
+                            // column. In text-highlight mode the
+                            // handler mutates nothing — drags
+                            // belong to the pages' selection layer
+                            // (the 1.2.37/1.2.38 discipline, when
+                            // this handler simply was not installed
+                            // in the mode). Gesture ACTIVITY is
+                            // tracked by the column's own observer
+                            // below (pinchActive / multiTouch).
+                            var prev = mapOf<Long, Offset>()
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val down = event.changes.filter { it.pressed }
+                                    if (!textHighlightMode && down.size >= 2) {
+                                        val cur = down.associate { it.id.value to it.position }
+                                        val ids = cur.keys.intersect(prev.keys).take(2)
+                                        if (ids.size == 2) {
+                                            val a = ids[0]; val b = ids[1]
+                                            val oldDist = (prev[a]!! - prev[b]!!).getDistance()
+                                            val newDist = (cur[a]!! - cur[b]!!).getDistance()
+                                            val oldC = (prev[a]!! + prev[b]!!) / 2f
+                                            val newC = (cur[a]!! + cur[b]!!) / 2f
+                                            if (oldDist > 0f && newDist > 0f) {
+                                                val scale = newDist / oldDist
+                                                if (scale != 1f || newC != oldC) {
+                                                    val oldZoom = zoom
+                                                    val newZoom =
+                                                        (zoom * scale).coerceIn(1f, 4f)
+                                                    zoom = newZoom
+                                                    pan = if (newZoom <= 1.01f) {
+                                                        Offset.Zero
+                                                    } else {
+                                                        // Anchored zoom
+                                                        // (1.2.50 — see
+                                                        // ReaderZoomMath):
+                                                        // the pan
+                                                        // compensates the
+                                                        // scale around
+                                                        // the box centre
+                                                        // in the SAME
+                                                        // event, so the
+                                                        // content under
+                                                        // the fingers no
+                                                        // longer swims a
+                                                        // frame behind
+                                                        // them (الرجفان).
+                                                        val anchored =
+                                                            ReaderZoomMath.anchoredPan(
+                                                                ReaderZoomMath.Pan(oldC.x, oldC.y),
+                                                                ReaderZoomMath.Pan(newC.x, newC.y),
+                                                                ReaderZoomMath.BoxSize(
+                                                                    boxSize.width,
+                                                                    boxSize.height
+                                                                ),
+                                                                ReaderZoomMath.ZoomChange(
+                                                                    oldZoom, newZoom
+                                                                ),
+                                                                ReaderZoomMath.Pan(pan.x, pan.y)
+                                                            )
+                                                        clampViewPan(
+                                                            Offset(anchored.x, anchored.y),
+                                                            newZoom
+                                                        )
+                                                    }
+                                                    down.forEach { it.consume() }
+                                                }
+                                            }
+                                        }
+                                        prev = cur
+                                    } else if (!textHighlightMode && down.size == 1 && zoom > 1.01f) {
+                                        val c = down[0]
+                                        val p = prev[c.id.value]
+                                        if (p != null && c.position != p) {
+                                            pan = clampViewPan(pan + (c.position - p), zoom)
+                                            c.consume()
+                                        }
+                                        prev = mapOf(c.id.value to c.position)
+                                    } else {
+                                        // Single finger at 1x (or the
+                                        // highlight mode): consume
+                                        // nothing — the column scrolls
+                                        // / the pages select.
+                                        prev = down.associate { it.id.value to it.position }
+                                    }
+                                    if (down.isEmpty()) prev = emptyMap()
+                                }
+                            }
+                        }
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        // Neighbours are composed (and so start
+                        // rendering) BEFORE they scroll in
+                        // (1.2.46 discipline, kept from the
+                        // pager): with the default 0 the incoming
+                        // page only began its render once it was
+                        // already entering, and the render's
+                        // duration showed up as a spinner
+                        // mid-scroll.
+                        beyondBoundsItemCount = 1,
+                        // While zoomed, drags pan the stack
+                        // instead of scrolling it; in
+                        // text-highlight mode they select instead
+                        // of scrolling; while a second finger is
+                        // down the pinch owns the gesture; at 1x
+                        // a single finger always scrolls.
+                        userScrollEnabled = zoom <= 1.01f && !textHighlightMode && !multiTouch,
+                        verticalArrangement = Arrangement.spacedBy(READER_PAGE_GAP_DP.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .onSizeChanged { columnWidthPx = it.width }
+                            // The pointer observer (1.2.52):
+                            // watches every pointer in the
+                            // INITIAL pass and consumes NOTHING —
+                            // it only records gesture activity
+                            // (pinchActive gates the hi-res
+                            // re-render, 1.2.50) and the second
+                            // finger (multiTouch stops the
+                            // column's own scrolling so the pinch
+                            // can own the gesture).
+                            .pointerInput(Unit) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val observed = awaitPointerEvent(
+                                            androidx.compose.ui.input.pointer.PointerEventPass.Initial
+                                        )
+                                        val downCount = observed.changes.count { it.pressed }
+                                        pinchActive = downCount > 0
+                                        multiTouch = downCount >= 2
+                                    }
+                                }
+                            }
+                    ) {
+                        items(count = totalPages, key = { it }) { page ->
                 val bitmap = bitmapCache[page]
                 val renderAttempt = pageRenderAttempts[page] ?: 0
-                LaunchedEffect(page, pdfRenderer, renderAttempt) {
-                    if (pdfRenderer == null) return@LaunchedEffect
+                LaunchedEffect(page, pdfiumDoc, renderAttempt) {
+                    if (pdfiumDoc == null) return@LaunchedEffect
                     // Staged, bounded page resolution (1.2.50 —
                     // see ReaderPagePipeline): the FAST paint
                     // lands first so a downloaded book shows its
@@ -1121,46 +1473,48 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         showPreparing = true
                     }
                 }
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // The page's slot in the stack (1.2.52): the
+                // full column width, with the height following
+                // the page's own aspect ratio — this slot IS the
+                // fitted page rect that the touch normalization
+                // and the markings canvas work in (the pager's
+                // full-screen letterbox is gone; pages are the
+                // layout now). itemSize is the same rect in
+                // pixels, from the column's measured width.
+                val sizePt = pageSizesPt.getOrNull(page)
+                    ?: pageSizesPt.firstOrNull()
+                    ?: PdfPagePoints(DEFAULT_PAGE_WIDTH_PT, DEFAULT_PAGE_HEIGHT_PT)
+                val itemSize = IntSize(
+                    columnWidthPx,
+                    ReaderScrollMath.pageHeightPx(sizePt, columnWidthPx)
+                )
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(
+                            if (sizePt.heightPt > 0) {
+                                sizePt.widthPt.toFloat() / sizePt.heightPt.toFloat()
+                            } else {
+                                1f
+                            }
+                        )
+                ) {
                     if (bitmap != null) {
-                        val isCurrent = page == currentPage
                         // The ImageBitmap wrapper is remembered per
                         // bitmap (1.2.46): the old code rebuilt it on
                         // every recomposition of the page.
                         val pageImageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
-                        // Pan is clamped so the page cannot be dragged
-                        // off-screen: max pan is half the overflow on
-                        // each axis.
-                        fun clampPan(p: Offset, z: Float): Offset {
-                            // The clamp math lives in
-                            // ReaderZoomMath (1.2.50, unit-tested):
-                            // half the zoomed page's overflow over
-                            // the box, per axis.
-                            val fit = minOf(
-                                boxSize.width.toFloat() / bitmap.width,
-                                boxSize.height.toFloat() / bitmap.height
-                            )
-                            val clamped = ReaderZoomMath.clampPan(
-                                ReaderZoomMath.Pan(p.x, p.y),
-                                ReaderZoomMath.SizeF(
-                                    bitmap.width * fit, bitmap.height * fit
-                                ),
-                                ReaderZoomMath.BoxSize(boxSize.width, boxSize.height),
-                                z
-                            )
-                            return Offset(clamped.x, clamped.y)
-                        }
                         Box(
                             Modifier
                                 .fillMaxSize()
-                                // White page background: PdfRenderer does not clear
-                                // the bitmap, so pages with a transparent background
-                                // rendered as black text on the black canvas. The
-                                // page area is always white now, whatever the PDF.
-                                // Display mode: the letterbox follows
-                                // the page — black in night mode, warm
-                                // paper in warm mode, white otherwise;
-                                // the outer canvas stays black as always.
+                                // The page area carries the display
+                                // mode's paper colour — black in
+                                // night mode, warm paper in warm
+                                // mode, white otherwise (1.2.52:
+                                // PDFium fills the rendered bitmap's
+                                // background white itself; this is
+                                // the slot behind it, visible only
+                                // if a fit ever letterboxes).
                                 .background(
                                     when {
                                         nightMode -> Color.Black
@@ -1168,27 +1522,6 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                         else -> Color.White
                                     }
                                 )
-                                .graphicsLayer {
-                                    // Zoom/pan are read HERE, in the
-                                    // draw phase (1.2.46): the old
-                                    // parameter form read them during
-                                    // composition, so every pinch/pan
-                                    // pointer event recomposed the
-                                    // whole page (image + markings
-                                    // canvas + fit math) on the main
-                                    // thread and movement stuttered.
-                                    // Read in the layer block, a state
-                                    // change only re-records this
-                                    // layer — no recomposition — and
-                                    // the markings Canvas inside
-                                    // inherits the same transform.
-                                    if (isCurrent) {
-                                        scaleX = zoom
-                                        scaleY = zoom
-                                        translationX = pan.x
-                                        translationY = pan.y
-                                    }
-                                }
                                 .pointerInput(Unit) {
                                     detectTapGestures(
                                         onTap = { tapOff ->
@@ -1202,7 +1535,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                 // were somehow hidden it
                                                 // brings them (and the exit)
                                                 // back.
-                                                val n = toNormalized(tapOff, bitmap)
+                                                val n = toNormalized(tapOff, bitmap, itemSize)
                                                 val hitIdx = textHighlights.indexOfLast { th ->
                                                     th.page == page && th.rects.any { r ->
                                                         n.x >= r.x0 && n.x <= r.x1 &&
@@ -1229,7 +1562,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                     )
                                 }
                                 .then(
-                                    if (isCurrent && textHighlightMode) {
+                                    if (textHighlightMode) {
                                         // Keyed on the mode (1.2.38): the
                                         // layer installs on entry and
                                         // DISPOSES on exit, so no stuck
@@ -1250,18 +1583,20 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                             // exact at any zoom.
                                             detectDragGestures(
                                                 onDragStart = { off ->
-                                                    val n = toNormalized(off, bitmap)
+                                                    val n = toNormalized(off, bitmap, itemSize)
+                                                    selectionPage = page
                                                     selectionStart = n
                                                     selectionEnd = n
                                                 },
                                                 onDrag = { change, _ ->
-                                                    selectionEnd = toNormalized(change.position, bitmap)
+                                                    selectionEnd = toNormalized(change.position, bitmap, itemSize)
                                                 },
                                                 onDragEnd = {
                                                     val s = selectionStart
                                                     val e = selectionEnd
                                                     selectionStart = null
                                                     selectionEnd = null
+                                                    selectionPage = -1
                                                     if (s != null && e != null) {
                                                         val left = minOf(s.x, e.x)
                                                         val right = maxOf(s.x, e.x)
@@ -1300,115 +1635,13 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                 onDragCancel = {
                                                     selectionStart = null
                                                     selectionEnd = null
+                                                    selectionPage = -1
                                                 }
                                             )
                                         }
                                     } else Modifier
                                 )
-                                .then(
-                                    if (isCurrent && !textHighlightMode) {
-                                        Modifier.pointerInput(Unit) {
-                                            // Pinch/pan that never steals
-                                            // single-finger swipes at 1x
-                                            // (Nov 2026 fix): the old
-                                            // detectTransformGestures
-                                            // consumed every drag, so the
-                                            // pager never received page
-                                            // swipes and students were
-                                            // forced onto the arrow
-                                            // buttons. Here only
-                                            // multi-touch (pinch) and
-                                            // drags while zoomed are
-                                            // consumed; a single finger
-                                            // at 1x passes straight
-                                            // through to the pager.
-                                            var prev = mapOf<Long, Offset>()
-                                            awaitPointerEventScope {
-                                            while (true) {
-                                                val event = awaitPointerEvent()
-                                                val down = event.changes.filter { it.pressed }
-                                                // Gesture activity gates the
-                                                // hi-res re-render (1.2.50):
-                                                // it may only start once the
-                                                // fingers are gone.
-                                                pinchActive = down.isNotEmpty()
-                                                if (down.size >= 2) {
-                                                    val cur = down.associate { it.id.value to it.position }
-                                                    val ids = cur.keys.intersect(prev.keys).take(2)
-                                                    if (ids.size == 2) {
-                                                        val a = ids[0]; val b = ids[1]
-                                                        val oldDist = (prev[a]!! - prev[b]!!).getDistance()
-                                                        val newDist = (cur[a]!! - cur[b]!!).getDistance()
-                                                        val oldC = (prev[a]!! + prev[b]!!) / 2f
-                                                        val newC = (cur[a]!! + cur[b]!!) / 2f
-                                                        if (oldDist > 0f && newDist > 0f) {
-                                                            val scale = newDist / oldDist
-                                                            if (scale != 1f || newC != oldC) {
-                                                                val oldZoom = zoom
-                                                                val newZoom =
-                                                                    (zoom * scale).coerceIn(1f, 4f)
-                                                                zoom = newZoom
-                                                                pan = if (newZoom <= 1.01f) {
-                                                                    Offset.Zero
-                                                                } else {
-                                                                    // Anchored zoom
-                                                                    // (1.2.50 — see
-                                                                    // ReaderZoomMath):
-                                                                    // the pan
-                                                                    // compensates the
-                                                                    // scale around
-                                                                    // the box centre
-                                                                    // in the SAME
-                                                                    // event, so the
-                                                                    // content under
-                                                                    // the fingers no
-                                                                    // longer swims a
-                                                                    // frame behind
-                                                                    // them (الرجفان).
-                                                                    val anchored =
-                                                                        ReaderZoomMath.anchoredPan(
-                                                                            ReaderZoomMath.Pan(oldC.x, oldC.y),
-                                                                            ReaderZoomMath.Pan(newC.x, newC.y),
-                                                                            ReaderZoomMath.BoxSize(
-                                                                                boxSize.width,
-                                                                                boxSize.height
-                                                                            ),
-                                                                            ReaderZoomMath.ZoomChange(
-                                                                                oldZoom, newZoom
-                                                                            ),
-                                                                            ReaderZoomMath.Pan(pan.x, pan.y)
-                                                                        )
-                                                                    clampPan(
-                                                                        Offset(anchored.x, anchored.y),
-                                                                        newZoom
-                                                                    )
-                                                                }
-                                                                down.forEach { it.consume() }
-                                                            }
-                                                        }
-                                                    }
-                                                    prev = cur
-                                                } else if (down.size == 1 && zoom > 1.01f) {
-                                                    val c = down[0]
-                                                    val p = prev[c.id.value]
-                                                    if (p != null && c.position != p) {
-                                                        pan = clampPan(pan + (c.position - p), zoom)
-                                                        c.consume()
-                                                    }
-                                                    prev = mapOf(c.id.value to c.position)
-                                                } else {
-                                                    // Single finger at 1x:
-                                                    // consume nothing —
-                                                    // the pager swipes.
-                                                    prev = down.associate { it.id.value to it.position }
-                                                }
-                                                if (down.isEmpty()) prev = emptyMap()
-                                            }
-                                            }
-                                        }
-                                    } else Modifier
-                                )
-                        ) {
+                       ) {
                             Image(
                                 bitmap = pageImageBitmap,
                                 contentDescription = null,
@@ -1474,7 +1707,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                             }
                                         }
                                 }
-                                if (isCurrent) {
+                                if (page == selectionPage) {
                                     val s = selectionStart
                                     val e = selectionEnd
                                     if (s != null && e != null) {
@@ -1553,6 +1786,9 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                     )
                                 }
                             }
+                        }
+                    }
+                }
                         }
                     }
                 }
@@ -1877,7 +2113,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     IconButton(
                         onClick = {
                             if (currentPage > 0) coroutineScope.launch {
-                                pagerState.animateScrollToPage(currentPage - 1)
+                                listState.animateScrollToItem(currentPage - 1)
                             }
                         },
                         modifier = Modifier.size(36.dp)
@@ -1901,7 +2137,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                             onValueChangeFinished = {
                                 sliderPos?.let { target ->
                                     coroutineScope.launch {
-                                        pagerState.scrollToPage(target.roundToInt().coerceIn(0, totalPages - 1))
+                                        listState.scrollToItem(target.roundToInt().coerceIn(0, totalPages - 1))
                                     }
                                 }
                                 sliderPos = null
@@ -1920,7 +2156,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     IconButton(
                         onClick = {
                             if (currentPage < totalPages - 1) coroutineScope.launch {
-                                pagerState.animateScrollToPage(currentPage + 1)
+                                listState.animateScrollToItem(currentPage + 1)
                             }
                         },
                         modifier = Modifier.size(36.dp)
@@ -2045,7 +2281,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                         Button(shape = MaterialTheme.shapes.medium,
                                             onClick = {
                                                 coroutineScope.launch {
-                                                    pagerState.animateScrollToPage(page)
+                                                    listState.animateScrollToItem(page)
                                                 }
                                                 showBookmarks = false
                                             },
@@ -2175,7 +2411,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                         .fillMaxWidth()
                                         .clickable {
                                             coroutineScope.launch {
-                                                pagerState.scrollToPage(
+                                                listState.scrollToItem(
                                                     item.page.coerceIn(0, totalPages - 1)
                                                 )
                                             }
@@ -2218,7 +2454,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                             .fillMaxWidth()
                                             .clickable {
                                                 coroutineScope.launch {
-                                                    pagerState.scrollToPage(
+                                                    listState.scrollToItem(
                                                         th.page.coerceIn(0, totalPages - 1)
                                                     )
                                                 }
@@ -2276,7 +2512,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                                                 showRecents = false
                                                 if (recent.path == pdfFile.absolutePath) {
                                                     coroutineScope.launch {
-                                                        pagerState.scrollToPage(
+                                                        listState.scrollToItem(
                                                             recent.page.coerceIn(0, totalPages - 1)
                                                         )
                                                     }
@@ -2338,7 +2574,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         TextButton(onClick = {
                             goToPageText.toIntOrNull()?.let { n ->
                                 coroutineScope.launch {
-                                    pagerState.scrollToPage((n - 1).coerceIn(0, totalPages - 1))
+                                    listState.scrollToItem((n - 1).coerceIn(0, totalPages - 1))
                                 }
                             }
                             showGoToPage = false

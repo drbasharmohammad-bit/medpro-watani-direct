@@ -1,8 +1,15 @@
 package sy.medpro.watani.data
 
 import android.content.Context
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import io.legere.pdfiumandroid.PdfDocument
+import io.legere.pdfiumandroid.PdfTextPage
+import io.legere.pdfiumandroid.api.Bookmark
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.security.MessageDigest
 
 /** One page's size in PDF points (1/72 inch), as the reader's
  * engines report it. Shared by the PDFium text engine (which
@@ -53,10 +60,19 @@ object PdfiumTextEngine {
      * lands here too — the fallback then also finds no words
      * and the book honestly has no text layer).
      */
-    fun shouldFallbackToPdfBox(index: BookTextIndex?): Boolean {
-        // Stub (red-first commit of 1.2.52): implemented by the
-        // build commit that follows.
-        return false
+    fun shouldFallbackToPdfBox(index: BookTextIndex?): Boolean =
+        index == null || index.pages.all { it.words.isEmpty() }
+
+    private val moshi: Moshi by lazy {
+        Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    }
+
+    private fun cacheFile(context: Context, file: File): File {
+        val raw = "${file.absolutePath}|${file.length()}|${file.lastModified()}"
+        val digest = MessageDigest.getInstance("SHA-1")
+            .digest(raw.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        return File(File(context.filesDir, CACHE_DIR), "$digest.json")
     }
 
     /**
@@ -76,9 +92,184 @@ object PdfiumTextEngine {
         file: File,
         document: PdfDocument,
         pageSizes: List<PdfPagePoints>
-    ): BookTextIndex? {
-        // Stub (red-first commit of 1.2.52): implemented by the
-        // build commit that follows.
-        return null
+    ): BookTextIndex? =
+        withContext(Dispatchers.IO) {
+            try {
+                val adapter = moshi.adapter(BookTextIndex::class.java)
+                val cached = cacheFile(context, file)
+                if (cached.isFile) {
+                    try {
+                        val text = SectionCacheCrypto.readText(context, cached)
+                        if (text != null) {
+                            adapter.fromJson(text)?.let { return@withContext it }
+                        }
+                    } catch (_: Exception) {
+                        // Corrupt cache entry: fall through and re-extract.
+                    }
+                }
+                val extracted = extract(document, pageSizes)
+                try {
+                    cached.parentFile?.mkdirs()
+                    SectionCacheCrypto.writeText(context, cached, adapter.toJson(extracted))
+                } catch (_: Exception) {
+                    // An unwritable cache must not lose the extraction.
+                }
+                extracted
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+    /**
+     * The FPDFText walk: every page's words via [extractPageWords]
+     * plus the document outline. A page that fails on its own
+     * contributes an empty word list (the book keeps its other
+     * pages' text); the walk itself only fails wholesale when
+     * the document is unusable, which the caller reads as
+     * "fall back".
+     */
+    private fun extract(
+        document: PdfDocument,
+        pageSizes: List<PdfPagePoints>
+    ): BookTextIndex {
+        val pages = ArrayList<PageText>(pageSizes.size)
+        for ((index, size) in pageSizes.withIndex()) {
+            pages += PageText(
+                page = index,
+                words = extractPageWords(document, index, size)
+            )
+        }
+        return BookTextIndex(pages = pages, outline = extractOutline(document))
     }
+
+    /**
+     * One page's words: open the page and its text page, read
+     * the page string once, ask FPDFText for the rects of all
+     * word ranges in ONE call (the per-character alternative is
+     * a JNI call per glyph — a whole book of them), and fold
+     * them into [WordBox]es with [PdfiumWordGrouper]. Every
+     * handle is closed on every path, and ANY failure (a page
+     * the engine chokes on, a native error) yields no words for
+     * this page instead of failing the book.
+     */
+    private fun extractPageWords(
+        document: PdfDocument,
+        pageIndex: Int,
+        size: PdfPagePoints
+    ): List<WordBox> {
+        if (size.widthPt <= 0 || size.heightPt <= 0) return emptyList()
+        return runCatching { readPageWords(document, pageIndex, size) }
+            .getOrDefault(emptyList())
+    }
+
+    /** Opens the page and its text page, reads the words, and
+     * closes both handles on every path. */
+    private fun readPageWords(
+        document: PdfDocument,
+        pageIndex: Int,
+        size: PdfPagePoints
+    ): List<WordBox> {
+        val page = document.openPage(pageIndex) ?: return emptyList()
+        try {
+            val textPage = page.openTextPage()
+            try {
+                return wordsFromTextPage(textPage, size)
+            } finally {
+                runCatching { textPage.close() }
+            }
+        } finally {
+            runCatching { page.close() }
+        }
+    }
+
+    /** The words of one open text page: its string, its word
+     * ranges, their rects, folded into page fractions. A page
+     * with no characters or no word ranges has no words. */
+    private fun wordsFromTextPage(
+        textPage: PdfTextPage,
+        size: PdfPagePoints
+    ): List<WordBox> {
+        val charCount = textPage.textPageCountChars()
+        val text = if (charCount > 0) {
+            textPage.textPageGetText(0, charCount).orEmpty()
+        } else {
+            ""
+        }
+        val ranges = PdfiumWordGrouper.wordRanges(text)
+        return if (ranges.isEmpty()) {
+            emptyList()
+        } else {
+            val flatRanges = IntArray(ranges.size * RANGE_FIELDS)
+            ranges.forEachIndexed { i, range ->
+                flatRanges[i * RANGE_FIELDS] = range.first
+                flatRanges[i * RANGE_FIELDS + 1] = range.last - range.first + 1
+            }
+            val rects = textPage.textPageGetRectsForRanges(flatRanges)
+                .orEmpty()
+                .map { rangeRect ->
+                    PdfiumWordGrouper.RangeRect(
+                        start = rangeRect.rangeStart,
+                        length = rangeRect.rangeLength,
+                        left = rangeRect.rect.left,
+                        top = rangeRect.rect.top,
+                        right = rangeRect.rect.right,
+                        bottom = rangeRect.rect.bottom
+                    )
+                }
+            PdfiumWordGrouper.groupWords(
+                text = text,
+                rects = rects,
+                pageWidthPt = size.widthPt.toFloat(),
+                pageHeightPt = size.heightPt.toFloat()
+            )
+        }
+    }
+
+    /**
+     * The document outline, flattened depth-first with levels —
+     * the same shape the PDFBox engine produces. PDFium hands
+     * back a bookmark tree; entries with a blank title are
+     * skipped but their children are still walked, and a
+     * broken outline yields whatever was collected (usually
+     * the empty list) instead of failing the index.
+     */
+    private fun extractOutline(document: PdfDocument): List<OutlineItem> {
+        val out = ArrayList<OutlineItem>()
+        runCatching {
+            flattenBookmarks(document.getTableOfContents(), 0, out)
+        }
+        return out
+    }
+
+    private fun flattenBookmarks(
+        bookmarks: List<Bookmark>,
+        level: Int,
+        out: MutableList<OutlineItem>
+    ) {
+        for (bookmark in bookmarks) {
+            val title = bookmark.title.trim()
+            if (title.isNotEmpty()) {
+                out += OutlineItem(
+                    title = title,
+                    page = bookmark.pageIdx.toInt().coerceAtLeast(0),
+                    level = level
+                )
+            }
+            if (bookmark.children.isNotEmpty()) {
+                flattenBookmarks(bookmark.children, level + 1, out)
+            }
+        }
+    }
+
+    /** This engine's own encrypted-cache directory (see the
+     * class contract): never shared with the PDFBox engine's,
+     * so the two engines' indexes cannot alias. It is
+     * registered in RestrictedInventory's revocation wipe
+     * beside the PDFBox directory (same content class: the
+     * full text of restricted books). */
+    private const val CACHE_DIR = "pdf_text_index_pdfium"
+
+    /** (start, length) pairs in the flat range array FPDFText
+     * consumes. */
+    private const val RANGE_FIELDS = 2
 }

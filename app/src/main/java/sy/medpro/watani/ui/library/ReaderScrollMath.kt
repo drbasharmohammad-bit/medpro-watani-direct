@@ -1,5 +1,6 @@
 package sy.medpro.watani.ui.library
 
+import kotlin.math.roundToInt
 import sy.medpro.watani.data.PdfPagePoints
 
 /**
@@ -42,9 +43,11 @@ object ReaderScrollMath {
      * default aspect instead of laying out a broken stack.
      */
     fun pageHeightPx(page: PdfPagePoints, columnWidthPx: Int): Int {
-        // Stub (red-first commit of 1.2.52): implemented by the
-        // build commit that follows.
-        return 0
+        if (page.widthPt <= 0 || page.heightPt <= 0 || columnWidthPx <= 0) {
+            return 0
+        }
+        val height = columnWidthPx.toDouble() * page.heightPt / page.widthPt
+        return height.roundToInt().coerceAtLeast(1)
     }
 
     /**
@@ -54,9 +57,8 @@ object ReaderScrollMath {
      * until the next page truly takes over). No visible page
      * (an unmeasured stack) yields 0 — the stack's start.
      */
-    fun currentPageFromVisible(slices: List<VisibleSlice>): Int {
-        // Stub (red-first commit of 1.2.52): implemented by the
-        // build commit that follows.
-        return 0
-    }
+    fun currentPageFromVisible(slices: List<VisibleSlice>): Int =
+        slices.maxWithOrNull(
+            compareBy<VisibleSlice> { it.visiblePx }.thenBy { -it.page }
+        )?.page ?: 0
 }

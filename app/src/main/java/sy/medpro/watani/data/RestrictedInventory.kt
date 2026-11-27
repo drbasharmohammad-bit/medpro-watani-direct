@@ -37,7 +37,8 @@ import java.io.File
  *  - The manifest disk cache (manifest_cache.json): it lists restricted
  *    sections, so a stale copy must not survive a revocation.
  *  - Audit additions (21 Nov 2026, SEC-S6): pdf_text_index (full-text
- *    indexes derived from restricted books), booklets (downloaded
+ *    indexes derived from restricted books), pdf_text_index_pdfium
+ *    (the same indexes from the PDFium text engine, 1.2.52), booklets (downloaded
  *    library booklet PDFs), firstaid_booklets + firstaid_media
  *    (activation-gated First Aid downloads) and auscultation_clips
  *    (library content). NOT wiped: the student's own Anki data and
@@ -145,6 +146,10 @@ object RestrictedInventory {
         // downloaded content behind the same activation gate as the
         // sections above.
         deleteDirContents(File(context.filesDir, "pdf_text_index"))
+        // 1.2.52: the PDFium text engine's index cache joins the
+        // sweep beside the PDFBox one — same content class (full
+        // text of restricted books), same rule.
+        deleteDirContents(File(context.filesDir, "pdf_text_index_pdfium"))
         deleteDirContents(File(context.filesDir, "booklets"))
         deleteDirContents(File(context.filesDir, "firstaid_booklets"))
         deleteDirContents(File(context.filesDir, "firstaid_media"))

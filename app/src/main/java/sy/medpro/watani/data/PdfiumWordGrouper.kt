@@ -47,10 +47,26 @@ object PdfiumWordGrouper {
      * the non-breaking space PDFium likes to emit.
      */
     fun wordRanges(text: String): List<IntRange> {
-        // Stub (red-first commit of 1.2.52): implemented by the
-        // build commit that follows.
-        return emptyList()
+        val ranges = ArrayList<IntRange>()
+        var start = -1
+        for (i in text.indices) {
+            if (isSeparator(text[i])) {
+                if (start >= 0) {
+                    ranges += start..(i - 1)
+                    start = -1
+                }
+            } else if (start < 0) {
+                start = i
+            }
+        }
+        if (start >= 0) {
+            ranges += start..(text.length - 1)
+        }
+        return ranges
     }
+
+    private fun isSeparator(ch: Char): Boolean =
+        ch.isWhitespace() || ch == '\u00A0'
 
     /**
      * The [WordBox]es of one page: for every word range of
@@ -66,8 +82,55 @@ object PdfiumWordGrouper {
         pageWidthPt: Float,
         pageHeightPt: Float
     ): List<WordBox> {
-        // Stub (red-first commit of 1.2.52): implemented by the
-        // build commit that follows.
-        return emptyList()
+        if (pageWidthPt <= 0f || pageHeightPt <= 0f || text.isEmpty()) {
+            return emptyList()
+        }
+        val byRange = rects.groupBy { it.start to it.length }
+        return wordRanges(text).mapNotNull { range ->
+            val length = range.last - range.first + 1
+            val boxes = byRange[range.first to length].orEmpty()
+            if (boxes.isEmpty()) {
+                null
+            } else {
+                unionBox(text.substring(range), boxes, pageWidthPt, pageHeightPt)
+            }
+        }
+    }
+
+    /**
+     * One word's box: the union of its range rects (min/max per
+     * axis, so either y orientation folds identically), with
+     * the PDF y axis flipped into the reader's top-origin
+     * fractions and every edge clamped to the page. A union
+     * that ends up degenerate (zero area after clamping)
+     * yields no box.
+     */
+    private fun unionBox(
+        word: String,
+        boxes: List<RangeRect>,
+        pageWidthPt: Float,
+        pageHeightPt: Float
+    ): WordBox? {
+        var left = Float.MAX_VALUE
+        var right = -Float.MAX_VALUE
+        var lowY = Float.MAX_VALUE
+        var highY = -Float.MAX_VALUE
+        for (rect in boxes) {
+            left = minOf(left, rect.left, rect.right)
+            right = maxOf(right, rect.left, rect.right)
+            lowY = minOf(lowY, rect.top, rect.bottom)
+            highY = maxOf(highY, rect.top, rect.bottom)
+        }
+        // PDF space: highY is the word's TOP edge (y grows up),
+        // so its from-the-top fraction is 1 - highY/height.
+        val x0 = (left / pageWidthPt).coerceIn(0f, 1f)
+        val x1 = (right / pageWidthPt).coerceIn(0f, 1f)
+        val y0 = (1f - highY / pageHeightPt).coerceIn(0f, 1f)
+        val y1 = (1f - lowY / pageHeightPt).coerceIn(0f, 1f)
+        return if (x1 > x0 && y1 > y0) {
+            WordBox(text = word, x0 = x0, y0 = y0, x1 = x1, y1 = y1)
+        } else {
+            null
+        }
     }
 }
