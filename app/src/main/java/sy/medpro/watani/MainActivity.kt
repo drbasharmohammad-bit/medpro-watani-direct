@@ -1624,9 +1624,10 @@ class MainActivity : ComponentActivity() {
                                                                 onRefreshManifest = { viewModel.fetchManifest() },
                                                                 onDownloadSection = { path, entry -> viewModel.downloadSection(path, entry) },
                                                                 onOpenSubject = { path, name, tab ->
-                                                                    // «تابع من حيث توقفت» (1.2.51):
-                                                                    // حفظ آخر مادة فُتحت لويدجت التابع.
-                                                                    sy.medpro.watani.data.LastStudyStore.save(context, path, name)
+                                                                    // كان هنا حفظ «آخر مادة»
+                                                                    // لويدجت «تابع» الزجاجي —
+                                                                    // أُزيل مع إلغاء الزجاج
+                                                                    // نهائيًا (1.2.55).
                                                                     coroutineScope.launch {
                                                                         activeSubjectEnvelope = viewModel.getSubjectEnvelope(path)
                                                                         viewModel.openSubject(path, name, tab)
