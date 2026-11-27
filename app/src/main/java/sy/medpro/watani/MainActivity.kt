@@ -533,6 +533,84 @@ class MainActivity : ComponentActivity() {
                             try { sy.medpro.watani.data.WorkerActivationApi.checkRevocationIfOnline(contextForSync) } catch (_: Exception) { }
                         }
                     }
+                    // رمز الإحالة (1.2.54): مطالبة لمرة واحدة لكل
+                    // حساب عند أول دخول على بناء فيه الميزة، وفقط
+                    // إن قالت البوابة إن الحساب ما زال يستطيع إدخال
+                    // رمز (جديد وبلا إسناد). أي إغلاق — تسجيل أو
+                    // تخطٍّ — ينهي المطالبة نهائيًا؛ الحقل الدائم
+                    // يعيش بشاشة «ادعُ أصدقاءك» طوال نافذة الإدخال.
+                    var referralPromptUid by remember { mutableStateOf<String?>(null) }
+                    var referralClaimText by remember { mutableStateOf("") }
+                    var referralClaimBusy by remember { mutableStateOf(false) }
+                    var referralClaimError by remember { mutableStateOf<String?>(null) }
+                    val referralPromptScope = rememberCoroutineScope()
+                    LaunchedEffect(currentUser?.uid) {
+                        val uid = currentUser?.uid
+                        if (uid != null &&
+                            !sy.medpro.watani.data.ReferralPromptStore.isDone(contextForSync, uid)
+                        ) {
+                            try {
+                                val reply = sy.medpro.watani.data.WorkerReferralGateway().fetchMine()
+                                if (reply.me?.canClaim == true && reply.me.referredByCode == null) {
+                                    referralPromptUid = uid
+                                }
+                            } catch (_: Exception) { }
+                        }
+                    }
+                    referralPromptUid?.let { promptUid ->
+                        AlertDialog(
+                            onDismissRequest = {
+                                sy.medpro.watani.data.ReferralPromptStore.markDone(contextForSync, promptUid)
+                                referralPromptUid = null
+                            },
+                            title = { Text("عندك رمز إحالة؟", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column {
+                                    Text("إذا دعاك صديق إلى Med Pro، أدخل رمز الإحالة الخاص به — يُحتسب له عندما تُفعّل حسابك.")
+                                    Spacer(Modifier.height(10.dp))
+                                    OutlinedTextField(
+                                        value = referralClaimText,
+                                        onValueChange = { referralClaimText = it },
+                                        singleLine = true,
+                                        label = { Text("رمز الإحالة") },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    referralClaimError?.let { err ->
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(err, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    enabled = referralClaimText.isNotBlank() && !referralClaimBusy,
+                                    onClick = {
+                                        referralClaimBusy = true
+                                        referralClaimError = null
+                                        referralPromptScope.launch {
+                                            val reply = sy.medpro.watani.data.WorkerReferralGateway()
+                                                .claim(referralClaimText)
+                                            referralClaimBusy = false
+                                            if (reply.isSuccess) {
+                                                sy.medpro.watani.data.ReferralPromptStore
+                                                    .markDone(contextForSync, promptUid)
+                                                referralPromptUid = null
+                                            } else {
+                                                referralClaimError = sy.medpro.watani.data
+                                                    .referralClaimErrorMessage(reply.error)
+                                            }
+                                        }
+                                    }
+                                ) { Text(if (referralClaimBusy) "جارٍ التسجيل…" else "تسجيل الرمز") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = {
+                                    sy.medpro.watani.data.ReferralPromptStore.markDone(contextForSync, promptUid)
+                                    referralPromptUid = null
+                                }) { Text("لاحقًا") }
+                            }
+                        )
+                    }
                     // POST_NOTIFICATIONS (Android 13+): ask once after
                     // sign-in, never blocking activation or content —
                     // denial only means no system notifications; the
@@ -855,6 +933,7 @@ class MainActivity : ComponentActivity() {
                                                 "الملف الشخصي",
                                                 "ربط التليجرام",
                                                 "الاشتراك وتفعيل الحساب",
+                                                "ادعُ أصدقاءك",
                                                 "التواصل",
                                                 "سياسة الخصوصية والشروط",
                                                 "تسجيل الخروج"
@@ -883,6 +962,7 @@ class MainActivity : ComponentActivity() {
                                                 val icon = when (title) {
                                                     "الملف الشخصي" -> Icons.Default.Person
                                                     "ربط التليجرام" -> Icons.Default.Send
+                                                    "ادعُ أصدقاءك" -> Icons.Default.GroupAdd
                                                     "الاشتراك وتفعيل الحساب" -> Icons.Default.VpnKey
                                                     "المراجعة الذكية Anki" -> Icons.Default.Style
                                                     "دليل الدراسة" -> Icons.Default.Book
@@ -1281,6 +1361,7 @@ class MainActivity : ComponentActivity() {
                                             when (activeDrawer) {
                                                 "الملف الشخصي" -> ProfileScreen(onBack = { drawerScreen = null })
                                                 "ربط التليجرام" -> TelegramLinkScreen(onBack = { drawerScreen = null })
+                                                "ادعُ أصدقاءك" -> sy.medpro.watani.ui.referral.ReferralRoute(onBack = { drawerScreen = null })
                                                 "الاشتراك وتفعيل الحساب" -> ActivationScreen(
                                                     onBack = { drawerScreen = null },
                                                     onActivationChanged = { viewModel.refreshDownloadedSections() }
