@@ -395,26 +395,11 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            set +e
-            # Retry loop (same discipline as the build job): the
-            # first attempt of run 45994691391 died in 30s on a
-            # transient plugin-resolution failure (foojay-resolver
-            # not found) before any test compiled — infrastructure
-            # flakes must not masquerade as a reader verdict.
-            code=1
-            for attempt in 1 2 3; do
-              gradle :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=sy.medpro.watani.reader.PdfiumReaderOpenTest --console=plain --max-workers=2
-              code=$?
-              if [ "$code" = "0" ]; then break; fi
-              echo "connectedDebugAndroidTest attempt $attempt failed (exit $code); retrying in 20s..."
-              sleep 20
-            done
-            adb logcat -d -v threadtime > logcat-full.txt 2>/dev/null || true
-            adb shell "ls /data/tombstones 2>/dev/null" || true
-            mkdir -p tombstones
-            adb pull /data/tombstones tombstones/ 2>/dev/null || true
-            exit $code
+          # ONE line on purpose: the emulator runner mangles
+          # multi-line shell loops embedded in `script:` (run
+          # 45995690147 died on a sh syntax error before Gradle
+          # started). All logic lives in the repo script.
+          script: sh scripts/run-reader-emulator-test.sh
 
       - name: Upload emulator logcat + test reports
         if: always()
