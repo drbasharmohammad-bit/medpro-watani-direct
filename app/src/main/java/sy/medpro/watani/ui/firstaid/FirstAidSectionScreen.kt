@@ -95,13 +95,6 @@ private sealed interface FaDest {
  * booklets that follow gated units) needs an activated account;
  * (ج) no hard locks anywhere — order is advisory only.
  */
-/**
- * يعزل مقطعًا لاتيني/رقمي (مثل مدى صفحات «241-299») داخل نص عربي بـ
- * LRI…PDI (U+2066…U+2069) حتى لا يقلب خوارزم الاتجاه الثنائي ترتيب
- * طرفيه عند العرض (كان المدى يظهر «299-241» على الجهاز).
- */
-internal fun isolateLtrRun(s: String): String = "\u2066$s\u2069"
-
 @Composable
 fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null) {
     val context = LocalContext.current

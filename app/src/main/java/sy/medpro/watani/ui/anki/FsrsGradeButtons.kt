@@ -50,38 +50,34 @@ fun FsrsGradeButtons(
     ) {
         GradeButton(
             label = "إعادة",
-            grade = AnkiGrade.AGAIN,
-            intervals = intervals,
+            interval = intervals[AnkiGrade.AGAIN],
             colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
             modifier = Modifier.weight(1f),
-            onGrade = onGrade
+            onClick = { onGrade(AnkiGrade.AGAIN) }
         )
         GradeButton(
             label = "صعب",
-            grade = AnkiGrade.HARD,
-            intervals = intervals,
+            interval = intervals[AnkiGrade.HARD],
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 contentColor = MaterialTheme.colorScheme.onSurface
             ),
             modifier = Modifier.weight(1f),
-            onGrade = onGrade
+            onClick = { onGrade(AnkiGrade.HARD) }
         )
         GradeButton(
             label = "جيد",
-            grade = AnkiGrade.GOOD,
-            intervals = intervals,
+            interval = intervals[AnkiGrade.GOOD],
             colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
             modifier = Modifier.weight(1f),
-            onGrade = onGrade
+            onClick = { onGrade(AnkiGrade.GOOD) }
         )
         GradeButton(
             label = "سهل",
-            grade = AnkiGrade.EASY,
-            intervals = intervals,
+            interval = intervals[AnkiGrade.EASY],
             colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
             modifier = Modifier.weight(1f),
-            onGrade = onGrade
+            onClick = { onGrade(AnkiGrade.EASY) }
         )
     }
 }
@@ -89,14 +85,13 @@ fun FsrsGradeButtons(
 @Composable
 private fun GradeButton(
     label: String,
-    grade: AnkiGrade,
-    intervals: Map<AnkiGrade, String>,
+    interval: String?,
     colors: androidx.compose.material3.ButtonColors,
     modifier: Modifier = Modifier,
-    onGrade: (AnkiGrade) -> Unit
+    onClick: () -> Unit
 ) {
     Button(
-        onClick = { onGrade(grade) },
+        onClick = onClick,
         colors = colors,
         modifier = modifier.height(58.dp),
         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
@@ -109,9 +104,9 @@ private fun GradeButton(
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1
             )
-            intervals[grade]?.let { interval ->
+            interval?.let {
                 Text(
-                    interval,
+                    it,
                     fontSize = 10.5.sp,
                     maxLines = 1,
                     color = LocalContentColor.current.copy(alpha = 0.85f)
