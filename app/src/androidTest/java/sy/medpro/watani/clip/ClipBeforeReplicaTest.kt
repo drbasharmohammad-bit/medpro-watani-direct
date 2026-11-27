@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -61,7 +62,9 @@ class ClipBeforeReplicaTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private fun shoot(name: String) {
-        Thread.sleep(400)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        composeRule.waitForIdle()
+        Thread.sleep(600)
         val bitmap = instrumentation.uiAutomation.takeScreenshot()
         // The system provisions this directory on request (the test
         // package's own external files dir); raw paths under

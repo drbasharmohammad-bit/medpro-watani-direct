@@ -11,6 +11,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -49,7 +50,9 @@ class ClipProofTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private fun shoot(name: String) {
-        Thread.sleep(400)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        composeRule.waitForIdle()
+        Thread.sleep(600)
         val bitmap = instrumentation.uiAutomation.takeScreenshot()
         // The system provisions this directory on request (the test
         // package's own external files dir); raw paths under
