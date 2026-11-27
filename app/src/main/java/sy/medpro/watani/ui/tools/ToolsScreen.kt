@@ -125,6 +125,13 @@ private val TOOL_GROUPS = listOf(
     )
 )
 
+/** Tools-gate view state (1.2.54): activation flag + per-tool use counts + the server-set free limit, bundled for the tiles. */
+data class ToolGateUiState(
+    val activated: Boolean = false,
+    val counts: Map<String, Int> = emptyMap(),
+    val freeLimit: Int = sy.medpro.watani.data.ToolGate.DEFAULT_FREE_LIMIT
+)
+
 @Composable
 fun ToolsScreen(
     onToolClick: (String) -> Unit,
@@ -132,6 +139,7 @@ fun ToolsScreen(
     toolCounts: Map<String, Int> = emptyMap(),
     toolsFreeLimit: Int = sy.medpro.watani.data.ToolGate.DEFAULT_FREE_LIMIT
 ) {
+    val gate = ToolGateUiState(toolsActivated, toolCounts, toolsFreeLimit)
     Column(modifier = Modifier.fillMaxSize().background(libBackground())) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -154,9 +162,9 @@ fun ToolsScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            ToolTile(pair[0], onToolClick, Modifier.weight(1f), toolsActivated, toolCounts, toolsFreeLimit)
+                            ToolTile(pair[0], onToolClick, Modifier.weight(1f), gate)
                             if (pair.size > 1) {
-                                ToolTile(pair[1], onToolClick, Modifier.weight(1f), toolsActivated, toolCounts, toolsFreeLimit)
+                                ToolTile(pair[1], onToolClick, Modifier.weight(1f), gate)
                             } else {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
@@ -174,16 +182,14 @@ private fun ToolTile(
     tool: ToolEntry,
     onToolClick: (String) -> Unit,
     modifier: Modifier = Modifier,
-    toolsActivated: Boolean = false,
-    toolCounts: Map<String, Int> = emptyMap(),
-    toolsFreeLimit: Int = sy.medpro.watani.data.ToolGate.DEFAULT_FREE_LIMIT
+    gate: ToolGateUiState = ToolGateUiState()
 ) {
     // بوابة الأدوات (1.2.54): لغير المفعّل تعرض البلاطة المتبقّي من
     // الاستخدامات المجانية، وقفلًا ذهبيًا عند نفادها (النقر نفسه يوجّه
     // لشاشة التفعيل من المعالج). المفعّل لا يرى أي شارة.
     val def = sy.medpro.watani.data.ToolGate.byTitle(tool.target)
     val decision = def?.let {
-        sy.medpro.watani.data.ToolGate.decide(toolCounts[it.id] ?: 0, toolsFreeLimit, toolsActivated)
+        sy.medpro.watani.data.ToolGate.decide(gate.counts[it.id] ?: 0, gate.freeLimit, gate.activated)
     }
     val locked = decision?.access == sy.medpro.watani.data.ToolGate.Access.LOCKED
     LibCard(
@@ -208,7 +214,7 @@ private fun ToolTile(
                 lineHeight = 16.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            if (!toolsActivated && decision != null) {
+            if (!gate.activated && decision != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 if (locked) {
                     Row(verticalAlignment = Alignment.CenterVertically) {

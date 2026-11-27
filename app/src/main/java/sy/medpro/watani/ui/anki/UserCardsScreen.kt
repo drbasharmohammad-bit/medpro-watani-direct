@@ -58,6 +58,10 @@ import sy.medpro.watani.ui.theme.SuccessGreen
  * editor (create/edit), study session — with sequential back
  * navigation (session/editor step back to the list first).
  */
+@Suppress("LongMethod", "CyclomaticComplexMethod")
+// One cohesive screen state machine (list/editor/study switching
+// with sequential back) — same accepted pattern as the other
+// multi-state section screens in this codebase.
 @Composable
 fun UserCardsHome() {
     val context = LocalContext.current
@@ -268,6 +272,7 @@ private fun UserCardEditor(
     }
 }
 
+@Suppress("LongMethod") // one study-session flow: card, reveal, grade row, finish state
 @Composable
 private fun UserCardStudySession(queue: List<UserCard>, onExit: () -> Unit) {
     val context = LocalContext.current

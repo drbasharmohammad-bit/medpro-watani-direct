@@ -37,51 +37,22 @@ object FsrsStore {
         return context.getSharedPreferences(name, Context.MODE_PRIVATE)
     }
 
-    private fun serialize(s: Fsrs.State): String =
-        "${(s.stability * 10000).toLong()}|${(s.difficulty * 100).toInt()}|" +
-            "${s.dueAtMillis}|${s.lastReviewMillis}|${s.repetitions}|${s.lapses}"
-
-    private fun parse(raw: String?): Fsrs.State? {
-        if (raw.isNullOrBlank()) return null
-        val p = raw.split("|")
-        if (p.size < 6) return null
-        return Fsrs.State(
-            stability = (p[0].toLongOrNull() ?: return null) / 10000.0,
-            difficulty = (p[1].toIntOrNull() ?: return null) / 100.0,
-            dueAtMillis = p[2].toLongOrNull() ?: return null,
-            lastReviewMillis = p[3].toLongOrNull() ?: 0L,
-            repetitions = p[4].toIntOrNull() ?: 0,
-            lapses = p[5].toIntOrNull() ?: 0
-        )
-    }
-
-    /** Legacy SM-2 record -> FSRS state (see Fsrs.migrateFromSm2). */
-    private fun parseLegacy(raw: String?): Fsrs.State? {
-        if (raw.isNullOrBlank()) return null
-        val p = raw.split("|")
-        if (p.size < 5) return null
-        val dueAt = p[0].toLongOrNull() ?: return null
-        val interval = p[1].toDoubleOrNull() ?: 0.0
-        val ease = (p[2].toIntOrNull() ?: 250) / 100.0
-        val reps = p[3].toIntOrNull() ?: 0
-        val lapses = p[4].toIntOrNull() ?: 0
-        return Fsrs.migrateFromSm2(interval, ease, reps, lapses, dueAt, System.currentTimeMillis())
-    }
-
     fun state(context: Context, cardKey: String): Fsrs.State? {
         val p = prefs(context)
-        parse(p.getString(PREFIX + cardKey, null))?.let { return it }
+        val current = FsrsRecordCodec.parse(p.getString(PREFIX + cardKey, null))
         // One-time legacy conversion for built-in deck cards (their
         // keys are the bare Int ids the SM-2 store used).
-        if (cardKey.all { it.isDigit() }) {
-            val legacy = parseLegacy(p.getString(cardKey, null)) ?: return null
-            p.edit()
-                .putString(PREFIX + cardKey, serialize(legacy))
-                .remove(cardKey)
-                .apply()
-            return legacy
+        val legacy = if (current == null && cardKey.all { it.isDigit() }) {
+            FsrsRecordCodec.parseLegacy(p.getString(cardKey, null))?.also { converted ->
+                p.edit()
+                    .putString(PREFIX + cardKey, FsrsRecordCodec.serialize(converted))
+                    .remove(cardKey)
+                    .apply()
+            }
+        } else {
+            null
         }
-        return null
+        return current ?: legacy
     }
 
     fun states(context: Context, cardKeys: Collection<String>): Map<String, Fsrs.State> {
@@ -105,7 +76,7 @@ object FsrsStore {
 
     fun grade(context: Context, cardKey: String, grade: AnkiGrade) {
         val next = Fsrs.schedule(state(context, cardKey), grade, System.currentTimeMillis())
-        prefs(context).edit().putString(PREFIX + cardKey, serialize(next)).apply()
+        prefs(context).edit().putString(PREFIX + cardKey, FsrsRecordCodec.serialize(next)).apply()
         _changes.value = _changes.value + 1
     }
 
@@ -113,5 +84,61 @@ object FsrsStore {
     fun forget(context: Context, cardKey: String) {
         prefs(context).edit().remove(PREFIX + cardKey).remove(cardKey).apply()
         _changes.value = _changes.value + 1
+    }
+}
+
+/**
+ * Wire codec for FSRS records (kept apart from [FsrsStore] so the
+ * store stays a thin persistence facade). Scales are part of the
+ * on-disk format: stability x10000, difficulty/ease x100.
+ */
+private object FsrsRecordCodec {
+    private const val STABILITY_SCALE = 10000.0
+    private const val DIFFICULTY_SCALE = 100.0
+    private const val DEFAULT_EASE_X100 = 250
+
+    fun serialize(s: Fsrs.State): String =
+        "${(s.stability * STABILITY_SCALE).toLong()}|${(s.difficulty * DIFFICULTY_SCALE).toInt()}|" +
+            "${s.dueAtMillis}|${s.lastReviewMillis}|${s.repetitions}|${s.lapses}"
+
+    fun parse(raw: String?): Fsrs.State? {
+        val p = raw?.takeIf { it.isNotBlank() }?.split("|")?.takeIf { it.size >= 6 }
+        return p?.let {
+            val stability = it[0].toLongOrNull()
+            val difficulty = it[1].toIntOrNull()
+            val dueAt = it[2].toLongOrNull()
+            if (stability == null || difficulty == null || dueAt == null) {
+                null
+            } else {
+                Fsrs.State(
+                    stability = stability / STABILITY_SCALE,
+                    difficulty = difficulty / DIFFICULTY_SCALE,
+                    dueAtMillis = dueAt,
+                    lastReviewMillis = it[3].toLongOrNull() ?: 0L,
+                    repetitions = it[4].toIntOrNull() ?: 0,
+                    lapses = it[5].toIntOrNull() ?: 0
+                )
+            }
+        }
+    }
+
+    /** Legacy SM-2 record -> FSRS state (see Fsrs.migrateFromSm2). */
+    fun parseLegacy(raw: String?): Fsrs.State? {
+        val p = raw?.takeIf { it.isNotBlank() }?.split("|")?.takeIf { it.size >= 5 }
+        val dueAt = p?.get(0)?.toLongOrNull()
+        return if (p == null || dueAt == null) {
+            null
+        } else {
+            Fsrs.migrateFromSm2(
+                Fsrs.Sm2Record(
+                    intervalDays = p[1].toDoubleOrNull() ?: 0.0,
+                    easeFactor = (p[2].toIntOrNull() ?: DEFAULT_EASE_X100) / DIFFICULTY_SCALE,
+                    repetitions = p[3].toIntOrNull() ?: 0,
+                    lapses = p[4].toIntOrNull() ?: 0,
+                    dueAtMillis = dueAt
+                ),
+                System.currentTimeMillis()
+            )
+        }
     }
 }

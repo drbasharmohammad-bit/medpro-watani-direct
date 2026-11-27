@@ -43,6 +43,12 @@ enum class AnkiGrade(val rating: Int) {
  * than a fractional day; the stored stability/difficulty are always
  * the exact FSRS values.
  */
+@Suppress("MagicNumber", "TooManyFunctions")
+// MagicNumber: every literal here IS a published FSRS-5 algorithm
+// constant (the 19 default weights, the difficulty clamp [1,10],
+// the ease mapping) — naming them would rename the reference
+// formulas, not clarify them. TooManyFunctions: one cohesive
+// scheduler object; the reference API is kept whole on purpose.
 object Fsrs {
     /** FSRS-5 official default weights (19 parameters). */
     val W: DoubleArray = doubleArrayOf(
@@ -175,23 +181,25 @@ object Fsrs {
      *   9.8 (very hard), ease 2.8 maps to 3.8 (easy).
      * - due time, repetitions and lapses carry over unchanged.
      */
-    fun migrateFromSm2(
-        intervalDays: Double,
-        easeFactor: Double,
-        repetitions: Int,
-        lapses: Int,
-        dueAtMillis: Long,
-        now: Long
-    ): State {
-        val stability = if (repetitions > 0) maxOf(intervalDays, 0.1) else W[0]
-        val difficulty = (5.0 + (2.5 - easeFactor) * 4.0).coerceIn(1.0, 10.0)
+    /** One legacy SM-2 record as stored by the old AnkiSrs store. */
+    data class Sm2Record(
+        val intervalDays: Double,
+        val easeFactor: Double,
+        val repetitions: Int,
+        val lapses: Int,
+        val dueAtMillis: Long
+    )
+
+    fun migrateFromSm2(record: Sm2Record, now: Long): State {
+        val stability = if (record.repetitions > 0) maxOf(record.intervalDays, 0.1) else W[0]
+        val difficulty = (5.0 + (2.5 - record.easeFactor) * 4.0).coerceIn(1.0, 10.0)
         return State(
             stability = stability,
             difficulty = difficulty,
-            dueAtMillis = dueAtMillis,
+            dueAtMillis = record.dueAtMillis,
             lastReviewMillis = now,
-            repetitions = repetitions,
-            lapses = lapses
+            repetitions = record.repetitions,
+            lapses = record.lapses
         )
     }
 }

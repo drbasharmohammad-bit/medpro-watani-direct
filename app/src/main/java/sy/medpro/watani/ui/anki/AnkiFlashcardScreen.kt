@@ -126,9 +126,9 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
     // الأقل) = استخدام واحد لأداة البطاقات — مرة واحدة لكل جلسة.
     var sessionUseCounted by remember { mutableStateOf(false) }
     LaunchedEffect(sessionStarted, currentIndex, queue, reviewedThisSession) {
-        if (sessionStarted && queue.isNotEmpty() && currentIndex >= queue.size &&
-            reviewedThisSession > 0 && !sessionUseCounted
-        ) {
+        val sessionComplete = sessionStarted && queue.isNotEmpty() && currentIndex >= queue.size
+        val shouldCountUse = sessionComplete && reviewedThisSession > 0 && !sessionUseCounted
+        if (shouldCountUse) {
             sessionUseCounted = true
             sy.medpro.watani.data.ToolUsageStore.recordUse(context, "flashcards")
         }
@@ -326,7 +326,13 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                             modifier = Modifier.padding(24.dp)
                         ) {
                             Icon(Icons.Default.Style, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(64.dp))
-                            Text("أتممت مراجعة جميع البطاقات بنجاح!", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary, textAlign = TextAlign.Center)
+                            Text(
+                                "أتممت مراجعة جميع البطاقات بنجاح!",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = MaroonPrimary,
+                                textAlign = TextAlign.Center
+                            )
                             Text("راجعت في هذه الجلسة: $reviewedThisSession", fontSize = 15.sp)
                             Text("أتقنتها في هذه الجلسة: $newlyMasteredThisSession", fontSize = 15.sp, color = SuccessGreen)
                             Text("بطاقات متبقية في القائمة: ${(queue.size - currentIndex).coerceAtLeast(0)}", fontSize = 15.sp)

@@ -27,6 +27,7 @@ data class UserCard(
  */
 object UserCards {
     private const val KEY = "cards"
+    private const val ID_RANDOM_CHARS = 16
 
     private val _changes = MutableStateFlow(0L)
     val changes: StateFlow<Long> = _changes.asStateFlow()
@@ -40,26 +41,24 @@ object UserCards {
         )
 
     fun list(context: Context): List<UserCard> {
-        val raw = prefs(context).getString(KEY, null) ?: return emptyList()
-        val arr = try {
-            JSONArray(raw)
-        } catch (_: Exception) {
-            return emptyList()
-        }
-        return buildList {
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                val id = o.optString("id")
-                if (id.isBlank()) continue
-                add(
+        val arr = prefs(context).getString(KEY, null)?.let { raw ->
+            try {
+                JSONArray(raw)
+            } catch (_: Exception) {
+                null
+            }
+        } ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            arr.optJSONObject(i)
+                ?.takeIf { it.optString("id").isNotBlank() }
+                ?.let { o ->
                     UserCard(
-                        id = id,
+                        id = o.optString("id"),
                         front = o.optString("front"),
                         back = o.optString("back"),
                         createdAtMillis = o.optLong("created", 0L)
                     )
-                )
-            }
+                }
         }
     }
 
@@ -80,7 +79,7 @@ object UserCards {
 
     fun add(context: Context, front: String, back: String): UserCard {
         val card = UserCard(
-            id = "u" + UUID.randomUUID().toString().replace("-", "").take(16),
+            id = "u" + UUID.randomUUID().toString().replace("-", "").take(ID_RANDOM_CHARS),
             front = front.trim(),
             back = back.trim(),
             createdAtMillis = System.currentTimeMillis()

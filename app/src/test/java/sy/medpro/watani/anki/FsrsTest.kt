@@ -107,17 +107,17 @@ class FsrsTest {
     fun migrationFromSm2ConvertsNotWipes() {
         val due = 1_700_100_000_000L
         // A learned card: SM-2 interval 12.5 days at default ease 2.5.
-        val learned = Fsrs.migrateFromSm2(12.5, 2.5, repetitions = 4, lapses = 1, dueAtMillis = due, now = 1_700_000_000_000L)
+        val learned = Fsrs.migrateFromSm2(Fsrs.Sm2Record(12.5, 2.5, repetitions = 4, lapses = 1, dueAtMillis = due), now = 1_700_000_000_000L)
         close(12.5, learned.stability)
         close(5.0, learned.difficulty)
         assertEquals(due, learned.dueAtMillis)
         assertEquals(4, learned.repetitions)
         assertEquals(1, learned.lapses)
         // Hard card (ease at the SM-2 floor) maps to high difficulty.
-        val hard = Fsrs.migrateFromSm2(3.0, 1.3, repetitions = 2, lapses = 3, dueAtMillis = due, now = 0L)
+        val hard = Fsrs.migrateFromSm2(Fsrs.Sm2Record(3.0, 1.3, repetitions = 2, lapses = 3, dueAtMillis = due), now = 0L)
         close(9.8, hard.difficulty)
         // Never-passed card starts from the FSRS initial Again stability.
-        val fresh = Fsrs.migrateFromSm2(0.0, 2.5, repetitions = 0, lapses = 2, dueAtMillis = due, now = 0L)
+        val fresh = Fsrs.migrateFromSm2(Fsrs.Sm2Record(0.0, 2.5, repetitions = 0, lapses = 2, dueAtMillis = due), now = 0L)
         close(0.40255, fresh.stability)
     }
 }
