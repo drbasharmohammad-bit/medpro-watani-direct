@@ -30,6 +30,7 @@ import sy.medpro.watani.data.WidgetSettings
 import sy.medpro.watani.data.WidgetSettingsMath
 import sy.medpro.watani.data.WidgetShapeMath
 import sy.medpro.watani.data.WidgetSettingsStore
+import sy.medpro.watani.data.WidgetSizeBounds
 import sy.medpro.watani.data.WidgetSizeMath
 import sy.medpro.watani.data.LastStudyStore
 import sy.medpro.watani.data.OfflineStudyVault
@@ -240,10 +241,12 @@ object Widgets {
         val isPortrait = context.resources.configuration.orientation !=
             android.content.res.Configuration.ORIENTATION_LANDSCAPE
         return WidgetSizeMath.deriveSizeDp(
-            minWidth = opt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
-            minHeight = opt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT),
-            maxWidth = opt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH),
-            maxHeight = opt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT),
+            bounds = WidgetSizeBounds(
+                minWidth = opt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
+                minHeight = opt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT),
+                maxWidth = opt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH),
+                maxHeight = opt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+            ),
             isPortrait = isPortrait,
             fallback = fallback
         )

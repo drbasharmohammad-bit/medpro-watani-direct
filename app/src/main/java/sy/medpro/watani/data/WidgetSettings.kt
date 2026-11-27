@@ -347,27 +347,34 @@ object WidgetGlassMath {
  * ينعكس الدوران (MAX_WIDTH × MIN_HEIGHT). مشغّلات لا تملأ
  * النطاق (MIN == MAX) لا تتأثر بالقاعدة.
  */
+/** نطاق المقاس الذي يبلّغه المشغّل لخلية الويدجت (خيارات
+ * AppWidgetManager الأربعة) — يُمرَّر كوحدة واحدة حتى لا تتضخم
+ * قائمة وسائط اشتقاق المقاس مع كل بُعد جديد. */
+data class WidgetSizeBounds(
+    val minWidth: Int,
+    val minHeight: Int,
+    val maxWidth: Int,
+    val maxHeight: Int
+)
+
 object WidgetSizeMath {
 
     /** المقاس الذي يُخبز عليه وجه الويدجت: من النطاق المُبلَّغ
      * حسب الاتجاه، وسقوطًا للمقاس الافتراضي عند غياب أي بُعد. */
     fun deriveSizeDp(
-        minWidth: Int,
-        minHeight: Int,
-        maxWidth: Int,
-        maxHeight: Int,
+        bounds: WidgetSizeBounds,
         isPortrait: Boolean,
         fallback: Pair<Int, Int>
     ): Pair<Int, Int> {
         val width = if (isPortrait) {
-            firstPositive(minWidth, fallback.first)
+            firstPositive(bounds.minWidth, fallback.first)
         } else {
-            firstPositive(maxWidth, minWidth, fallback.first)
+            firstPositive(bounds.maxWidth, bounds.minWidth, fallback.first)
         }
         val height = if (isPortrait) {
-            firstPositive(maxHeight, minHeight, fallback.second)
+            firstPositive(bounds.maxHeight, bounds.minHeight, fallback.second)
         } else {
-            firstPositive(minHeight, fallback.second)
+            firstPositive(bounds.minHeight, fallback.second)
         }
         return width to height
     }

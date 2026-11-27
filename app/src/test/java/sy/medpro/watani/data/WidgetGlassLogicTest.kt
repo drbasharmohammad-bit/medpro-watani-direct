@@ -145,27 +145,42 @@ class WidgetGlassLogicTest {
         // is MAX_HEIGHT (documented AppWidgetOptions semantics).
         assertEquals(
             250 to 300,
-            WidgetSizeMath.deriveSizeDp(250, 140, 250, 300, isPortrait = true, fallback)
+            WidgetSizeMath.deriveSizeDp(
+                WidgetSizeBounds(250, 140, 250, 300),
+                isPortrait = true, fallback
+            )
         )
         // Landscape: the axes swap.
         assertEquals(
             420 to 140,
-            WidgetSizeMath.deriveSizeDp(250, 140, 420, 300, isPortrait = false, fallback)
+            WidgetSizeMath.deriveSizeDp(
+                WidgetSizeBounds(250, 140, 420, 300),
+                isPortrait = false, fallback
+            )
         )
         // Hosts reporting no range (MIN == MAX) are unaffected.
         assertEquals(
             250 to 140,
-            WidgetSizeMath.deriveSizeDp(250, 140, 250, 140, isPortrait = true, fallback)
+            WidgetSizeMath.deriveSizeDp(
+                WidgetSizeBounds(250, 140, 250, 140),
+                isPortrait = true, fallback
+            )
         )
         // Nothing reported at all: the provider-info fallback.
         assertEquals(
             fallback,
-            WidgetSizeMath.deriveSizeDp(0, 0, 0, 0, isPortrait = true, fallback)
+            WidgetSizeMath.deriveSizeDp(
+                WidgetSizeBounds(0, 0, 0, 0),
+                isPortrait = true, fallback
+            )
         )
         // Partial range: a missing MAX falls back to MIN.
         assertEquals(
             250 to 140,
-            WidgetSizeMath.deriveSizeDp(250, 140, 0, 0, isPortrait = true, fallback)
+            WidgetSizeMath.deriveSizeDp(
+                WidgetSizeBounds(250, 140, 0, 0),
+                isPortrait = true, fallback
+            )
         )
     }
 

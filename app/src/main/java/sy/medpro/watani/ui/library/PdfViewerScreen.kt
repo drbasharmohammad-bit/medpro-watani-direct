@@ -645,6 +645,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                     val fd = ParcelFileDescriptor.open(
                         pdfFile, ParcelFileDescriptor.MODE_READ_ONLY
                     )
+                    var handedOff = false
                     try {
                         val core = PdfiumCore(context)
                         val doc = core.newDocument(fd)
@@ -688,10 +689,10 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         } else {
                             emptyList()
                         }
+                        handedOff = true
                         OpenedBook(fd, doc, count, sizes)
-                    } catch (t: Throwable) {
-                        runCatching { fd.close() }
-                        throw t
+                    } finally {
+                        if (!handedOff) runCatching { fd.close() }
                     }
                 }
                 opened.fold(

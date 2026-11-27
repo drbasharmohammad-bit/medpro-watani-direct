@@ -1,7 +1,6 @@
 package sy.medpro.watani.ui.firstaid
 
 import sy.medpro.watani.ui.PremiumListSkeleton
-import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import io.legere.pdfiumandroid.PdfDocument
 import io.legere.pdfiumandroid.PdfiumCore
@@ -1216,24 +1215,3 @@ private suspend fun validateFaPdfFile(file: File): String? = withContext(Dispatc
     )
 }
 
-/** The probe's engine-outage fallback (1.2.52): the platform
- * PdfRenderer check this probe ran on before PDFium — used
- * ONLY when the PDFium native library cannot load at all. */
-private suspend fun validateFaPdfFileWithPlatformRenderer(file: File): String? {
-    var fd: ParcelFileDescriptor? = null
-    var renderer: PdfRenderer? = null
-    return try {
-        fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-        renderer = PdfRenderer(fd)
-        if (renderer.pageCount > 0) {
-            null
-        } else {
-            "PdfRenderer: الملف بلا صفحات (pageCount = 0)"
-        }
-    } catch (e: Exception) {
-        "${e.javaClass.simpleName}: ${e.message ?: "خطأ غير معروف أثناء فتح ملف PDF"}"
-    } finally {
-        try { renderer?.close() } catch (_: Exception) {}
-        try { fd?.close() } catch (_: Exception) {}
-    }
-}

@@ -242,6 +242,31 @@ data class CriticalFactDto(
     @Json(name = "definitiveGroup") val definitiveGroup: String?
 )
 
+/** Option indices of the Arabic label letters past the legacy
+ * map's ceiling of 4 (build 1.2.52): «و» is the sixth option,
+ * «ز» the seventh, «ح» the eighth, «ط» the ninth — the same
+ * positions DAWRA_OPTION_LABELS assigns them. */
+private const val OPTION_INDEX_WAW = 5
+private const val OPTION_INDEX_ZAY = 6
+private const val OPTION_INDEX_HA = 7
+private const val OPTION_INDEX_TA = 8
+
+/** The static letter map of [parseCorrectIndexOrNull]: Arabic
+ * and Latin label letters (and their digit spellings) to option
+ * indices. The 1.2.52 extension adds «هـ» (ه + tatweel — the
+ * canonical fifth label, cf. DAWRA_OPTION_LABELS) beside plain
+ * «ه», and the letters past the legacy ceiling via the named
+ * index constants above. */
+private val OPTION_LETTER_INDEX: Map<String, Int> = mapOf(
+    "أ" to 0, "إ" to 0, "ا" to 0, "A" to 0, "a" to 0, "0" to 0,
+    "ب" to 1, "B" to 1, "b" to 1, "1" to 1,
+    "ج" to 2, "C" to 2, "c" to 2, "2" to 2,
+    "د" to 3, "D" to 3, "d" to 3, "3" to 3,
+    "ه" to 4, "هـ" to 4, "E" to 4, "e" to 4, "4" to 4,
+    "و" to OPTION_INDEX_WAW, "ز" to OPTION_INDEX_ZAY,
+    "ح" to OPTION_INDEX_HA, "ط" to OPTION_INDEX_TA
+)
+
 /**
  * F-08: strict key resolution. Returns the question's correct indices,
  * or null when the key cannot be determined (missing, unparseable, or
@@ -273,38 +298,23 @@ fun parseCorrectIndexOrNull(
     optionLabels: List<String>? = null
 ): Int? {
     if (correct == null || options.isNullOrEmpty()) return null
-    if (correct is Number) {
-        val idx = correct.toInt()
-        if (idx in options.indices) return idx
-    }
+    val opts = options
     val str = correct.toString().trim()
-    str.toIntOrNull()?.let { idx ->
-        if (idx in options.indices) return idx
-    }
-    val arabicMap = mapOf(
-        "أ" to 0, "إ" to 0, "ا" to 0, "A" to 0, "a" to 0, "0" to 0,
-        "ب" to 1, "B" to 1, "b" to 1, "1" to 1,
-        "ج" to 2, "C" to 2, "c" to 2, "2" to 2,
-        "د" to 3, "D" to 3, "d" to 3, "3" to 3,
-        "ه" to 4, "هـ" to 4, "E" to 4, "e" to 4, "4" to 4,
-        "و" to 5, "ز" to 6, "ح" to 7, "ط" to 8
-    )
-    arabicMap[str]?.let { if (it in options.indices) return it }
-
-    // The record's own labels resolve a label key the static map
-    // does not know — a content family's label set is self-describing
-    // and no static map can enumerate every family's labels. Runs
-    // before the option-text match so a label is never mistaken for
-    // an option's text.
-    if (!optionLabels.isNullOrEmpty()) {
-        val idx = optionLabels.indexOf(str)
-        if (idx in options.indices) return idx
-    }
-
-    options.forEachIndexed { index, option ->
-        if (option.trim() == str) return index
-    }
-    return null
+    // The resolution chain, in the legacy priority order: a
+    // Number key, a numeric-string key, the static letter map,
+    // the record's own optionLabels (1.2.52 — a content family's
+    // label set is self-describing, and no static map can
+    // enumerate every family's labels; runs before the text
+    // match so a label is never mistaken for an option's text),
+    // and finally the exact option-text match. Every step yields
+    // null when it cannot resolve, so a key the legacy steps
+    // resolved resolves identically here.
+    val fromNumber = (correct as? Number)?.toInt()?.takeIf { it in opts.indices }
+    val fromNumericText = str.toIntOrNull()?.takeIf { it in opts.indices }
+    val fromLetterMap = OPTION_LETTER_INDEX[str]?.takeIf { it in opts.indices }
+    val fromOwnLabels = optionLabels?.indexOf(str)?.takeIf { it in opts.indices }
+    val fromOptionText = opts.indexOfFirst { it.trim() == str }.takeIf { it >= 0 }
+    return fromNumber ?: fromNumericText ?: fromLetterMap ?: fromOwnLabels ?: fromOptionText
 }
 
 fun normalizeCorrectIndex(
