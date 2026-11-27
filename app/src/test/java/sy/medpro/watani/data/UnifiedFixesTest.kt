@@ -50,6 +50,13 @@ class UnifiedFixesTest {
         topics = null, free = null
     )
 
+    private fun qL(correct: Any?, options: List<String>, labels: List<String>?) = QuestionDto(
+        id = "t", text = "q", options = options,
+        optionLabels = labels, correct = correct, correctIndices = null,
+        explanation = null, years = null, source = null, session = null,
+        topics = null, free = null
+    )
+
     @Test
     fun validKeysResolveExactlyAsLegacy() {
         val opts = listOf("a", "b", "c", "d")
@@ -61,6 +68,80 @@ class UnifiedFixesTest {
         assertEquals(listOf(1, 3), getCorrectIndices(q(null, listOf(1.0, 3.0)), opts))
         // Option-text match path of the legacy normalizer.
         assertEquals(listOf(1), getCorrectIndices(q("b"), opts))
+    }
+
+    @Test
+    fun labelKeyedQuestionsResolveViaLabelsAndExtendedMap() {
+        // 1.2.52 (diagnosis 27 Nov 2026): content families whose
+        // records carry their own optionLabels (UWorld) name keys
+        // by those labels — «هـ» is ه + tatweel (U+0640), the
+        // canonical fifth label (cf. DAWRA_OPTION_LABELS). The
+        // legacy static map knew only plain «ه» and stopped at
+        // index 4, so every such key fell through to null and the
+        // question rendered with no answer reveal at all.
+        val labels5 = listOf("أ", "ب", "ج", "د", "هـ")
+        val opts5 = listOf("a", "b", "c", "d", "e")
+        // Via the record's own labels.
+        assertEquals(listOf(4), getCorrectIndices(qL("هـ", opts5, labels5), opts5))
+        // Via the extended static map (no labels on the record).
+        assertEquals(listOf(4), getCorrectIndices(qL("هـ", opts5, null), opts5))
+        // Beyond the legacy ceiling: «و»/«ز»/«ح»/«ط» → 5/6/7/8.
+        val opts6 = opts5 + "f"
+        val opts7 = opts6 + "g"
+        val opts8 = opts7 + "h"
+        val opts9 = opts8 + "i"
+        assertEquals(listOf(5), getCorrectIndices(qL("و", opts6, null), opts6))
+        assertEquals(listOf(6), getCorrectIndices(qL("ز", opts7, null), opts7))
+        assertEquals(listOf(7), getCorrectIndices(qL("ح", opts8, null), opts8))
+        assertEquals(listOf(8), getCorrectIndices(qL("ط", opts9, null), opts9))
+        // Labels beyond the map's letters resolve from the record
+        // itself (a family-specific label the map cannot know).
+        val opts4 = listOf("a", "b", "c", "d")
+        assertEquals(
+            listOf(2),
+            getCorrectIndices(qL("خ3", opts4, listOf("خ1", "خ2", "خ3", "خ4")), opts4)
+        )
+        // A key the static map already knows resolves identically
+        // with labels present (map step precedes the labels step).
+        assertEquals(
+            listOf(1),
+            getCorrectIndices(qL("ب", opts4, listOf("أ", "ب", "ج", "د")), opts4)
+        )
+    }
+
+    @Test
+    fun unknownLabelKeyStaysRejected() {
+        // A label key that is neither in the static map nor in the
+        // record's own labels must stay null — never an invented
+        // index (F-08 discipline, unchanged by the 1.2.52 steps).
+        val opts4 = listOf("a", "b", "c", "d")
+        val before = invalidCorrectKeyCount.get()
+        assertTrue(
+            getCorrectIndices(qL("خ", opts4, listOf("أ", "ب", "ج", "د")), opts4).isEmpty()
+        )
+        // «و» is index 5 in the extended map, but with only four
+        // options it is out of range and stays rejected.
+        assertTrue(getCorrectIndices(qL("و", opts4, null), opts4).isEmpty())
+        assertEquals(before + 2, invalidCorrectKeyCount.get())
+    }
+
+    @Test
+    fun uworldLabelShapesResolveWithoutInvalidCount() {
+        // Representative shapes sampled from the published UWorld
+        // bank (diagnosis 27 Nov 2026): label keys at the fifth
+        // and sixth positions, resolved by the record's labels.
+        val before = invalidCorrectKeyCount.get()
+        val opts5 = listOf("a", "b", "c", "d", "e")
+        assertEquals(
+            listOf(4),
+            getCorrectIndices(qL("هـ", opts5, listOf("أ", "ب", "ج", "د", "هـ")), opts5)
+        )
+        val opts6 = opts5 + "f"
+        assertEquals(
+            listOf(5),
+            getCorrectIndices(qL("و", opts6, listOf("أ", "ب", "ج", "د", "هـ", "و")), opts6)
+        )
+        assertEquals(before, invalidCorrectKeyCount.get())
     }
 
     @Test
