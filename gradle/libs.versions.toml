@@ -44,7 +44,14 @@ credentials = "1.5.0"
 googleid = "1.1.1"
 media3 = "1.5.1"
 pdfboxAndroid = "2.0.27.0"
-pdfiumAndroid = "2.0.3"
+# Pinned at 2.0.1 (build 1.2.52): 2.0.2+ ship AAR metadata with
+# minCompileSdk 37 while this project compiles against 36.1, and
+# raising compileSdk to 37 is not available (AGP 9.1's SDK DSL tops
+# out at 36.1 and the CI runner's preinstalled SDK has no android-37
+# platform). 2.0.1 is the newest release accepting compileSdk 36;
+# the one 2.0.2+ API the reader used (bulk getPageSizes) is served
+# by 2.0.1's per-page point getters instead — see PdfViewerScreen.
+pdfiumAndroid = "2.0.1"
 detekt = "1.23.8"
 
 

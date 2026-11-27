@@ -167,11 +167,6 @@ private data class OpenedBook(
  * student can actually see.) */
 private const val READER_MAX_CACHED_BITMAPS = 6
 
-/** The dpi at which PDFium's page-size call returns PDF points
- * numerically (points are 1/72 inch): getPageSizes(72) yields
- * the book's page sizes in points (build 1.2.52). */
-private const val PDFIUM_SIZE_DPI = 72
-
 /** Fallback page size (A4 points) for a page whose size the
  * engine could not report — layout only; the render itself
  * always uses the page's real size (build 1.2.52). */
@@ -651,17 +646,41 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         pdfFile, ParcelFileDescriptor.MODE_READ_ONLY
                     )
                     try {
-                        val doc = PdfiumCore(context).newDocument(fd)
+                        val core = PdfiumCore(context)
+                        val doc = core.newDocument(fd)
                         val count = doc.getPageCount()
                         val sizes = if (count > 0) {
-                            val raw = runCatching {
-                                doc.getPageSizes(PDFIUM_SIZE_DPI)
-                            }.getOrDefault(emptyList())
+                            // Page sizes in points (build
+                            // 1.2.52): pdfiumandroid is pinned
+                            // at 2.0.1 — the newest release
+                            // whose AAR metadata accepts this
+                            // project's compileSdk 36 (2.0.2+
+                            // demand 37). 2.0.1 has no bulk
+                            // getPageSizes call (that arrived
+                            // in 2.0.2+), so sizes are read
+                            // per page through the core's point
+                            // getters, which return PDF points
+                            // directly — the same numbers a
+                            // bulk call at 72 dpi would have
+                            // produced. A page whose size
+                            // cannot be read stays null here
+                            // and takes the fallback chain
+                            // below (a sibling page's size,
+                            // then the A4 default).
+                            val raw = (0 until count).map { i ->
+                                runCatching {
+                                    val w = core.getPageWidthPoint(doc, i)
+                                    val h = core.getPageHeightPoint(doc, i)
+                                    if (w > 0 && h > 0) {
+                                        PdfPagePoints(w, h)
+                                    } else {
+                                        null
+                                    }
+                                }.getOrNull()
+                            }
                             (0 until count).map { i ->
                                 raw.getOrNull(i)
-                                    ?.let { PdfPagePoints(it.width, it.height) }
-                                    ?: raw.firstOrNull()
-                                        ?.let { PdfPagePoints(it.width, it.height) }
+                                    ?: raw.firstOrNull { it != null }
                                     ?: PdfPagePoints(
                                         DEFAULT_PAGE_WIDTH_PT, DEFAULT_PAGE_HEIGHT_PT
                                     )
@@ -1369,12 +1388,16 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         // Neighbours are composed (and so start
                         // rendering) BEFORE they scroll in
                         // (1.2.46 discipline, kept from the
-                        // pager): with the default 0 the incoming
-                        // page only began its render once it was
-                        // already entering, and the render's
-                        // duration showed up as a spinner
-                        // mid-scroll.
-                        beyondBoundsItemCount = 1,
+                        // pager). The pinned Compose Foundation
+                        // (BOM 2024.09.00 / foundation 1.7.2) has
+                        // NO beyondBoundsItemCount parameter on
+                        // LazyColumn at all (verified against the
+                        // AAR's own LazyDslKt signature): 1.7
+                        // folds neighbour prefetch into the list
+                        // state's built-in prefetch strategy,
+                        // which composes the next page ahead of
+                        // the scroll on its own — the discipline
+                        // survives, the knob does not exist.
                         // While zoomed, drags pan the stack
                         // instead of scrolling it; in
                         // text-highlight mode they select instead

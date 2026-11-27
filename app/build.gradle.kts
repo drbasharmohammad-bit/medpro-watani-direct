@@ -258,11 +258,11 @@ dependencies {
 }
 
 // ---------------------------------------------------------------------------
-// PDFium metadata gate (build 1.2.52): PdfiumAndroidKt 2.0.3 is
-// compiled with Kotlin 2.4, so its classes carry metadata version
-// 2.4 while this project compiles with Kotlin 2.1 — without this
+// PDFium metadata gate (build 1.2.52): PdfiumAndroidKt 2.0.1 is
+// compiled with Kotlin 2.3, so its classes carry metadata version
+// 2.3 while this project compiles with Kotlin 2.1 — without this
 // flag the compiler refuses the library's classes outright
-// ("binary version of its metadata is 2.4.0, expected 2.1.0").
+// ("binary version of its metadata is 2.3.0, expected 2.1.0").
 // The reader consumes only the library's plain class/method API
 // (no inline or Kotlin-specific surface), whose metadata layout
 // the 2.1 reader parses unchanged once the version gate is off.

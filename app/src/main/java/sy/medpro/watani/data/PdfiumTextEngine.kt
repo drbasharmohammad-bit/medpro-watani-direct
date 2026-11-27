@@ -247,7 +247,11 @@ object PdfiumTextEngine {
         out: MutableList<OutlineItem>
     ) {
         for (bookmark in bookmarks) {
-            val title = bookmark.title.trim()
+            // Bookmark.title is String? in the pdfiumandroid API
+            // (a bookmark may carry no title at all) — a missing
+            // title flattens to empty and is skipped below, exactly
+            // like a blank one.
+            val title = bookmark.title?.trim().orEmpty()
             if (title.isNotEmpty()) {
                 out += OutlineItem(
                     title = title,
