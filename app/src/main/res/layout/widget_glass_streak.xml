@@ -4,7 +4,7 @@
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_bg"
+    android:background="@null"
     android:clipToOutline="true">
 
     <ImageView
@@ -36,7 +36,11 @@
             android:text="سلسلة الأيام"
             android:textColor="#C2A059"
             android:textSize="13sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:shadowColor="#73000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -52,7 +56,11 @@
                 android:layout_height="wrap_content"
                 android:textColor="#FAF6F0"
                 android:textSize="40sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+            android:shadowColor="#73000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
 
             <TextView
                 android:id="@+id/widget_streak_caption"

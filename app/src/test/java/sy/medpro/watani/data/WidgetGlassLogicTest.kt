@@ -122,4 +122,75 @@ class WidgetGlassLogicTest {
         )
         assertEquals(List(7) { false }, WidgetStreakMath.weekDots(emptyMap(), today))
     }
+
+    // ── Glass fix 1.2.52 ─────────────────────────────────────
+
+    @Test
+    fun clearTintHasAnAbsoluteFloor() {
+        // At the slider minimum the CLEAR tint must not collapse
+        // toward transparency (v4: ~0.16 over bright photos).
+        val atMin = WidgetGlassMath.effectiveTintAlpha(WidgetGlassStyle.CLEAR, 45)
+        assertTrue("clear tint at slider minimum must stay >= 0.30, was $atMin", atMin >= 0.30f)
+        assertTrue(atMin < WidgetGlassMath.effectiveTintAlpha(WidgetGlassStyle.DARK, 45))
+        // At full slider the fraction applies above the floor.
+        assertEquals(
+            0.55f, WidgetGlassMath.effectiveTintAlpha(WidgetGlassStyle.CLEAR, 100), 0.001f
+        )
+    }
+
+    @Test
+    fun deriveSizeUsesTheReportedRangePerOrientation() {
+        val fallback = 250 to 140
+        // Portrait: current width is MIN_WIDTH, current height
+        // is MAX_HEIGHT (documented AppWidgetOptions semantics).
+        assertEquals(
+            250 to 300,
+            WidgetSizeMath.deriveSizeDp(250, 140, 250, 300, isPortrait = true, fallback)
+        )
+        // Landscape: the axes swap.
+        assertEquals(
+            420 to 140,
+            WidgetSizeMath.deriveSizeDp(250, 140, 420, 300, isPortrait = false, fallback)
+        )
+        // Hosts reporting no range (MIN == MAX) are unaffected.
+        assertEquals(
+            250 to 140,
+            WidgetSizeMath.deriveSizeDp(250, 140, 250, 140, isPortrait = true, fallback)
+        )
+        // Nothing reported at all: the provider-info fallback.
+        assertEquals(
+            fallback,
+            WidgetSizeMath.deriveSizeDp(0, 0, 0, 0, isPortrait = true, fallback)
+        )
+        // Partial range: a missing MAX falls back to MIN.
+        assertEquals(
+            250 to 140,
+            WidgetSizeMath.deriveSizeDp(250, 140, 0, 0, isPortrait = true, fallback)
+        )
+    }
+
+    @Test
+    fun glassProvidersRebakeOnOptionsChanged() {
+        // Structural: every glass provider must route through
+        // the shared base that overrides onAppWidgetOptionsChanged
+        // (v4 shipped without it — resized widgets kept a
+        // wrong-size baked face until the next periodic update).
+        val base = Class.forName("sy.medpro.watani.ui.widget.GlassWidgetProvider")
+        val method = base.getDeclaredMethod(
+            "onAppWidgetOptionsChanged",
+            android.content.Context::class.java,
+            android.appwidget.AppWidgetManager::class.java,
+            Int::class.javaPrimitiveType,
+            android.os.Bundle::class.java
+        )
+        assertTrue(method.declaringClass == base)
+        listOf(
+            "CountdownWideWidgetProvider", "HeroWidgetProvider", "GoalWidgetProvider",
+            "StreakWidgetProvider", "ContinueWidgetProvider", "TipWidgetProvider",
+            "QuickActionsWidgetProvider", "FocusWidgetProvider", "MiniCountdownWidgetProvider"
+        ).forEach { name ->
+            val clazz = Class.forName("sy.medpro.watani.ui.widget.$name")
+            assertTrue("$name must extend GlassWidgetProvider", base.isAssignableFrom(clazz))
+        }
+    }
 }
