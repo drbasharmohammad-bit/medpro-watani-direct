@@ -96,13 +96,15 @@ private object FsrsRecordCodec {
     private const val STABILITY_SCALE = 10000.0
     private const val DIFFICULTY_SCALE = 100.0
     private const val DEFAULT_EASE_X100 = 250
+    private const val STATE_FIELD_COUNT = 6
+    private const val LEGACY_FIELD_COUNT = 5
 
     fun serialize(s: Fsrs.State): String =
         "${(s.stability * STABILITY_SCALE).toLong()}|${(s.difficulty * DIFFICULTY_SCALE).toInt()}|" +
             "${s.dueAtMillis}|${s.lastReviewMillis}|${s.repetitions}|${s.lapses}"
 
     fun parse(raw: String?): Fsrs.State? {
-        val p = raw?.takeIf { it.isNotBlank() }?.split("|")?.takeIf { it.size >= 6 }
+        val p = raw?.takeIf { it.isNotBlank() }?.split("|")?.takeIf { it.size >= STATE_FIELD_COUNT }
         return p?.let {
             val stability = it[0].toLongOrNull()
             val difficulty = it[1].toIntOrNull()
@@ -124,7 +126,7 @@ private object FsrsRecordCodec {
 
     /** Legacy SM-2 record -> FSRS state (see Fsrs.migrateFromSm2). */
     fun parseLegacy(raw: String?): Fsrs.State? {
-        val p = raw?.takeIf { it.isNotBlank() }?.split("|")?.takeIf { it.size >= 5 }
+        val p = raw?.takeIf { it.isNotBlank() }?.split("|")?.takeIf { it.size >= LEGACY_FIELD_COUNT }
         val dueAt = p?.get(0)?.toLongOrNull()
         return if (p == null || dueAt == null) {
             null

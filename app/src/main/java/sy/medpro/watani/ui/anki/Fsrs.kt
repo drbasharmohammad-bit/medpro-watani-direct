@@ -5,6 +5,7 @@ import kotlin.math.pow
 import kotlin.math.roundToLong
 
 /** The four review grades (kept from the old SM-2 UI vocabulary). */
+@Suppress("MagicNumber") // the FSRS ratings ARE 1..4 by definition
 enum class AnkiGrade(val rating: Int) {
     AGAIN(1), HARD(2), GOOD(3), EASY(4)
 }
