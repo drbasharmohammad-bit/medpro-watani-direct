@@ -424,3 +424,89 @@ jobs:
   # التغطية arm64 الحالية: تدقيق ساكن للـAPK المشحون (محاذاة
   # LOAD ‏16KB ومكتبات arm64) + بوابة x86_64 الديناميكية أعلاه
   # التي استنسخت كراش التزامن وأثبتت إصلاحه.
+
+  # ─── بوابة إثبات الاتجاه الثنائي (1.2.55) ───
+  # BidiProofTest: يعرض على محاكي حقيقي ترويسة بنك Step 2 بمدى
+  # الصفحات المعزول، وسؤال الدكتور نفسه (بنوك 3، سؤال 1) بمشغّل
+  # الأسئلة المشحون ونصّه الحي المُصلَح، وعيّنة شرح من بنك
+  # الوطني — واللقطات الثلاث هي أرتيفاكت الإثبات البصري.
+  emulator-bidi:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Verify preinstalled Android SDK
+        run: |
+          if [ -z "${ANDROID_HOME:-}" ]; then
+            echo "ERROR: ANDROID_HOME is not set on this runner." >&2
+            exit 1
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls -1 "$ANDROID_HOME/platform-tools" >/dev/null
+
+      - name: Download Gradle 9.3.1 (no gradlew in Studio export)
+        run: |
+          ok=""
+          for url in https://services.gradle.org/distributions/gradle-9.3.1-bin.zip https://downloads.gradle.org/distributions/gradle-9.3.1-bin.zip https://mirrors.huaweicloud.com/gradle/gradle-9.3.1-bin.zip https://mirrors.cloud.tencent.com/gradle/gradle-9.3.1-bin.zip https://github.com/gradle/gradle-distributions/releases/download/v9.3.1/gradle-9.3.1-bin.zip; do
+            for attempt in 1 2; do
+              if curl -fsSL --retry 2 "$url" -o /tmp/gradle-9.3.1-bin.zip && unzip -tq /tmp/gradle-9.3.1-bin.zip >/dev/null; then ok=1; break; fi
+              echo "Gradle download from $url (attempt $attempt) failed/corrupt; retrying..."
+              sleep 8
+            done
+            if [ -n "$ok" ]; then break; fi
+          done
+          if [ -z "$ok" ]; then echo "ERROR: could not download a valid Gradle 9.3.1 zip from any mirror." >&2; exit 1; fi
+          unzip -q /tmp/gradle-9.3.1-bin.zip -d /tmp
+          echo "/tmp/gradle-9.3.1/bin" >> "$GITHUB_PATH"
+
+      - name: Restore stable signing keystore (debug builds sign from it too)
+        env:
+          WATANI_KEYSTORE_BASE64: ${{ secrets.WATANI_KEYSTORE_BASE64 }}
+          WATANI_KEYSTORE_PASSWORD: <redacted>
+          WATANI_KEY_ALIAS: watani
+          WATANI_KEYSTORE_TYPE: PKCS12
+        run: |
+          echo "$WATANI_KEYSTORE_BASE64" | base64 -d > debug.keystore
+
+      - name: Enable KVM (emulator hardware acceleration)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Bidi proof test on emulator (header + quiz + Watani sample)
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          WATANI_KEYSTORE_PASSWORD: <redacted>
+          WATANI_KEY_ALIAS: watani
+          WATANI_KEY_PASSWORD: <redacted>
+          WATANI_KEYSTORE_TYPE: PKCS12
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: sh scripts/run-bidi-emulator-test.sh
+
+      - name: Upload bidi proof screenshots + reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-bidi-proof
+          path: |
+            bidi_screenshots
+            logcat-bidi.txt
+            app/build/reports/androidTests
+            app/build/outputs/androidTest-results
+          if-no-files-found: ignore
+          retention-days: 14

@@ -95,6 +95,13 @@ private sealed interface FaDest {
  * booklets that follow gated units) needs an activated account;
  * (ج) no hard locks anywhere — order is advisory only.
  */
+/**
+ * يعزل مقطعًا لاتيني/رقمي (مثل مدى صفحات «241-299») داخل نص عربي بـ
+ * LRI…PDI (U+2066…U+2069) حتى لا يقلب خوارزم الاتجاه الثنائي ترتيب
+ * طرفيه عند العرض (كان المدى يظهر «299-241» على الجهاز).
+ */
+internal fun isolateLtrRun(s: String): String = "\u2066$s\u2069"
+
 @Composable
 fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null) {
     val context = LocalContext.current
@@ -426,7 +433,7 @@ fun FirstAidSectionScreen(onReaderFullscreenChange: ((Boolean) -> Unit)? = null)
                             } else {
                                 FirstAidQuizPlayer(
                                     title = test.test ?: "اختبار مطبوع",
-                                    subtitle = "بنوك Step 2 المطبوعة — صفحات ${test.sourcePages ?: "—"}",
+                                    subtitle = "بنوك Step 2 المطبوعة — صفحات ${isolateLtrRun(test.sourcePages ?: "—")}",
                                     items = test.questions.orEmpty()
                                         .mapIndexed { i, q -> q.toFaQuizItem(i) },
                                     onWrong = { item ->
@@ -1106,7 +1113,7 @@ private fun FaBanksList(
                             fontSize = 14.5.sp, color = faHeading()
                         )
                         Text(
-                            "${test.questions.orEmpty().size} سؤالًا · صفحات ${test.sourcePages ?: "—"}" +
+                            "${test.questions.orEmpty().size} سؤالًا · صفحات ${isolateLtrRun(test.sourcePages ?: "—")}" +
                                 if (unkeyed > 0) " · $unkeyed بلا مفتاح مطبوع" else "",
                             fontFamily = NotoSansArabicFontFamily,
                             fontSize = 11.8.sp, color = faMuted()
