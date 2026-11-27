@@ -44,6 +44,7 @@ import sy.medpro.watani.ui.referral.ReferralRoute
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
+@org.robolectric.annotation.Config(sdk = [34], qualifiers = "w800dp-h2400dp")
 class ReferralIntegrationTest {
 
     @get:Rule
