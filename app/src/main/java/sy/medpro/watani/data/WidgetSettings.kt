@@ -207,13 +207,26 @@ object WidgetShapeMath {
     }
 
     /** مقاس الـBitmap بالبكسل لمقاس ويدجت بالـdp (بسقف أمان للذاكرة
-     * وحدّ الـBinder): تُحفَظ النسبة ويُقصّ الأطول عند الحاجة. */
+     * وحدّ الـBinder): تُحفَظ النسبة ويُقصّ الأطول عند الحاجة،
+     * وبسقف إجمالي للبكسلات أيضًا (إصلاح زجاج 1.2.52): ويدجتات
+     * كبيرة بكثافة عالية كانت تتجاوز ما تمرّره خدمة الويدجتات
+     * ببعض المشغّلات فيسقط التحديث بصمت ويبقى الويدجت قديمًا
+     * أو فارغًا — السقف يبقي كل وجه ضمن ما يُسلَّم فعلًا. */
     fun bitmapSizePx(widthDp: Int, heightDp: Int, density: Float): Pair<Int, Int> {
-        val w = (widthDp.coerceAtLeast(1) * density).toInt().coerceAtLeast(1)
-        val h = (heightDp.coerceAtLeast(1) * density).toInt().coerceAtLeast(1)
-        if (w <= MAX_BITMAP_SIDE_PX && h <= MAX_BITMAP_SIDE_PX) return w to h
-        val scale = MAX_BITMAP_SIDE_PX.toFloat() / maxOf(w, h)
-        return (w * scale).toInt().coerceAtLeast(1) to (h * scale).toInt().coerceAtLeast(1)
+        var w = (widthDp.coerceAtLeast(1) * density).toInt().coerceAtLeast(1)
+        var h = (heightDp.coerceAtLeast(1) * density).toInt().coerceAtLeast(1)
+        if (w > MAX_BITMAP_SIDE_PX || h > MAX_BITMAP_SIDE_PX) {
+            val sideScale = MAX_BITMAP_SIDE_PX.toFloat() / maxOf(w, h)
+            w = (w * sideScale).toInt().coerceAtLeast(1)
+            h = (h * sideScale).toInt().coerceAtLeast(1)
+        }
+        val pixels = w.toLong() * h.toLong()
+        if (pixels > MAX_BITMAP_PIXELS) {
+            val pixelScale = kotlin.math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixels.toDouble())
+            w = (w * pixelScale).toInt().coerceAtLeast(1)
+            h = (h * pixelScale).toInt().coerceAtLeast(1)
+        }
+        return w to h
     }
 
     /** مستطيل القصّ المركزي (centerCrop): أكبر مستطيل بنسبة
@@ -263,6 +276,9 @@ object WidgetShapeMath {
     }
 
     const val MAX_BITMAP_SIDE_PX = 1200
+
+    /** سقف إجمالي لبكسلات أي وجه ويدجت مخبوز (انظر bitmapSizePx). */
+    const val MAX_BITMAP_PIXELS = 1_200_000
 }
 
 // ---------------------------------------------------------------------
@@ -286,8 +302,15 @@ object WidgetGlassMath {
     const val GLASS_ALPHA_MAX: Int = 100
     const val DEFAULT_GLASS_ALPHA: Int = 65
     private const val PERCENT_BASE: Float = 100f
-    /** كسر قوّة الصبغة بالنمط الشفاف (ربع القوّة تقريبًا). */
-    private const val CLEAR_TINT_FRACTION: Float = 0.35f
+    /** كسر قوّة الصبغة بالنمط الشفاف.
+     * إصلاح زجاج 1.2.52: كان 0.35 فتهبط الصبغة الفعلية عند حدّ
+     * المنزلق الأدنى إلى ~0.16 — نص عاجي فوق سماء نهارية بلا
+     * أي حماية تقريبًا (أحد أسباب حكم «الزجاج فاشل» على الجهاز).
+     * رُفع الكسر وثُبّتت أرضية مطلقة أدناه فلا توجد حالة منزلق
+     * يصير فيها النمط الشفاف شفافًا فعلًا. */
+    private const val CLEAR_TINT_FRACTION: Float = 0.55f
+    /** أرضية ألفا الصبغة المطلقة للنمط الشفاف (0..1). */
+    private const val CLEAR_TINT_FLOOR: Float = 0.30f
 
     fun clampGlassAlpha(value: Int): Int =
         value.coerceIn(GLASS_ALPHA_MIN, GLASS_ALPHA_MAX)
@@ -296,14 +319,61 @@ object WidgetGlassMath {
     fun tintAlpha(glassAlphaPercent: Int): Float =
         clampGlassAlpha(glassAlphaPercent) / PERCENT_BASE
 
-    /** للنمط الشفاف تُخفَّف الصبغة لربع قوّتها — الزجاج على
-     * الخلفية مباشرة كما بنموذج «شفاف»، والحدّ الأدنى نفسه
-     * يحمي المقروئية عبر طبقة التعتيم التحتية القائمة. */
+    /** للنمط الشفاف تُخفَّف الصبغة لكسر من قوّتها — الزجاج على
+     * الخلفية مباشرة كما بنموذج «شفاف» — لكن بأرضية مطلقة
+     * (CLEAR_TINT_FLOOR) فوق طبقة التعتيم التحتية، فالمقروئية
+     * محميّة عند كل قيمة منزلق. */
     fun effectiveTintAlpha(style: WidgetGlassStyle, glassAlphaPercent: Int): Float =
         when (style) {
-            WidgetGlassStyle.CLEAR -> tintAlpha(glassAlphaPercent) * CLEAR_TINT_FRACTION
+            WidgetGlassStyle.CLEAR -> maxOf(
+                tintAlpha(glassAlphaPercent) * CLEAR_TINT_FRACTION, CLEAR_TINT_FLOOR
+            )
             else -> tintAlpha(glassAlphaPercent)
         }
+}
+
+/**
+ * اشتقاق مقاس الويدجت الفعلي بالـdp من خيارات AppWidgetOptions
+ * — منطق نقي (إصلاح زجاج 1.2.52).
+ *
+ * العطل المُثبت بـ1.2.51: القراءة كانت من OPTION_APPWIDGET_MIN_*
+ * فقط، وهي عند أغلب المشغّلات **الحدّ الأدنى** لمقاس الويدجت
+ * لا مقاسه الحالي؛ فالوجه الزجاجي (تغبيش + صبغة + حافة + قصّ
+ * زوايا) كان يُخبز بمقاس أصغر من الخلية الفعلية ثم يمدّده
+ * المشغّل — ضبابية وقصّ خاطئ وحواف مشوّهة.
+ *
+ * دلالة الخيارات الموثّقة من أندرويد: بالوضع العمودي العرض
+ * الحالي هو MIN_WIDTH والارتفاع الحالي هو MAX_HEIGHT، وبالأفقي
+ * ينعكس الدوران (MAX_WIDTH × MIN_HEIGHT). مشغّلات لا تملأ
+ * النطاق (MIN == MAX) لا تتأثر بالقاعدة.
+ */
+object WidgetSizeMath {
+
+    /** المقاس الذي يُخبز عليه وجه الويدجت: من النطاق المُبلَّغ
+     * حسب الاتجاه، وسقوطًا للمقاس الافتراضي عند غياب أي بُعد. */
+    fun deriveSizeDp(
+        minWidth: Int,
+        minHeight: Int,
+        maxWidth: Int,
+        maxHeight: Int,
+        isPortrait: Boolean,
+        fallback: Pair<Int, Int>
+    ): Pair<Int, Int> {
+        val width = if (isPortrait) {
+            firstPositive(minWidth, fallback.first)
+        } else {
+            firstPositive(maxWidth, minWidth, fallback.first)
+        }
+        val height = if (isPortrait) {
+            firstPositive(maxHeight, minHeight, fallback.second)
+        } else {
+            firstPositive(minHeight, fallback.second)
+        }
+        return width to height
+    }
+
+    private fun firstPositive(vararg values: Int): Int =
+        values.firstOrNull { it > 0 } ?: 1
 }
 
 /** سلسلة الأيام ونقاط الأسبوع — منطق نقي من خريطة النشاط اليومي

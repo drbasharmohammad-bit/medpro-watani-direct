@@ -4,7 +4,7 @@
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_bg"
+    android:background="@null"
     android:clipToOutline="true">
 
     <ImageView
@@ -36,7 +36,11 @@
             android:text="العد التنازلي للامتحان الوطني"
             android:textColor="#C2A059"
             android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:shadowColor="#73000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
 
         <LinearLayout
             android:id="@+id/widget_days_row"
@@ -52,7 +56,11 @@
                 android:layout_height="wrap_content"
                 android:textColor="#FAF6F0"
                 android:textSize="56sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+            android:shadowColor="#73000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
 
             <TextView
                 android:id="@+id/widget_days_caption"
@@ -80,7 +88,11 @@
                 android:layout_height="wrap_content"
                 android:textColor="#E8CD96"
                 android:textSize="24sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+            android:shadowColor="#73000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
         </LinearLayout>
 
         <TextView
@@ -124,7 +136,11 @@
                     android:gravity="center"
                     android:textColor="#FAF6F0"
                     android:textSize="17sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+            android:shadowColor="#73000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
             </FrameLayout>
 
             <LinearLayout
@@ -166,7 +182,11 @@
                     android:layout_height="wrap_content"
                     android:textColor="#E8CD96"
                     android:textSize="22sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+            android:shadowColor="#73000000"
+            android:shadowDx="0"
+            android:shadowDy="1"
+            android:shadowRadius="3" />
 
                 <TextView
                     android:id="@+id/widget_streak_caption"

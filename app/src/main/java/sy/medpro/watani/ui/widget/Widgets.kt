@@ -30,6 +30,7 @@ import sy.medpro.watani.data.WidgetSettings
 import sy.medpro.watani.data.WidgetSettingsMath
 import sy.medpro.watani.data.WidgetShapeMath
 import sy.medpro.watani.data.WidgetSettingsStore
+import sy.medpro.watani.data.WidgetSizeMath
 import sy.medpro.watani.data.LastStudyStore
 import sy.medpro.watani.data.OfflineStudyVault
 import sy.medpro.watani.data.TipsContract
@@ -143,7 +144,7 @@ object Widgets {
                 // so each placed widget gets its own build.
                 ids.forEach { id ->
                     val views = buildViewsForKind(
-                        appContext, data, kind, widgetSizeDp(manager, id, kind)
+                        appContext, data, kind, widgetSizeDp(appContext, manager, id, kind)
                     )
                     manager.updateAppWidget(id, views)
                 }
@@ -181,7 +182,8 @@ object Widgets {
             val data = loadData(appContext)
             appWidgetIds.forEach { id ->
                 val views = buildViewsForKind(
-                    appContext, data, layoutKind, widgetSizeDp(appWidgetManager, id, layoutKind)
+                    appContext, data, layoutKind,
+                    widgetSizeDp(appContext, appWidgetManager, id, layoutKind)
                 )
                 appWidgetManager.updateAppWidget(id, views)
             }
@@ -214,8 +216,16 @@ object Widgets {
     /** The placed instance's real size in dp from its widget
      * options; the provider-info minimums when the host reports
      * nothing usable (1.2.27 — the background clip is built at
-     * exactly this size). */
+     * exactly this size).
+     *
+     * Glass fix 1.2.52: the size is now derived from the FULL
+     * reported range (MIN and MAX) via [WidgetSizeMath] — the
+     * 1.2.51 code read MIN only, which on most launchers is the
+     * smallest size the widget may take, not the size it has;
+     * the baked glass face was then host-stretched (blur, wrong
+     * crop, distorted edge light). */
     private fun widgetSizeDp(
+        context: Context,
         manager: AppWidgetManager,
         appWidgetId: Int,
         kind: Int
@@ -226,10 +236,17 @@ object Widgets {
             null
         }
         val fallback = WidgetShapeMath.fallbackSizeDp(kind)
-        val width = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
-        val height = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0) ?: 0
-        return (if (width > 0) width else fallback.first) to
-            (if (height > 0) height else fallback.second)
+        fun opt(key: String): Int = options?.getInt(key, 0) ?: 0
+        val isPortrait = context.resources.configuration.orientation !=
+            android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        return WidgetSizeMath.deriveSizeDp(
+            minWidth = opt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
+            minHeight = opt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT),
+            maxWidth = opt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH),
+            maxHeight = opt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT),
+            isPortrait = isPortrait,
+            fallback = fallback
+        )
     }
 
     internal const val KIND_COUNTDOWN = 0
@@ -430,6 +447,12 @@ object Widgets {
         if (index == null) {
             views.setViewVisibility(R.id.widget_photo, View.GONE)
             views.setViewVisibility(R.id.widget_overlay, View.GONE)
+            // Glass fix 1.2.52: glass layouts no longer carry the
+            // root burgundy drawable (it peeked out as square
+            // corners); the plain-mode fallback restores it here
+            // so a failed glass compose still lands on the
+            // approved burgundy face, never on transparency.
+            views.setInt(R.id.widget_root, "setBackgroundResource", R.drawable.widget_bg)
             return
         }
         val density = context.resources.displayMetrics.density

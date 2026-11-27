@@ -4,9 +4,12 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Shader
+import android.util.LruCache
 import sy.medpro.watani.data.WidgetGlassMath
 import sy.medpro.watani.data.WidgetGlassStyle
 import sy.medpro.watani.data.WidgetSettingsMath
@@ -71,13 +74,24 @@ private object GlassRecipe {
     const val DARK_R = 0x2E; const val DARK_G = 0x08; const val DARK_B = 0x12
     const val IVORY_R = 0xFA; const val IVORY_G = 0xF6; const val IVORY_B = 0xF0
     // The approved dim grade colour (#22050B) and its strength
-    // under the glass (the pre-v4 overlay runs at full strength).
+    // under the glass. Glass fix 1.2.52: v4 ran it at 0.75 —
+    // weakening the one legibility layer the doctor had already
+    // approved at full strength pre-v4 — restored to 1.0.
     const val DIM_R = 0x22; const val DIM_G = 0x05; const val DIM_B = 0x0B
-    const val DIM_STRENGTH = 0.75f
+    const val DIM_STRENGTH = 1.0f
     const val ALPHA_MAX = 255
-    // Blur: render the background at 1/8 size and scale back up.
-    const val BLUR_DOWNSAMPLE = 8
+    // Blur (glass fix 1.2.52): two resampling passes (÷4 then ÷2
+    // of the target) instead of one ÷8 jump — the single pass
+    // produced blotchy, uneven mush over detailed photos; two
+    // bilinear passes approximate the mockups' gaussian far
+    // more closely at the same cost class.
+    const val BLUR_STEP_ONE = 4
+    const val BLUR_STEP_TWO = 2
     const val MIN_BLUR_BUFFER = 8
+    /** Byte budget of the composed-face cache (several placed
+     * instances/sizes stay resident; v4 cached exactly ONE face,
+     * so a family refresh recomposed nearly every instance). */
+    const val CACHE_MAX_BYTES = 8 * 1024 * 1024
     // Top sheen: white alpha 34 → 0 over the upper half.
     const val SHEEN_MAX_ALPHA = 34
     const val SHEEN_HEIGHT_FRACTION = 0.5f
@@ -118,8 +132,9 @@ internal object WidgetGlass {
         val dim: Int, val widthPx: Int, val heightPx: Int
     )
 
-    private var cachedKey: Key? = null
-    private var cached: Bitmap? = null
+    private val cache = object : LruCache<Key, Bitmap>(GlassRecipe.CACHE_MAX_BYTES) {
+        override fun sizeOf(key: Key, value: Bitmap): Int = value.byteCount
+    }
 
     /**
      * The composed glass background at the widget's real size:
@@ -142,7 +157,7 @@ internal object WidgetGlass {
             WidgetGlassMath.clampGlassAlpha(settings.glassAlphaPercent),
             settings.dimPercent, widthPx, heightPx
         )
-        cached?.let { if (cachedKey == key) return it }
+        cache.get(key)?.let { return it }
         val result = try {
             compose(context, data, widthPx, heightPx, radiusPx)
         } catch (_: Exception) {
@@ -151,8 +166,7 @@ internal object WidgetGlass {
             null
         }
         if (result != null) {
-            cached = result
-            cachedKey = key
+            cache.put(key, result)
         }
         return result
     }
@@ -187,11 +201,11 @@ internal object WidgetGlass {
         return out
     }
 
-    /** Photo base: center-cropped landmark, blurred by rendering
-     * into a small buffer and scaling back up (a real pixel blur
-     * of the background layer, standing in for the mockup's
-     * GaussianBlur 26), then the approved dim grade at reduced
-     * strength under the glass. False = photo undecodable. */
+    /** Photo base: center-cropped landmark, blurred by two
+     * resampling passes (a real pixel blur of the background
+     * layer, standing in for the mockup's GaussianBlur 26), then
+     * the approved dim grade at full strength under the glass.
+     * False = photo undecodable. */
     private fun drawPhotoBase(
         context: Context,
         data: WidgetData,
@@ -214,53 +228,64 @@ internal object WidgetGlass {
             crop[0].toInt(), crop[1].toInt(),
             (crop[0] + crop[2]).toInt(), (crop[1] + crop[GlassRecipe.CROP_HEIGHT_INDEX]).toInt()
         )
-        val smallW = (widthPx / GlassRecipe.BLUR_DOWNSAMPLE).coerceAtLeast(GlassRecipe.MIN_BLUR_BUFFER)
-        val smallH = (heightPx / GlassRecipe.BLUR_DOWNSAMPLE).coerceAtLeast(GlassRecipe.MIN_BLUR_BUFFER)
-        val small = Bitmap.createBitmap(smallW, smallH, Bitmap.Config.ARGB_8888)
-        Canvas(small).drawBitmap(
-            source, srcRect, RectF(0f, 0f, smallW.toFloat(), smallH.toFloat()), paint
+        // Pass 1: crop into a ÷4 buffer. Pass 2: that into a ÷2
+        // buffer. The face draws the ÷2 buffer at full size — two
+        // bilinear resamples read as a smooth gaussian-like blur
+        // where v4's single ÷8 jump read as blotches.
+        val stepOneW = (widthPx / GlassRecipe.BLUR_STEP_ONE).coerceAtLeast(GlassRecipe.MIN_BLUR_BUFFER)
+        val stepOneH = (heightPx / GlassRecipe.BLUR_STEP_ONE).coerceAtLeast(GlassRecipe.MIN_BLUR_BUFFER)
+        val stepOne = Bitmap.createBitmap(stepOneW, stepOneH, Bitmap.Config.ARGB_8888)
+        Canvas(stepOne).drawBitmap(
+            source, srcRect, RectF(0f, 0f, stepOneW.toFloat(), stepOneH.toFloat()), paint
+        )
+        val stepTwoW = (widthPx / GlassRecipe.BLUR_STEP_TWO).coerceAtLeast(GlassRecipe.MIN_BLUR_BUFFER)
+        val stepTwoH = (heightPx / GlassRecipe.BLUR_STEP_TWO).coerceAtLeast(GlassRecipe.MIN_BLUR_BUFFER)
+        val stepTwo = Bitmap.createBitmap(stepTwoW, stepTwoH, Bitmap.Config.ARGB_8888)
+        Canvas(stepTwo).drawBitmap(
+            stepOne, android.graphics.Rect(0, 0, stepOneW, stepOneH),
+            RectF(0f, 0f, stepTwoW.toFloat(), stepTwoH.toFloat()), paint
         )
         canvas.drawBitmap(
-            small, android.graphics.Rect(0, 0, smallW, smallH),
+            stepTwo, android.graphics.Rect(0, 0, stepTwoW, stepTwoH),
             RectF(0f, 0f, widthPx.toFloat(), heightPx.toFloat()), paint
         )
         drawDimGrade(canvas, data, widthPx, heightPx)
         return true
     }
 
-    /** The approved dim grade (legibility), at 75% strength —
-     * the glass tint above it carries the rest of the recipe. */
+    /** The approved dim grade (legibility) at full strength —
+     * drawn as ONE gradient shader (v4 looped a drawRect per
+     * pixel row, ~800 canvas calls per face per instance). */
     private fun drawDimGrade(canvas: Canvas, data: WidgetData, widthPx: Int, heightPx: Int) {
         val (top, mid, bottom) = WidgetSettingsMath.overlayStops(data.settings.dimPercent)
-        val dimPaint = Paint()
-        for (y in 0 until heightPx) {
-            val t = y / (heightPx - 1).coerceAtLeast(1).toFloat()
-            val a = if (t < GlassRecipe.GRADIENT_MIDPOINT) {
-                top + (mid - top) * (t * 2f)
-            } else {
-                mid + (bottom - mid) * ((t - GlassRecipe.GRADIENT_MIDPOINT) * 2f)
-            }
-            dimPaint.color = Color.argb(
-                (a * GlassRecipe.DIM_STRENGTH * GlassRecipe.ALPHA_MAX).toInt(),
-                GlassRecipe.DIM_R, GlassRecipe.DIM_G, GlassRecipe.DIM_B
+        fun dimColor(alphaFraction: Float): Int = Color.argb(
+            (alphaFraction * GlassRecipe.DIM_STRENGTH * GlassRecipe.ALPHA_MAX).toInt(),
+            GlassRecipe.DIM_R, GlassRecipe.DIM_G, GlassRecipe.DIM_B
+        )
+        val paint = Paint().apply {
+            shader = LinearGradient(
+                0f, 0f, 0f, heightPx.toFloat(),
+                intArrayOf(dimColor(top), dimColor(mid), dimColor(bottom)),
+                floatArrayOf(0f, GlassRecipe.GRADIENT_MIDPOINT, 1f),
+                Shader.TileMode.CLAMP
             )
-            canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, dimPaint)
         }
+        canvas.drawRect(0f, 0f, widthPx.toFloat(), heightPx.toFloat(), paint)
     }
 
     /** Plain mode base: a burgundy vertical gradient (the glass
-     * still applies above it — tint, sheen and edge). */
+     * still applies above it — tint, sheen and edge), drawn as
+     * one gradient shader instead of per-row rects. */
     private fun drawGradientBase(canvas: Canvas, widthPx: Int, heightPx: Int) {
-        val basePaint = Paint()
-        for (y in 0 until heightPx) {
-            val t = y / (heightPx - 1).coerceAtLeast(1).toFloat()
-            basePaint.color = Color.rgb(
-                (GlassRecipe.DARK_R + (GlassRecipe.BURG_R - GlassRecipe.DARK_R) * t).toInt(),
-                (GlassRecipe.DARK_G + (GlassRecipe.BURG_G - GlassRecipe.DARK_G) * t).toInt(),
-                (GlassRecipe.DARK_B + (GlassRecipe.BURG_B - GlassRecipe.DARK_B) * t).toInt()
+        val paint = Paint().apply {
+            shader = LinearGradient(
+                0f, 0f, 0f, heightPx.toFloat(),
+                Color.rgb(GlassRecipe.DARK_R, GlassRecipe.DARK_G, GlassRecipe.DARK_B),
+                Color.rgb(GlassRecipe.BURG_R, GlassRecipe.BURG_G, GlassRecipe.BURG_B),
+                Shader.TileMode.CLAMP
             )
-            canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, basePaint)
         }
+        canvas.drawRect(0f, 0f, widthPx.toFloat(), heightPx.toFloat(), paint)
     }
 
     /** Glass tint: the style colour at the student's floored
@@ -278,16 +303,19 @@ internal object WidgetGlass {
         canvas.drawColor(Color.argb((tintAlpha * GlassRecipe.ALPHA_MAX).toInt(), tr, tg, tb))
     }
 
-    /** Top sheen: white 34 → 0 over the upper half. */
+    /** Top sheen: white 34 → 0 over the upper half — one
+     * gradient shader (v4 looped per pixel row). */
     private fun drawSheen(canvas: Canvas, widthPx: Int, heightPx: Int) {
-        val sheenPaint = Paint()
         val sheenEnd = (heightPx * GlassRecipe.SHEEN_HEIGHT_FRACTION).toInt().coerceAtLeast(1)
-        for (y in 0 until sheenEnd) {
-            val t = y / sheenEnd.toFloat()
-            val alpha = ((1f - t) * GlassRecipe.SHEEN_MAX_ALPHA).toInt()
-            sheenPaint.color = (alpha shl GlassRecipe.ALPHA_SHIFT) or GlassRecipe.WHITE_RGB
-            canvas.drawRect(0f, y.toFloat(), widthPx.toFloat(), y + 1f, sheenPaint)
+        val paint = Paint().apply {
+            shader = LinearGradient(
+                0f, 0f, 0f, sheenEnd.toFloat(),
+                (GlassRecipe.SHEEN_MAX_ALPHA shl GlassRecipe.ALPHA_SHIFT) or GlassRecipe.WHITE_RGB,
+                0,
+                Shader.TileMode.CLAMP
+            )
         }
+        canvas.drawRect(0f, 0f, widthPx.toFloat(), sheenEnd.toFloat(), paint)
     }
 
     /** Edge light: warm hairline + top highlight line. */
