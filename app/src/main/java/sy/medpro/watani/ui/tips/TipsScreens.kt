@@ -101,15 +101,43 @@ fun TipsRootScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var route by remember {
-        mutableStateOf<TipsRoute>(
-            if (initialSubject != null && TipsContract.isTipsSubject(initialSubject)) {
-                TipsRoute.Subject(initialSubject)
-            } else {
-                TipsRoute.Subjects
-            }
+    // Sequential back navigation (build 1.2.54, doctor's report):
+    // the section keeps a TRUE visit stack — every forward tap
+    // pushes the screen it lands on, and EVERY back step (the
+    // top-bar arrow and the system back button/gesture alike)
+    // pops exactly one visited screen. Only at the stack's root
+    // does back hand over to the caller (the destination the
+    // student was on before entering the section). Before this
+    // fix the internal route was wired only to the scaffold's
+    // visual arrow through a static parent map, and no
+    // BackHandler existed here at all — so the system back fell
+    // through to MainActivity's handler, which nulls the whole
+    // drawer screen and threw the student back to the main tabs
+    // from ANY depth inside the section (Subjects → Subject →
+    // Section → one press → out). A deep entry (initialSubject)
+    // starts the stack at that subject, so back from it exits
+    // the section — it never invents a visit to the subjects
+    // list the student never saw.
+    var backStack by remember {
+        mutableStateOf(
+            listOf(
+                if (initialSubject != null && TipsContract.isTipsSubject(initialSubject)) {
+                    TipsRoute.Subject(initialSubject)
+                } else {
+                    TipsRoute.Subjects
+                }
+            )
         )
     }
+    val route = backStack.last()
+    val goBack: () -> Unit = {
+        if (backStack.size > 1) {
+            backStack = backStack.dropLast(1)
+        } else {
+            onBack()
+        }
+    }
+    androidx.activity.compose.BackHandler { goBack() }
 
     // Open triggers: flush the outbox + refresh «mine» + learn the
     // writing gate — all silent, all best-effort.
@@ -118,15 +146,15 @@ fun TipsRootScreen(
         TipsRepository.refreshWritingMode(context)
     }
 
-    val title = TipsRouting.title(route)
-    val back: () -> Unit = {
-        val next = TipsRouting.backRoute(route)
-        if (next == null) onBack() else route = next
-    }
-
-    DrawerScreenScaffold(title = title, onBack = back) { padding ->
+    DrawerScreenScaffold(title = TipsRouting.title(route), onBack = goBack) { padding ->
         Box(modifier = modifier.fillMaxSize().padding(padding)) {
-            TipsRouteContent(route = route, onRoute = { route = it })
+            TipsRouteContent(
+                route = route,
+                onRoute = { next ->
+                    if (next != route) backStack = backStack + next
+                },
+                onPop = goBack
+            )
         }
     }
 }
@@ -752,7 +780,9 @@ private fun TipsIntroHeader(onOpenMine: () -> Unit) {
     }
 }
 
-/** منطق توجيه الزوادة النقي: العناوين ومسارات الرجوع. */
+/** منطق توجيه الزوادة النقي: عناوين الشاشات. (مسارات الرجوع لم
+ * تعد خريطة آباء ثابتة — صارت مكدّس الزيارة الحقيقي داخل
+ * TipsRootScreen منذ بناء 1.2.54.) */
 private object TipsRouting {
 
     /** عنوان شاشة مسار الزوادة الحالي. */
@@ -763,24 +793,17 @@ private object TipsRouting {
         is TipsRoute.Add -> "أضف نصيحة"
         TipsRoute.Mine -> "إضافاتي"
     }
-
-    /** مسار الرجوع من كل شاشة؛ null من قائمة المواد = خروج. */
-    fun backRoute(route: TipsRoute): TipsRoute? = when (route) {
-        TipsRoute.Subjects -> null
-        is TipsRoute.Subject -> TipsRoute.Subjects
-        is TipsRoute.Section -> TipsRoute.Subject(route.subject)
-        is TipsRoute.Add -> if (route.sectionId != null) {
-            TipsRoute.Section(route.subject, route.sectionId)
-        } else {
-            TipsRoute.Subject(route.subject)
-        }
-        TipsRoute.Mine -> TipsRoute.Subjects
-    }
 }
 
-/** محتوى المسار الحالي (شاشات الزوادة الخمس). */
+/** محتوى المسار الحالي (شاشات الزوادة الخمس). [onRoute] تنقّل
+ * أمامي يدفع على مكدّس الزيارة، و[onPop] عودة خطوة واحدة —
+ * شاشة الإضافة عند إتمامها ترجع لما قبلها لا تدفع وجهة جديدة. */
 @Composable
-private fun TipsRouteContent(route: TipsRoute, onRoute: (TipsRoute) -> Unit) {
+private fun TipsRouteContent(
+    route: TipsRoute,
+    onRoute: (TipsRoute) -> Unit,
+    onPop: () -> Unit
+) {
     when (route) {
         TipsRoute.Subjects -> TipsSubjectsContent(
             onOpenSubject = { onRoute(TipsRoute.Subject(it)) },
@@ -799,7 +822,7 @@ private fun TipsRouteContent(route: TipsRoute, onRoute: (TipsRoute) -> Unit) {
         is TipsRoute.Add -> TipsAddContent(
             subject = route.subject,
             initialSectionId = route.sectionId,
-            onDone = { onRoute(TipsRouting.backRoute(route) ?: TipsRoute.Subject(route.subject)) }
+            onDone = onPop
         )
         TipsRoute.Mine -> TipsMineContent()
     }

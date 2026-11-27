@@ -1295,7 +1295,14 @@ class MainActivity : ComponentActivity() {
                                                 )
                                                 "المراجعة الذكية Anki - الخاطئة" -> FlashcardsReviewScreen(
                                                     ankiWrongOnly = true,
-                                                    onBack = { drawerScreen = null }
+                                                    // Sequential back (1.2.54): this
+                                                    // screen is reachable ONLY from
+                                                    // «سجل أخطائي والاختبارات», so its
+                                                    // back returns there — the same
+                                                    // one-step pattern as the night
+                                                    // shift returning to the ER — not
+                                                    // out of the drawer entirely.
+                                                    onBack = { drawerScreen = "سجل أخطائي والاختبارات" }
                                                 )
                                                 "بنك أخطائي" -> MistakesBankScreen(
                                                     autoStartReview = mistakesAutoReview,
