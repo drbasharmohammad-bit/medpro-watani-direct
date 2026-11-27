@@ -11,7 +11,7 @@ code=1
 attempt=1
 while [ "$attempt" -le 3 ]; do
   gradle :app:connectedDebugAndroidTest \
-    -Pandroid.testInstrumentationRunnerArguments.additionalTestOutputDir=/storage/emulated/0/Android/data/sy.medpro.watani.test/files/testout \
+    -Pandroid.testInstrumentationRunnerArguments.additionalTestOutputDir=/storage/emulated/0/Android/data/sy.medpro.watani.test/files \
     -Pandroid.testInstrumentationRunnerArguments.class=sy.medpro.watani.bidi.BidiProofTest \
     --console=plain --max-workers=2
   code=$?
