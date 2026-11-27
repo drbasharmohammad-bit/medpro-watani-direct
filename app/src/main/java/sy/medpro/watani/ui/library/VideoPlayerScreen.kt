@@ -278,7 +278,7 @@ fun VideoPlayerScreen(
 
         if (showControls) {
             TopAppBar(
-                title = { Text(title, maxLines = 1, color = Color.White) },
+                title = { Text(title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Color.White) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaroonPrimary)
             )

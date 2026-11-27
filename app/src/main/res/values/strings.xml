@@ -3,13 +3,4 @@
     <string name="widget_countdown_description">عدّاد الامتحان — أيام وساعات ودقائق وثوانٍ حية</string>
     <string name="widget_day_description">عدّاد الامتحان وأهداف اليوم وتقدم الأسئلة</string>
     <string name="widget_day_large_description">عدّاد الامتحان وأهداف اليوم والتركيز — حجم كبير</string>
-    <string name="widget_glass_countdown_description">العدّاد التنازلي الزجاجي — 4×2</string>
-    <string name="widget_glass_hero_description">الجاهزية الزجاجية — عدّاد وهدف وسلسلة وتابع، 4×4</string>
-    <string name="widget_glass_goal_description">هدف اليوم الزجاجي — 2×2</string>
-    <string name="widget_glass_streak_description">سلسلة الأيام الزجاجية — 2×2</string>
-    <string name="widget_glass_continue_description">تابع من حيث توقفت — 4×1</string>
-    <string name="widget_glass_tip_description">زوادة اليوم — نصيحة من زملائك، 4×2</string>
-    <string name="widget_glass_actions_description">أزرار سريعة زجاجية — 4×1</string>
-    <string name="widget_glass_focus_description">تركيز اليوم الزجاجي — 2×2</string>
-    <string name="widget_glass_mini_description">عدّاد مصغّر زجاجي — 2×1</string>
 </resources>

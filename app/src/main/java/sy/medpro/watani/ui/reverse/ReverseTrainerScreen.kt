@@ -407,7 +407,7 @@ private fun DiagnosisHeader(round: ReverseRoundDto, instruction: String) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("التشخيص", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-            Text(round.diagnosis ?: "", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaroonPrimary)
+            Text(round.diagnosis ?: "", fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 30.sp, color = MaroonPrimary)
             round.diagnosisEn?.let {
                 Text(it, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
@@ -430,7 +430,7 @@ private fun DiagnosisHeader(round: ReverseRoundDto, instruction: String) {
 private fun ResultCard(score: Int, max: Int, rating: String?, round: ReverseRoundDto) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("نتيجتك: $score / $max", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaroonPrimary)
+            Text("نتيجتك: $score / $max", fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 30.sp, color = MaroonPrimary)
             if (rating != null) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(rating, fontWeight = FontWeight.Bold, fontSize = 16.sp)

@@ -863,7 +863,7 @@ private fun DdxCasePlay(
                         Text(
                             "الدرجة الكلية: ${score.total}/100",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
+                            fontSize = 20.sp, lineHeight = 30.sp,
                             color = MaroonPrimary
                         )
                         Text(

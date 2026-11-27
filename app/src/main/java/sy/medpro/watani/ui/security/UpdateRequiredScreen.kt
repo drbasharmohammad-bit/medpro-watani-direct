@@ -131,7 +131,7 @@ fun UpdateRequiredScreen() {
         Text(
             "يلزم تحديث التطبيق",
             fontWeight = FontWeight.Bold,
-            fontSize = 24.sp,
+            fontSize = 24.sp, lineHeight = 36.sp,
             color = MaroonPrimary,
             textAlign = TextAlign.Center
         )

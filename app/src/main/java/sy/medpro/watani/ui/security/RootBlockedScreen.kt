@@ -70,7 +70,7 @@ fun RootBlockedScreen(onClose: () -> Unit) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "جهاز مروّت",
-                        fontSize = 22.sp,
+                        fontSize = 22.sp, lineHeight = 33.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaroonPrimary,
                         textAlign = TextAlign.Center,

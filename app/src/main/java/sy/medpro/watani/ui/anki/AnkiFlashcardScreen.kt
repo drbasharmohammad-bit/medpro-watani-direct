@@ -341,6 +341,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                                     onClick = { rebuildSession() },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
                                     modifier = Modifier.weight(1f).height(50.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
                                     shape = MaterialTheme.shapes.medium) {
                                     Text("إعادة الجلسة")
                                 }
@@ -348,6 +349,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                                     onClick = { backToPicker() },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                     modifier = Modifier.weight(1f).height(50.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
                                     shape = MaterialTheme.shapes.medium) {
                                     Text("اختيار مادة أخرى", color = MaterialTheme.colorScheme.onSurface)
                                 }
@@ -388,12 +390,8 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                                 fontSize = 14.sp
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = if (!showAnswer) card.front else card.back,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurface
+                            FlashcardFaceText(
+                                text = if (!showAnswer) card.front else card.back
                             )
                             AnimatedVisibility(visible = showAnswer) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -440,39 +438,14 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                             currentIndex++
                             reviewedThisSession++
                         }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { gradeCurrent(AnkiGrade.AGAIN) },
-                                colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                                modifier = Modifier.weight(1f).height(50.dp),
-                                shape = MaterialTheme.shapes.medium) {
-                                Text("إعادة", fontSize = 13.sp)
-                            }
-                            Button(
-                                onClick = { gradeCurrent(AnkiGrade.HARD) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                ),
-                                modifier = Modifier.weight(1f).height(50.dp),
-                                shape = MaterialTheme.shapes.medium) {
-                                Text("صعب", fontSize = 13.sp)
-                            }
-                            Button(
-                                onClick = { gradeCurrent(AnkiGrade.GOOD) },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                                modifier = Modifier.weight(1f).height(50.dp),
-                                shape = MaterialTheme.shapes.medium) {
-                                Text("جيد", fontSize = 13.sp)
-                            }
-                            Button(
-                                onClick = { gradeCurrent(AnkiGrade.EASY) },
-                                colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
-                                modifier = Modifier.weight(1f).height(50.dp),
-                                shape = MaterialTheme.shapes.medium) {
-                                Text("سهل", fontSize = 13.sp)
-                            }
-                        }
+                        FsrsGradeButtons(
+                            intervals = AnkiGrade.values().associateWith { g ->
+                                formatFsrsInterval(
+                                    FsrsStore.previewIntervalDays(context, card.id.toString(), g)
+                                )
+                            },
+                            onGrade = { gradeCurrent(it) }
+                        )
                     } else {
                         Button(
                             onClick = { showAnswer = true },
@@ -675,7 +648,7 @@ private fun AnkiDropdown(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                    Text(selected, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(selected, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
                 Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = MaroonPrimary)
             }

@@ -148,7 +148,7 @@ fun ActivationPromptDialog(
                 Text(
                     "الاشتراك الكامل",
                     fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
-                    fontSize = 26.sp, color = libHeading(), textAlign = TextAlign.Center
+                    fontSize = 26.sp, lineHeight = 39.sp, color = libHeading(), textAlign = TextAlign.Center
                 )
                 Text(
                     "كل المحتوى... باشتراك واحد",

@@ -109,7 +109,7 @@ fun ProfileScreen(onBack: () -> Unit) {
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(userName, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text(userName, fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 30.sp)
             Text(email, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
             Spacer(modifier = Modifier.height(24.dp))
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -611,7 +611,7 @@ fun StudyGuideScreen(onBack: () -> Unit) {
                 }
                 else -> {
                     Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
-                        Text(selectedGroup!!.title ?: "", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaroonPrimary)
+                        Text(selectedGroup!!.title ?: "", fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 30.sp, color = MaroonPrimary)
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(selectedGroup!!.content ?: selectedGroup!!.items?.joinToString("\n• ") ?: "", fontSize = 15.sp, lineHeight = 24.sp)
                     }

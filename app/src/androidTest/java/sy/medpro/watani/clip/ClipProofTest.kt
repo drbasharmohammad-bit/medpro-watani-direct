@@ -2,59 +2,46 @@ package sy.medpro.watani.clip
 
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import sy.medpro.watani.ui.anki.AnkiGrade
+import sy.medpro.watani.ui.anki.FlashcardFaceText
+import sy.medpro.watani.ui.anki.FsrsGradeButtons
+import sy.medpro.watani.ui.home.HomeBrandHeader
+import sy.medpro.watani.ui.widget.WidgetSettingsScreen
 import java.io.File
 import java.io.FileOutputStream
 
 /**
- * Text-clipping proof — BEFORE state (build 1.2.55, stage 1 of 2).
+ * Text-clipping proof — AFTER state (build 1.2.55, stage 2 of 2).
  *
- * Doctor's device report on 1.2.54 (27 Nov 2026): on the smart
- * flashcards study screen the four FSRS grade buttons clip their
- * labels («سهل» renders «سه», «صعب» renders «صع») and the card
- * text clips its Arabic diacritics at the tops of lines
- * («المجزّأً»).
+ * Stage 1 (commit 02bfdd4) rendered the verbatim 1.2.54
+ * construction and shot clip_before.png: grade labels clipped by
+ * the default 24.dp button content padding, card diacritics
+ * clipped by the inherited 26.sp line height at 20.sp.
  *
- * This stage renders the EXACT construction the shipped 1.2.54
- * code uses (copied verbatim from AnkiFlashcardScreen /
- * UserCardsScreen at 1f0c1b5):
- *  - grade buttons: Modifier.weight(1f).height(50.dp), DEFAULT
- *    Material3 content padding (24.dp on each side), one Text at
- *    13.sp — inside a ~328.dp-wide row each button's inner text
- *    width shrinks below the label's width and the button's clip
- *    cuts the final glyph;
- *  - card face text: Text at 20.sp bold with NO lineHeight — it
- *    inherits bodyLarge's fixed 26.sp line height (ratio 1.3),
- *    too tight for stacked Arabic marks, which overflow the line
- *    box and clip.
- * Screenshot: clip_before.png. Stage 2 replaces this file's body
- * with the production composables the fix introduces and shoots
- * clip_after.png.
+ * This stage renders the PRODUCTION composables the fix ships:
+ *  1. [FlashcardFaceText] (31.sp line height) over the same
+ *     diacritic-stacked sample + [FsrsGradeButtons] (4.dp content
+ *     padding, 58.dp height, label + FSRS interval) —
+ *     clip_after.png;
+ *  2. [HomeBrandHeader] — the doctor's home-header ruling: name
+ *     beside the M logo, no «Med Pro» word in the block, and the
+ *     study line complete on one line — header_after.png;
+ *  3. the restored pre-glass [WidgetSettingsScreen] (solid v3
+ *     family; the glass family was removed for good by the
+ *     doctor's 27 Nov 2026 ruling) — widget_after.png.
  */
 @RunWith(AndroidJUnit4::class)
 class ClipProofTest {
@@ -74,61 +61,52 @@ class ClipProofTest {
         bitmap.recycle()
     }
 
-    /** Verbatim 1.2.54 grade row (colors simplified to swatches). */
-    @Composable
-    private fun GradeRowBefore() {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = {},
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
-                modifier = Modifier.weight(1f).height(50.dp),
-                shape = MaterialTheme.shapes.medium
-            ) { Text("إعادة", fontSize = 13.sp) }
-            Button(
-                onClick = {},
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                modifier = Modifier.weight(1f).height(50.dp),
-                shape = MaterialTheme.shapes.medium
-            ) { Text("صعب", fontSize = 13.sp) }
-            Button(
-                onClick = {},
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5E1224)),
-                modifier = Modifier.weight(1f).height(50.dp),
-                shape = MaterialTheme.shapes.medium
-            ) { Text("جيد", fontSize = 13.sp) }
-            Button(
-                onClick = {},
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                modifier = Modifier.weight(1f).height(50.dp),
-                shape = MaterialTheme.shapes.medium
-            ) { Text("سهل", fontSize = 13.sp) }
-        }
-    }
-
     @Test
-    fun gradeButtonsAndCardText_beforeFix() {
+    fun gradeButtonsAndCardText_afterFix() {
         composeRule.setContent {
             Surface {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-                    // Card face text exactly as shipped (20.sp, bold,
-                    // no lineHeight) with a diacritic-stacked sample.
-                    Text(
-                        text = "الدَّواءُ المُجَزَّأً يُعطى للمَريضِ صَباحًا، والمُؤَكَّدُ أنَّ الجُرعةَ تُقَسَّمُ على دُفُعاتٍ مُتَساوِيَةٍ طَوالَ اليَومِ.",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
+                    FlashcardFaceText(
+                        text = "الدَّواءُ المُجَزَّأً يُعطى للمَريضِ صَباحًا، والمُؤَكَّدُ أنَّ الجُرعةَ تُقَسَّمُ على دُفُعاتٍ مُتَساوِيَةٍ طَوالَ اليَومِ."
                     )
-                    GradeRowBefore()
+                    FsrsGradeButtons(
+                        intervals = mapOf(
+                            AnkiGrade.AGAIN to "10 د",
+                            AnkiGrade.HARD to "1 يوم",
+                            AnkiGrade.GOOD to "3 يوم",
+                            AnkiGrade.EASY to "7 يوم"
+                        ),
+                        onGrade = {}
+                    )
                 }
             }
         }
         composeRule.onNode(hasText("سهل", substring = true)).assertIsDisplayed()
-        shoot("clip_before.png")
+        composeRule.onNode(hasText("صعب", substring = true)).assertIsDisplayed()
+        composeRule.onNode(hasText("10 د", substring = true)).assertIsDisplayed()
+        shoot("clip_after.png")
+    }
+
+    @Test
+    fun homeHeader_afterRedesign() {
+        composeRule.setContent {
+            Surface {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                    HomeBrandHeader(displayName = "د. بشار المحمد")
+                }
+            }
+        }
+        composeRule.onNode(hasText("بشار المحمد", substring = true)).assertIsDisplayed()
+        composeRule.onNode(hasText("دراستك اليوم", substring = true)).assertIsDisplayed()
+        shoot("header_after.png")
+    }
+
+    @Test
+    fun widgetSettings_restoredSolidFamily() {
+        composeRule.setContent {
+            WidgetSettingsScreen(onBack = {})
+        }
+        composeRule.onNode(hasText("خلفية الويدجت", substring = true)).assertIsDisplayed()
+        shoot("widget_after.png")
     }
 }

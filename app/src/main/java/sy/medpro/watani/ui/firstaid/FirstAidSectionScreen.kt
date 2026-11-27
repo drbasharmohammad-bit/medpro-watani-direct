@@ -556,7 +556,7 @@ private fun FaHome(
                     Text(
                         "First Aid",
                         fontFamily = NotoKufiFontFamily, fontWeight = FontWeight.ExtraBold,
-                        fontSize = 27.sp, color = Color(0xFFFFF7EA)
+                        fontSize = 27.sp, lineHeight = 40.sp, color = Color(0xFFFFF7EA)
                     )
                     Text(
                         " - Med Pro",

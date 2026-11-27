@@ -110,7 +110,7 @@ class StudyAlarmActivity : ComponentActivity() {
                         Text(
                             "حان وقت الدراسة",
                             color = Color.White,
-                            fontSize = 28.sp,
+                            fontSize = 28.sp, lineHeight = 42.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
                         )

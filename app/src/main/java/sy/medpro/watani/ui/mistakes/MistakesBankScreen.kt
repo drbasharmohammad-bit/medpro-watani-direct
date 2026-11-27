@@ -423,7 +423,7 @@ private fun StatColumn(label: String, value: String) {
             value,
             color = MaterialTheme.colorScheme.onPrimary,
             fontWeight = FontWeight.Bold,
-            fontSize = 22.sp
+            fontSize = 22.sp, lineHeight = 33.sp
         )
         Text(
             label,

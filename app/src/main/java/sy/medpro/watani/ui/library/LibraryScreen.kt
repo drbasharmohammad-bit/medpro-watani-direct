@@ -1522,7 +1522,7 @@ private fun LibraryVideoRow(
                             bookletMeta?.title?.takeIf { it.isNotBlank() }
                                 ?: item.title ?: "",
                             fontFamily = NotoSansArabicFontFamily,
-                            fontSize = 11.5.sp, color = libMuted(), maxLines = 1
+                            fontSize = 11.5.sp, color = libMuted(), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                     val pages = bookletMeta?.pages

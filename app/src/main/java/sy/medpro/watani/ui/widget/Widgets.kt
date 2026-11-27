@@ -30,16 +30,6 @@ import sy.medpro.watani.data.WidgetSettings
 import sy.medpro.watani.data.WidgetSettingsMath
 import sy.medpro.watani.data.WidgetShapeMath
 import sy.medpro.watani.data.WidgetSettingsStore
-import sy.medpro.watani.data.WidgetSizeBounds
-import sy.medpro.watani.data.WidgetSizeMath
-import sy.medpro.watani.data.LastStudyStore
-import sy.medpro.watani.data.OfflineStudyVault
-import sy.medpro.watani.data.TipsContract
-import sy.medpro.watani.data.TipsRepository
-import sy.medpro.watani.data.WidgetGlassStyle
-import sy.medpro.watani.data.WidgetStreakMath
-import sy.medpro.watani.data.WidgetTip
-import sy.medpro.watani.data.WidgetTipMath
 import java.time.LocalDate
 
 /**
@@ -74,9 +64,6 @@ import java.time.LocalDate
  * مسطّح #E9C767 (لا تدرّج لون على نصّيّات RemoteViews).
  */
 
-/** أيام نافذة نقاط الأسبوع بالويدجت (اليوم + 6 سابقة). */
-internal const val WEEK_DAYS: Int = 7
-
 internal data class WidgetData(
     val remainingMillis: Long,
     val days: Long,
@@ -96,17 +83,7 @@ internal data class WidgetData(
     /** Chosen landmark index for today, or null in plain mode.
      * The landmark's NAME is never written on the widget at any
      * size (doctor's order 16 Nov 18:32) — the photo stands alone. */
-    val landmarkIndex: Int?,
-    /** Consecutive study days ending today/yesterday (glass
-     * family v4, design 4 + hero). */
-    val streakDays: Int = 0,
-    /** Activity of the last 7 days, oldest → newest (design 4). */
-    val weekDots: List<Boolean> = List(WEEK_DAYS) { false },
-    /** Last opened bank subject («تابع من حيث توقفت», design 5). */
-    val lastSubjectName: String? = null,
-    /** Today's stable daily tip from the downloaded «زوادة
-     * الطالب» packs (design 6); null = no pack/tip yet. */
-    val tipOfDay: WidgetTip? = null
+    val landmarkIndex: Int?
 )
 
 object Widgets {
@@ -114,16 +91,7 @@ object Widgets {
     private val PROVIDERS: List<Class<*>> = listOf(
         CountdownWidgetProvider::class.java,
         DayWidgetProvider::class.java,
-        DayWidgetLargeProvider::class.java,
-        CountdownWideWidgetProvider::class.java,
-        HeroWidgetProvider::class.java,
-        GoalWidgetProvider::class.java,
-        StreakWidgetProvider::class.java,
-        ContinueWidgetProvider::class.java,
-        TipWidgetProvider::class.java,
-        QuickActionsWidgetProvider::class.java,
-        FocusWidgetProvider::class.java,
-        MiniCountdownWidgetProvider::class.java
+        DayWidgetLargeProvider::class.java
     )
 
     /** Refreshes every placed widget of the family. Called on app
@@ -139,13 +107,17 @@ object Widgets {
                 val component = ComponentName(appContext, providerClass)
                 val ids = manager.getAppWidgetIds(component)
                 if (ids.isEmpty()) return@forEach
-                val kind = kindFor(providerClass)
+                val kind = when (providerClass) {
+                    CountdownWidgetProvider::class.java -> KIND_COUNTDOWN
+                    DayWidgetProvider::class.java -> KIND_DAY
+                    else -> KIND_LARGE
+                }
                 // Per-instance views (1.2.27): the background
                 // bitmaps are clipped at the instance's real size,
                 // so each placed widget gets its own build.
                 ids.forEach { id ->
                     val views = buildViewsForKind(
-                        appContext, data, kind, widgetSizeDp(appContext, manager, id, kind)
+                        appContext, data, kind, widgetSizeDp(manager, id, kind)
                     )
                     manager.updateAppWidget(id, views)
                 }
@@ -153,22 +125,6 @@ object Widgets {
         } catch (_: Exception) {
             // Guarded: boot / midnight / edit callbacks must survive.
         }
-    }
-
-    /** Provider class → layout kind (the family's full map). */
-    private fun kindFor(providerClass: Class<*>): Int = when (providerClass) {
-        CountdownWidgetProvider::class.java -> KIND_COUNTDOWN
-        DayWidgetProvider::class.java -> KIND_DAY
-        DayWidgetLargeProvider::class.java -> KIND_LARGE
-        CountdownWideWidgetProvider::class.java -> KIND_COUNTDOWN_WIDE
-        HeroWidgetProvider::class.java -> KIND_HERO
-        GoalWidgetProvider::class.java -> KIND_GOAL
-        StreakWidgetProvider::class.java -> KIND_STREAK
-        ContinueWidgetProvider::class.java -> KIND_CONTINUE
-        TipWidgetProvider::class.java -> KIND_TIP
-        QuickActionsWidgetProvider::class.java -> KIND_ACTIONS
-        FocusWidgetProvider::class.java -> KIND_FOCUS
-        else -> KIND_MINI
     }
 
     /** Single-provider refresh used by each provider's onUpdate. */
@@ -183,8 +139,7 @@ object Widgets {
             val data = loadData(appContext)
             appWidgetIds.forEach { id ->
                 val views = buildViewsForKind(
-                    appContext, data, layoutKind,
-                    widgetSizeDp(appContext, appWidgetManager, id, layoutKind)
+                    appContext, data, layoutKind, widgetSizeDp(appWidgetManager, id, layoutKind)
                 )
                 appWidgetManager.updateAppWidget(id, views)
             }
@@ -202,31 +157,14 @@ object Widgets {
     ): RemoteViews = when (kind) {
         KIND_COUNTDOWN -> buildCountdownViews(context, data, sizeDp)
         KIND_DAY -> buildDayViews(context, data, sizeDp)
-        KIND_LARGE -> buildLargeViews(context, data, sizeDp)
-        KIND_COUNTDOWN_WIDE -> GlassWidgetBuilders.buildCountdownWideViews(context, data, sizeDp)
-        KIND_HERO -> GlassWidgetBuilders.buildHeroViews(context, data, sizeDp)
-        KIND_GOAL -> GlassWidgetBuilders.buildGoalViews(context, data, sizeDp)
-        KIND_STREAK -> GlassWidgetBuilders.buildStreakViews(context, data, sizeDp)
-        KIND_CONTINUE -> GlassWidgetBuilders.buildContinueViews(context, data, sizeDp)
-        KIND_TIP -> GlassWidgetBuilders.buildTipViews(context, data, sizeDp)
-        KIND_ACTIONS -> GlassWidgetBuilders.buildActionsViews(context, data, sizeDp)
-        KIND_FOCUS -> GlassWidgetBuilders.buildFocusViews(context, data, sizeDp)
-        else -> GlassWidgetBuilders.buildMiniViews(context, data, sizeDp)
+        else -> buildLargeViews(context, data, sizeDp)
     }
 
     /** The placed instance's real size in dp from its widget
      * options; the provider-info minimums when the host reports
      * nothing usable (1.2.27 — the background clip is built at
-     * exactly this size).
-     *
-     * Glass fix 1.2.52: the size is now derived from the FULL
-     * reported range (MIN and MAX) via [WidgetSizeMath] — the
-     * 1.2.51 code read MIN only, which on most launchers is the
-     * smallest size the widget may take, not the size it has;
-     * the baked glass face was then host-stretched (blur, wrong
-     * crop, distorted edge light). */
+     * exactly this size). */
     private fun widgetSizeDp(
-        context: Context,
         manager: AppWidgetManager,
         appWidgetId: Int,
         kind: Int
@@ -237,33 +175,15 @@ object Widgets {
             null
         }
         val fallback = WidgetShapeMath.fallbackSizeDp(kind)
-        fun opt(key: String): Int = options?.getInt(key, 0) ?: 0
-        val isPortrait = context.resources.configuration.orientation !=
-            android.content.res.Configuration.ORIENTATION_LANDSCAPE
-        return WidgetSizeMath.deriveSizeDp(
-            bounds = WidgetSizeBounds(
-                minWidth = opt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
-                minHeight = opt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT),
-                maxWidth = opt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH),
-                maxHeight = opt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
-            ),
-            isPortrait = isPortrait,
-            fallback = fallback
-        )
+        val width = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
+        val height = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0) ?: 0
+        return (if (width > 0) width else fallback.first) to
+            (if (height > 0) height else fallback.second)
     }
 
     internal const val KIND_COUNTDOWN = 0
     internal const val KIND_DAY = 1
     internal const val KIND_LARGE = 2
-    internal const val KIND_COUNTDOWN_WIDE = 3
-    internal const val KIND_HERO = 4
-    internal const val KIND_GOAL = 5
-    internal const val KIND_STREAK = 6
-    internal const val KIND_CONTINUE = 7
-    internal const val KIND_TIP = 8
-    internal const val KIND_ACTIONS = 9
-    internal const val KIND_FOCUS = 10
-    internal const val KIND_MINI = 11
 
     internal fun loadData(context: Context): WidgetData {
         val target = DailyGoalEngine.examTargetOrDefault(context)
@@ -276,25 +196,6 @@ object Widgets {
         val landmarkIndex = WidgetBackgroundMath.pickIndex(
             settings, LocalDate.now().toEpochDay(), LandmarkLibrary.all.size
         )
-        // Glass family v4 extras (1.2.51): streak + week dots from
-        // the vault's daily activity, the last studied subject, and
-        // the daily tip from the downloaded tips packs. Every read
-        // is guarded — a widget refresh must never fail on them.
-        val today = LocalDate.now()
-        val activity = try {
-            OfflineStudyVault.ensureInitialized(context)
-            OfflineStudyVault.statsFlow.value.dailyActivity
-        } catch (_: Exception) {
-            emptyMap()
-        }
-        val tipOfDay = try {
-            val packs = TipsContract.SUBJECTS.mapNotNull { subject ->
-                TipsRepository.cachedPack(context, subject)?.let { subject to it }
-            }.toMap()
-            WidgetTipMath.pickDaily(packs, today.toEpochDay())
-        } catch (_: Exception) {
-            null
-        }
         return WidgetData(
             remainingMillis = remaining,
             days = parts.days,
@@ -307,15 +208,7 @@ object Widgets {
             focusSessions = focus.sessionsToday,
             focusWeekMinutes = focus.minutesWeek,
             settings = settings,
-            landmarkIndex = landmarkIndex,
-            streakDays = WidgetStreakMath.streakDays(activity, today),
-            weekDots = WidgetStreakMath.weekDots(activity, today),
-            lastSubjectName = try {
-                LastStudyStore.load(context)?.second
-            } catch (_: Exception) {
-                null
-            },
-            tipOfDay = tipOfDay
+            landmarkIndex = landmarkIndex
         )
     }
 
@@ -426,36 +319,16 @@ object Widgets {
      * doctor's launcher) and the overlay had no clipping at all.
      * Any bitmap failure falls back to the pre-1.2.27 resource
      * path rather than breaking the widget. */
-    internal fun bindBackground(
+    private fun bindBackground(
         views: RemoteViews,
         context: Context,
         data: WidgetData,
         sizeDp: Pair<Int, Int>
     ) {
-        // Glass family v4 (1.2.51): ONE composed glass bitmap —
-        // blurred background + tint + sheen + edge light — replaces
-        // the photo+overlay pair. Any failure falls through to the
-        // pre-v4 path below, unchanged.
-        val density0 = context.resources.displayMetrics.density
-        val (gw, gh) = WidgetShapeMath.bitmapSizePx(sizeDp.first, sizeDp.second, density0)
-        val gr = WidgetShapeMath.radiusPx(sizeDp.first, sizeDp.second, density0)
-        val glass = WidgetGlass.background(context, data, gw, gh, gr)
-        if (glass != null) {
-            views.setImageViewBitmap(R.id.widget_photo, glass)
-            views.setViewVisibility(R.id.widget_photo, View.VISIBLE)
-            views.setViewVisibility(R.id.widget_overlay, View.GONE)
-            return
-        }
         val index = data.landmarkIndex
         if (index == null) {
             views.setViewVisibility(R.id.widget_photo, View.GONE)
             views.setViewVisibility(R.id.widget_overlay, View.GONE)
-            // Glass fix 1.2.52: glass layouts no longer carry the
-            // root burgundy drawable (it peeked out as square
-            // corners); the plain-mode fallback restores it here
-            // so a failed glass compose still lands on the
-            // approved burgundy face, never on transparency.
-            views.setInt(R.id.widget_root, "setBackgroundResource", R.drawable.widget_bg)
             return
         }
         val density = context.resources.displayMetrics.density
@@ -491,7 +364,7 @@ object Widgets {
      * shows instead (a count-down Chronometer past its base
      * would render negative garbage).
      */
-    internal fun bindChronometer(views: RemoteViews, data: WidgetData) {
+    private fun bindChronometer(views: RemoteViews, data: WidgetData) {
         if (data.remainingMillis <= 0L) {
             views.setViewVisibility(R.id.widget_days_row, View.GONE)
             views.setViewVisibility(R.id.widget_chip, View.GONE)
@@ -584,7 +457,7 @@ object Widgets {
      * (action × widget kind), so intents can never merge and a
      * tap always lands on that button's intended screen.
      */
-    internal fun bindButtons(
+    private fun bindButtons(
         context: Context,
         views: RemoteViews,
         data: WidgetData,

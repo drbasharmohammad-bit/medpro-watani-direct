@@ -319,7 +319,7 @@ fun NightShiftSimulatorScreen(onBack: () -> Unit) {
                         Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("تهانينا! لقد أنهيت المناوبة الليلية بنجاح", color = GoldAccent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("النتيجة النهائية للمناوبة: $shiftScore / 100", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp)
+                            Text("النتيجة النهائية للمناوبة: $shiftScore / 100", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 36.sp)
                             Spacer(modifier = Modifier.height(12.dp))
                             Button(shape = MaterialTheme.shapes.medium,
                                 onClick = {

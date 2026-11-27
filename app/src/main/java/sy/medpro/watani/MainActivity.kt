@@ -1372,7 +1372,7 @@ class MainActivity : ComponentActivity() {
                                                                 MaterialTheme.colorScheme.onSurfaceVariant,
                                                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                                             style = MaterialTheme.typography.labelMedium,
-                                                            maxLines = 1
+                                                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                                         )
                                                     }
                                                 }

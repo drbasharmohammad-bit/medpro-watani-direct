@@ -231,7 +231,7 @@ fun FullDawraListScreen(
                                             "و",
                                             fontFamily = NotoKufiFontFamily,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 26.sp,
+                                            fontSize = 26.sp, lineHeight = 39.sp,
                                             color = LibColors.MaroonDeep
                                         )
                                     }
@@ -241,7 +241,7 @@ fun FullDawraListScreen(
                                             "البنك",
                                             fontFamily = NotoKufiFontFamily,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 21.sp,
+                                            fontSize = 21.sp, lineHeight = 32.sp,
                                             color = libHeading()
                                         )
                                         Text(

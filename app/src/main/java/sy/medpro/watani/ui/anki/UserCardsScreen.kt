@@ -191,7 +191,7 @@ fun UserCardsHome() {
                                         Text(
                                             card.back,
                                             fontSize = 12.sp,
-                                            maxLines = 1,
+                                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                         )
                                         Text(
@@ -335,9 +335,8 @@ private fun UserCardStudySession(queue: List<UserCard>, onExit: () -> Unit) {
                     fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 14.sp
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    if (!showAnswer) card.front else card.back,
-                    fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center
+                FlashcardFaceText(
+                    text = if (!showAnswer) card.front else card.back
                 )
             }
         }
@@ -349,35 +348,14 @@ private fun UserCardStudySession(queue: List<UserCard>, onExit: () -> Unit) {
                 reviewed++
                 index++
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { gradeCurrent(AnkiGrade.AGAIN) },
-                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    shape = MaterialTheme.shapes.medium
-                ) { Text("إعادة", fontSize = 13.sp) }
-                Button(
-                    onClick = { gradeCurrent(AnkiGrade.HARD) },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    shape = MaterialTheme.shapes.medium
-                ) { Text("صعب", fontSize = 13.sp) }
-                Button(
-                    onClick = { gradeCurrent(AnkiGrade.GOOD) },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    shape = MaterialTheme.shapes.medium
-                ) { Text("جيد", fontSize = 13.sp) }
-                Button(
-                    onClick = { gradeCurrent(AnkiGrade.EASY) },
-                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    shape = MaterialTheme.shapes.medium
-                ) { Text("سهل", fontSize = 13.sp) }
-            }
+            FsrsGradeButtons(
+                intervals = AnkiGrade.values().associateWith { g ->
+                    formatFsrsInterval(
+                        FsrsStore.previewIntervalDays(context, card.id, g)
+                    )
+                },
+                onGrade = { gradeCurrent(it) }
+            )
         } else {
             Button(
                 onClick = { showAnswer = true },

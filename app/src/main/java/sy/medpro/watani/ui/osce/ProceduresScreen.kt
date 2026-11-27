@@ -298,7 +298,7 @@ private fun ProcedureDetail(
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
         item {
-            Text(procedure.ar ?: "", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaroonPrimary)
+            Text(procedure.ar ?: "", fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 30.sp, color = MaroonPrimary)
             if (!procedure.en.isNullOrBlank()) {
                 Text(procedure.en, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }

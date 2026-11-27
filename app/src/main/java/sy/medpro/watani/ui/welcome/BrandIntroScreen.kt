@@ -195,7 +195,7 @@ fun BrandIntroScreen(onDone: () -> Unit) {
                         "Med Pro",
                         fontFamily = ThmanyahFontFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 40.sp,
+                        fontSize = 40.sp, lineHeight = 60.sp,
                         color = TextOnDark
                     )
                 }

@@ -47,8 +47,7 @@
                 android:text="Med Pro"
                 android:textColor="#E9C767"
                 android:textSize="17sp"
-                android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:textStyle="bold" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -58,16 +57,14 @@
                 android:text="— العدّ التنازلي للإمتحان الوطني"
                 android:textColor="#FAF4E6"
                 android:textSize="13sp"
-                android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:textStyle="bold" />
         </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:layout_marginTop="8dp"
-            android:background="#59D4AF37" 
-                android:fontFamily="@font/thmanyah_sans" />
+            android:background="#59D4AF37" />
 
         <LinearLayout
             android:id="@+id/widget_countdown_block"
@@ -90,8 +87,7 @@
                     android:layout_height="wrap_content"
                     android:textColor="#E9C767"
                     android:textSize="48sp"
-                    android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                    android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -100,15 +96,13 @@
                     android:text="يومًا"
                     android:textColor="#FAF4E6"
                     android:textSize="16sp"
-                    android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="1dp"
-                android:layout_weight="1" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:layout_weight="1" />
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -147,8 +141,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
                     android:textColor="#D8CDB8"
-                    android:textSize="12sp" 
-                android:fontFamily="@font/thmanyah_sans" />
+                    android:textSize="12sp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -161,8 +154,7 @@
             android:textColor="#FAF4E6"
             android:textSize="13sp"
             android:textStyle="bold"
-            android:visibility="gone" 
-                android:fontFamily="@font/thmanyah_sans" />
+            android:visibility="gone" />
 
         <LinearLayout
             android:id="@+id/widget_questions_block"
@@ -183,14 +175,12 @@
                     android:text="أسئلة اليوم"
                     android:textColor="#FAF4E6"
                     android:textSize="14sp"
-                    android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                    android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="0dp"
                     android:layout_height="1dp"
-                    android:layout_weight="1" 
-                android:fontFamily="@font/thmanyah_sans" />
+                    android:layout_weight="1" />
 
                 <TextView
                     android:id="@+id/widget_goal_text"
@@ -198,8 +188,7 @@
                     android:layout_height="wrap_content"
                     android:textColor="#FAF4E6"
                     android:textSize="15sp"
-                    android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <ProgressBar
@@ -218,8 +207,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:textColor="#D8CDB8"
-                android:textSize="11sp" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:textSize="11sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -237,8 +225,7 @@
                 android:text="أهداف اليوم"
                 android:textColor="#E9C767"
                 android:textSize="14sp"
-                android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/widget_goal_line_1"
@@ -248,8 +235,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#FAF4E6"
-                android:textSize="12sp" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/widget_goal_line_2"
@@ -259,8 +245,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#FAF4E6"
-                android:textSize="12sp" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/widget_goal_line_3"
@@ -270,8 +255,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#FAF4E6"
-                android:textSize="12sp" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -297,15 +281,13 @@
                 android:ellipsize="end"
                 android:maxLines="2"
                 android:textColor="#FAF4E6"
-                android:textSize="12sp" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1" 
-                android:fontFamily="@font/thmanyah_sans" />
+            android:layout_weight="1" />
 
         <LinearLayout
             android:id="@+id/widget_buttons_row"
@@ -340,14 +322,12 @@
                     android:singleLine="true"
                     android:textColor="#FAF4E6"
                     android:textSize="10sp"
-                    android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="6dp"
-                android:layout_height="1dp" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:layout_height="1dp" />
 
             <LinearLayout
                 android:id="@+id/widget_btn_2"
@@ -376,14 +356,12 @@
                     android:singleLine="true"
                     android:textColor="#FAF4E6"
                     android:textSize="10sp"
-                    android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="6dp"
-                android:layout_height="1dp" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:layout_height="1dp" />
 
             <LinearLayout
                 android:id="@+id/widget_btn_3"
@@ -412,14 +390,12 @@
                     android:singleLine="true"
                     android:textColor="#FAF4E6"
                     android:textSize="10sp"
-                    android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="6dp"
-                android:layout_height="1dp" 
-                android:fontFamily="@font/thmanyah_sans" />
+                android:layout_height="1dp" />
 
             <LinearLayout
                 android:id="@+id/widget_btn_4"
@@ -448,8 +424,7 @@
                     android:singleLine="true"
                     android:textColor="#FAF4E6"
                     android:textSize="10sp"
-                    android:textStyle="bold" 
-                android:fontFamily="@font/thmanyah_sans" />
+                    android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

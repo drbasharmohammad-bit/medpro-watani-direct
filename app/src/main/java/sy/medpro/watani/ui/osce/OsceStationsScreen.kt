@@ -333,7 +333,7 @@ private fun OsceStationDetailScreen(
                 Text(station.specialty ?: "", fontWeight = FontWeight.Bold, color = MaroonPrimary, fontSize = 14.sp)
             }
             Spacer(modifier = Modifier.height(6.dp))
-            Text(station.title ?: "", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = MaroonPrimary)
+            Text(station.title ?: "", fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 30.sp, color = MaroonPrimary)
             Text("المدة الزمنية للمحطة: ${(station.durationSec ?: 300) / 60} دقائق", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
         }
 

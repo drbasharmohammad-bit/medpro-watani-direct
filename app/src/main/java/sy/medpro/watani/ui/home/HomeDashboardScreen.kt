@@ -89,29 +89,14 @@ fun HomeDashboardScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        // Slim header of the approved home model (01): logo +
-        // app name. (The header search button was removed
-        // with the global-search feature, 1.2.45; the brand word
-        // and the slogan left the header in 1.2.49.)
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                LibAppLogo()
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Med Pro",
-                        fontFamily = NotoKufiFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 19.sp,
-                        color = libHeading()
-                    )
-                }
-            }
-        }
-
-        // Greeting of the model: small warm line, then the big
-        // Kufi heading. The name comes from the same profile store
-        // the gate writes and the profile screen edits.
+        // Home header (doctor's device ruling, build 1.2.55):
+        // the M logo with the student's name BESIDE it in the
+        // same row, larger than before; the «Med Pro» word no
+        // longer sits next to the logo in this block (the top
+        // app-bar title is a different surface and is untouched);
+        // and the study line below fits on ONE line, unbroken.
+        // The name comes from the same profile store the gate
+        // writes and the profile screen edits.
         item {
             val greetingName = sy.medpro.watani.data.ProfileNameStore.resolveName(
                 sy.medpro.watani.data.ProfileNameStore.savedName(
@@ -120,21 +105,9 @@ fun HomeDashboardScreen(
                 ),
                 com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.displayName
             )
-            Column {
-                Text(
-                    text = sy.medpro.watani.data.ProfileNameStore.greetingFor(greetingName),
-                    fontSize = 13.sp,
-                    color = libMuted()
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "دراستك اليوم… خطوة أقرب للنجاح",
-                    fontFamily = NotoKufiFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    color = libHeading()
-                )
-            }
+            HomeBrandHeader(
+                displayName = sy.medpro.watani.data.ProfileNameStore.greetingFor(greetingName)
+            )
         }
 
         item {
@@ -904,5 +877,48 @@ private fun CountdownUnit(modifier: Modifier = Modifier, value: String, label: S
             Text(value, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = LibColors.Maroon)
             Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
         }
+    }
+}
+
+/**
+ * Home header block (build 1.2.55, doctor's literal spec from his
+ * device screenshot): the M logo alone in its row with the
+ * student's name directly beside it — the name at 20.sp Kufi bold
+ * (it was a 13.sp small line under the logo before, and the
+ * «Med Pro» word that sat beside the logo in this block is gone;
+ * the top app-bar title is a different surface, untouched) — and
+ * below it the study line on exactly ONE line: 17.sp Kufi bold
+ * with wrapping disabled, sized to fit the full sentence
+ * unbroken at phone widths.
+ */
+@Composable
+internal fun HomeBrandHeader(displayName: String) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            LibAppLogo()
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = displayName,
+                fontFamily = NotoKufiFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                lineHeight = 30.sp,
+                color = libHeading(),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "دراستك اليوم… خطوة أقرب للنجاح",
+            fontFamily = NotoKufiFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 17.sp,
+            lineHeight = 26.sp,
+            color = libHeading(),
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }

@@ -301,7 +301,7 @@ fun SignInGate(
                         "Med Pro",
                         fontFamily = ThmanyahFontFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 40.sp,
+                        fontSize = 40.sp, lineHeight = 60.sp,
                         color = TextOnDark
                     )
                 }
@@ -361,7 +361,7 @@ fun SignInGate(
                                 "أهلاً بك",
                                 fontFamily = NotoKufiFontFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 22.sp,
+                                fontSize = 22.sp, lineHeight = 33.sp,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.fillMaxWidth(),
                                 textAlign = TextAlign.Start
