@@ -170,6 +170,21 @@ fun CoursesTopBar(title: String, onBack: () -> Unit) {
  * existing machinery decrypted/built a playback session for. */
 private data class OpenLesson(val file: File, val title: String, val isPdf: Boolean, val item: LibraryItem)
 
+/** Everything the course detail body renders from, bundled as
+ * one value object (detekt LongParameterList — the same pattern
+ * as WidgetSizeBounds in the 1.2.52 detekt round). */
+data class CourseDetailUiState(
+    val course: Course,
+    val lessons: List<CourseLesson>,
+    val items: List<LibraryItem>,
+    val canAccess: Boolean,
+    val fullyDownloaded: Boolean,
+    val anyDownloading: Boolean,
+    val downloadedCount: Int,
+    val downloadingIds: Set<String>,
+    val openError: String?
+)
+
 @Composable
 fun CourseDetailScreen(
     course: Course,
@@ -326,31 +341,27 @@ private fun OpenLessonView(
  * (Extracted from CourseDetailScreen: detekt length/complexity.) */
 @Composable
 fun CourseAccessHeader(
-    canAccess: Boolean,
-    fullyDownloaded: Boolean,
-    anyDownloading: Boolean,
-    downloadedCount: Int,
-    totalCount: Int,
+    state: CourseDetailUiState,
     onDownloadAll: () -> Unit,
     onDeleteAll: () -> Unit
 ) {
     when {
-        !canAccess -> Text(
+        !state.canAccess -> Text(
             "هذا الكورس للمفعّلين — فعّل حسابك بكود التفعيل لتحميله ودراسته.",
             fontSize = 13.sp, lineHeight = 19.sp, color = MaroonPrimary
         )
-        !fullyDownloaded -> Button(
+        !state.fullyDownloaded -> Button(
             onClick = onDownloadAll,
-            enabled = !anyDownloading,
+            enabled = !state.anyDownloading,
             colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
             modifier = Modifier.fillMaxWidth()
         ) {
-            if (anyDownloading) {
+            if (state.anyDownloading) {
                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("جارٍ تحميل الكورس… ($downloadedCount من $totalCount)")
+                Text("جارٍ تحميل الكورس… (${state.downloadedCount} من ${state.items.size})")
             } else {
-                Text(if (downloadedCount > 0) "إكمال تحميل الكورس ($downloadedCount من $totalCount)" else "تحميل الكورس كاملًا")
+                Text(if (state.downloadedCount > 0) "إكمال تحميل الكورس (${state.downloadedCount} من ${state.items.size})" else "تحميل الكورس كاملًا")
             }
         }
         else -> Row(verticalAlignment = Alignment.CenterVertically) {

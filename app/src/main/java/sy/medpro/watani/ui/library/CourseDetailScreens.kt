@@ -13,8 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import sy.medpro.watani.data.Course
-import sy.medpro.watani.data.CourseLesson
 import sy.medpro.watani.data.CourseLogic
 import sy.medpro.watani.data.LibraryItem
 import sy.medpro.watani.ui.theme.GoldAccent
@@ -26,21 +24,6 @@ import sy.medpro.watani.ui.theme.MaroonPrimary
  * split pattern as the 1.2.52 reader probe). Rendering only —
  * all state lives in CourseDetailScreen / LibraryViewModel.
  */
-
-/** Everything the course detail body renders from, bundled as
- * one value object (detekt LongParameterList — the same pattern
- * as WidgetSizeBounds in the 1.2.52 detekt round). */
-data class CourseDetailUiState(
-    val course: Course,
-    val lessons: List<CourseLesson>,
-    val items: List<LibraryItem>,
-    val canAccess: Boolean,
-    val fullyDownloaded: Boolean,
-    val anyDownloading: Boolean,
-    val downloadedCount: Int,
-    val downloadingIds: Set<String>,
-    val openError: String?
-)
 
 @Composable
 fun CourseDetailContent(
@@ -94,11 +77,7 @@ private fun CourseLessonsList(
         }
         item {
             CourseAccessHeader(
-                canAccess = state.canAccess,
-                fullyDownloaded = state.fullyDownloaded,
-                anyDownloading = state.anyDownloading,
-                downloadedCount = state.downloadedCount,
-                totalCount = state.items.size,
+                state = state,
                 onDownloadAll = onDownloadAll,
                 onDeleteAll = onDeleteAll
             )
