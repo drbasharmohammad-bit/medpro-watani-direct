@@ -3,6 +3,9 @@ package sy.medpro.watani.data
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import sy.medpro.watani.data.SectionSwitches.EntryDecision
 
 /**
@@ -13,6 +16,8 @@ import sy.medpro.watani.data.SectionSwitches.EntryDecision
  * exactly, so nothing changes until the doctor flips a switch
  * himself.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class SectionSwitchesTest {
 
     @Test
