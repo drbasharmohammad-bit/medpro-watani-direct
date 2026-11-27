@@ -11,7 +11,6 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,16 +49,15 @@ class ClipProofTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private fun shoot(name: String) {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        composeRule.waitForIdle()
-        Thread.sleep(600)
+        Thread.sleep(400)
         val bitmap = instrumentation.uiAutomation.takeScreenshot()
-        // additionalTestOutputDir is the documented channel Gradle
-        // pulls back with the test results (plain adb pull of the
-        // app sandbox proved unreliable in the emulator action:
-        // run 46027639852 produced reports but no screenshots).
-        val dir = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
-            ?.let { File(it).apply { mkdirs() } }
+        // The system provisions this directory on request (the test
+        // package's own external files dir); raw paths under
+        // Android/data do not exist until provisioned this way —
+        // three CI runs (46030960372 EACCES, 46032573952 and
+        // 46034042185 ENOENT) proved every shortcut wrong. Gradle
+        // pulls this exact dir back via additionalTestOutputDir.
+        val dir = instrumentation.context.getExternalFilesDir(null)
             ?: instrumentation.targetContext.getExternalFilesDir(null)
         FileOutputStream(File(dir, name)).use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
