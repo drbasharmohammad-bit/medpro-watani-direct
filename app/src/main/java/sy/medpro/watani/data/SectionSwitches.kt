@@ -93,9 +93,9 @@ object SectionSwitches {
         val names = config.keys()
         while (names.hasNext()) {
             val name = names.next()
-            val key = SectionKey.fromConfigName(name) ?: continue
-            val state = SwitchState.fromConfigValue(config.optString(name, "")) ?: continue
-            merged[key] = state
+            val key = SectionKey.fromConfigName(name)
+            val state = key?.let { SwitchState.fromConfigValue(config.optString(name, "")) }
+            if (key != null && state != null) merged[key] = state
         }
         return merged
     }

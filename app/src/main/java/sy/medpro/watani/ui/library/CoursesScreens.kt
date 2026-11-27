@@ -154,7 +154,7 @@ private fun CourseCard(course: Course, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CoursesTopBar(title: String, onBack: () -> Unit) {
+fun CoursesTopBar(title: String, onBack: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -192,122 +192,40 @@ fun CourseDetailScreen(
 
     val opened = openLesson
     if (opened != null) {
-        if (opened.isPdf) {
-            PdfViewerScreen(
-                pdfFile = opened.file,
-                title = opened.title,
-                onBack = {
-                    viewModel.closeItem(opened.item)
-                    openLesson = null
-                    onReaderFullscreenChange?.invoke(false)
-                },
-                onDeleteCorrupt = {
-                    viewModel.deleteItem(opened.item)
-                    openLesson = null
-                    onReaderFullscreenChange?.invoke(false)
-                },
-                onFullscreenChange = onReaderFullscreenChange
-            )
-        } else {
-            VideoPlayerScreen(
-                opened.file, opened.title,
-                onBack = {
-                    viewModel.closeItem(opened.item)
-                    openLesson = null
-                    onReaderFullscreenChange?.invoke(false)
-                },
-                onFullscreenChange = onReaderFullscreenChange
-            )
-        }
+        OpenLessonView(
+            opened = opened,
+            viewModel = viewModel,
+            onClose = { openLesson = null },
+            onReaderFullscreenChange = onReaderFullscreenChange
+        )
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        CoursesTopBar(title = course.title ?: "كورس", onBack = onBack)
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            if (!course.description.isNullOrBlank()) {
-                item {
-                    Text(course.description ?: "", fontSize = 13.sp, lineHeight = 19.sp, color = MaroonPrimary)
-                }
-            }
-            if (!canAccess) {
-                item {
-                    Text(
-                        "هذا الكورس للمفعّلين — فعّل حسابك بكود التفعيل لتحميله ودراسته.",
-                        fontSize = 13.sp, lineHeight = 19.sp, color = MaroonPrimary
-                    )
-                }
-            } else if (!fullyDownloaded) {
-                item {
-                    Button(
-                        onClick = {
-                            items.forEach { item ->
-                                if (!viewModel.isItemDownloaded(item) && (item.id ?: "") !in state.downloadingIds) {
-                                    viewModel.downloadItem(item)
-                                }
-                            }
-                        },
-                        enabled = !anyDownloading,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (anyDownloading) {
-                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("جارٍ تحميل الكورس… ($downloadedCount من ${items.size})")
-                        } else {
-                            Text(if (downloadedCount > 0) "إكمال تحميل الكورس ($downloadedCount من ${items.size})" else "تحميل الكورس كاملًا")
-                        }
-                    }
-                }
-            } else {
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("الكورس محمّل بالكامل — يعمل بلا إنترنت", fontSize = 13.sp, color = MaroonPrimary, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { items.forEach { viewModel.deleteItem(it) } }) {
-                            Text("حذف الكورس", color = MaroonPrimary)
-                        }
-                    }
-                }
-            }
-            items(lessons, key = { it.id ?: "" }) { lesson ->
-                LessonRow(
-                    lesson = lesson,
-                    item = CourseLogic.lessonItem(course, lesson),
-                    viewModel = viewModel,
-                    canAccess = canAccess,
-                    onOpen = { item, isPdf ->
-                        scope.launch {
-                            viewModel.openItem(item).fold(
-                                onSuccess = { file -> openLesson = OpenLesson(file, item.title ?: "", isPdf, item) },
-                                onFailure = { e -> openError = e.localizedMessage ?: "تعذر فتح الدرس" }
-                            )
-                        }
-                    }
+    CourseDetailContent(
+        course = course,
+        lessons = lessons,
+        items = items,
+        viewModel = viewModel,
+        canAccess = canAccess,
+        fullyDownloaded = fullyDownloaded,
+        anyDownloading = anyDownloading,
+        downloadedCount = downloadedCount,
+        downloadingIds = state.downloadingIds,
+        openError = openError,
+        onBack = onBack,
+        onOpenLesson = { item, isPdf ->
+            scope.launch {
+                viewModel.openItem(item).fold(
+                    onSuccess = { file -> openLesson = OpenLesson(file, item.title ?: "", isPdf, item) },
+                    onFailure = { e -> openError = e.localizedMessage ?: "تعذر فتح الدرس" }
                 )
             }
-            if (openError != null) {
-                item {
-                    Text(openError ?: "", fontSize = 12.sp, color = MaroonPrimary)
-                }
-            }
         }
-        if (anyDownloading && !fullyDownloaded && items.isNotEmpty()) {
-            LinearProgressIndicator(
-                progress = { downloadedCount.toFloat() / items.size },
-                modifier = Modifier.fillMaxWidth(),
-                color = GoldAccent
-            )
-        }
-    }
+    )
 }
 
 @Composable
-private fun LessonRow(
+fun LessonRow(
     lesson: CourseLesson,
     item: LibraryItem,
     viewModel: LibraryViewModel,
@@ -350,18 +268,118 @@ private fun LessonRow(
                     LinearProgressIndicator(progress = { progress }, color = GoldAccent, modifier = Modifier.fillMaxWidth())
                 }
             }
-            when {
-                !canAccess -> Icon(Icons.Default.Lock, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(18.dp))
-                downloading -> CircularProgressIndicator(color = MaroonPrimary, modifier = Modifier.size(20.dp))
-                downloaded -> Button(
-                    onClick = { onOpen(item, isPdf) },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
-                ) { Text("فتح") }
-                else -> Button(
-                    onClick = { viewModel.downloadItem(item) },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
-                ) { Text("تحميل") }
+            LessonActionButton(
+                canAccess = canAccess,
+                downloading = downloading,
+                downloaded = downloaded,
+                onOpenClick = { onOpen(item, isPdf) },
+                onDownloadClick = { viewModel.downloadItem(item) }
+            )
+        }
+    }
+}
+
+/** Full-screen view of one opened lesson — the unified PDF
+ * reader for PDFs, the existing video player for videos.
+ * (Extracted from CourseDetailScreen: detekt length/complexity.) */
+@Composable
+private fun OpenLessonView(
+    opened: OpenLesson,
+    viewModel: LibraryViewModel,
+    onClose: () -> Unit,
+    onReaderFullscreenChange: ((Boolean) -> Unit)?
+) {
+    if (opened.isPdf) {
+        PdfViewerScreen(
+            pdfFile = opened.file,
+            title = opened.title,
+            onBack = {
+                viewModel.closeItem(opened.item)
+                onClose()
+                onReaderFullscreenChange?.invoke(false)
+            },
+            onDeleteCorrupt = {
+                viewModel.deleteItem(opened.item)
+                onClose()
+                onReaderFullscreenChange?.invoke(false)
+            },
+            onFullscreenChange = onReaderFullscreenChange
+        )
+    } else {
+        VideoPlayerScreen(
+            opened.file, opened.title,
+            onBack = {
+                viewModel.closeItem(opened.item)
+                onClose()
+                onReaderFullscreenChange?.invoke(false)
+            },
+            onFullscreenChange = onReaderFullscreenChange
+        )
+    }
+}
+
+/** The course page's access/download header: a locked note for
+ * non-activated students, the download-all button while anything
+ * is missing, or the fully-downloaded row with delete.
+ * (Extracted from CourseDetailScreen: detekt length/complexity.) */
+@Composable
+fun CourseAccessHeader(
+    canAccess: Boolean,
+    fullyDownloaded: Boolean,
+    anyDownloading: Boolean,
+    downloadedCount: Int,
+    totalCount: Int,
+    onDownloadAll: () -> Unit,
+    onDeleteAll: () -> Unit
+) {
+    when {
+        !canAccess -> Text(
+            "هذا الكورس للمفعّلين — فعّل حسابك بكود التفعيل لتحميله ودراسته.",
+            fontSize = 13.sp, lineHeight = 19.sp, color = MaroonPrimary
+        )
+        !fullyDownloaded -> Button(
+            onClick = onDownloadAll,
+            enabled = !anyDownloading,
+            colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (anyDownloading) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("جارٍ تحميل الكورس… ($downloadedCount من $totalCount)")
+            } else {
+                Text(if (downloadedCount > 0) "إكمال تحميل الكورس ($downloadedCount من $totalCount)" else "تحميل الكورس كاملًا")
             }
         }
+        else -> Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("الكورس محمّل بالكامل — يعمل بلا إنترنت", fontSize = 13.sp, color = MaroonPrimary, modifier = Modifier.weight(1f))
+            TextButton(onClick = onDeleteAll) {
+                Text("حذف الكورس", color = MaroonPrimary)
+            }
+        }
+    }
+}
+
+/** A lesson row's trailing action: lock, spinner, open, or
+ * download. (Extracted from LessonRow: detekt complexity.) */
+@Composable
+private fun LessonActionButton(
+    canAccess: Boolean,
+    downloading: Boolean,
+    downloaded: Boolean,
+    onOpenClick: () -> Unit,
+    onDownloadClick: () -> Unit
+) {
+    when {
+        !canAccess -> Icon(Icons.Default.Lock, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(18.dp))
+        downloading -> CircularProgressIndicator(color = MaroonPrimary, modifier = Modifier.size(20.dp))
+        downloaded -> Button(
+            onClick = onOpenClick,
+            colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
+        ) { Text("فتح") }
+        else -> Button(
+            onClick = onDownloadClick,
+            colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
+        ) { Text("تحميل") }
     }
 }
