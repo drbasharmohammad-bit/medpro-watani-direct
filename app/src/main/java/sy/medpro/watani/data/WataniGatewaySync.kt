@@ -176,6 +176,10 @@ object WataniGatewaySync {
             // anything is pushed — pushing first would overwrite the
             // server totals with zero. Only higher remote totals win.
             val remoteData = pull(user)?.doc ?: return@withContext
+            // عدّادات الأدوات (1.2.54): النسخة الخادمية تُطوى محليًا
+            // بالأعلى لكل أداة (رتيبة — لا تنقص أبدًا)، والدفع بالأسفل
+            // يحمل اللقطة المحلية ضمن وثيقة التقدم نفسها.
+            ToolUsageStore.applyRemoteMax(context, remoteData.optJSONObject("toolUsage"))
             val remoteXp = if (remoteData.has("xp") && !remoteData.isNull("xp")) {
                 remoteData.optLong("xp", 0L)
             } else {
@@ -343,6 +347,7 @@ object WataniGatewaySync {
                 put("notes", notesJson)
                 put("subjectPerformance", subjectPerfJson)
                 put("dailyActivity", dailyActivityJson)
+                put("toolUsage", ToolUsageStore.snapshotJson(context))
                 put("lastSyncedAt", System.currentTimeMillis())
             }
 

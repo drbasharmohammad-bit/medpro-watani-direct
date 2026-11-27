@@ -155,6 +155,8 @@ fun ReverseTrainerScreen(onBack: () -> Unit) {
     }
 
     val onRoundFinished: (ReverseRoundDto, Int, Int) -> Unit = { round, score, max ->
+        // بوابة الأدوات (1.2.54): إنهاء جولة «اقلبها» = استخدام واحد.
+        sy.medpro.watani.data.ToolUsageStore.recordUse(context, "flip_it")
         val id = round.id
         if (id != null) {
             saveBestScore(context, id, score, max)

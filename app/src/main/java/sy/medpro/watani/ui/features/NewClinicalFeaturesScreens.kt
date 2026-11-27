@@ -1394,6 +1394,15 @@ private fun NumericSpecBlock(spec: CalcSpec) {
     }
 
     val outcome = if (inputError == null) evaluateCalcSpec(spec.id, parsed) else null
+    // بوابة الأدوات (1.2.54): كل مجموعة قيم مكتملة تُظهر نتيجة =
+    // استخدام واحد للحاسبات (الحساب حي بلا زر، فالاكتمال هو ظهور
+    // النتيجة لقيم بعينها — التأثير يعمل مرة لكل تركيبة قيم).
+    val calcContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(spec.id, outcome) {
+        if (outcome is CalcOutcome.Value) {
+            sy.medpro.watani.data.ToolUsageStore.recordUse(calcContext, "calculators")
+        }
+    }
     val errorText = when {
         inputError != null -> inputError
         outcome is CalcOutcome.Rejected -> "لا يمكن الحساب: ${outcome.reason}"

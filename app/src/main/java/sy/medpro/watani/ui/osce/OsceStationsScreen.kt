@@ -46,6 +46,13 @@ fun OsceStationsScreen(onBack: () -> Unit) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedStation by remember { mutableStateOf<OsceStation?>(null) }
     var activeExamMode by remember { mutableStateOf(false) }
+
+    // بوابة الأدوات (1.2.54): بدء محطة OSCE (فتحها) = استخدام واحد.
+    LaunchedEffect(selectedStation) {
+        if (selectedStation != null) {
+            sy.medpro.watani.data.ToolUsageStore.recordUse(context, "osce")
+        }
+    }
     // Build 1.2.6: the procedures wing (osce_procedures.json checklists
     // + ordering trainer) lives inside this section behind its own
     // entry card — it has its own scaffold and loading flow.

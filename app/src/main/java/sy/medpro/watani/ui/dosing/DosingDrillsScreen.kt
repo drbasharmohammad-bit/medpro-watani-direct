@@ -50,6 +50,13 @@ fun DosingDrillsScreen(onBack: () -> Unit) {
     var inSession by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
     var sessionDrills by remember { mutableStateOf<List<DosingDrillDto>>(emptyList()) }
+
+    // بوابة الأدوات (1.2.54): إنهاء جلسة جرعات = استخدام واحد.
+    LaunchedEffect(finished) {
+        if (finished) {
+            sy.medpro.watani.data.ToolUsageStore.recordUse(context, "dosing_trainer")
+        }
+    }
     var currentIndex by remember { mutableIntStateOf(0) }
     var chosen by remember { mutableStateOf<Int?>(null) }
     var answers by remember { mutableStateOf<List<DrillAnswer>>(emptyList()) }

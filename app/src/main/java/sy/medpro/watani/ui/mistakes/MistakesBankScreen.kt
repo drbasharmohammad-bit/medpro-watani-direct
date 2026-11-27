@@ -128,6 +128,13 @@ fun MistakesBankScreen(onBack: () -> Unit, autoStartReview: Boolean = false) {
                 getCorrectIndices(entry.toDto(), entry.options).contains(sel)
             }
             val finished = answeredCount == items.size && items.isNotEmpty()
+            // بوابة الأدوات (1.2.54): إنهاء جلسة مراجعة أخطاء كاملة =
+            // استخدام واحد لبنك أخطائي.
+            LaunchedEffect(finished) {
+                if (finished) {
+                    sy.medpro.watani.data.ToolUsageStore.recordUse(context, "mistakes_bank")
+                }
+            }
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
                 Card(
                     shape = RoundedCornerShape(16.dp),

@@ -334,6 +334,12 @@ private fun CasePlayerContent(caseItem: ClinicalCaseDto, onBack: () -> Unit, ger
                 caseItem.xpReward ?: 25
             }
             OfflineStudyVault.recordCaseCompletion(context, xpToGrant)
+            // بوابة الأدوات (1.2.54): الحالات الألمانية أداة بقسم
+            // الأدوات — إنهاء حالة (كشف التشخيص والشرح) = استخدام
+            // واحد. الحالات العربية هنا قسم الحالات لا أداة، فلا عدّ.
+            if (german) {
+                sy.medpro.watani.data.ToolUsageStore.recordUse(context, "german_cases")
+            }
         }
     }
 

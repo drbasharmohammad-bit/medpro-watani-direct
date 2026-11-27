@@ -180,6 +180,14 @@ fun EcgCourseScreen(onBack: () -> Unit) {
     val dest = navTop.dest
     val selectedPatternId = navTop.patternId
     val selectedStripId = navTop.stripId
+
+    // بوابة الأدوات (1.2.54): فتح شريط/وحدة تدريب = استخدام واحد
+    // لأداة «القلب والإصغاء».
+    LaunchedEffect(selectedStripId) {
+        if (selectedStripId != null) {
+            sy.medpro.watani.data.ToolUsageStore.recordUse(context, "ecg_course")
+        }
+    }
     // Recompose progress figures after returning from a unit.
     var progressTick by remember { mutableStateOf(0) }
 

@@ -315,6 +315,9 @@ object FocusTimerEngine {
         )
         persistSettings()
         startTickLoop()
+        // بوابة الأدوات (1.2.54): بدء جلسة تركيز = استخدام مكتمل
+        // للمؤقت (بأمر الدكتور: الجلسة المبدوءة تُحتسب).
+        ToolUsageStore.recordUse(context, "focus_timer")
         // شريط القفل الحي (1.2.30): جلسة بدأت ⇒ الخدمة الأمامية تلحقها إن فعّلها الطالب.
         FocusSessionService.sync(context)
     }

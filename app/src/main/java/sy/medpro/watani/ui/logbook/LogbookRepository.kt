@@ -133,6 +133,9 @@ object LogbookRepository {
         entries.add(0, entry)
         persist(context)
         publish()
+        // بوابة الأدوات (1.2.54): إنشاء قيد جديد = استخدام واحد
+        // للسجلّ (التعديلات اللاحقة على القيد نفسه لا تُحتسب).
+        sy.medpro.watani.data.ToolUsageStore.recordUse(context, "logbook")
         return entry
     }
 

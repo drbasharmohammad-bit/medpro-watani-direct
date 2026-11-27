@@ -646,7 +646,16 @@ private data class ErMistake(val caseTitle: String, val actionLabel: String, val
 
 @Composable
 fun EmergencyRoomScreen(onBack: () -> Unit, onOpenNightShift: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var caseIndex by remember { mutableIntStateOf(-1) }
+
+    // بوابة الأدوات (1.2.54): بدء كل حالة مناوبة = استخدام واحد
+    // لغرفة الطوارئ (caseIndex يبدأ -1 قبل أي حالة).
+    LaunchedEffect(caseIndex) {
+        if (caseIndex >= 0) {
+            sy.medpro.watani.data.ToolUsageStore.recordUse(context, "emergency_room")
+        }
+    }
     var nodeId by remember { mutableStateOf<String?>(null) }
     var totalScore by remember { mutableIntStateOf(0) }
     var caseScore by remember { mutableIntStateOf(0) }

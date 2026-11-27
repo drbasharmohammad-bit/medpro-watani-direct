@@ -690,6 +690,41 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // بوابة الأدوات (1.2.54، أمر الدكتور): كل أداة تمنح
+                    // عددًا من الاستخدامات المجانية (من إعدادات البوابة،
+                    // افتراضي 10) ثم تصير للمفعّلين فقط. القرار محلي
+                    // بالكامل (عدّاد محلي + حالة تفعيل محلية) فلا يُحرم
+                    // مفعّل أوف لاين أبدًا. الأدوات المرجعية (ENTRY)
+                    // يُحتسب استخدامها عند الفتح نفسه؛ أدوات الإتمام
+                    // (COMPLETION) تُحتسب من شاشاتها عند الإتمام.
+                    // العنوان غير المعروف كأداة يفتح كما كان دائمًا.
+                    // ملاحظة مقصودة: بلاطتا «المراجعة الذكية» و«محاكاة
+                    // الامتحان» كانتا مقفلتين كليًا لغير المفعّل، وصارتا
+                    // ضمن بوابة الأدوات بأمر الدكتور (10 استخدامات
+                    // مجانية ثم التفعيل).
+                    fun openToolOrDrawer(title: String) {
+                        val def = sy.medpro.watani.data.ToolGate.byTitle(title)
+                        if (def == null) {
+                            drawerScreen = title
+                            return
+                        }
+                        val activated = sy.medpro.watani.data.WorkerActivationApi.isActivated(context)
+                        val decision = sy.medpro.watani.data.ToolGate.decide(
+                            sy.medpro.watani.data.ToolUsageStore.count(context, def.id),
+                            sy.medpro.watani.data.ToolsLimitStore.current(context),
+                            activated
+                        )
+                        if (decision.access == sy.medpro.watani.data.ToolGate.Access.LOCKED) {
+                            pendingDrawer = title
+                            showActivationPrompt = true
+                            return
+                        }
+                        if (def.usageKind == sy.medpro.watani.data.ToolUsageKind.ENTRY && !activated) {
+                            sy.medpro.watani.data.ToolUsageStore.recordUse(context, def.id)
+                        }
+                        drawerScreen = title
+                    }
+
                     // Widget quick-action routing (build 1.2.25,
                     // doctor's explicit order): a route delivered
                     // by a widget button is consumed exactly once,
@@ -710,8 +745,8 @@ class MainActivity : ComponentActivity() {
                                 // current widget destinations are free, but a
                                 // future restricted destination must not slip
                                 // in ungated — apply the same check here.
-                                if (destination.title == "المراجعة الذكية Anki") {
-                                    openRestrictedDrawer(destination.title)
+                                if (sy.medpro.watani.data.ToolGate.byTitle(destination.title) != null) {
+                                    openToolOrDrawer(destination.title)
                                 } else {
                                     drawerScreen = destination.title
                                 }
@@ -1037,11 +1072,15 @@ class MainActivity : ComponentActivity() {
                                                                 drawerScreen = null
                                                                 viewModel.setTab(AppTab.CASES)
                                                             } else if (title == "المراجعة الذكية Anki") {
-                                                                // M8 + activation: the smart-review
-                                                                // drawer screen must pass the same
-                                                                // gates as the bank tabs instead of
-                                                                // opening ungated from the drawer.
-                                                                openRestrictedDrawer(title)
+                                                                // 1.2.54: the smart review is a
+                                                                // gated TOOL now (10 free
+                                                                // sessions, then activation —
+                                                                // the doctor's tools gate),
+                                                                // decided by the same helper
+                                                                // as the tool tiles.
+                                                                openToolOrDrawer(title)
+                                                            } else if (sy.medpro.watani.data.ToolGate.byTitle(title) != null) {
+                                                                openToolOrDrawer(title)
                                                             } else {
                                                                 drawerScreen = title
                                                             }
@@ -1537,7 +1576,7 @@ class MainActivity : ComponentActivity() {
                                                                 manifestVersion = uiState.manifestVersion,
                                                                 onOpenSupport = { drawerScreen = "الدعم النفسي" },
                                                                 onOpenFocusTimer = { drawerScreen = "مؤقت التركيز" },
-                                                                onOpenReviewDue = { openRestrictedDrawer("المراجعة الذكية Anki") },
+                                                                onOpenReviewDue = { openToolOrDrawer("المراجعة الذكية Anki") },
                                                                 onOpenTips = {
                                                                     tipsInitialSubject = null
                                                                     drawerScreen = "زوادة الطالب"
@@ -1757,21 +1796,21 @@ class MainActivity : ComponentActivity() {
                                                             )
                                                         }
                                                         AppTab.TOOLS -> {
+                                                            // بوابة الأدوات (1.2.54): حالة
+                                                            // التفعيل والعدّادات والحدّ
+                                                            // تُمرَّر للبلاطات لعرض القفل
+                                                            // والمتبقّي، والنقر يمرّ
+                                                            // بالبوابة نفسها.
+                                                            val toolUsageChanges by sy.medpro.watani.data.ToolUsageStore.changes.collectAsState()
+                                                            val toolsActivated = sy.medpro.watani.data.WorkerActivationApi.isActivated(context)
+                                                            val toolCounts = remember(toolUsageChanges, toolsActivated) {
+                                                                sy.medpro.watani.data.ToolUsageStore.counts(context)
+                                                            }
                                                             ToolsScreen(
-                                                                onToolClick = { title ->
-                                                                    // The Anki review and the exam
-                                                                    // simulator both consume restricted
-                                                                    // bank content, so their tiles pass
-                                                                    // the same activation gate as the
-                                                                    // bank tabs; every other tile is free.
-                                                                    if (title == "المراجعة الذكية Anki" ||
-                                                                        title == "محاكاة الامتحان"
-                                                                    ) {
-                                                                        openRestrictedDrawer(title)
-                                                                    } else {
-                                                                        drawerScreen = title
-                                                                    }
-                                                                }
+                                                                onToolClick = { title -> openToolOrDrawer(title) },
+                                                                toolsActivated = toolsActivated,
+                                                                toolCounts = toolCounts,
+                                                                toolsFreeLimit = sy.medpro.watani.data.ToolsLimitStore.current(context)
                                                             )
                                                         }
                                                     }

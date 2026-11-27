@@ -47,16 +47,19 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
     val subjects = loadedSet?.subjects.orEmpty()
     val allCards = remember(loadedSet) { loadedSet?.cards.orEmpty() }
 
-    // SRS layer (local-only scheduling): due ids/counts recompute
-    // whenever a grade lands (AnkiSrs.changes) or the set reloads.
-    val srsChanges by AnkiSrs.changes.collectAsState()
+    // FSRS layer (local-only scheduling, build 1.2.54 — FSRS replaced
+    // the SM-2-lite scheduler; legacy states migrate on first read):
+    // due ids/counts recompute whenever a grade lands
+    // (FsrsStore.changes) or the set reloads. Deck card keys are the
+    // content-hash Int ids, stringified.
+    val srsChanges by FsrsStore.changes.collectAsState()
     val dueIds = remember(allCards, srsChanges) {
         if (allCards.isEmpty()) emptyList()
-        else AnkiSrs.dueIds(context, allCards.map { it.id })
+        else FsrsStore.dueKeys(context, allCards.map { it.id.toString() })
     }
     val dueCountBySubject = remember(subjects, srsChanges) {
         subjects.associate { s ->
-            s.name to AnkiSrs.dueCount(context, s.topics.flatMap { it.cards }.map { it.id })
+            s.name to FsrsStore.dueCount(context, s.topics.flatMap { it.cards }.map { it.id.toString() })
         }
     }
 
@@ -91,27 +94,43 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
         val masteredIds = OfflineStudyVault.statsFlow.value.masteredFlashcardIds
         val wrongIds = OfflineStudyVault.statsFlow.value.wrongFlashcardIds
         if (due) {
-            val dueNow = AnkiSrs.dueIds(context, allCards.map { it.id }).toSet()
+            val dueNow = FsrsStore.dueKeys(context, allCards.map { it.id.toString() }).toSet()
             return allCards.filter { card ->
-                card.id in dueNow &&
+                card.id.toString() in dueNow &&
                     (subject == ANKI_ALL || card.subject == subject) &&
                     (topic == ANKI_ALL || card.topic == topic)
-            }.sortedBy { AnkiSrs.state(context, it.id)?.dueAtMillis ?: Long.MAX_VALUE }
+            }.sortedBy { FsrsStore.state(context, it.id.toString())?.dueAtMillis ?: Long.MAX_VALUE }
         }
         return if (wrong) {
             allCards.filter { it.id in wrongIds && it.id !in masteredIds }
         } else {
-            // SRS scheduling: a reviewed card leaves the general queue
+            // FSRS scheduling: a reviewed card leaves the general queue
             // until its due date arrives (vault mastery still removes
             // it outright, exactly as before).
-            val srsStates = AnkiSrs.states(context, allCards.map { it.id })
+            val srsStates = FsrsStore.states(context, allCards.map { it.id.toString() })
             val now = System.currentTimeMillis()
             allCards.filter { card ->
                 (subject == ANKI_ALL || card.subject == subject) &&
                     (topic == ANKI_ALL || card.topic == topic) &&
                     card.id !in masteredIds &&
-                    (srsStates[card.id] == null || srsStates[card.id]!!.dueAtMillis <= now)
+                    (srsStates[card.id.toString()] == null || srsStates[card.id.toString()]!!.dueAtMillis <= now)
             }
+        }
+    }
+
+    // بطاقات الطالب (1.2.54): وضع «بطاقاتي» يعرض شاشة بطاقات الطالب
+    // الخاصة (إنشاء/تعديل/حذف/دراسة بنفس FSRS) بدل منتقي المجموعة.
+    var myCardsMode by remember { mutableStateOf(false) }
+
+    // بوابة الأدوات (1.2.54): إنهاء جلسة مراجعة (بطاقة واحدة على
+    // الأقل) = استخدام واحد لأداة البطاقات — مرة واحدة لكل جلسة.
+    var sessionUseCounted by remember { mutableStateOf(false) }
+    LaunchedEffect(sessionStarted, currentIndex, queue, reviewedThisSession) {
+        if (sessionStarted && queue.isNotEmpty() && currentIndex >= queue.size &&
+            reviewedThisSession > 0 && !sessionUseCounted
+        ) {
+            sessionUseCounted = true
+            sy.medpro.watani.data.ToolUsageStore.recordUse(context, "flashcards")
         }
     }
 
@@ -126,6 +145,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
         reviewedThisSession = 0
         newlyMasteredThisSession = 0
         finished = false
+        sessionUseCounted = false
         sessionStarted = true
     }
 
@@ -184,7 +204,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
             // Back-navigation fix (1.2.22): the top-bar back steps
             // like the system button — session → picker → exit.
             SlimSubBar(onBack = { if (sessionStarted) backToPicker() else onBack() }) {
-                SlimBarTitle("البطاقات الذكية - Anki")
+                SlimBarTitle("البطاقات الذكية")
             }
         }
     ) { padding ->
@@ -198,18 +218,28 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                     CircularProgressIndicator(color = MaroonPrimary)
                 }
             } else if (!sessionStarted) {
-                AnkiSubjectPicker(
-                    subjects = subjects,
-                    allCards = allCards,
-                    mastered = mastered,
-                    wrongCount = stats.wrongFlashcardIds.size,
-                    dueCount = dueIds.size,
-                    dueCountBySubject = dueCountBySubject,
-                    onSubjectSelected = { name -> startSession(name, ANKI_ALL, false) },
-                    onMixedSelected = { startSession(ANKI_ALL, ANKI_ALL, false) },
-                    onWrongSelected = { startSession(ANKI_ALL, ANKI_ALL, true) },
-                    onDueSelected = { startSession(ANKI_ALL, ANKI_ALL, false, due = true) }
-                )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    DeckSwitcherRow(myCardsMode) { myCardsMode = it }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (myCardsMode) {
+                            UserCardsHome()
+                        } else {
+                            AnkiSubjectPicker(
+                                subjects = subjects,
+                                allCards = allCards,
+                                mastered = mastered,
+                                wrongCount = stats.wrongFlashcardIds.size,
+                                dueCount = dueIds.size,
+                                dueCountBySubject = dueCountBySubject,
+                                onSubjectSelected = { name -> startSession(name, ANKI_ALL, false) },
+                                onMixedSelected = { startSession(ANKI_ALL, ANKI_ALL, false) },
+                                onWrongSelected = { startSession(ANKI_ALL, ANKI_ALL, true) },
+                                onDueSelected = { startSession(ANKI_ALL, ANKI_ALL, false, due = true) }
+                            )
+                        }
+                    }
+                }
             } else {
                 if (wrongOnlyMode) {
                     Text(
@@ -296,7 +326,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                             modifier = Modifier.padding(24.dp)
                         ) {
                             Icon(Icons.Default.Style, contentDescription = null, tint = MaroonPrimary, modifier = Modifier.size(64.dp))
-                            Text("أتممت مراجعة جميع بطاقات Anki بنجاح!", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary, textAlign = TextAlign.Center)
+                            Text("أتممت مراجعة جميع البطاقات بنجاح!", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaroonPrimary, textAlign = TextAlign.Center)
                             Text("راجعت في هذه الجلسة: $reviewedThisSession", fontSize = 15.sp)
                             Text("أتقنتها في هذه الجلسة: $newlyMasteredThisSession", fontSize = 15.sp, color = SuccessGreen)
                             Text("بطاقات متبقية في القائمة: ${(queue.size - currentIndex).coerceAtLeast(0)}", fontSize = 15.sp)
@@ -384,7 +414,7 @@ fun AnkiFlashcardScreen(onBack: () -> Unit, wrongOnly: Boolean = false) {
                         // for the other screens: إعادة = wrong (+unmaster),
                         // صعب/جيد = clear wrong, سهل = mastered.
                         fun gradeCurrent(grade: AnkiGrade) {
-                            AnkiSrs.grade(context, card.id, grade)
+                            FsrsStore.grade(context, card.id.toString(), grade)
                             when (grade) {
                                 AnkiGrade.AGAIN -> {
                                     OfflineStudyVault.addFlashcardWrong(context, card.id)
@@ -682,5 +712,38 @@ private fun AnkiEmptyState(title: String, message: String) {
             Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, textAlign = TextAlign.Center)
             Text(message, fontSize = 13.sp, textAlign = TextAlign.Center)
         }
+    }
+}
+
+/**
+ * Deck switcher (1.2.54): the ready-made rebuilt deck vs the
+ * student's own authored cards — both scheduled by FSRS.
+ */
+@Composable
+private fun DeckSwitcherRow(myCardsMode: Boolean, onSelect: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = !myCardsMode,
+            onClick = { onSelect(false) },
+            label = { Text("المجموعة الجاهزة", fontWeight = FontWeight.Bold) },
+            modifier = Modifier.weight(1f),
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaroonPrimary,
+                selectedLabelColor = androidx.compose.ui.graphics.Color.White
+            )
+        )
+        FilterChip(
+            selected = myCardsMode,
+            onClick = { onSelect(true) },
+            label = { Text("بطاقاتي", fontWeight = FontWeight.Bold) },
+            modifier = Modifier.weight(1f),
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = MaroonPrimary,
+                selectedLabelColor = androidx.compose.ui.graphics.Color.White
+            )
+        )
     }
 }

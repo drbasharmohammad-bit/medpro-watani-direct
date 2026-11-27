@@ -126,7 +126,12 @@ private val TOOL_GROUPS = listOf(
 )
 
 @Composable
-fun ToolsScreen(onToolClick: (String) -> Unit) {
+fun ToolsScreen(
+    onToolClick: (String) -> Unit,
+    toolsActivated: Boolean = false,
+    toolCounts: Map<String, Int> = emptyMap(),
+    toolsFreeLimit: Int = sy.medpro.watani.data.ToolGate.DEFAULT_FREE_LIMIT
+) {
     Column(modifier = Modifier.fillMaxSize().background(libBackground())) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -149,9 +154,9 @@ fun ToolsScreen(onToolClick: (String) -> Unit) {
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            ToolTile(pair[0], onToolClick, Modifier.weight(1f))
+                            ToolTile(pair[0], onToolClick, Modifier.weight(1f), toolsActivated, toolCounts, toolsFreeLimit)
                             if (pair.size > 1) {
-                                ToolTile(pair[1], onToolClick, Modifier.weight(1f))
+                                ToolTile(pair[1], onToolClick, Modifier.weight(1f), toolsActivated, toolCounts, toolsFreeLimit)
                             } else {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
@@ -165,7 +170,22 @@ fun ToolsScreen(onToolClick: (String) -> Unit) {
 }
 
 @Composable
-private fun ToolTile(tool: ToolEntry, onToolClick: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun ToolTile(
+    tool: ToolEntry,
+    onToolClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    toolsActivated: Boolean = false,
+    toolCounts: Map<String, Int> = emptyMap(),
+    toolsFreeLimit: Int = sy.medpro.watani.data.ToolGate.DEFAULT_FREE_LIMIT
+) {
+    // بوابة الأدوات (1.2.54): لغير المفعّل تعرض البلاطة المتبقّي من
+    // الاستخدامات المجانية، وقفلًا ذهبيًا عند نفادها (النقر نفسه يوجّه
+    // لشاشة التفعيل من المعالج). المفعّل لا يرى أي شارة.
+    val def = sy.medpro.watani.data.ToolGate.byTitle(tool.target)
+    val decision = def?.let {
+        sy.medpro.watani.data.ToolGate.decide(toolCounts[it.id] ?: 0, toolsFreeLimit, toolsActivated)
+    }
+    val locked = decision?.access == sy.medpro.watani.data.ToolGate.Access.LOCKED
     LibCard(
         onClick = { onToolClick(tool.target) },
         modifier = modifier
@@ -188,6 +208,32 @@ private fun ToolTile(tool: ToolEntry, onToolClick: (String) -> Unit, modifier: M
                 lineHeight = 16.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (!toolsActivated && decision != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                if (locked) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = LibColors.GoldText,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "للمفعّلين — فعّل اشتراكك للمتابعة",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = LibColors.GoldText
+                        )
+                    }
+                } else {
+                    Text(
+                        "متبقّي ${decision.remainingFree} من الاستخدامات المجانية",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }

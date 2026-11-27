@@ -335,6 +335,9 @@ fun ExamSimulatorScreen(onBack: () -> Unit) {
                                     flaggedQuestions = emptySet()
                                     currentIndex = 0
                                     mode = "RUNNING"
+                                    // بوابة الأدوات (1.2.54): بدء امتحان
+                                    // محاكاة مولّد = استخدام واحد للأداة.
+                                    sy.medpro.watani.data.ToolUsageStore.recordUse(context, "exam_simulator")
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()

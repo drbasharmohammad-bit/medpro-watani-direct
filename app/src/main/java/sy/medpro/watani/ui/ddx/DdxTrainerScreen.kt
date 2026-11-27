@@ -225,6 +225,13 @@ fun DdxTrainerScreen(onBack: () -> Unit) {
     val cases = ddxEnvelope?.cases.orEmpty()
     val selectedCase = cases.firstOrNull { it.id != null && it.id == selectedCaseId }
 
+    // بوابة الأدوات (1.2.54): بدء حالة تدريبية (فتحها) = استخدام واحد.
+    LaunchedEffect(selectedCaseId) {
+        if (selectedCaseId != null) {
+            sy.medpro.watani.data.ToolUsageStore.recordUse(context, "ddx_trainer")
+        }
+    }
+
     // Diagnosis dictionary of the whole bank: every reference diagnosis,
     // de-duplicated on the diagnosis_en identity key.
     val dictionary = remember(cases) {

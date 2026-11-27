@@ -76,6 +76,9 @@ object AppVersionGate {
         // open/activated/locked states. A config without the field
         // (older gateway) leaves the stored switches untouched.
         SectionSwitchStore.updateFromConfig(context, config)
+        // بوابة الأدوات (1.2.54): حد الاستخدامات المجانية من نفس
+        // الاستجابة — غياب الحقل يبقي المخزَّن كما هو.
+        ToolsLimitStore.updateFromConfig(context, config)
         return isUpdateRequired(context)
     }
 }
