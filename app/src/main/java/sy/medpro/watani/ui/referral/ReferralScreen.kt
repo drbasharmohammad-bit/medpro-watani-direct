@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import sy.medpro.watani.data.ReferralGateway
 import sy.medpro.watani.data.ReferralMe
+import sy.medpro.watani.data.ReferralReward
 import sy.medpro.watani.data.WorkerReferralGateway
 import sy.medpro.watani.data.referralClaimErrorMessage
 import sy.medpro.watani.ui.drawer.DrawerScreenScaffold
@@ -64,17 +65,7 @@ import java.util.Locale
  * full-screen wash.
  */
 
-sealed interface ReferralUiState {
-    data object Loading : ReferralUiState
-    data object Failed : ReferralUiState
-    data class Content(
-        val me: ReferralMe,
-        val claiming: Boolean = false,
-        val claimNotice: String? = null,
-        val claimSucceeded: Boolean = false,
-        val copied: Boolean = false
-    ) : ReferralUiState
-}
+private val ReferralErrorColor = Color(0xFFB3261E)
 
 @Composable
 fun ReferralRoute(
@@ -84,6 +75,7 @@ fun ReferralRoute(
     var state by remember { mutableStateOf<ReferralUiState>(ReferralUiState.Loading) }
     var refreshKey by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     LaunchedEffect(refreshKey) {
         val reply = gateway.fetchMine()
@@ -93,9 +85,7 @@ fun ReferralRoute(
         }
     }
 
-    val context = LocalContext.current
-    ReferralScreen(
-        state = state,
+    val actions = ReferralActions(
         onBack = onBack,
         onRetry = { state = ReferralUiState.Loading; refreshKey++ },
         onCopy = { code ->
@@ -128,7 +118,11 @@ fun ReferralRoute(
                                 claimSucceeded = true
                             )
                         } else {
-                            s.copy(claiming = false, claimNotice = "تم تسجيل رمز الإحالة بنجاح", claimSucceeded = true)
+                            s.copy(
+                                claiming = false,
+                                claimNotice = "تم تسجيل رمز الإحالة بنجاح",
+                                claimSucceeded = true
+                            )
                         }
                     } else {
                         s.copy(claiming = false, claimNotice = referralClaimErrorMessage(reply.error))
@@ -137,57 +131,55 @@ fun ReferralRoute(
             }
         }
     )
+    ReferralScreen(state = state, actions = actions)
 }
 
 @Composable
-fun ReferralScreen(
-    state: ReferralUiState,
-    onBack: () -> Unit,
-    onRetry: () -> Unit,
-    onCopy: (String) -> Unit,
-    onShare: (String) -> Unit,
-    onClaim: (String) -> Unit
-) {
-    DrawerScreenScaffold(title = "ادعُ أصدقاءك", onBack = onBack) {
+fun ReferralScreen(state: ReferralUiState, actions: ReferralActions) {
+    DrawerScreenScaffold(title = "ادعُ أصدقاءك", onBack = actions.onBack) {
         when (state) {
-            ReferralUiState.Loading -> Column(
-                modifier = Modifier.fillMaxSize().padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                CircularProgressIndicator(color = MaroonPrimary)
-                Spacer(Modifier.height(12.dp))
-                Text("جارٍ تحميل بيانات الإحالة…", color = MaroonPrimary)
-            }
-            ReferralUiState.Failed -> Column(
-                modifier = Modifier.fillMaxSize().padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    "تعذّر تحميل بيانات الإحالة — تحقق من الاتصال وحاول مجددًا",
-                    color = MaroonPrimary, textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(12.dp))
-                Button(
-                    onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
-                ) { Text("إعادة المحاولة") }
-            }
-            is ReferralUiState.Content -> ReferralContent(state, onCopy, onShare, onClaim)
+            ReferralUiState.Loading -> ReferralLoading()
+            ReferralUiState.Failed -> ReferralFailed(onRetry = actions.onRetry)
+            is ReferralUiState.Content -> ReferralContent(state, actions)
         }
     }
 }
 
 @Composable
-private fun ReferralContent(
-    state: ReferralUiState.Content,
-    onCopy: (String) -> Unit,
-    onShare: (String) -> Unit,
-    onClaim: (String) -> Unit
-) {
+private fun ReferralLoading() {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator(color = MaroonPrimary)
+        Spacer(Modifier.height(12.dp))
+        Text("جارٍ تحميل بيانات الإحالة…", color = MaroonPrimary)
+    }
+}
+
+@Composable
+private fun ReferralFailed(onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            "تعذّر تحميل بيانات الإحالة — تحقق من الاتصال وحاول مجددًا",
+            color = MaroonPrimary, textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = onRetry,
+            colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary)
+        ) { Text("إعادة المحاولة") }
+    }
+}
+
+@Composable
+private fun ReferralContent(state: ReferralUiState.Content, actions: ReferralActions) {
     val me = state.me
-    var claimText by remember { mutableStateOf("") }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -198,92 +190,10 @@ private fun ReferralContent(
                 "يصلك تفعيل مجاني لمدة 18 شهرًا تلقائيًا.",
             fontSize = 14.sp, color = MaroonPrimary
         )
-
-        // ── My code ──
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaroonPrimary),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("رمز الإحالة الخاص بك", color = GoldAccent, fontSize = 13.sp)
-                Text(
-                    me.displayCode,
-                    color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { onCopy(me.displayCode) }) {
-                        Text(if (state.copied) "تم النسخ" else "نسخ الرمز", color = Color.White)
-                    }
-                    Button(
-                        onClick = { onShare(me.displayCode) },
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldAccent)
-                    ) { Text("مشاركة", color = MaroonPrimary) }
-                }
-            }
-        }
-
-        // ── Counter (ACTIVATED referrals only) ──
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text(
-                    "فعّل عن طريقك ${me.count} من ${me.threshold}",
-                    fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaroonPrimary
-                )
-                Spacer(Modifier.height(8.dp))
-                val progress = if (me.threshold > 0) {
-                    (me.count % me.threshold).toFloat() / me.threshold.toFloat()
-                } else 0f
-                LinearProgressIndicator(
-                    progress = { progress },
-                    color = GoldAccent,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                if (me.remainingForNextReward > 0) {
-                    Text(
-                        "بقي ${me.remainingForNextReward} تفعيلًا وتصلك مكافأة التفعيل المجاني",
-                        fontSize = 13.sp, color = MaroonPrimary
-                    )
-                }
-                if (me.registeredCount > me.count) {
-                    Text(
-                        "سجّل عن طريقك ${me.registeredCount} طالبًا، منهم ${me.registeredCount - me.count} لم يُفعّلوا بعد — العدّاد يزيد عند التفعيل",
-                        fontSize = 12.sp, color = MaroonPrimary
-                    )
-                }
-            }
-        }
-
-        // ── Rewards earned ──
+        ReferralCodeCard(me = me, copied = state.copied, onCopy = actions.onCopy, onShare = actions.onShare)
+        ReferralCounterCard(me = me)
         for (reward in me.rewards) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = GoldAccent),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text(
-                        "وصلتك مكافأة إحالة: تفعيل مجاني",
-                        fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaroonPrimary
-                    )
-                    Text(
-                        if (reward.expiresAt > 0) {
-                            "تفعيلك ساري حتى ${formatReferralDate(reward.expiresAt)}"
-                        } else {
-                            "تفعيلك ساري بلا انتهاء"
-                        },
-                        fontSize = 13.sp, color = MaroonPrimary
-                    )
-                }
-            }
+            ReferralRewardCard(reward = reward)
         }
         if (me.rewards.isEmpty() && me.activationActivated && me.activationExpiresAt > 0) {
             Text(
@@ -291,58 +201,165 @@ private fun ReferralContent(
                 fontSize = 12.sp, color = MaroonPrimary
             )
         }
+        ReferralAttributionBlock(state = state, onClaim = actions.onClaim)
+        Spacer(Modifier.height(8.dp))
+    }
+}
 
-        // ── Who referred me / claim a code ──
-        if (me.referredByCode != null) {
+@Composable
+private fun ReferralCodeCard(
+    me: ReferralMe,
+    copied: Boolean,
+    onCopy: (String) -> Unit,
+    onShare: (String) -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaroonPrimary),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("رمز الإحالة الخاص بك", color = GoldAccent, fontSize = 13.sp)
             Text(
-                "سجّلت برمز إحالة" +
-                    (me.referredByName?.let { " من $it" } ?: "") +
-                    " (${me.referredByCode})",
-                fontSize = 12.sp, color = MaroonPrimary
+                me.displayCode,
+                color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold
             )
-        } else if (me.canClaim) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text(
-                        "عندك رمز إحالة من صديق؟",
-                        fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaroonPrimary
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = claimText,
-                        onValueChange = { claimText = it },
-                        singleLine = true,
-                        label = { Text("رمز الإحالة") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    state.claimNotice?.let { notice ->
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            notice, fontSize = 13.sp,
-                            color = if (state.claimSucceeded) MaroonPrimary else Color(0xFFB3261E)
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = { onClaim(claimText) },
-                        enabled = claimText.isNotBlank() && !state.claiming,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (state.claiming) "جارٍ التسجيل…" else "تسجيل الرمز")
-                    }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { onCopy(me.displayCode) }) {
+                    Text(if (copied) "تم النسخ" else "نسخ الرمز", color = Color.White)
                 }
-            }
-        } else {
-            state.claimNotice?.let { notice ->
-                Text(notice, fontSize = 13.sp, color = MaroonPrimary)
+                Button(
+                    onClick = { onShare(me.displayCode) },
+                    colors = ButtonDefaults.buttonColors(containerColor = GoldAccent)
+                ) { Text("مشاركة", color = MaroonPrimary) }
             }
         }
-        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun ReferralCounterCard(me: ReferralMe) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(
+                "فعّل عن طريقك ${me.count} من ${me.threshold}",
+                fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaroonPrimary
+            )
+            Spacer(Modifier.height(8.dp))
+            val progress = if (me.threshold > 0) {
+                (me.count % me.threshold).toFloat() / me.threshold.toFloat()
+            } else {
+                0f
+            }
+            LinearProgressIndicator(
+                progress = { progress },
+                color = GoldAccent,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            if (me.remainingForNextReward > 0) {
+                Text(
+                    "بقي ${me.remainingForNextReward} تفعيلًا وتصلك مكافأة التفعيل المجاني",
+                    fontSize = 13.sp, color = MaroonPrimary
+                )
+            }
+            if (me.registeredCount > me.count) {
+                Text(
+                    "سجّل عن طريقك ${me.registeredCount} طالبًا، منهم " +
+                        "${me.registeredCount - me.count} لم يُفعّلوا بعد — العدّاد يزيد عند التفعيل",
+                    fontSize = 12.sp, color = MaroonPrimary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReferralRewardCard(reward: ReferralReward) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = GoldAccent),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(
+                "وصلتك مكافأة إحالة: تفعيل مجاني",
+                fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaroonPrimary
+            )
+            Text(
+                if (reward.expiresAt > 0) {
+                    "تفعيلك ساري حتى ${formatReferralDate(reward.expiresAt)}"
+                } else {
+                    "تفعيلك ساري بلا انتهاء"
+                },
+                fontSize = 13.sp, color = MaroonPrimary
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReferralAttributionBlock(state: ReferralUiState.Content, onClaim: (String) -> Unit) {
+    val me = state.me
+    when {
+        me.referredByCode != null -> Text(
+            "سجّلت برمز إحالة" +
+                (me.referredByName?.let { " من $it" } ?: "") +
+                " (${me.referredByCode})",
+            fontSize = 12.sp, color = MaroonPrimary
+        )
+        me.canClaim -> ReferralClaimCard(state = state, onClaim = onClaim)
+        else -> state.claimNotice?.let { notice ->
+            Text(notice, fontSize = 13.sp, color = MaroonPrimary)
+        }
+    }
+}
+
+@Composable
+private fun ReferralClaimCard(state: ReferralUiState.Content, onClaim: (String) -> Unit) {
+    var claimText by remember { mutableStateOf("") }
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(
+                "عندك رمز إحالة من صديق؟",
+                fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaroonPrimary
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = claimText,
+                onValueChange = { claimText = it },
+                singleLine = true,
+                label = { Text("رمز الإحالة") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            state.claimNotice?.let { notice ->
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    notice, fontSize = 13.sp,
+                    color = if (state.claimSucceeded) MaroonPrimary else ReferralErrorColor
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { onClaim(claimText) },
+                enabled = claimText.isNotBlank() && !state.claiming,
+                colors = ButtonDefaults.buttonColors(containerColor = MaroonPrimary),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (state.claiming) "جارٍ التسجيل…" else "تسجيل الرمز")
+            }
+        }
     }
 }
 

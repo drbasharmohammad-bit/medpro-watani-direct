@@ -60,11 +60,13 @@ data class ReferralClaimReply(val code: Int, val error: String? = null) {
     val isSuccess: Boolean get() = code in HTTP_SUCCESS_MIN..HTTP_SUCCESS_MAX
 }
 
+/** Fallback threshold when the gateway omits it (its own default). */
+const val REFERRAL_DEFAULT_THRESHOLD: Int = 7
+
 /** Parses the GET /v1/referral/me payload. Pure — pinned by tests. */
 fun parseReferralMe(obj: JSONObject): ReferralMe? {
-    if (!obj.optBoolean("ok", false)) return null
     val code = obj.optString("code", "").trim()
-    if (code.isBlank()) return null
+    if (!obj.optBoolean("ok", false) || code.isBlank()) return null
     val rewards = mutableListOf<ReferralReward>()
     val arr = obj.optJSONArray("rewards")
     if (arr != null) {
@@ -84,7 +86,7 @@ fun parseReferralMe(obj: JSONObject): ReferralMe? {
         code = code,
         count = obj.optInt("count", 0),
         registeredCount = obj.optInt("registeredCount", 0),
-        threshold = obj.optInt("threshold", 7).coerceAtLeast(1),
+        threshold = obj.optInt("threshold", REFERRAL_DEFAULT_THRESHOLD).coerceAtLeast(1),
         remainingForNextReward = obj.optInt("remainingForNextReward", 0),
         rewards = rewards,
         referredByCode = referredBy?.optString("code", "")?.takeIf { it.isNotEmpty() },

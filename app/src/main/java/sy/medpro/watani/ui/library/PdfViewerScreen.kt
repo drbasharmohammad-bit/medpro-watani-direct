@@ -641,7 +641,12 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 // path; on success it stays open for the
                 // document's lifetime (PDFium reads through it)
                 // and closes after the document on dispose.
-                val opened = runCatching {
+                // (1.2.54): the open is a native FPDF entry too —
+                // it takes the global PdfiumGate like every other
+                // one, so a previous book's still-draining text
+                // walk or close can never overlap it.
+                val opened = sy.medpro.watani.data.PdfiumGate.run {
+                    runCatching {
                     val fd = ParcelFileDescriptor.open(
                         pdfFile, ParcelFileDescriptor.MODE_READ_ONLY
                     )
@@ -693,6 +698,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                         OpenedBook(fd, doc, count, sizes)
                     } finally {
                         if (!handedOff) runCatching { fd.close() }
+                    }
                     }
                 }
                 opened.fold(
@@ -776,8 +782,26 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
             // The document closes before its descriptor (1.2.52):
             // PDFium reads through the fd, so the fd must outlive
             // the document, never the other way round.
-            try { pdfiumDoc?.close() } catch (_: Exception) {}
-            try { parcelFd?.close() } catch (_: Exception) {}
+            // (1.2.54): the close itself is a native FPDF call —
+            // closing on the main thread while the text engine
+            // walks the same document on IO threads is one of
+            // the documented heap-corruption vectors, so the
+            // close is handed to a detached IO scope that passes
+            // through the same global PdfiumGate as every render
+            // and text walk; it lands as soon as in-flight native
+            // work drains, and never races it.
+            val docToClose = pdfiumDoc
+            val fdToClose = parcelFd
+            if (docToClose != null || fdToClose != null) {
+                kotlinx.coroutines.CoroutineScope(
+                    kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+                ).launch {
+                    sy.medpro.watani.data.PdfiumGate.run {
+                        try { docToClose?.close() } catch (_: Exception) {}
+                        try { fdToClose?.close() } catch (_: Exception) {}
+                    }
+                }
+            }
             // The render thread dies with the reader (1.2.50).
             (renderDispatcher as? ExecutorCoroutineDispatcher)?.close()
         }
@@ -911,8 +935,14 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                 maxPixels: Int = 0
             ): Bitmap? {
                 val doc = pdfiumDoc ?: return null
-                return withContext(renderDispatcher) {
-                    synchronized(renderLock) {
+                // بوابة PDFium العالمية (1.2.54): الرسم متسلسل
+                // أصلًا على خيط الرسم + renderLock، لكن محرّك
+                // النص يمشي على الوثيقة نفسها من خيوط أخرى —
+                // البوابة هي القفل المشترك الوحيد بينهما (كراش
+                // فساد الكومة الموثق بـPdfiumGate).
+                return sy.medpro.watani.data.PdfiumGate.run {
+                    withContext(renderDispatcher) {
+                        synchronized(renderLock) {
                         try {
                             val pg = doc.openPage(page)
                             if (pg == null) {
@@ -943,6 +973,7 @@ fun PdfViewerScreen(pdfFile: File, title: String, onBack: () -> Unit, onDeleteCo
                             }
                         } catch (_: Exception) {
                             null
+                        }
                         }
                     }
                 }

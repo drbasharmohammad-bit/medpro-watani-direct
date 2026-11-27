@@ -1186,20 +1186,25 @@ private suspend fun validateFaPdfFile(file: File): String? = withContext(Dispatc
     if (!file.exists() || file.length() == 0L) {
         return@withContext "الملف غير موجود على الجهاز أو فارغ"
     }
+    // بوابة PDFium العالمية (1.2.54): حتى فحص الصلاحية هذا
+    // نداء أصلي — يمرّ بالبوابة نفسها حتى لا يتقاطع مع رسم أو
+    // مشي نصي جارٍ بقسم آخر (فساد الكومة الموثق بـPdfiumGate).
     val pdfiumResult = runCatching {
-        var fd: ParcelFileDescriptor? = null
-        var doc: PdfDocument? = null
-        try {
-            fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-            doc = PdfiumCore().newDocument(fd)
-            if (doc.getPageCount() > 0) {
-                null
-            } else {
-                "PDFium: الملف بلا صفحات (pageCount = 0)"
+        sy.medpro.watani.data.PdfiumGate.run {
+            var fd: ParcelFileDescriptor? = null
+            var doc: PdfDocument? = null
+            try {
+                fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                doc = PdfiumCore().newDocument(fd)
+                if (doc.getPageCount() > 0) {
+                    null
+                } else {
+                    "PDFium: الملف بلا صفحات (pageCount = 0)"
+                }
+            } finally {
+                try { doc?.close() } catch (_: Exception) {}
+                try { fd?.close() } catch (_: Exception) {}
             }
-        } finally {
-            try { doc?.close() } catch (_: Exception) {}
-            try { fd?.close() } catch (_: Exception) {}
         }
     }
     pdfiumResult.fold(

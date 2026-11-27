@@ -107,7 +107,11 @@ object PdfiumTextEngine {
                         // Corrupt cache entry: fall through and re-extract.
                     }
                 }
-                val extracted = extract(document, pageSizes)
+                // بوابة PDFium العالمية (1.2.54): المشي النصي
+                // على الوثيقة نفسها التي يرسمها القارئ — بلا
+                // البوابة يتصادم النداءان الأصليان وتفسد الكومة
+                // (كراش Scudo/FT_Load_Glyph الموثق بـPdfiumGate).
+                val extracted = PdfiumGate.run { extract(document, pageSizes) }
                 try {
                     cached.parentFile?.mkdirs()
                     SectionCacheCrypto.writeText(context, cached, adapter.toJson(extracted))
