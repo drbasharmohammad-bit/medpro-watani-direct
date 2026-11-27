@@ -255,8 +255,23 @@ data class CriticalFactDto(
  * list for every question whose key resolves. Only keys that
  * previously FELL THROUGH to the invented 0 (or were dropped out of a
  * correctIndices list) now resolve to null instead.
+ *
+ * 1.2.52 addition (diagnosis 27 Nov 2026): two steps that fire ONLY
+ * for keys the legacy steps could not resolve — the static map now
+ * also knows «هـ» (ه + tatweel, the canonical fifth label) and the
+ * letters past the legacy ceiling («و»/«ز»/«ح»/«ط» → 5/6/7/8), and
+ * the record's own optionLabels are consulted before the text
+ * match. Content families that name keys by their own label sets
+ * (UWorld) previously fell through to null despite a valid key:
+ * 1,790 published questions rendered with no answer reveal. Keys
+ * that resolved before resolve identically — the new steps sit
+ * strictly after the legacy map and before the text match.
  */
-fun parseCorrectIndexOrNull(correct: Any?, options: List<String>?): Int? {
+fun parseCorrectIndexOrNull(
+    correct: Any?,
+    options: List<String>?,
+    optionLabels: List<String>? = null
+): Int? {
     if (correct == null || options.isNullOrEmpty()) return null
     if (correct is Number) {
         val idx = correct.toInt()
@@ -271,9 +286,20 @@ fun parseCorrectIndexOrNull(correct: Any?, options: List<String>?): Int? {
         "ب" to 1, "B" to 1, "b" to 1, "1" to 1,
         "ج" to 2, "C" to 2, "c" to 2, "2" to 2,
         "د" to 3, "D" to 3, "d" to 3, "3" to 3,
-        "ه" to 4, "E" to 4, "e" to 4, "4" to 4
+        "ه" to 4, "هـ" to 4, "E" to 4, "e" to 4, "4" to 4,
+        "و" to 5, "ز" to 6, "ح" to 7, "ط" to 8
     )
     arabicMap[str]?.let { if (it in options.indices) return it }
+
+    // The record's own labels resolve a label key the static map
+    // does not know — a content family's label set is self-describing
+    // and no static map can enumerate every family's labels. Runs
+    // before the option-text match so a label is never mistaken for
+    // an option's text.
+    if (!optionLabels.isNullOrEmpty()) {
+        val idx = optionLabels.indexOf(str)
+        if (idx in options.indices) return idx
+    }
 
     options.forEachIndexed { index, option ->
         if (option.trim() == str) return index
@@ -281,8 +307,12 @@ fun parseCorrectIndexOrNull(correct: Any?, options: List<String>?): Int? {
     return null
 }
 
-fun normalizeCorrectIndex(correct: Any?, options: List<String>?): Int =
-    parseCorrectIndexOrNull(correct, options) ?: 0
+fun normalizeCorrectIndex(
+    correct: Any?,
+    options: List<String>?,
+    optionLabels: List<String>? = null
+): Int =
+    parseCorrectIndexOrNull(correct, options, optionLabels) ?: 0
 
 /**
  * Resolves a question's correct indices, or null when its key is
@@ -304,7 +334,7 @@ fun resolveCorrectIndices(dto: QuestionDto, options: List<String>?): List<Int>? 
         if (options != null && indices.any { it !in options.indices }) return null
         return indices
     }
-    return parseCorrectIndexOrNull(dto.correct, options)?.let { listOf(it) }
+    return parseCorrectIndexOrNull(dto.correct, options, dto.optionLabels)?.let { listOf(it) }
 }
 
 /** Countable trace of questions rejected for an invalid key (F-08). */
